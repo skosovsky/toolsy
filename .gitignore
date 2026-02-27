@@ -1,0 +1,10 @@
+# Coverage
+coverage.out
+
+# Test binaries
+*.test
+
+# IDE
+.idea/
+.vscode/
+.cursor/
