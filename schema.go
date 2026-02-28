@@ -3,17 +3,72 @@ package toolsy
 import (
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
+	"sync"
 
 	invopop "github.com/invopop/jsonschema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
+var (
+	customTypesMu sync.RWMutex
+	customTypes   = make(map[reflect.Type]*invopop.Schema)
+)
+
+// RegisterType registers a custom Go type to be mapped to a JSON Schema type/format in generated schemas.
+// emptyInstance is a value of the type to register (e.g. uuid.UUID{}, or MyMoney{}); it must not be nil.
+// jsonType is the JSON Schema type (e.g. "string", "number"); it must not be empty.
+// format is optional (e.g. "uuid", "decimal"). Registration is by reflect.TypeOf(emptyInstance).
+// Pointer fields (*T) are resolved automatically via the same mapping as T; call RegisterType once for the value type.
+// Call RegisterType at application startup before the first NewTool or NewExtractor.
+func RegisterType(emptyInstance any, jsonType, format string) {
+	if emptyInstance == nil {
+		panic("toolsy: RegisterType emptyInstance must not be nil")
+	}
+	if jsonType == "" {
+		panic("toolsy: RegisterType jsonType must not be empty")
+	}
+	t := reflect.TypeOf(emptyInstance)
+	s := &invopop.Schema{Type: jsonType, Format: format}
+	customTypesMu.Lock()
+	defer customTypesMu.Unlock()
+	if customTypes == nil {
+		customTypes = make(map[reflect.Type]*invopop.Schema)
+	}
+	customTypes[t] = s
+}
+
+// customTypeMapper returns a copy of the registered schema for t, or nil if not registered.
+// It checks exact type first, then pointer element type (t.Elem()) when t is a pointer.
+func customTypeMapper(t reflect.Type) *invopop.Schema {
+	customTypesMu.RLock()
+	defer customTypesMu.RUnlock()
+	var out *invopop.Schema
+	if customTypes != nil {
+		if s := customTypes[t]; s != nil {
+			out = s
+		} else if t.Kind() == reflect.Pointer {
+			if s := customTypes[t.Elem()]; s != nil {
+				out = s
+			}
+		}
+	}
+	if out == nil {
+		return nil
+	}
+	// Return a copy so callers do not share the same pointer.
+	return &invopop.Schema{Type: out.Type, Format: out.Format}
+}
+
 // generateSchema produces a JSON Schema map and a compiled validator for type T.
 // It is called once when building a Tool. strict sets additionalProperties: false
 // for all objects (OpenAI Structured Outputs).
 func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Schema, error) {
-	r := &invopop.Reflector{}
+	r := &invopop.Reflector{
+		DoNotReference: true,
+		Mapper:         customTypeMapper,
+	}
 	s := r.Reflect(new(T))
 	if s == nil {
 		return nil, nil, errNilSchema

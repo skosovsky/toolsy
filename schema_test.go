@@ -2,11 +2,30 @@ package toolsy
 
 import (
 	"encoding/json"
+	"maps"
+	"reflect"
 	"testing"
 
+	invopop "github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// snapshotAndRestoreCustomTypes backs up the global custom type registry and registers t.Cleanup
+// to restore it. Use in tests that call RegisterType so they do not affect other tests.
+// Do not run such tests with t.Parallel().
+func snapshotAndRestoreCustomTypes(t *testing.T) {
+	t.Helper()
+	customTypesMu.Lock()
+	before := make(map[reflect.Type]*invopop.Schema)
+	maps.Copy(before, customTypes)
+	customTypesMu.Unlock()
+	t.Cleanup(func() {
+		customTypesMu.Lock()
+		customTypes = before
+		customTypesMu.Unlock()
+	})
+}
 
 func TestGenerateSchema_Simple(t *testing.T) {
 	type Simple struct {
@@ -17,7 +36,7 @@ func TestGenerateSchema_Simple(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, compiled)
 	require.NotNil(t, m)
-	// Top-level or $defs: get the object that has "properties" (may be root or a $defs entry)
+	// Root or $defs: get the object that has "properties" (DoNotReference inlines; we support both)
 	var obj map[string]any
 	if m["properties"] != nil {
 		obj = m
@@ -135,4 +154,60 @@ func FuzzValidate(f *testing.F) {
 		_ = json.Unmarshal(data, &v)
 		_ = compiled.Validate(v)
 	})
+}
+
+func TestRegisterType_ValueType(t *testing.T) {
+	snapshotAndRestoreCustomTypes(t)
+	type MyMoney struct{}
+	RegisterType(MyMoney{}, "number", "decimal")
+	type Args struct {
+		Amount MyMoney `json:"amount"`
+	}
+	m, _, err := generateSchema[Args](false)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	props, ok := m["properties"].(map[string]any)
+	require.True(t, ok)
+	amount, ok := props["amount"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "number", amount["type"])
+	assert.Equal(t, "decimal", amount["format"])
+}
+
+func TestRegisterType_PointerFieldUsesValueMapping(t *testing.T) {
+	snapshotAndRestoreCustomTypes(t)
+	type MyMoney struct{}
+	RegisterType(MyMoney{}, "number", "decimal")
+	type Args struct {
+		Amount *MyMoney `json:"amount,omitempty"`
+	}
+	m, _, err := generateSchema[Args](false)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	props, ok := m["properties"].(map[string]any)
+	require.True(t, ok)
+	amount, ok := props["amount"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "number", amount["type"])
+	assert.Equal(t, "decimal", amount["format"])
+}
+
+func TestGenerateSchema_NoRefsOrDefs(t *testing.T) {
+	type Nested struct {
+		A string `json:"a"`
+	}
+	type Root struct {
+		N Nested `json:"n"`
+	}
+	m, _, err := generateSchema[Root](false)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	assert.Nil(t, m["$ref"], "schema must not contain $ref")
+	assert.Nil(t, m["$defs"], "schema must not contain $defs with DoNotReference")
+}
+
+func TestRegisterType_InvalidArgs_Panic(t *testing.T) {
+	snapshotAndRestoreCustomTypes(t)
+	assert.Panics(t, func() { RegisterType(nil, "string", "uuid") })
+	assert.Panics(t, func() { RegisterType(struct{}{}, "", "uuid") })
 }

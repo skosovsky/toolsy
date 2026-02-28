@@ -3,6 +3,7 @@ package toolsy
 import (
 	"encoding/json"
 	"maps"
+	"reflect"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -50,11 +51,29 @@ func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 	if err := json.Unmarshal(argsJSON, &args); err != nil {
 		return zero, &ClientError{Reason: "json parse error: " + err.Error()}
 	}
-	if err := validateCustom(any(&args)); err != nil {
+	// Layer 2: Validatable. Try args first (value receiver or T is *SomeType), then &args only
+	// for value type T when args does not implement Validatable (pointer receiver).
+	if err := runLayer2Validation(args); err != nil {
 		if IsClientError(err) {
 			return zero, err
 		}
 		return zero, &ClientError{Reason: err.Error(), Err: ErrValidation}
 	}
 	return args, nil
+}
+
+// runLayer2Validation runs Validatable.Validate() on args; if args does not implement Validatable,
+// it tries &args for value types (pointer receiver). Never calls Validate twice for the same receiver.
+func runLayer2Validation[T any](args T) error {
+	if err := validateCustom(any(args)); err != nil {
+		return err
+	}
+	if _, ok := any(args).(Validatable); ok {
+		return nil
+	}
+	typ := reflect.TypeOf(args)
+	if typ == nil || typ.Kind() == reflect.Pointer {
+		return nil
+	}
+	return validateCustom(any(&args))
 }

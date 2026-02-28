@@ -18,6 +18,9 @@
 //   - Self-Correction: ClientError carries human-readable messages back to the LLM.
 //
 // Use Extractor for schema generation and validation without a full Tool pipeline (e.g. in custom orchestrators).
+// Schema and Parameters: Extractor.Schema() and Tool.Parameters() return a shallow copy (top-level map only);
+// nested maps are shared—do not mutate the returned value or nested maps; treat as read-only or clone deeply if modifying.
+// Call RegisterType at init time to map custom types (e.g. uuid.UUID) to JSON Schema type/format before first NewTool or NewExtractor.
 // See Tool, ToolCall, ToolResult for the core types, and NewTool / NewRegistry for setup.
 //
 // # Example

@@ -112,7 +112,38 @@ schema := ext.Schema()   // JSON Schema for LLM provider adapters
 args, err := ext.ParseAndValidate(rawJSON)  // Layer 1 + Layer 2 validation, parse into T
 ```
 
+**Schema / Parameters — shallow-copy contract**  
+Both `Extractor.Schema()` and `Tool.Parameters()` return a **shallow copy**: only the top-level map is copied; nested maps (e.g. under `"properties"`) are shared with the internal schema. **Do not mutate** the returned map or any nested map—otherwise you will alter the tool’s schema for all future callers. Treat the value as read-only, or clone deeply (e.g. with a JSON round-trip or a deep-copy helper) if you need to modify it for a specific export. Generated schemas use inline definitions (no top-level `$ref`); the generator uses `DoNotReference: true`.
+
 `NewTool` is built on top of `Extractor`; both share the same schema generation and validation logic.
+
+## Custom Type Mappings
+
+By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `RegisterType` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct and has no `$ref`/`$defs` for those types.
+
+Call `RegisterType` at application startup, **before** the first `NewTool` or `NewExtractor`:
+
+```go
+import "github.com/google/uuid"
+
+func init() {
+    toolsy.RegisterType(uuid.UUID{}, "string", "uuid")
+}
+```
+
+Pointer fields are supported automatically: if you register `MyMoney{}`, then a field `*MyMoney` will use the same mapping (no need to register `*MyMoney` separately).
+
+Example for a custom “money” type:
+
+```go
+type MyMoney struct{}
+
+func init() {
+    toolsy.RegisterType(MyMoney{}, "number", "decimal")
+}
+```
+
+After registration, any struct that has a `MyMoney` or `*MyMoney` field will get `type: number`, `format: decimal` in the schema for that field.
 
 ## Strict Mode
 
@@ -169,6 +200,7 @@ if err := reg.Shutdown(ctx); err != nil {
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
 | [Middleware](https://pkg.go.dev/github.com/skosovsky/toolsy#Middleware) | WithLogging, WithRecovery, WithTimeoutMiddleware; [Registry.Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use) to apply |
 | [IsClientError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsClientError) / [IsSystemError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsSystemError) | Classify errors for LLM vs internal handling |
+| [RegisterType](https://pkg.go.dev/github.com/skosovsky/toolsy#RegisterType) | Register a custom type → JSON Schema type/format; call at startup before first NewTool/NewExtractor |
 
 ## Installation
 

@@ -30,7 +30,7 @@ func TestNewExtractor_Strict(t *testing.T) {
 	require.NotNil(t, ext)
 	schema := ext.Schema()
 	require.NotNil(t, schema)
-	// Find the object node (root or $defs entry) — invopop may use $ref + $defs for local types
+	// Find the object node (root or $defs entry; DoNotReference inlines, but we support both shapes)
 	var obj map[string]any
 	if schema["properties"] != nil {
 		obj = schema
@@ -44,6 +44,13 @@ func TestNewExtractor_Strict(t *testing.T) {
 	}
 	require.NotNil(t, obj, "expected object with properties in schema")
 	assert.Equal(t, false, obj["additionalProperties"])
+	// Strict mode also makes all properties required
+	required, ok := obj["required"].([]any)
+	require.True(t, ok, "strict schema must have required array")
+	require.Len(t, required, 2, "required must list all properties (a, b)")
+	// Order is deterministic (slices.Sort in applyStrictMode)
+	assert.Equal(t, "a", required[0])
+	assert.Equal(t, "b", required[1])
 }
 
 func TestExtractor_ParseAndValidate_Success(t *testing.T) {
@@ -116,6 +123,24 @@ func TestExtractor_ParseAndValidate_ValidatablePointer(t *testing.T) {
 	assert.ErrorIs(t, err, ErrValidation)
 }
 
+// TestExtractor_ParseAndValidate_PointerT ensures Extractor[*T] runs Validatable when T is pointer type.
+func TestExtractor_ParseAndValidate_PointerT(t *testing.T) {
+	t.Parallel()
+	ext, err := NewExtractor[*pointerValidatableArgs](false)
+	require.NoError(t, err)
+	// Valid: min <= max
+	args, err := ext.ParseAndValidate([]byte(`{"min": 1, "max": 10}`))
+	require.NoError(t, err)
+	require.NotNil(t, args)
+	assert.Equal(t, 1, args.Min)
+	assert.Equal(t, 10, args.Max)
+	// Invalid: min > max — Validate() on *pointerValidatableArgs is called
+	_, err = ext.ParseAndValidate([]byte(`{"min": 10, "max": 5}`))
+	require.Error(t, err)
+	assert.True(t, IsClientError(err))
+	assert.ErrorIs(t, err, ErrValidation)
+}
+
 func TestExtractor_Schema_ReturnsCopy(t *testing.T) {
 	t.Parallel()
 	type Args struct {
@@ -167,4 +192,49 @@ func TestExtractor_ParseAndValidate_ValidatableClientErrorPassthrough(t *testing
 	var ce *ClientError
 	require.ErrorAs(t, err, &ce)
 	assert.Equal(t, "v must be >= 0", ce.Reason)
+}
+
+// countValidatable counts Validate() calls for double-invocation test.
+type countValidatable struct {
+	X int `json:"x"`
+}
+
+var layer2ValidateCallCount int
+
+func (c countValidatable) Validate() error {
+	layer2ValidateCallCount++
+	return nil
+}
+
+// TestExtractor_ParseAndValidate_ValidatableNotCalledTwice ensures Layer-2 validation
+// runs at most once per parse (no double call for pointer-receiver fallback).
+func TestExtractor_ParseAndValidate_ValidatableNotCalledTwice(t *testing.T) {
+	layer2ValidateCallCount = 0
+	defer func() { layer2ValidateCallCount = 0 }()
+	ext, err := NewExtractor[countValidatable](false)
+	require.NoError(t, err)
+	_, err = ext.ParseAndValidate([]byte(`{"x": 1}`))
+	require.NoError(t, err)
+	assert.Equal(t, 1, layer2ValidateCallCount, "Validate() must be called exactly once")
+}
+
+// TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic ensures ParseAndValidate with T=any
+// and JSON "null" does not panic (runLayer2Validation guards reflect.TypeOf(nil)).
+func TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic(t *testing.T) {
+	ext, err := NewExtractor[any](false)
+	if err != nil {
+		t.Skip("NewExtractor[any] not supported by schema generator")
+	}
+	// Must not panic; result may be nil or schema may reject null
+	_, _ = ext.ParseAndValidate([]byte("null"))
+}
+
+// TestExtractor_ParseAndValidate_InterfaceT_Object_NoPanic ensures ParseAndValidate with T=any
+// and JSON object does not panic.
+func TestExtractor_ParseAndValidate_InterfaceT_Object_NoPanic(t *testing.T) {
+	ext, err := NewExtractor[any](false)
+	if err != nil {
+		t.Skip("NewExtractor[any] not supported by schema generator")
+	}
+	_, _ = ext.ParseAndValidate([]byte(`{}`))
 }
