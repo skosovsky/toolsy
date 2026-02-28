@@ -5,7 +5,7 @@ import (
 	"maps"
 	"reflect"
 
-	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // Extractor provides JSON Schema generation and two-layer validation (schema + Validatable)
@@ -13,19 +13,19 @@ import (
 // schema export and validated parsing but not the standard Execute([]byte) ([]byte, error) pipeline.
 type Extractor[T any] struct {
 	schemaMap map[string]any
-	compiled  *jsonschema.Schema
+	resolved  *jsonschema.Resolved
 }
 
 // NewExtractor creates an Extractor for type T. When strict is true, the generated schema
 // has additionalProperties: false for all objects and all properties required (OpenAI Structured Outputs).
 func NewExtractor[T any](strict bool) (*Extractor[T], error) {
-	schemaMap, compiled, err := generateSchema[T](strict)
+	schemaMap, resolved, err := generateSchema[T](strict)
 	if err != nil {
 		return nil, err
 	}
 	return &Extractor[T]{
 		schemaMap: schemaMap,
-		compiled:  compiled,
+		resolved:  resolved,
 	}, nil
 }
 
@@ -42,14 +42,14 @@ func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 	var zero T
 	var v any
 	if err := json.Unmarshal(argsJSON, &v); err != nil {
-		return zero, &ClientError{Reason: "json parse error: " + err.Error()}
+		return zero, wrapJSONParseError(err)
 	}
-	if err := validateAgainstSchema(e.compiled, v); err != nil {
+	if err := validateAgainstSchema(e.resolved, v); err != nil {
 		return zero, err
 	}
 	var args T
 	if err := json.Unmarshal(argsJSON, &args); err != nil {
-		return zero, &ClientError{Reason: "json parse error: " + err.Error()}
+		return zero, wrapJSONParseError(err)
 	}
 	// Layer 2: Validatable. Try args first (value receiver or T is *SomeType), then &args only
 	// for value type T when args does not implement Validatable (pointer receiver).

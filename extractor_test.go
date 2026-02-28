@@ -30,18 +30,7 @@ func TestNewExtractor_Strict(t *testing.T) {
 	require.NotNil(t, ext)
 	schema := ext.Schema()
 	require.NotNil(t, schema)
-	// Find the object node (root or $defs entry; DoNotReference inlines, but we support both shapes)
-	var obj map[string]any
-	if schema["properties"] != nil {
-		obj = schema
-	} else if defs, ok := schema["$defs"].(map[string]any); ok {
-		for _, v := range defs {
-			if o, ok := v.(map[string]any); ok && o["properties"] != nil {
-				obj = o
-				break
-			}
-		}
-	}
+	obj := findSchemaObject(schema)
 	require.NotNil(t, obj, "expected object with properties in schema")
 	assert.Equal(t, false, obj["additionalProperties"])
 	// Strict mode also makes all properties required
@@ -82,11 +71,12 @@ func TestExtractor_ParseAndValidate_InvalidJSON(t *testing.T) {
 func TestExtractor_ParseAndValidate_SchemaViolation(t *testing.T) {
 	t.Parallel()
 	type Args struct {
-		Unit string `json:"unit" jsonschema:"enum=celsius|fahrenheit"`
+		Count int `json:"count"`
 	}
 	ext, err := NewExtractor[Args](false)
 	require.NoError(t, err)
-	_, err = ext.ParseAndValidate([]byte(`{"unit": "kelvin"}`))
+	// Wrong type (string instead of int) yields schema validation error
+	_, err = ext.ParseAndValidate([]byte(`{"count": "not a number"}`))
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }

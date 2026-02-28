@@ -40,10 +40,7 @@ func NewTool[T any, R any](
 		}
 		result, err := fn(ctx, args)
 		if err != nil {
-			if IsClientError(err) {
-				return nil, err
-			}
-			return nil, &SystemError{Err: err}
+			return nil, wrapHandlerError(err)
 		}
 		out, err := json.Marshal(result)
 		if err != nil {
@@ -101,17 +98,14 @@ func NewDynamicTool(
 	execute := func(ctx context.Context, argsJSON []byte) ([]byte, error) {
 		var v any
 		if err := json.Unmarshal(argsJSON, &v); err != nil {
-			return nil, &ClientError{Reason: "json parse error: " + err.Error()}
+			return nil, wrapJSONParseError(err)
 		}
 		if err := validateAgainstSchema(compiled, v); err != nil {
 			return nil, err
 		}
 		res, err := fn(ctx, argsJSON)
 		if err != nil {
-			if IsClientError(err) {
-				return nil, err
-			}
-			return nil, &SystemError{Err: err}
+			return nil, wrapHandlerError(err)
 		}
 		return res, nil
 	}
@@ -139,6 +133,17 @@ func (t *tool) Timeout() time.Duration { return t.opts.timeout }
 func (t *tool) Tags() []string         { return append([]string(nil), t.opts.tags...) }
 func (t *tool) Version() string        { return t.opts.version }
 func (t *tool) IsDangerous() bool      { return t.opts.dangerous }
+
+// wrapHandlerError passes through ClientError; wraps other errors as SystemError.
+func wrapHandlerError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if IsClientError(err) {
+		return err
+	}
+	return &SystemError{Err: err}
+}
 
 var (
 	_ Tool         = (*tool)(nil)

@@ -47,7 +47,7 @@ func TestMinTool_ImplementsTool(_ *testing.T) {
 
 func ExampleNewTool() {
 	type Args struct {
-		City string `json:"city" jsonschema:"required,description=City name"`
+		City string `json:"city" jsonschema:"City name"`
 	}
 	type Out struct {
 		Temp float64 `json:"temp"`

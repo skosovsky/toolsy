@@ -62,9 +62,9 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 
 func TestNewDynamicTool_InvalidSchema(t *testing.T) {
 	t.Parallel()
-	// Schema that fails to compile (invalid type value)
+	// Schema that fails to resolve (type must be string or array of strings per JSON Schema)
 	invalidSchema := map[string]any{
-		"type": "notavalidtype",
+		"type": 123,
 	}
 	_, err := NewDynamicTool("bad", "Bad", invalidSchema, func(_ context.Context, _ []byte) ([]byte, error) {
 		return nil, nil
@@ -146,17 +146,7 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 	require.NoError(t, err)
 
 	params := tool.Parameters()
-	var obj map[string]any
-	if params["properties"] != nil {
-		obj = params
-	} else if defs, ok := params["$defs"].(map[string]any); ok {
-		for _, v := range defs {
-			if o, ok := v.(map[string]any); ok && o["properties"] != nil {
-				obj = o
-				break
-			}
-		}
-	}
+	obj := findSchemaObject(params)
 	require.NotNil(t, obj, "expected object with properties")
 	assert.Equal(t, false, obj["additionalProperties"])
 	required, ok := obj["required"].([]any)

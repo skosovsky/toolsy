@@ -55,3 +55,9 @@ func IsSystemError(err error) bool {
 	var se *SystemError
 	return errors.As(err, &se)
 }
+
+// wrapJSONParseError returns a ClientError for JSON unmarshal failures.
+// Used by Extractor.ParseAndValidate and NewDynamicTool execute path so parse errors are consistent.
+func wrapJSONParseError(err error) error {
+	return &ClientError{Reason: "json parse error: " + err.Error()}
+}

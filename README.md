@@ -18,7 +18,7 @@ import (
 
 func main() {
     type Args struct {
-        City string `json:"city" jsonschema:"required,description=City name"`
+        City string `json:"city" jsonschema:"City name"`
     }
     type Out struct {
         Temp float64 `json:"temp"`
@@ -48,7 +48,7 @@ func main() {
 
 ## Concept
 
-- **Single Source of Truth**: One set of struct tags (e.g. `jsonschema:"required"`, `json:"field"`) drives both the schema you send to the LLM and the validation of incoming JSON. No duplicate schemas.
+- **Single Source of Truth**: One set of struct tags (`json:"field"` for names and omitempty; `jsonschema:"description text"` — the tag value becomes the schema `description` for the property) drives both the schema you send to the LLM and the validation of incoming JSON. No duplicate schemas.
 - **Partial Success**: `ExecuteBatch` runs multiple tool calls in parallel; each result is independent. One failure does not cancel others.
 - **Self-Correction**: `ClientError` returns human-readable validation messages (e.g. "field 'city' is required") so the LLM can fix and retry.
 
@@ -87,7 +87,7 @@ After JSON Schema validation, you can add cross-field or business rules by imple
 
 ```go
 type CreateOrderArgs struct {
-    Quantity int    `json:"quantity" jsonschema:"minimum=1"`
+    Quantity int    `json:"quantity" jsonschema:"Number of items"`
     Coupon   string `json:"coupon"`
 }
 
@@ -113,7 +113,7 @@ args, err := ext.ParseAndValidate(rawJSON)  // Layer 1 + Layer 2 validation, par
 ```
 
 **Schema / Parameters — shallow-copy contract**  
-Both `Extractor.Schema()` and `Tool.Parameters()` return a **shallow copy**: only the top-level map is copied; nested maps (e.g. under `"properties"`) are shared with the internal schema. **Do not mutate** the returned map or any nested map—otherwise you will alter the tool’s schema for all future callers. Treat the value as read-only, or clone deeply (e.g. with a JSON round-trip or a deep-copy helper) if you need to modify it for a specific export. Generated schemas use inline definitions (no top-level `$ref`); the generator uses `DoNotReference: true`.
+Both `Extractor.Schema()` and `Tool.Parameters()` return a **shallow copy**: only the top-level map is copied; nested maps (e.g. under `"properties"`) are shared with the internal schema. **Do not mutate** the returned map or any nested map—otherwise you will alter the tool’s schema for all future callers. Treat the value as read-only, or clone deeply (e.g. with a JSON round-trip or a deep-copy helper) if you need to modify it for a specific export. Generated schemas are produced by [github.com/google/jsonschema-go](https://github.com/google/jsonschema-go); the root schema does not rely on top-level `$ref` for LLM compatibility.
 
 `NewTool` is built on top of `Extractor`; both share the same schema generation and validation logic.
 
@@ -146,7 +146,7 @@ reg.Register(tool)
 
 ## Custom Type Mappings
 
-By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `RegisterType` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct and has no `$ref`/`$defs` for those types.
+By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `RegisterType` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct for those fields.
 
 Call `RegisterType` at application startup, **before** the first `NewTool` or `NewExtractor`:
 
@@ -240,8 +240,7 @@ go get github.com/skosovsky/toolsy
 
 **Runtime** (required when using the library):
 
-- **github.com/invopop/jsonschema** — generate JSON Schema from Go structs
-- **github.com/santhosh-tekuri/jsonschema/v6** — validate JSON against schema
+- **github.com/google/jsonschema-go** — JSON Schema inference from Go types and validation (single engine)
 
 **Development only** (tests and examples):
 

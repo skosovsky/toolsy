@@ -61,14 +61,15 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 
 func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 	type Args struct {
-		Unit string `json:"unit" jsonschema:"enum=celsius|fahrenheit"`
+		Count int `json:"count"`
 	}
 	type Result struct{}
 	tool, err := NewTool("id", "desc", func(_ context.Context, _ Args) (Result, error) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	_, err = tool.Execute(context.Background(), []byte(`{"unit": "kelvin"}`))
+	// Wrong type for count (string instead of int) yields schema validation error
+	_, err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`))
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -137,33 +138,16 @@ func TestTool_Parameters_ShallowCopyNested(t *testing.T) {
 	require.NoError(t, err)
 	params := tool.Parameters()
 	require.NotNil(t, params)
-	var props map[string]any
-	if params["properties"] != nil {
-		props = params["properties"].(map[string]any)
-	} else if defs, ok := params["$defs"].(map[string]any); ok {
-		for _, v := range defs {
-			if m, ok := v.(map[string]any); ok && m["properties"] != nil {
-				props = m["properties"].(map[string]any)
-				break
-			}
-		}
-	}
-	require.NotNil(t, props, "expected properties in schema")
+	obj := findSchemaObject(params)
+	require.NotNil(t, obj, "expected properties in schema")
+	props, ok := obj["properties"].(map[string]any)
+	require.True(t, ok)
 	// Mutating nested map affects the tool's internal schema (shallow copy).
 	props["x"] = "mutated_nested"
 	params2 := tool.Parameters()
-	var props2 map[string]any
-	if params2["properties"] != nil {
-		props2 = params2["properties"].(map[string]any)
-	} else if defs, ok := params2["$defs"].(map[string]any); ok {
-		for _, v := range defs {
-			if m, ok := v.(map[string]any); ok && m["properties"] != nil {
-				props2 = m["properties"].(map[string]any)
-				break
-			}
-		}
-	}
-	require.NotNil(t, props2)
+	obj2 := findSchemaObject(params2)
+	require.NotNil(t, obj2)
+	props2 := obj2["properties"].(map[string]any)
 	assert.Equal(t, "mutated_nested", props2["x"], "nested maps are shared")
 }
 

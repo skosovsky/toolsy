@@ -4,12 +4,32 @@ import (
 	"encoding/json"
 	"maps"
 	"reflect"
+	"slices"
 	"testing"
 
-	invopop "github.com/invopop/jsonschema"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// findSchemaObject returns the first map in schemaMap that has "properties" (root or inside $defs).
+// Used by tests to assert on additionalProperties, required, etc.
+func findSchemaObject(schemaMap map[string]any) map[string]any {
+	if schemaMap == nil {
+		return nil
+	}
+	if schemaMap["properties"] != nil {
+		return schemaMap
+	}
+	if defs, ok := schemaMap["$defs"].(map[string]any); ok {
+		for _, v := range defs {
+			if o, ok := v.(map[string]any); ok && o["properties"] != nil {
+				return o
+			}
+		}
+	}
+	return nil
+}
 
 // snapshotAndRestoreCustomTypes backs up the global custom type registry and registers t.Cleanup
 // to restore it. Use in tests that call RegisterType so they do not affect other tests.
@@ -17,7 +37,7 @@ import (
 func snapshotAndRestoreCustomTypes(t *testing.T) {
 	t.Helper()
 	customTypesMu.Lock()
-	before := make(map[reflect.Type]*invopop.Schema)
+	before := make(map[reflect.Type]*jsonschema.Schema)
 	maps.Copy(before, customTypes)
 	customTypesMu.Unlock()
 	t.Cleanup(func() {
@@ -29,25 +49,14 @@ func snapshotAndRestoreCustomTypes(t *testing.T) {
 
 func TestGenerateSchema_Simple(t *testing.T) {
 	type Simple struct {
-		Location string `json:"location" jsonschema:"required,description=City"`
-		Unit     string `json:"unit,omitempty" jsonschema:"enum=celsius|fahrenheit,default=celsius"`
+		Location string `json:"location" jsonschema:"City name"`
+		Unit     string `json:"unit,omitempty" jsonschema:"Temperature unit"`
 	}
-	m, compiled, err := generateSchema[Simple](false)
+	m, resolved, err := generateSchema[Simple](false)
 	require.NoError(t, err)
-	require.NotNil(t, compiled)
+	require.NotNil(t, resolved)
 	require.NotNil(t, m)
-	// Root or $defs: get the object that has "properties" (DoNotReference inlines; we support both)
-	var obj map[string]any
-	if m["properties"] != nil {
-		obj = m
-	} else if defs, ok := m["$defs"].(map[string]any); ok {
-		for _, v := range defs {
-			if o, ok := v.(map[string]any); ok {
-				obj = o
-				break
-			}
-		}
-	}
+	obj := findSchemaObject(m)
 	require.NotNil(t, obj, "expected root or $defs with properties")
 	props, ok := obj["properties"].(map[string]any)
 	require.True(t, ok, "expected properties map")
@@ -123,18 +132,18 @@ func TestGenerateSchema_CompiledValidates(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
 	}
-	_, compiled, err := generateSchema[Args](false)
+	_, resolved, err := generateSchema[Args](false)
 	require.NoError(t, err)
-	require.NotNil(t, compiled)
+	require.NotNil(t, resolved)
 	// Valid JSON matching schema
-	var v any
-	require.NoError(t, json.Unmarshal([]byte(`{"x": 1}`), &v))
-	err = compiled.Validate(v)
+	var parsed any
+	require.NoError(t, json.Unmarshal([]byte(`{"x": 1}`), &parsed))
+	err = resolved.Validate(parsed)
 	assert.NoError(t, err)
 	// Invalid: wrong type
-	var vBad any
-	require.NoError(t, json.Unmarshal([]byte(`{"x": "not a number"}`), &vBad))
-	err = compiled.Validate(vBad)
+	var parsedBad any
+	require.NoError(t, json.Unmarshal([]byte(`{"x": "not a number"}`), &parsedBad))
+	err = resolved.Validate(parsedBad)
 	assert.Error(t, err)
 }
 
@@ -142,7 +151,7 @@ func FuzzValidate(f *testing.F) {
 	type Args struct {
 		X int `json:"x"`
 	}
-	_, compiled, err := generateSchema[Args](false)
+	_, resolved, err := generateSchema[Args](false)
 	if err != nil {
 		f.Skip("generateSchema failed")
 	}
@@ -150,9 +159,9 @@ func FuzzValidate(f *testing.F) {
 	f.Add([]byte(`{}`))
 	f.Add([]byte(`{"x": "y"}`))
 	f.Fuzz(func(_ *testing.T, data []byte) {
-		var v any
-		_ = json.Unmarshal(data, &v)
-		_ = compiled.Validate(v)
+		var instance any
+		_ = json.Unmarshal(data, &instance)
+		_ = resolved.Validate(instance)
 	})
 }
 
@@ -188,22 +197,59 @@ func TestRegisterType_PointerFieldUsesValueMapping(t *testing.T) {
 	require.True(t, ok)
 	amount, ok := props["amount"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "number", amount["type"])
+	// google/jsonschema-go may output "type": "number", "types": ["null", "number"], or "type": ["null", "number"] for pointer fields
+	hasNumber := false
+	if typ, ok := amount["type"].(string); ok {
+		hasNumber = typ == "number"
+	} else if types, ok := amount["types"].([]any); ok {
+		hasNumber = slices.Contains(types, "number")
+	} else if typeArr, ok := amount["type"].([]any); ok {
+		hasNumber = slices.Contains(typeArr, "number")
+	}
+	assert.True(t, hasNumber, "amount schema must allow number (type or types): %v", amount)
 	assert.Equal(t, "decimal", amount["format"])
 }
 
-func TestGenerateSchema_NoRefsOrDefs(t *testing.T) {
+// noRefInSchemaTree returns false if any node in schemaMap has a "$ref" key (LLM inline requirement).
+func noRefInSchemaTree(schemaMap map[string]any) bool {
+	if schemaMap == nil {
+		return true
+	}
+	if _, has := schemaMap["$ref"]; has {
+		return false
+	}
+	for _, val := range schemaMap {
+		switch v := val.(type) {
+		case map[string]any:
+			if !noRefInSchemaTree(v) {
+				return false
+			}
+		case []any:
+			for _, item := range v {
+				if m2, ok := item.(map[string]any); ok {
+					if !noRefInSchemaTree(m2) {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
+}
+
+func TestGenerateSchema_NoTopLevelRefOrDefs(t *testing.T) {
 	type Nested struct {
 		A string `json:"a"`
 	}
 	type Root struct {
 		N Nested `json:"n"`
 	}
-	m, _, err := generateSchema[Root](false)
+	schemaMap, _, err := generateSchema[Root](false)
 	require.NoError(t, err)
-	require.NotNil(t, m)
-	assert.Nil(t, m["$ref"], "schema must not contain $ref")
-	assert.Nil(t, m["$defs"], "schema must not contain $defs with DoNotReference")
+	require.NotNil(t, schemaMap)
+	assert.Nil(t, schemaMap["$ref"], "root schema must not contain $ref for LLM compatibility")
+	assert.Nil(t, schemaMap["$defs"], "root schema must not contain $defs for LLM compatibility")
+	assert.True(t, noRefInSchemaTree(schemaMap), "schema tree must not contain $ref in any node")
 }
 
 func TestRegisterType_InvalidArgs_Panic(t *testing.T) {
