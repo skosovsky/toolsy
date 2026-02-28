@@ -16,8 +16,8 @@ type tool struct {
 	opts        toolOptions
 }
 
-// NewTool builds a Tool from a typed function. Schema is generated from T (Layer 1);
-// if T implements Validatable, Layer 2 is run after unmarshal.
+// NewTool builds a Tool from a typed function. Schema and validation are delegated to Extractor[T];
+// Execute runs ParseAndValidate then fn, then marshals the result.
 // Returns an error if schema generation fails (e.g. unsupported type).
 func NewTool[T any, R any](
 	name, description string,
@@ -28,28 +28,14 @@ func NewTool[T any, R any](
 	for _, opt := range opts {
 		opt(&o)
 	}
-	schemaMap, compiled, err := generateSchema[T](o.strict)
+	ext, err := NewExtractor[T](o.strict)
 	if err != nil {
 		return nil, err
 	}
 	execute := func(ctx context.Context, argsJSON []byte) ([]byte, error) {
-		var v any
-		if err := json.Unmarshal(argsJSON, &v); err != nil {
-			return nil, &ClientError{Reason: "json parse error: " + err.Error()}
-		}
-		if err := validateAgainstSchema(compiled, v); err != nil {
+		args, err := ext.ParseAndValidate(argsJSON)
+		if err != nil {
 			return nil, err
-		}
-		var args T
-		// Same bytes already unmarshaled above; error here is effectively unreachable for valid JSON.
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, &ClientError{Reason: "json parse error: " + err.Error()}
-		}
-		if err := validateCustom(any(&args)); err != nil {
-			if IsClientError(err) {
-				return nil, err
-			}
-			return nil, &ClientError{Reason: err.Error(), Err: ErrValidation}
 		}
 		result, err := fn(ctx, args)
 		if err != nil {
@@ -67,7 +53,7 @@ func NewTool[T any, R any](
 	return &tool{
 		name:        name,
 		description: description,
-		schema:      schemaMap,
+		schema:      ext.Schema(),
 		execute:     execute,
 		opts:        o,
 	}, nil

@@ -1,0 +1,60 @@
+package toolsy
+
+import (
+	"encoding/json"
+	"maps"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+)
+
+// Extractor provides JSON Schema generation and two-layer validation (schema + Validatable)
+// for type T without binding to the Tool interface. Use it in custom orchestrators that need
+// schema export and validated parsing but not the standard Execute([]byte) ([]byte, error) pipeline.
+type Extractor[T any] struct {
+	schemaMap map[string]any
+	compiled  *jsonschema.Schema
+}
+
+// NewExtractor creates an Extractor for type T. When strict is true, the generated schema
+// has additionalProperties: false for all objects and all properties required (OpenAI Structured Outputs).
+func NewExtractor[T any](strict bool) (*Extractor[T], error) {
+	schemaMap, compiled, err := generateSchema[T](strict)
+	if err != nil {
+		return nil, err
+	}
+	return &Extractor[T]{
+		schemaMap: schemaMap,
+		compiled:  compiled,
+	}, nil
+}
+
+// Schema returns a shallow copy of the JSON Schema (top-level keys only).
+// Nested maps are shared; callers must not mutate them.
+func (e *Extractor[T]) Schema() map[string]any {
+	return maps.Clone(e.schemaMap)
+}
+
+// ParseAndValidate deserializes argsJSON into T, runs Layer 1 (schema validation) and
+// Layer 2 (Validatable.Validate() if T implements it). Returns ClientError for invalid
+// JSON or validation failures so the caller can pass the message to the LLM for self-correction.
+func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
+	var zero T
+	var v any
+	if err := json.Unmarshal(argsJSON, &v); err != nil {
+		return zero, &ClientError{Reason: "json parse error: " + err.Error()}
+	}
+	if err := validateAgainstSchema(e.compiled, v); err != nil {
+		return zero, err
+	}
+	var args T
+	if err := json.Unmarshal(argsJSON, &args); err != nil {
+		return zero, &ClientError{Reason: "json parse error: " + err.Error()}
+	}
+	if err := validateCustom(any(&args)); err != nil {
+		if IsClientError(err) {
+			return zero, err
+		}
+		return zero, &ClientError{Reason: err.Error(), Err: ErrValidation}
+	}
+	return args, nil
+}

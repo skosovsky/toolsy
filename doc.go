@@ -17,6 +17,7 @@
 //   - Partial Success: ExecuteBatch collects all results; one failure does not cancel others.
 //   - Self-Correction: ClientError carries human-readable messages back to the LLM.
 //
+// Use Extractor for schema generation and validation without a full Tool pipeline (e.g. in custom orchestrators).
 // See Tool, ToolCall, ToolResult for the core types, and NewTool / NewRegistry for setup.
 //
 // # Example

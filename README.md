@@ -101,6 +101,19 @@ func (a CreateOrderArgs) Validate() error {
 
 If `Validate()` returns an error, toolsy wraps it as `ClientError` when appropriate so the LLM receives a clear message.
 
+## Extractor (Schema + Validation without Tool)
+
+When you need JSON Schema and two-layer validation (schema + Validatable) but not the full Tool execute pipeline—e.g. in custom orchestrators that return `*Result` with UIAction instead of `[]byte`—use `Extractor[T]`:
+
+```go
+ext, err := toolsy.NewExtractor[MyArgs](false)
+if err != nil { ... }
+schema := ext.Schema()   // JSON Schema for LLM provider adapters
+args, err := ext.ParseAndValidate(rawJSON)  // Layer 1 + Layer 2 validation, parse into T
+```
+
+`NewTool` is built on top of `Extractor`; both share the same schema generation and validation logic.
+
 ## Strict Mode
 
 For OpenAI Structured Outputs (or when you want to reject extra properties), use `WithStrict()` when creating a tool. Strict mode sets `additionalProperties: false` for all objects in the generated schema and makes all properties required.
@@ -151,6 +164,7 @@ if err := reg.Shutdown(ctx); err != nil {
 | [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata) | Optional: Timeout, Tags, Version, IsDangerous (for tools created with NewTool) |
 | [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [ToolResult](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolResult) | Request/response for one call |
 | [NewTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewTool) | Build a Tool from a typed function `func(ctx, T) (R, error)` |
+| [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor) | Schema + validation only (no Execute); use in custom orchestrators |
 | [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry) | Create a registry; use [Register](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Register), [GetTool](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetTool) / [GetAllTools](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetAllTools), and [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute) / [ExecuteBatch](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatch) |
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
 | [Middleware](https://pkg.go.dev/github.com/skosovsky/toolsy#Middleware) | WithLogging, WithRecovery, WithTimeoutMiddleware; [Registry.Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use) to apply |
