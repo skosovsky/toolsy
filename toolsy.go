@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// Event type constants for Chunk. EventProgress is for intermediate UI status;
+// EventResult is for final data or a stream chunk.
+const (
+	EventProgress = "progress"
+	EventResult   = "result"
+)
+
 // Tool is the contract for an LLM-callable instrument.
 // It is provider-agnostic (no knowledge of OpenAI, Anthropic, etc.).
 type Tool interface {
@@ -13,10 +20,10 @@ type Tool interface {
 	Description() string
 	// Parameters returns a valid JSON Schema as map (compatible with LLM tool definitions).
 	Parameters() map[string]any
-	// Execute runs the tool and streams result data via yield. The tool may call yield
+	// Execute runs the tool and streams chunks via yield. The tool may call yield
 	// once (simple response) or multiple times (streaming). If yield returns an error,
 	// execution must stop and that error is returned (wrapped as ErrStreamAborted).
-	Execute(ctx context.Context, argsJSON []byte, yield func(data []byte) error) error
+	Execute(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error
 }
 
 // ToolMetadata is implemented by tools created with NewTool and provides optional per-tool settings.
@@ -36,17 +43,20 @@ type ToolCall struct {
 	Args     json.RawMessage // JSON payload of arguments
 }
 
-// Chunk is a single stream event from a tool execution. Used by ExecuteBatchStream so the
-// caller can identify which call and tool produced each chunk when multiple tools run in parallel.
+// Chunk is a single stream event from a tool execution. Registry (and ExecuteBatchStream) set
+// CallID and ToolName when forwarding; tools may set only Data and optionally Event, IsError, Metadata.
 type Chunk struct {
 	CallID   string
 	ToolName string
+	Event    string // EventProgress or EventResult
 	Data     []byte
+	IsError  bool           // true if Data contains error message text
+	Metadata map[string]any // optional: progress 0-100, etc.
 }
 
 // ExecutionSummary is passed to the after-execution hook (WithOnAfterExecute) when a tool
-// execution finishes (success or error). ChunksDelivered and TotalBytes reflect what was
-// successfully sent via yield before any error.
+// execution finishes (success or error). ChunksDelivered and TotalBytes count only chunks
+// with !IsError (successfully delivered result chunks).
 type ExecutionSummary struct {
 	CallID          string
 	ToolName        string

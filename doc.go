@@ -12,10 +12,9 @@
 //
 // # Key concepts
 //
-//   - Streaming: Tool.Execute and Registry.Execute accept a yield callback; tools push chunks (one or many). Use NewStreamTool for multi-chunk responses.
-//   - Single Source of Truth: one set of struct tags (json for field names/omitempty,
-//     jsonschema for descriptions) drives both the schema sent to the LLM and the validation of incoming JSON.
-//   - Partial Success: ExecuteBatchStream runs calls in parallel; chunks are tagged with CallID/ToolName (Chunk).
+//   - Streaming: Tool.Execute and Registry.Execute use yield func(Chunk) error. Chunk has CallID, ToolName, Event (EventProgress/EventResult), Data, IsError, Metadata. Use NewStreamTool for multi-chunk responses.
+//   - Single Source of Truth: one set of struct tags (json, jsonschema, description, enum) drives schema and validation.
+//   - Partial Success: ExecuteBatchStream runs calls in parallel; tool errors are sent as Chunk with IsError: true; the method returns error only for critical failures (context cancel, shutdown).
 //   - Self-Correction: ClientError carries human-readable messages back to the LLM. Yield errors become ErrStreamAborted. The after-execution hook (WithOnAfterExecute) receives ExecutionSummary.
 //
 // Use Extractor for schema generation and validation without a full Tool pipeline (e.g. in custom orchestrators).
@@ -36,5 +35,5 @@
 //	reg := toolsy.NewRegistry()
 //	reg.Register(tool)
 //	var result []byte
-//	_ = reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`)}, func(data []byte) error { result = data; return nil })
+//	_ = reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`)}, func(c toolsy.Chunk) error { result = c.Data; return nil })
 package toolsy

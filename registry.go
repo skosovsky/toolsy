@@ -11,8 +11,8 @@ import (
 
 // Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
 type Registry struct {
-	tools       map[string]Tool // wrapped with middlewares, used by Execute
-	rawTools    map[string]Tool // unwrapped, used by Use() to re-apply middlewares from scratch
+	tools       map[string]Tool
+	rawTools    map[string]Tool
 	sem         chan struct{}
 	opts        registryOptions
 	done        chan struct{}
@@ -45,7 +45,6 @@ func NewRegistry(opts ...RegistryOption) *Registry {
 }
 
 // Register adds a tool. Stored middlewares (see Use) are applied to the tool before registration.
-// If a tool with the same name already exists, it is replaced. Safe for concurrent use with Execute and other Register calls.
 func (r *Registry) Register(t Tool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -57,7 +56,7 @@ func (r *Registry) Register(t Tool) {
 	r.tools[name] = t
 }
 
-// GetAllTools returns all registered tools (e.g. for exporting to LLM providers), sorted by name for deterministic order.
+// GetAllTools returns all registered tools, sorted by name.
 func (r *Registry) GetAllTools() []Tool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -73,7 +72,7 @@ func (r *Registry) GetAllTools() []Tool {
 	return out
 }
 
-// GetTool returns the tool with the given name (after middlewares are applied), or (nil, false) if not found.
+// GetTool returns the tool with the given name, or (nil, false) if not found.
 func (r *Registry) GetTool(name string) (Tool, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -83,7 +82,8 @@ func (r *Registry) GetTool(name string) (Tool, bool) {
 
 // Execute runs one tool call and streams chunks to yield. Returns on first yield error or tool error.
 // The after-execution hook (WithOnAfterExecute) is always invoked via defer with ExecutionSummary.
-func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func([]byte) error) (err error) {
+// ChunksDelivered and TotalBytes count only chunks with !IsError.
+func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) (err error) {
 	r.mu.Lock()
 	select {
 	case <-r.done:
@@ -123,8 +123,6 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func([]byte
 	summary.CallID = call.ID
 	summary.ToolName = call.ToolName
 	start := time.Now()
-	// Ensure after-execution hook is always called with final summary (partial success or error).
-	// Recover defer is registered after onAfter so it runs first on panic and sets summary.Error before the hook runs.
 	defer func() {
 		dur := time.Since(start)
 		if r.opts.onAfter != nil {
@@ -144,20 +142,26 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func([]byte
 		r.opts.onBefore(ctx, call)
 	}
 
-	// Wrap yield to count chunks/bytes and optionally call onChunk. onChunk is only invoked for successfully delivered chunks.
-	yieldWrapped := func(chunk []byte) error {
-		err := yield(chunk)
-		if err == nil {
+	// Wrap yield: fill CallID/ToolName, count only !IsError chunks, call onChunk for successfully delivered non-error chunks.
+	toolYield := func(c Chunk) error {
+		if c.CallID == "" {
+			c.CallID = call.ID
+		}
+		if c.ToolName == "" {
+			c.ToolName = call.ToolName
+		}
+		yieldErr := yield(c)
+		if yieldErr == nil && !c.IsError {
 			summary.ChunksDelivered++
-			summary.TotalBytes += int64(len(chunk))
+			summary.TotalBytes += int64(len(c.Data))
 			if r.opts.onChunk != nil {
-				r.opts.onChunk(ctx, Chunk{CallID: call.ID, ToolName: call.ToolName, Data: chunk})
+				r.opts.onChunk(ctx, c)
 			}
 		}
-		return err
+		return yieldErr
 	}
 
-	summary.Error = tool.Execute(ctx, call.Args, yieldWrapped)
+	summary.Error = tool.Execute(ctx, call.Args, toolYield)
 	return summary.Error
 }
 
@@ -185,53 +189,50 @@ func (r *Registry) releaseSemaphore() {
 }
 
 // ExecuteBatchStream runs all calls in parallel and streams chunks via yield. Each chunk is
-// tagged with CallID and ToolName (Chunk). The library serializes calls to yield with a mutex
-// so the caller's yield does not need to be thread-safe. Returns on first error from any tool
-// or from yield (ErrStreamAborted); other goroutines are not explicitly cancelled.
+// tagged with CallID and ToolName. Tool errors are sent as Chunk with IsError: true; the method
+// returns error only for critical failures (context cancelled, shutdown). The library serializes
+// calls to yield with a mutex so the caller's callback need not be thread-safe.
 func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yield func(Chunk) error) error {
 	if len(calls) == 0 {
 		return nil
 	}
 	var yieldMu sync.Mutex
-	serializedYield := func(c Chunk) error {
+	safeYield := func(c Chunk) error {
 		yieldMu.Lock()
 		defer yieldMu.Unlock()
 		return yield(c)
 	}
 
-	var firstErr error
-	var firstErrMu sync.Mutex
-	setFirstErr := func(err error) {
-		if err == nil {
-			return
-		}
-		firstErrMu.Lock()
-		defer firstErrMu.Unlock()
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-
 	var wg sync.WaitGroup
 	for _, call := range calls {
 		wg.Go(func() {
-			toolYield := func(chunk []byte) error {
-				// Check if another goroutine already failed (best-effort skip further work).
-				firstErrMu.Lock()
-				done := firstErr != nil
-				firstErrMu.Unlock()
-				if done {
-					return ErrStreamAborted
+			toolYield := func(c Chunk) error {
+				if c.CallID == "" {
+					c.CallID = call.ID
 				}
-				return serializedYield(Chunk{CallID: call.ID, ToolName: call.ToolName, Data: chunk})
+				if c.ToolName == "" {
+					c.ToolName = call.ToolName
+				}
+				return safeYield(c)
 			}
 			if err := r.Execute(ctx, call, toolYield); err != nil {
-				setFirstErr(err)
+				// Send tool error as chunk; do not return it from ExecuteBatchStream.
+				_ = safeYield(Chunk{
+					CallID:   call.ID,
+					ToolName: call.ToolName,
+					Event:    EventResult,
+					Data:     []byte(err.Error()),
+					IsError:  true,
+				})
 			}
 		})
 	}
 	wg.Wait()
-	return firstErr
+	// Return only critical failures to avoid goroutine leaks and to let callers see all chunks.
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return nil
 }
 
 // Shutdown closes the registry for new calls and waits for in-flight executions or ctx to cancel.
@@ -258,7 +259,7 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 	}
 }
 
-// panicError wraps a recovered panic value for SystemError; used by Registry and WithRecovery middleware.
+// panicError wraps a recovered panic value for SystemError.
 type panicError struct{ p any }
 
 func (e *panicError) Error() string {

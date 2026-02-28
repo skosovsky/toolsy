@@ -102,7 +102,7 @@ func WithOnAfterExecute(fn func(context.Context, ToolCall, ExecutionSummary, tim
 	}
 }
 
-// WithOnChunk sets a hook called for each chunk successfully delivered (when yield returns nil). Observability only.
+// WithOnChunk sets a hook called for each non-error chunk successfully delivered (when yield returns nil). Observability only.
 func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 	return func(o *registryOptions) {
 		o.onChunk = fn

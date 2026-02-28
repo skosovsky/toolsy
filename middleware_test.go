@@ -17,13 +17,13 @@ func TestWithLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	inner := &minTool{name: "log_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{"ok":true}`))
+	inner.execute = func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{"ok":true}`)})
 	}
 	wrapped := WithLogging(logger)(inner)
 	var out []byte
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(chunk []byte) error {
-		out = chunk
+	err := wrapped.Execute(context.Background(), []byte(`{}`), func(c Chunk) error {
+		out = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -36,11 +36,11 @@ func TestWithLogging(t *testing.T) {
 
 func TestWithRecovery(t *testing.T) {
 	inner := &minTool{name: "panic_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	inner.execute = func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		panic("test panic")
 	}
 	wrapped := WithRecovery()(inner)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func([]byte) error { return nil })
+	err := wrapped.Execute(context.Background(), []byte(`{}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	var sysErr *SystemError
 	require.ErrorAs(t, err, &sysErr)
@@ -50,13 +50,13 @@ func TestWithRecovery(t *testing.T) {
 
 func TestWithTimeoutMiddleware(t *testing.T) {
 	inner := &minTool{name: "slow", desc: "desc", params: map[string]any{}}
-	inner.execute = func(ctx context.Context, _ []byte, _ func([]byte) error) error {
+	inner.execute = func(ctx context.Context, _ []byte, _ func(Chunk) error) error {
 		<-ctx.Done()
 		return ctx.Err()
 	}
 	wrapped := WithTimeoutMiddleware(5 * time.Millisecond)(inner)
 	ctx := context.Background()
-	err := wrapped.Execute(ctx, []byte(`{}`), func([]byte) error { return nil })
+	err := wrapped.Execute(ctx, []byte(`{}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
@@ -77,8 +77,8 @@ func TestRegistry_Use(t *testing.T) {
 	reg.Use(WithRecovery(), WithLogging(slog.Default()))
 	args, _ := json.Marshal(A{X: 2})
 	var result []byte
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)}, func(chunk []byte) error {
-		result = chunk
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)}, func(c Chunk) error {
+		result = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -107,8 +107,8 @@ func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
 	reg.Use(WithRecovery())
 	reg.Use(WithLogging(logger))
 	var result []byte
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)}, func(chunk []byte) error {
-		result = chunk
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)}, func(c Chunk) error {
+		result = c.Data
 		return nil
 	})
 	require.NoError(t, err)

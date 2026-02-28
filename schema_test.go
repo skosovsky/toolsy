@@ -64,6 +64,26 @@ func TestGenerateSchema_Simple(t *testing.T) {
 	assert.Contains(t, props, "unit")
 }
 
+// TestGenerateSchema_StructTagsDescriptionAndEnum verifies enrichSchemaFromStructTags adds description and enum from struct tags.
+func TestGenerateSchema_StructTagsDescriptionAndEnum(t *testing.T) {
+	type WithTags struct {
+		Status string `json:"status" enum:"ok,fail" description:"System status"`
+	}
+	m, _, err := generateSchema[WithTags](false)
+	require.NoError(t, err)
+	require.NotNil(t, m)
+	obj := findSchemaObject(m)
+	require.NotNil(t, obj)
+	props, ok := obj["properties"].(map[string]any)
+	require.True(t, ok)
+	statusProp, ok := props["status"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "System status", statusProp["description"])
+	enumArr, ok := statusProp["enum"].([]any)
+	require.True(t, ok)
+	assert.Equal(t, []any{"ok", "fail"}, enumArr)
+}
+
 func TestGenerateSchema_StrictMode(t *testing.T) {
 	type Nested struct {
 		A string `json:"a"`

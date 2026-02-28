@@ -16,9 +16,9 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	type Args struct {
 		N int `json:"n"`
 	}
-	tool, err := NewStreamTool("stream", "Stream N chunks", func(_ context.Context, a Args, yield func([]byte) error) error {
+	tool, err := NewStreamTool("stream", "Stream N chunks", func(_ context.Context, a Args, yield func(Chunk) error) error {
 		for i := 0; i < a.N; i++ {
-			if err := yield([]byte{byte('0' + i)}); err != nil {
+			if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
 				return err
 			}
 		}
@@ -26,8 +26,8 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var chunks [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"n": 3}`), func(chunk []byte) error {
-		chunks = append(chunks, append([]byte(nil), chunk...))
+	err = tool.Execute(context.Background(), []byte(`{"n": 3}`), func(c Chunk) error {
+		chunks = append(chunks, append([]byte(nil), c.Data...))
 		return nil
 	})
 	require.NoError(t, err)
@@ -42,15 +42,15 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 		X int `json:"x"`
 	}
 	yieldErr := errors.New("client closed")
-	tool, err := NewStreamTool("abort", "Abort on yield", func(_ context.Context, _ Args, yield func([]byte) error) error {
-		_ = yield([]byte("first"))
-		return yield([]byte("second")) // will return yieldErr from caller
+	tool, err := NewStreamTool("abort", "Abort on yield", func(_ context.Context, _ Args, yield func(Chunk) error) error {
+		_ = yield(Chunk{Data: []byte("first")})
+		return yield(Chunk{Data: []byte("second")}) // will return yieldErr from caller
 	})
 	require.NoError(t, err)
 	var received [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(chunk []byte) error {
-		received = append(received, append([]byte(nil), chunk...))
-		if string(chunk) == "first" {
+	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(c Chunk) error {
+		received = append(received, append([]byte(nil), c.Data...))
+		if string(c.Data) == "first" {
 			return nil
 		}
 		return yieldErr
@@ -64,12 +64,12 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 
 func TestNewStreamTool_ZeroChunks(t *testing.T) {
 	type Args struct{}
-	tool, err := NewStreamTool("nop", "No chunks", func(_ context.Context, _ Args, _ func([]byte) error) error {
+	tool, err := NewStreamTool("nop", "No chunks", func(_ context.Context, _ Args, _ func(Chunk) error) error {
 		return nil
 	})
 	require.NoError(t, err)
 	var count int
-	err = tool.Execute(context.Background(), []byte(`{}`), func([]byte) error {
+	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
 		count++
 		return nil
 	})
@@ -90,9 +90,9 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	require.NoError(t, err)
 	var callCount int
 	var singleChunk []byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(chunk []byte) error {
+	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
 		callCount++
-		singleChunk = chunk
+		singleChunk = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -110,7 +110,7 @@ func TestNewTool_YieldErrorReturnsErrStreamAborted(t *testing.T) {
 	})
 	require.NoError(t, err)
 	yieldErr := errors.New("connection closed")
-	err = tool.Execute(context.Background(), []byte(`{}`), func([]byte) error {
+	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
 		return yieldErr
 	})
 	require.Error(t, err)
@@ -187,7 +187,8 @@ func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
 }
 
 // TestRegistry_ExecuteBatchStream_YieldError verifies that when the batch yield callback returns
-// an error, ExecuteBatchStream returns ErrStreamAborted and partial chunks may have been delivered.
+// an error, ExecuteBatchStream still waits for goroutines and returns only critical errors (e.g. nil here).
+// Partial chunks may have been delivered before the yield failed.
 func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 	type A struct {
 		X int `json:"x"`
@@ -209,20 +210,19 @@ func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 	var chunks []Chunk
 	err = reg.ExecuteBatchStream(context.Background(), calls, func(c Chunk) error {
 		chunks = append(chunks, c)
-		// Fail on second chunk (from any call) to trigger ErrStreamAborted.
 		if len(chunks) >= 2 {
 			return yieldErr
 		}
 		return nil
 	})
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrStreamAborted)
-	// We may have received 1 or 2 chunks before yield failed (parallel execution).
+	// ExecuteBatchStream returns only critical errors; yield error is not returned.
+	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(chunks), 1)
-	assert.LessOrEqual(t, len(chunks), 2)
 	for _, c := range chunks {
 		assert.Equal(t, "double", c.ToolName)
 		assert.NotEmpty(t, c.CallID)
-		assert.NotEmpty(t, c.Data)
+		if !c.IsError {
+			assert.NotEmpty(t, c.Data)
+		}
 	}
 }

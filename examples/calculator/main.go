@@ -37,8 +37,8 @@ func main() {
 		Args:     []byte(`{"a": 3, "b": 5}`),
 	}
 	var result []byte
-	if err := reg.Execute(context.Background(), call, func(chunk []byte) error {
-		result = chunk
+	if err := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
+		result = c.Data
 		return nil
 	}); err != nil {
 		log.Fatalf("execute: %v", err)

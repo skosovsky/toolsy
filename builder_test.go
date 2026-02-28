@@ -39,8 +39,8 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(chunk []byte) error {
-		res = chunk
+	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
+		res = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	err = tool.Execute(context.Background(), []byte(`{invalid`), func([]byte) error { return nil })
+	err = tool.Execute(context.Background(), []byte(`{invalid`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -73,7 +73,7 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// Wrong type for count (string instead of int) yields schema validation error
-	err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`), func([]byte) error { return nil })
+	err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -170,9 +170,37 @@ func BenchmarkExecute(b *testing.B) {
 	}
 	ctx := context.Background()
 	argsJSON := []byte(`{"x": 42}`)
-	yield := func([]byte) error { return nil }
+	yield := func(Chunk) error { return nil }
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = tool.Execute(ctx, argsJSON, yield)
 	}
+}
+
+func TestNewProxyTool(t *testing.T) {
+	rawSchema := []byte(`{"type":"object","properties":{"x":{"type":"integer"}},"required":["x"]}`)
+	tool, err := NewProxyTool("proxy_echo", "Echo args as result", rawSchema, func(_ context.Context, rawArgs []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Event: EventResult, Data: rawArgs})
+	})
+	require.NoError(t, err)
+	require.NotNil(t, tool)
+	assert.Equal(t, "proxy_echo", tool.Name())
+	assert.Equal(t, "Echo args as result", tool.Description())
+	params := tool.Parameters()
+	require.NotNil(t, params)
+	// Valid args
+	var res []byte
+	err = tool.Execute(context.Background(), []byte(`{"x": 42}`), func(c Chunk) error {
+		res = c.Data
+		return nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	var out map[string]any
+	require.NoError(t, json.Unmarshal(res, &out))
+	assert.InDelta(t, 42.0, out["x"].(float64), 1e-9)
+	// Invalid: missing required
+	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error { return nil })
+	require.Error(t, err)
+	assert.True(t, IsClientError(err))
 }

@@ -40,14 +40,14 @@ func TestValidatable_Implemented(t *testing.T) {
 	require.NoError(t, err)
 	// Valid: low <= high
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"low":1,"high":10}`), func(chunk []byte) error {
-		res = chunk
+	err = tool.Execute(context.Background(), []byte(`{"low":1,"high":10}`), func(c Chunk) error {
+		res = c.Data
 		return nil
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	// Invalid: low > high — Validatable.Validate returns error
-	err = tool.Execute(context.Background(), []byte(`{"low":10,"high":5}`), func([]byte) error { return nil })
+	err = tool.Execute(context.Background(), []byte(`{"low":10,"high":5}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	res = nil
 	assert.Nil(t, res)
@@ -75,14 +75,14 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	require.NoError(t, err)
 	// Valid: min <= max
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"min":1,"max":10}`), func(chunk []byte) error {
-		res = chunk
+	err = tool.Execute(context.Background(), []byte(`{"min":1,"max":10}`), func(c Chunk) error {
+		res = c.Data
 		return nil
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	// Invalid: min > max — Validatable.Validate (pointer receiver) returns error
-	err = tool.Execute(context.Background(), []byte(`{"min":10,"max":5}`), func([]byte) error { return nil })
+	err = tool.Execute(context.Background(), []byte(`{"min":10,"max":5}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	res = nil
 	assert.Nil(t, res)

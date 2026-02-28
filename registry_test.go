@@ -32,8 +32,8 @@ func TestRegistry_Register_Execute(t *testing.T) {
 	var result []byte
 	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "double", Args: raw(`{"x": 7}`),
-	}, func(chunk []byte) error {
-		result = chunk
+	}, func(c Chunk) error {
+		result = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestRegistry_GetTool(t *testing.T) {
 
 func TestRegistry_Execute_ToolNotFound(t *testing.T) {
 	reg := NewRegistry()
-	err := reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "missing", Args: raw("{}")}, func([]byte) error { return nil })
+	err := reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "missing", Args: raw("{}")}, func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrToolNotFound)
 }
@@ -81,7 +81,7 @@ func TestRegistry_Execute_PanicRecovery(t *testing.T) {
 	require.NoError(t, err)
 	reg := NewRegistry(WithRecoverPanics(true))
 	reg.Register(tool)
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "panic", Args: raw(`{"x": 1}`)}, func([]byte) error { return nil })
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "panic", Args: raw(`{"x": 1}`)}, func(Chunk) error { return nil })
 	require.Error(t, err)
 	var se *SystemError
 	require.ErrorAs(t, err, &se)
@@ -106,7 +106,7 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 		}),
 	)
 	reg.Register(tool)
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "panic", Args: raw(`{"x": 1}`)}, func([]byte) error { return nil })
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "panic", Args: raw(`{"x": 1}`)}, func(Chunk) error { return nil })
 	require.Error(t, err)
 	var panicSE *SystemError
 	require.ErrorAs(t, err, &panicSE)
@@ -122,9 +122,9 @@ func TestRegistry_Execute_PanicInYield(t *testing.T) {
 	type A struct {
 		N int `json:"n"`
 	}
-	tool, err := NewStreamTool("stream_two", "Yields twice", func(_ context.Context, a A, yield func([]byte) error) error {
+	tool, err := NewStreamTool("stream_two", "Yields twice", func(_ context.Context, a A, yield func(Chunk) error) error {
 		for i := 0; i < a.N; i++ {
-			if err := yield([]byte{byte('0' + i)}); err != nil {
+			if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
 				return err
 			}
 		}
@@ -140,7 +140,7 @@ func TestRegistry_Execute_PanicInYield(t *testing.T) {
 	)
 	reg.Register(tool)
 	callCount := 0
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "stream_two", Args: raw(`{"n": 3}`)}, func([]byte) error {
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "stream_two", Args: raw(`{"n": 3}`)}, func(Chunk) error {
 		callCount++
 		if callCount == 2 {
 			panic("yield panic")
@@ -165,10 +165,10 @@ func TestRegistry_OnChunk_OnlySuccessfulChunks(t *testing.T) {
 	type A struct {
 		N int `json:"n"`
 	}
-	tool, err := NewStreamTool("stream", "Stream N", func(_ context.Context, a A, yield func([]byte) error) error {
+	tool, err := NewStreamTool("stream", "Stream N", func(_ context.Context, a A, yield func(Chunk) error) error {
 		for i := 0; i < a.N; i++ {
 			b := []byte{byte('0' + i)}
-			if err := yield(b); err != nil {
+			if err := yield(Chunk{Data: b}); err != nil {
 				return err
 			}
 		}
@@ -187,8 +187,8 @@ func TestRegistry_OnChunk_OnlySuccessfulChunks(t *testing.T) {
 		}),
 	)
 	reg.Register(tool)
-	err = reg.Execute(context.Background(), ToolCall{ID: "call-1", ToolName: "stream", Args: raw(`{"n": 3}`)}, func(data []byte) error {
-		if string(data) == "1" {
+	err = reg.Execute(context.Background(), ToolCall{ID: "call-1", ToolName: "stream", Args: raw(`{"n": 3}`)}, func(c Chunk) error {
+		if string(c.Data) == "1" {
 			return yieldErr
 		}
 		return nil
@@ -228,17 +228,21 @@ func TestRegistry_ExecuteBatchStream_PartialSuccess(t *testing.T) {
 		chunks = append(chunks, c)
 		return nil
 	})
-	// ExecuteBatchStream returns first error; one call was missing so we get ErrToolNotFound.
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrToolNotFound)
-	// We may still get chunks from successful tools before the error is aggregated
+	// ExecuteBatchStream returns nil (tool errors are sent as IsError chunks).
+	require.NoError(t, err)
 	var out R
+	var errorChunks int
 	for _, c := range chunks {
+		if c.IsError {
+			errorChunks++
+			continue
+		}
 		if c.ToolName == "double" && len(c.Data) > 0 {
 			require.NoError(t, json.Unmarshal(c.Data, &out))
 			assert.True(t, out.Y == 2 || out.Y == 6)
 		}
 	}
+	assert.GreaterOrEqual(t, errorChunks, 1, "missing tool should produce at least one error chunk")
 }
 
 func TestRegistry_Shutdown(t *testing.T) {
@@ -252,7 +256,7 @@ func TestRegistry_Shutdown(t *testing.T) {
 	defer cancel()
 	err = reg.Shutdown(ctx)
 	require.NoError(t, err)
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "nop", Args: raw("{}")}, func([]byte) error { return nil })
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "nop", Args: raw("{}")}, func(Chunk) error { return nil })
 	assert.ErrorIs(t, err, ErrShutdown)
 }
 
@@ -273,7 +277,7 @@ func TestRegistry_Shutdown_InFlight(t *testing.T) {
 	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
 	reg.Register(tool)
 	go func() {
-		_ = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "slow", Args: raw(`{"x":1}`)}, func([]byte) error { return nil })
+		_ = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "slow", Args: raw(`{"x":1}`)}, func(Chunk) error { return nil })
 	}()
 	<-started
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -302,7 +306,7 @@ func TestRegistry_Execute_CancelledContext(t *testing.T) {
 	reg.Register(tool)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "double", Args: raw(`{"x": 1}`)}, func([]byte) error { return nil })
+	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "double", Args: raw(`{"x": 1}`)}, func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled) || errors.Is(err, ErrTimeout),
 		"expected context.Canceled or ErrTimeout, got %v", err)
@@ -334,11 +338,11 @@ func TestRegistry_MaxConcurrency(t *testing.T) {
 	reg.Register(tool)
 	ctx := context.Background()
 	go func() {
-		_ = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "slow", Args: raw(`{"x": 1}`)}, func([]byte) error { return nil })
+		_ = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "slow", Args: raw(`{"x": 1}`)}, func(Chunk) error { return nil })
 	}()
 	<-started
 	assert.Equal(t, int32(1), atomic.LoadInt32(&running))
-	err = reg.Execute(ctx, ToolCall{ID: "2", ToolName: "slow", Args: raw(`{"x": 2}`)}, func([]byte) error { return nil })
+	err = reg.Execute(ctx, ToolCall{ID: "2", ToolName: "slow", Args: raw(`{"x": 2}`)}, func(Chunk) error { return nil })
 	require.NoError(t, err)
 }
 
@@ -369,7 +373,7 @@ func TestRegistry_ObservabilityHooks(t *testing.T) {
 		}),
 	)
 	reg.Register(tool)
-	err = reg.Execute(context.Background(), ToolCall{ID: "h1", ToolName: "add_one", Args: raw(`{"x": 10}`)}, func([]byte) error { return nil })
+	err = reg.Execute(context.Background(), ToolCall{ID: "h1", ToolName: "add_one", Args: raw(`{"x": 10}`)}, func(Chunk) error { return nil })
 	require.NoError(t, err)
 	assert.Equal(t, 1, beforeCalls)
 	assert.Equal(t, 1, afterCalls)
@@ -379,6 +383,55 @@ func TestRegistry_ObservabilityHooks(t *testing.T) {
 	assert.Equal(t, 1, lastSummary.ChunksDelivered)
 	assert.GreaterOrEqual(t, lastSummary.TotalBytes, int64(1), "one chunk delivered")
 	assert.GreaterOrEqual(t, lastDuration, time.Duration(0))
+}
+
+// TestRegistry_ExecuteBatchStream_ErrorIsolation verifies that when one tool fails and another succeeds,
+// ExecuteBatchStream returns nil (tool errors are sent as IsError chunks) and both outcomes are delivered.
+func TestRegistry_ExecuteBatchStream_ErrorIsolation(t *testing.T) {
+	type A struct {
+		X int `json:"x"`
+	}
+	type R struct {
+		Y int `json:"y"`
+	}
+	failTool, err := NewTool("fail_soon", "Fails", func(_ context.Context, _ A) (R, error) {
+		return R{}, errors.New("tool failed")
+	})
+	require.NoError(t, err)
+	okTool, err := NewTool("ok_later", "Succeeds after delay", func(_ context.Context, a A) (R, error) {
+		time.Sleep(100 * time.Millisecond)
+		return R{Y: a.X * 2}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
+	reg.Register(failTool)
+	reg.Register(okTool)
+	calls := []ToolCall{
+		{ID: "f1", ToolName: "fail_soon", Args: raw(`{"x": 1}`)},
+		{ID: "o1", ToolName: "ok_later", Args: raw(`{"x": 3}`)},
+	}
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(context.Background(), calls, func(c Chunk) error {
+		chunks = append(chunks, c)
+		return nil
+	})
+	require.NoError(t, err)
+	var errChunk, okChunk *Chunk
+	for i := range chunks {
+		c := &chunks[i]
+		if c.IsError {
+			errChunk = c
+		} else if c.ToolName == "ok_later" && len(c.Data) > 0 {
+			okChunk = c
+		}
+	}
+	require.NotNil(t, errChunk, "expected one chunk with IsError for fail_soon")
+	assert.Equal(t, "f1", errChunk.CallID)
+	assert.Equal(t, "fail_soon", errChunk.ToolName)
+	require.NotNil(t, okChunk, "expected one success chunk for ok_later")
+	var out R
+	require.NoError(t, json.Unmarshal(okChunk.Data, &out))
+	assert.Equal(t, 6, out.Y)
 }
 
 func TestRegistry_ExecuteBatchStream_Empty(t *testing.T) {
@@ -426,8 +479,8 @@ func TestRegistry_Register_Overwrite(t *testing.T) {
 	require.True(t, ok)
 	require.Same(t, second, got)
 	var result []byte
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "same", Args: raw(`{"x": 5}`)}, func(chunk []byte) error {
-		result = chunk
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "same", Args: raw(`{"x": 5}`)}, func(c Chunk) error {
+		result = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -481,7 +534,7 @@ func TestRegistry_OnAfter_ErrorPath(t *testing.T) {
 		lastSummary = summary
 	}))
 	reg.Register(tool)
-	err = reg.Execute(context.Background(), ToolCall{ID: "e1", ToolName: "fail", Args: raw(`{"x": 1}`)}, func([]byte) error { return nil })
+	err = reg.Execute(context.Background(), ToolCall{ID: "e1", ToolName: "fail", Args: raw(`{"x": 1}`)}, func(Chunk) error { return nil })
 	require.Error(t, err)
 	require.ErrorIs(t, err, errSentinel)
 	assert.Equal(t, 1, afterCalls)

@@ -72,14 +72,16 @@ type middlewareTool struct {
 	logger *slog.Logger
 }
 
-func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
+func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
 	m.logger.Info("tool start", "tool", m.next.Name())
 	start := time.Now()
 	var chunks, totalBytes int64
-	yieldWrapped := func(chunk []byte) error {
-		chunks++
-		totalBytes += int64(len(chunk))
-		return yield(chunk)
+	yieldWrapped := func(c Chunk) error {
+		if !c.IsError {
+			chunks++
+			totalBytes += int64(len(c.Data))
+		}
+		return yield(c)
 	}
 	var err error
 	defer func() {
@@ -96,7 +98,7 @@ func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func([]
 
 type recoveryTool struct{ toolBase }
 
-func (r *recoveryTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) (err error) {
+func (r *recoveryTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = &SystemError{Err: &panicError{p: p}}
@@ -117,7 +119,7 @@ func (t *timeoutTool) Timeout() time.Duration {
 	return t.toolBase.Timeout()
 }
 
-func (t *timeoutTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
+func (t *timeoutTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
 	if t.timeout <= 0 {
 		return t.next.Execute(ctx, args, yield)
 	}

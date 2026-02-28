@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -72,6 +73,7 @@ func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Resolved, e
 	if err := json.Unmarshal(data, &schemaMap); err != nil {
 		return nil, nil, err
 	}
+	enrichSchemaFromStructTags(schemaMap, reflect.TypeOf(*new(T)))
 	if strict {
 		applyStrictMode(schemaMap)
 	}
@@ -81,6 +83,55 @@ func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Resolved, e
 		return nil, nil, err
 	}
 	return schemaMap, resolved, nil
+}
+
+// enrichSchemaFromStructTags adds description and enum from struct tags to root-level properties.
+// typ may be a pointer; json tag (first part before comma) is used to match property keys.
+func enrichSchemaFromStructTags(schemaMap map[string]any, typ reflect.Type) {
+	if schemaMap == nil || typ == nil {
+		return
+	}
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return
+	}
+	props, ok := schemaMap["properties"].(map[string]any)
+	if !ok || len(props) == 0 {
+		return
+	}
+	// Build json name -> field for root struct
+	jsonToField := make(map[string]reflect.StructField)
+	for field := range typ.Fields() {
+		field := field
+		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+		jsonToField[jsonTag] = field
+	}
+	for key, val := range props {
+		prop, ok := val.(map[string]any)
+		if !ok {
+			continue
+		}
+		field, ok := jsonToField[key]
+		if !ok {
+			continue
+		}
+		if desc := field.Tag.Get("description"); desc != "" {
+			prop["description"] = desc
+		}
+		if enumStr := field.Tag.Get("enum"); enumStr != "" {
+			parts := strings.Split(enumStr, ",")
+			enum := make([]any, len(parts))
+			for i, p := range parts {
+				enum[i] = strings.TrimSpace(p)
+			}
+			prop["enum"] = enum
+		}
+	}
 }
 
 // walkSchema recursively visits every map node in the schema tree (including $defs and definitions).

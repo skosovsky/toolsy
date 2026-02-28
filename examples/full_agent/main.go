@@ -57,6 +57,10 @@ func main() {
 	}
 	var idx int
 	err = reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {
+		if c.IsError {
+			log.Printf("tool error [%s]: %s", c.ToolName, c.Data)
+			return nil
+		}
 		switch c.ToolName {
 		case "add":
 			var out AddOut

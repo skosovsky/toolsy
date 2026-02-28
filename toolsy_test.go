@@ -24,17 +24,36 @@ func TestToolCall_Chunk(t *testing.T) {
 	assert.Equal(t, []byte(`{"temp":22.5}`), chunk.Data)
 }
 
+// TestChunk_EventIsErrorMetadata verifies Chunk has Event, IsError, Metadata and constants EventProgress, EventResult.
+func TestChunk_EventIsErrorMetadata(t *testing.T) {
+	assert.Equal(t, "progress", EventProgress)
+	assert.Equal(t, "result", EventResult)
+	c := Chunk{
+		CallID:   "id1",
+		ToolName: "t1",
+		Event:    EventResult,
+		Data:     []byte("ok"),
+		IsError:  false,
+		Metadata: map[string]any{"percent": 50},
+	}
+	assert.Equal(t, EventResult, c.Event)
+	assert.False(t, c.IsError)
+	assert.Equal(t, 50, c.Metadata["percent"])
+	cErr := Chunk{Event: EventResult, Data: []byte("fail"), IsError: true}
+	assert.True(t, cErr.IsError)
+}
+
 // Ensure Tool interface is satisfied by a minimal impl (used in tests later).
 type minTool struct {
 	name, desc string
 	params     map[string]any
-	execute    func(context.Context, []byte, func([]byte) error) error
+	execute    func(context.Context, []byte, func(Chunk) error) error
 }
 
 func (m minTool) Name() string               { return m.name }
 func (m minTool) Description() string        { return m.desc }
 func (m minTool) Parameters() map[string]any { return m.params }
-func (m minTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
+func (m minTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
 	if m.execute != nil {
 		return m.execute(ctx, args, yield)
 	}
@@ -82,8 +101,8 @@ func ExampleRegistry_Execute() {
 	var result []byte
 	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "add_one", Args: []byte(`{"x": 5}`),
-	}, func(chunk []byte) error {
-		result = chunk
+	}, func(c Chunk) error {
+		result = c.Data
 		return nil
 	})
 	if err != nil {

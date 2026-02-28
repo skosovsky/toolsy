@@ -20,8 +20,8 @@ func TestNewDynamicTool_Success(t *testing.T) {
 		},
 		"required": []any{"x"},
 	}
-	tool, err := NewDynamicTool("dynamic", "A dynamic tool", schema, func(_ context.Context, argsJSON []byte, yield func([]byte) error) error {
-		return yield(argsJSON)
+	tool, err := NewDynamicTool("dynamic", "A dynamic tool", schema, func(_ context.Context, argsJSON []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: argsJSON})
 	})
 	require.NoError(t, err)
 	require.NotNil(t, tool)
@@ -29,8 +29,8 @@ func TestNewDynamicTool_Success(t *testing.T) {
 	assert.Equal(t, "A dynamic tool", tool.Description())
 
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 42}`), func(chunk []byte) error {
-		res = chunk
+	err = tool.Execute(context.Background(), []byte(`{"x": 42}`), func(c Chunk) error {
+		res = c.Data
 		return nil
 	})
 	require.NoError(t, err)
@@ -48,12 +48,12 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 		},
 		"required": []any{"unit"},
 	}
-	tool, err := NewDynamicTool("weather", "Weather", schema, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{}`))
+	tool, err := NewDynamicTool("weather", "Weather", schema, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{}`)})
 	})
 	require.NoError(t, err)
 
-	yieldNop := func([]byte) error { return nil }
+	yieldNop := func(Chunk) error { return nil }
 	// Missing required field
 	err = tool.Execute(context.Background(), []byte(`{}`), yieldNop)
 	require.Error(t, err)
@@ -71,13 +71,13 @@ func TestNewDynamicTool_InvalidSchema(t *testing.T) {
 	invalidSchema := map[string]any{
 		"type": 123,
 	}
-	_, err := NewDynamicTool("bad", "Bad", invalidSchema, func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	_, err := NewDynamicTool("bad", "Bad", invalidSchema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		return nil
 	})
 	require.Error(t, err)
 
 	// Nil schema
-	_, err = NewDynamicTool("nil", "Nil", nil, func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	_, err = NewDynamicTool("nil", "Nil", nil, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		return nil
 	})
 	require.Error(t, err)
@@ -98,12 +98,12 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 		"properties": map[string]any{"x": map[string]any{"type": "integer"}},
 	}
 	clientErr := &ClientError{Reason: "bad request"}
-	tool, err := NewDynamicTool("classify", "Classify", schema, func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	tool, err := NewDynamicTool("classify", "Classify", schema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		return clientErr
 	})
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func([]byte) error { return nil })
+	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 	var ce *ClientError
@@ -111,11 +111,11 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 	assert.Equal(t, "bad request", ce.Reason)
 
 	// Non-ClientError becomes SystemError
-	tool2, err := NewDynamicTool("sys", "Sys", schema, func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	tool2, err := NewDynamicTool("sys", "Sys", schema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		return errors.New("internal failure")
 	})
 	require.NoError(t, err)
-	err = tool2.Execute(context.Background(), []byte(`{"x": 1}`), func([]byte) error { return nil })
+	err = tool2.Execute(context.Background(), []byte(`{"x": 1}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsSystemError(err))
 }
@@ -123,8 +123,8 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	tool, err := NewDynamicTool("meta", "Meta", schema, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{}`))
+	tool, err := NewDynamicTool("meta", "Meta", schema, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{}`)})
 	}, WithTimeout(30*time.Second), WithTags("a", "b"), WithVersion("1.0"), WithDangerous())
 	require.NoError(t, err)
 
@@ -145,8 +145,8 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 			"b": map[string]any{"type": "integer"},
 		},
 	}
-	tool, err := NewDynamicTool("strict_tool", "Strict", schema, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{}`))
+	tool, err := NewDynamicTool("strict_tool", "Strict", schema, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{}`)})
 	}, WithStrict())
 	require.NoError(t, err)
 
@@ -176,8 +176,8 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 			"nested": nestedObj,
 		},
 	}
-	tool, err := NewDynamicTool("no_mutate", "No mutate", schemaMap, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{}`))
+	tool, err := NewDynamicTool("no_mutate", "No mutate", schemaMap, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{}`)})
 	}, WithStrict())
 	require.NoError(t, err)
 	require.NotNil(t, tool)
@@ -202,8 +202,8 @@ func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *te
 			"x": map[string]any{"type": "integer"},
 		},
 	}
-	tool, err := NewDynamicTool("isolated", "Isolated", schemaMap, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		return yield([]byte(`{}`))
+	tool, err := NewDynamicTool("isolated", "Isolated", schemaMap, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{}`)})
 	})
 	require.NoError(t, err)
 	paramsBefore := tool.Parameters()
@@ -237,7 +237,7 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 		},
 		"required": []any{"n"},
 	}
-	tool, err := NewDynamicTool("stream_dyn", "Stream N chunks", schema, func(_ context.Context, argsJSON []byte, yield func([]byte) error) error {
+	tool, err := NewDynamicTool("stream_dyn", "Stream N chunks", schema, func(_ context.Context, argsJSON []byte, yield func(Chunk) error) error {
 		var args struct {
 			N int `json:"n"`
 		}
@@ -246,7 +246,7 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 		}
 		for i := 0; i < args.N; i++ {
 			chunk := []byte{byte('0' + i)}
-			if err := yield(chunk); err != nil {
+			if err := yield(Chunk{Data: chunk}); err != nil {
 				return err
 			}
 		}
@@ -256,8 +256,8 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 	require.NotNil(t, tool)
 
 	var chunks [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"n": 4}`), func(chunk []byte) error {
-		chunks = append(chunks, append([]byte(nil), chunk...))
+	err = tool.Execute(context.Background(), []byte(`{"n": 4}`), func(c Chunk) error {
+		chunks = append(chunks, append([]byte(nil), c.Data...))
 		return nil
 	})
 	require.NoError(t, err)
@@ -271,12 +271,12 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 func TestNewDynamicTool_ZeroChunks(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	tool, err := NewDynamicTool("nop_stream", "Side-effect only", schema, func(_ context.Context, _ []byte, _ func([]byte) error) error {
+	tool, err := NewDynamicTool("nop_stream", "Side-effect only", schema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
 		return nil
 	})
 	require.NoError(t, err)
 	var count int
-	err = tool.Execute(context.Background(), []byte(`{}`), func([]byte) error {
+	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
 		count++
 		return nil
 	})
@@ -291,15 +291,15 @@ func TestNewDynamicTool_YieldError(t *testing.T) {
 		"properties": map[string]any{"x": map[string]any{"type": "integer"}},
 	}
 	yieldErr := errors.New("client closed")
-	tool, err := NewDynamicTool("abort_dyn", "Abort on yield", schema, func(_ context.Context, _ []byte, yield func([]byte) error) error {
-		_ = yield([]byte("first"))
-		return yield([]byte("second"))
+	tool, err := NewDynamicTool("abort_dyn", "Abort on yield", schema, func(_ context.Context, _ []byte, yield func(Chunk) error) error {
+		_ = yield(Chunk{Data: []byte("first")})
+		return yield(Chunk{Data: []byte("second")})
 	})
 	require.NoError(t, err)
 	var received [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(chunk []byte) error {
-		received = append(received, append([]byte(nil), chunk...))
-		if string(chunk) == "first" {
+	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(c Chunk) error {
+		received = append(received, append([]byte(nil), c.Data...))
+		if string(c.Data) == "first" {
 			return nil
 		}
 		return yieldErr

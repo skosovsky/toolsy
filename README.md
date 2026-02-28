@@ -35,8 +35,8 @@ func main() {
     var result []byte
     err = reg.Execute(context.Background(), toolsy.ToolCall{
         ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`),
-    }, func(chunk []byte) error {
-        result = chunk
+    }, func(c toolsy.Chunk) error {
+        result = c.Data
         return nil
     })
     if err != nil {
@@ -52,9 +52,9 @@ func main() {
 
 ## Concept
 
-- **Streaming**: All tools stream results via a `yield` callback. `NewTool` calls yield once with the marshalled result; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), the tool receives `ErrStreamAborted`.
-- **Single Source of Truth**: One set of struct tags (`json:"field"` for names and omitempty; `jsonschema:"description text"` — the tag value becomes the schema `description` for the property) drives both the schema you send to the LLM and the validation of incoming JSON. No duplicate schemas.
-- **Partial Success**: `ExecuteBatchStream` runs multiple tool calls in parallel; each chunk is tagged with `Chunk{CallID, ToolName, Data}`. The library serializes yield calls so your callback need not be thread-safe.
+- **Streaming**: All tools use a single contract `Execute(ctx, argsJSON, yield func(Chunk) error)`. `Chunk` carries `CallID`, `ToolName`, `Event` (e.g. `EventProgress` or `EventResult`), `Data`, `IsError`, and optional `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), the tool receives `ErrStreamAborted`.
+- **Single Source of Truth**: One set of struct tags (`json:"field"` for names and omitempty; `jsonschema:"description text"` and optionally `description:"..."` / `enum:"a,b,c"` for schema enrichment) drives both the schema you send to the LLM and the validation of incoming JSON. No duplicate schemas.
+- **Partial Success**: `ExecuteBatchStream` runs multiple tool calls in parallel; each chunk is tagged with `Chunk`. Tool errors are sent as chunks with `IsError: true`; the method returns an error only for critical failures (context cancelled, shutdown). The library serializes yield calls so your callback need not be thread-safe.
 - **Self-Correction**: `ClientError` returns human-readable validation messages (e.g. "field 'city' is required") so the LLM can fix and retry.
 
 ## Error Handling
@@ -67,8 +67,8 @@ Tool execution can fail in two ways:
 Use the provided helpers and standard library:
 
 ```go
-err := reg.Execute(ctx, call, func(chunk []byte) error {
-    // handle chunk (e.g. send to client)
+err := reg.Execute(ctx, call, func(c toolsy.Chunk) error {
+    // c.Data is the payload; c.IsError true means error message in Data
     return nil
 })
 if err != nil {
@@ -128,6 +128,18 @@ Both `Extractor.Schema()` and `Tool.Parameters()` return a **shallow copy**: onl
 
 `NewTool` is built on top of `Extractor`; both share the same schema generation and validation logic.
 
+## Proxy Tools (NewProxyTool)
+
+When you have a raw JSON Schema as bytes (e.g. from an MCP server or external spec) and want a Tool without Go struct reflection, use `NewProxyTool`. It parses and validates the schema, then runs your handler with validated raw args and `yield func(Chunk) error`. Options like `WithStrict` and `WithTimeout` apply. Tool errors are handled like `NewDynamicTool` (ClientError pass-through, yield errors → ErrStreamAborted).
+
+```go
+rawSchema := []byte(`{"type":"object","properties":{"q":{"type":"string"}},"required":["q"]}`)
+tool, err := toolsy.NewProxyTool("search", "Search", rawSchema, func(ctx context.Context, rawArgs []byte, yield func(toolsy.Chunk) error) error {
+    // rawArgs is validated; stream result
+    return yield(toolsy.Chunk{Data: result})
+})
+```
+
 ## Dynamic Tools (Runtime API Integration)
 
 When you have a JSON Schema at runtime (e.g. from OpenAPI/Swagger or a remote spec) and no Go struct, use `NewDynamicTool`. The schema map and handler function must be **non-nil**. It performs **Layer 1 only** (schema validation); the handler receives raw `[]byte`. Error handling matches `NewTool`: `ClientError` is passed through for self-correction, other errors are wrapped as `SystemError`. `ToolOption` (e.g. `WithTimeout`, `WithStrict`) is supported. The schema map you pass is **not mutated**: the constructor takes a **deep copy** of it before applying strict mode or stripping `$id`/`id`, so even nested objects in your map stay unchanged. Note: `Tool.Parameters()` still returns a **shallow copy** of the tool’s internal schema (see “Schema / Parameters — shallow-copy contract” above); that contract applies to the runtime Tool object, not to the input of `NewDynamicTool`.
@@ -143,11 +155,11 @@ schemaFromAPI := map[string]any{
     "required": []any{"endpoint", "method"},
 }
 tool, err := toolsy.NewDynamicTool("http_call", "Call HTTP API", schemaFromAPI,
-    func(ctx context.Context, argsJSON []byte, yield func([]byte) error) error {
+    func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
         var args struct{ Endpoint, Method string }
         if err := json.Unmarshal(argsJSON, &args); err != nil { return err }
-        // ... perform request, stream result via yield(resultJSON)
-        return yield(resultJSON)
+        // ... perform request, stream result via yield(toolsy.Chunk{Data: resultJSON})
+        return yield(toolsy.Chunk{Data: resultJSON})
     },
     toolsy.WithTimeout(15*time.Second),
 )
@@ -160,9 +172,9 @@ reg.Register(tool)
 For tools that produce multiple chunks (e.g. RAG search, logs), use `NewStreamTool`. Same schema/validation as `NewTool`, but the handler receives `yield` and may call it zero or more times. If `yield` returns an error (e.g. client closed connection), the error is returned as `ErrStreamAborted`.
 
 ```go
-tool, err := toolsy.NewStreamTool("search", "Search docs", func(ctx context.Context, q QueryArgs, yield func([]byte) error) error {
+tool, err := toolsy.NewStreamTool("search", "Search docs", func(ctx context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
     for _, doc := range search(q.Query) {
-        if err := yield(mustMarshal(doc)); err != nil { return err }
+        if err := yield(toolsy.Chunk{Data: mustMarshal(doc)}); err != nil { return err }
     }
     return nil
 })
@@ -244,10 +256,11 @@ if err := reg.Shutdown(ctx); err != nil {
 |--------|-------------|
 | [Tool](https://pkg.go.dev/github.com/skosovsky/toolsy#Tool) | Interface: Name, Description, Parameters (schema), Execute(ctx, argsJSON, yield) |
 | [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata) | Optional: Timeout, Tags, Version, IsDangerous (for tools from NewTool or NewDynamicTool) |
-| [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [Chunk](https://pkg.go.dev/github.com/skosovsky/toolsy#Chunk) | Request; Chunk is stream event (CallID, ToolName, Data) for batch |
-| [NewTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewTool) | Build a Tool from a typed function `func(ctx, T) (R, error)`; calls yield once |
-| [NewStreamTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewStreamTool) | Build a Tool with streaming handler `func(ctx, T, yield) error` |
-| [NewDynamicTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewDynamicTool) | Build a Tool from a raw JSON Schema map; handler gets argsJSON and yield |
+| [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [Chunk](https://pkg.go.dev/github.com/skosovsky/toolsy#Chunk) | Request; Chunk is stream event (CallID, ToolName, Event, Data, IsError, Metadata) |
+| [NewTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewTool) | Build a Tool from a typed function `func(ctx, T) (R, error)`; calls yield(Chunk) once |
+| [NewStreamTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewStreamTool) | Build a Tool with streaming handler `func(ctx, T, yield func(Chunk) error) error` |
+| [NewDynamicTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewDynamicTool) | Build a Tool from a raw JSON Schema map; handler gets argsJSON and yield func(Chunk) error |
+| [NewProxyTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewProxyTool) | Build a Tool from raw JSON Schema bytes (e.g. MCP); handler gets rawArgs and yield func(Chunk) error |
 | [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor) | Schema + validation only (no Execute); use in custom orchestrators |
 | [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry) | Create a registry; [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute)(ctx, call, yield), [ExecuteBatchStream](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatchStream)(ctx, calls, yield) |
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
