@@ -12,33 +12,33 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
-func TestToolCall_ToolResult(t *testing.T) {
+func TestToolCall_Chunk(t *testing.T) {
 	call := ToolCall{ID: "call_1", ToolName: "weather", Args: []byte(`{"location":"Moscow"}`)}
 	assert.Equal(t, "call_1", call.ID)
 	assert.Equal(t, "weather", call.ToolName)
 	assert.JSONEq(t, `{"location":"Moscow"}`, string(call.Args))
 
-	res := ToolResult{CallID: call.ID, ToolName: call.ToolName, Result: []byte(`{"temp":22.5}`), Error: nil}
-	assert.Equal(t, "call_1", res.CallID)
-	assert.Equal(t, "weather", res.ToolName)
-	assert.NoError(t, res.Error)
+	chunk := Chunk{CallID: call.ID, ToolName: call.ToolName, Data: []byte(`{"temp":22.5}`)}
+	assert.Equal(t, "call_1", chunk.CallID)
+	assert.Equal(t, "weather", chunk.ToolName)
+	assert.Equal(t, []byte(`{"temp":22.5}`), chunk.Data)
 }
 
 // Ensure Tool interface is satisfied by a minimal impl (used in tests later).
 type minTool struct {
 	name, desc string
 	params     map[string]any
-	execute    func(context.Context, []byte) ([]byte, error)
+	execute    func(context.Context, []byte, func([]byte) error) error
 }
 
 func (m minTool) Name() string               { return m.name }
 func (m minTool) Description() string        { return m.desc }
 func (m minTool) Parameters() map[string]any { return m.params }
-func (m minTool) Execute(ctx context.Context, args []byte) ([]byte, error) {
+func (m minTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
 	if m.execute != nil {
-		return m.execute(ctx, args)
+		return m.execute(ctx, args, yield)
 	}
-	return nil, nil
+	return nil
 }
 
 func TestMinTool_ImplementsTool(_ *testing.T) {
@@ -79,18 +79,22 @@ func ExampleRegistry_Execute() {
 	}
 	reg := NewRegistry()
 	reg.Register(tool)
-	result := reg.Execute(context.Background(), ToolCall{
+	var result []byte
+	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "add_one", Args: []byte(`{"x": 5}`),
+	}, func(chunk []byte) error {
+		result = chunk
+		return nil
 	})
-	if result.Error != nil {
-		panic(result.Error)
+	if err != nil {
+		panic(err)
 	}
-	// result.Result is []byte(`{"y":6}`)
+	// result is []byte(`{"y":6}`)
 	_ = result
 	// Output:
 }
 
-func ExampleRegistry_ExecuteBatch() {
+func ExampleRegistry_ExecuteBatchStream() {
 	type Args struct {
 		A int `json:"a"`
 		B int `json:"b"`
@@ -110,8 +114,12 @@ func ExampleRegistry_ExecuteBatch() {
 		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
 		{ID: "2", ToolName: "add", Args: []byte(`{"a": 10, "b": 20}`)},
 	}
-	results := reg.ExecuteBatch(context.Background(), calls)
-	// Partial success: each result is independent; failed calls have result.Error set
-	_ = results
+	err = reg.ExecuteBatchStream(context.Background(), calls, func(_ Chunk) error {
+		// handle each chunk (CallID, ToolName, Data)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 	// Output:
 }

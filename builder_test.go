@@ -38,7 +38,11 @@ func TestNewTool_Execute_Success(t *testing.T) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
-	res, err := tool.Execute(context.Background(), []byte(`{"x": 5}`))
+	var res []byte
+	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(chunk []byte) error {
+		res = chunk
+		return nil
+	})
 	require.NoError(t, err)
 	var out Result
 	require.NoError(t, json.Unmarshal(res, &out))
@@ -54,7 +58,7 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	_, err = tool.Execute(context.Background(), []byte(`{invalid`))
+	err = tool.Execute(context.Background(), []byte(`{invalid`), func([]byte) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -69,7 +73,7 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// Wrong type for count (string instead of int) yields schema validation error
-	_, err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`))
+	err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`), func([]byte) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -166,8 +170,9 @@ func BenchmarkExecute(b *testing.B) {
 	}
 	ctx := context.Background()
 	argsJSON := []byte(`{"x": 42}`)
+	yield := func([]byte) error { return nil }
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = tool.Execute(ctx, argsJSON)
+		_ = tool.Execute(ctx, argsJSON, yield)
 	}
 }

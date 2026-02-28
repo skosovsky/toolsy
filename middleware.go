@@ -72,29 +72,37 @@ type middlewareTool struct {
 	logger *slog.Logger
 }
 
-func (m *middlewareTool) Execute(ctx context.Context, args []byte) ([]byte, error) {
+func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
 	m.logger.Info("tool start", "tool", m.next.Name())
 	start := time.Now()
-	res, err := m.next.Execute(ctx, args)
-	dur := time.Since(start)
-	if err != nil {
-		m.logger.Error("tool error", "tool", m.next.Name(), "duration", dur, "error", err)
-		return nil, err
+	var chunks, totalBytes int64
+	yieldWrapped := func(chunk []byte) error {
+		chunks++
+		totalBytes += int64(len(chunk))
+		return yield(chunk)
 	}
-	m.logger.Info("tool end", "tool", m.next.Name(), "duration", dur)
-	return res, nil
+	var err error
+	defer func() {
+		dur := time.Since(start)
+		if err != nil {
+			m.logger.Error("tool error", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes, "error", err)
+		} else {
+			m.logger.Info("tool end", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes)
+		}
+	}()
+	err = m.next.Execute(ctx, args, yieldWrapped)
+	return err
 }
 
 type recoveryTool struct{ toolBase }
 
-func (r *recoveryTool) Execute(ctx context.Context, args []byte) (res []byte, err error) {
+func (r *recoveryTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			res = nil
 			err = &SystemError{Err: &panicError{p: p}}
 		}
 	}()
-	return r.next.Execute(ctx, args)
+	return r.next.Execute(ctx, args, yield)
 }
 
 type timeoutTool struct {
@@ -109,13 +117,13 @@ func (t *timeoutTool) Timeout() time.Duration {
 	return t.toolBase.Timeout()
 }
 
-func (t *timeoutTool) Execute(ctx context.Context, args []byte) ([]byte, error) {
+func (t *timeoutTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
 	if t.timeout <= 0 {
-		return t.next.Execute(ctx, args)
+		return t.next.Execute(ctx, args, yield)
 	}
 	ctx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	return t.next.Execute(ctx, args)
+	return t.next.Execute(ctx, args, yield)
 }
 
 // Use stores the given middlewares and reapplies them from scratch to all registered tools (onion order:

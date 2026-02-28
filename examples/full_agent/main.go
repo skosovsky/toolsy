@@ -1,4 +1,4 @@
-// Package main demonstrates multiple tools, ExecuteBatch, and partial success with toolsy.
+// Package main demonstrates multiple tools, ExecuteBatchStream, and streaming with toolsy.
 package main
 
 import (
@@ -49,38 +49,37 @@ func main() {
 	reg.Register(add)
 	reg.Register(mul)
 
-	// ExecuteBatch: run multiple calls in parallel (Partial Success — each result is independent)
+	// ExecuteBatchStream: run multiple calls in parallel; yield receives Chunk (CallID, ToolName, Data)
 	calls := []toolsy.ToolCall{
 		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
 		{ID: "2", ToolName: "mul", Args: []byte(`{"a": 3, "b": 4}`)},
 		{ID: "3", ToolName: "add", Args: []byte(`{"a": 10, "b": 20}`)},
 	}
-	results := reg.ExecuteBatch(context.Background(), calls)
-
-	for i, res := range results {
-		if res.Error != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "call %s (%s): %v\n", res.CallID, res.ToolName, res.Error)
-			// Self-correction: LLM can retry with corrected args when ClientError (e.g. validation)
-			if toolsy.IsClientError(res.Error) {
-				_, _ = fmt.Fprintln(os.Stderr, "  -> client error, LLM may retry with fixed input")
-			}
-			continue
-		}
-		switch res.ToolName {
+	var idx int
+	err = reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {
+		switch c.ToolName {
 		case "add":
 			var out AddOut
-			if err := json.Unmarshal(res.Result, &out); err != nil {
-				log.Printf("unmarshal add result: %v", err)
-				continue
+			if e := json.Unmarshal(c.Data, &out); e != nil {
+				log.Printf("unmarshal add result: %v", e)
+				return nil
 			}
-			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", i, out.Sum)
+			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", idx, out.Sum)
 		case "mul":
 			var out MulOut
-			if err := json.Unmarshal(res.Result, &out); err != nil {
-				log.Printf("unmarshal mul result: %v", err)
-				continue
+			if e := json.Unmarshal(c.Data, &out); e != nil {
+				log.Printf("unmarshal mul result: %v", e)
+				return nil
 			}
-			_, _ = fmt.Fprintf(os.Stdout, "result[%d] mul: product=%d\n", i, out.Product)
+			_, _ = fmt.Fprintf(os.Stdout, "result[%d] mul: product=%d\n", idx, out.Product)
+		}
+		idx++
+		return nil
+	})
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "batch error: %v\n", err)
+		if toolsy.IsClientError(err) {
+			_, _ = fmt.Fprintln(os.Stderr, "  -> client error, LLM may retry with fixed input")
 		}
 	}
 }

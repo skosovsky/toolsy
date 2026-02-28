@@ -12,7 +12,7 @@ type MockTool struct {
 	NameVal   string
 	DescVal   string
 	ParamsVal map[string]any
-	ExecuteFn func(ctx context.Context, args []byte) ([]byte, error)
+	ExecuteFn func(ctx context.Context, args []byte, yield func([]byte) error) error
 }
 
 // Name returns the tool name.
@@ -36,12 +36,12 @@ func (m *MockTool) Parameters() map[string]any {
 	return map[string]any{}
 }
 
-// Execute runs ExecuteFn if set, otherwise returns nil, nil.
-func (m *MockTool) Execute(ctx context.Context, args []byte) ([]byte, error) {
+// Execute runs ExecuteFn if set, otherwise returns nil.
+func (m *MockTool) Execute(ctx context.Context, args []byte, yield func([]byte) error) error {
 	if m.ExecuteFn != nil {
-		return m.ExecuteFn(ctx, args)
+		return m.ExecuteFn(ctx, args, yield)
 	}
-	return nil, nil
+	return nil
 }
 
 // Ensure MockTool implements Tool.

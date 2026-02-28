@@ -17,11 +17,15 @@ func TestWithLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	inner := &minTool{name: "log_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte) ([]byte, error) {
-		return []byte(`{"ok":true}`), nil
+	inner.execute = func(_ context.Context, _ []byte, yield func([]byte) error) error {
+		return yield([]byte(`{"ok":true}`))
 	}
 	wrapped := WithLogging(logger)(inner)
-	out, err := wrapped.Execute(context.Background(), []byte(`{}`))
+	var out []byte
+	err := wrapped.Execute(context.Background(), []byte(`{}`), func(chunk []byte) error {
+		out = chunk
+		return nil
+	})
 	require.NoError(t, err)
 	assert.Equal(t, []byte(`{"ok":true}`), out)
 	logStr := buf.String()
@@ -32,13 +36,12 @@ func TestWithLogging(t *testing.T) {
 
 func TestWithRecovery(t *testing.T) {
 	inner := &minTool{name: "panic_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte) ([]byte, error) {
+	inner.execute = func(_ context.Context, _ []byte, _ func([]byte) error) error {
 		panic("test panic")
 	}
 	wrapped := WithRecovery()(inner)
-	res, err := wrapped.Execute(context.Background(), []byte(`{}`))
+	err := wrapped.Execute(context.Background(), []byte(`{}`), func([]byte) error { return nil })
 	require.Error(t, err)
-	assert.Nil(t, res)
 	var sysErr *SystemError
 	require.ErrorAs(t, err, &sysErr)
 	// SystemError hides message; unwrapped error contains "panic"
@@ -47,15 +50,14 @@ func TestWithRecovery(t *testing.T) {
 
 func TestWithTimeoutMiddleware(t *testing.T) {
 	inner := &minTool{name: "slow", desc: "desc", params: map[string]any{}}
-	inner.execute = func(ctx context.Context, _ []byte) ([]byte, error) {
+	inner.execute = func(ctx context.Context, _ []byte, _ func([]byte) error) error {
 		<-ctx.Done()
-		return nil, ctx.Err()
+		return ctx.Err()
 	}
 	wrapped := WithTimeoutMiddleware(5 * time.Millisecond)(inner)
 	ctx := context.Background()
-	res, err := wrapped.Execute(ctx, []byte(`{}`))
+	err := wrapped.Execute(ctx, []byte(`{}`), func([]byte) error { return nil })
 	require.Error(t, err)
-	assert.Nil(t, res)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
@@ -74,10 +76,14 @@ func TestRegistry_Use(t *testing.T) {
 	reg.Register(tool)
 	reg.Use(WithRecovery(), WithLogging(slog.Default()))
 	args, _ := json.Marshal(A{X: 2})
-	result := reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)})
-	require.NoError(t, result.Error)
+	var result []byte
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)}, func(chunk []byte) error {
+		result = chunk
+		return nil
+	})
+	require.NoError(t, err)
 	var r R
-	require.NoError(t, json.Unmarshal(result.Result, &r))
+	require.NoError(t, json.Unmarshal(result, &r))
 	assert.Equal(t, 3, r.Y)
 }
 
@@ -100,12 +106,16 @@ func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
 	reg.Register(tool)
 	reg.Use(WithRecovery())
 	reg.Use(WithLogging(logger))
-	result := reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)})
-	require.NoError(t, result.Error)
+	var result []byte
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)}, func(chunk []byte) error {
+		result = chunk
+		return nil
+	})
+	require.NoError(t, err)
 	logStr := buf.String()
 	// With double-wrap we would see "tool start" twice (Logging(Logging(tool))). With rewrap-from-raw we see once.
 	require.Equal(t, 1, strings.Count(logStr, "tool start"))
 	var r R
-	require.NoError(t, json.Unmarshal(result.Result, &r))
+	require.NoError(t, json.Unmarshal(result, &r))
 	assert.Equal(t, 6, r.Y)
 }

@@ -22,11 +22,15 @@ func TestWithStrict(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 	// Valid args
-	res, err := tool.Execute(context.Background(), []byte(`{"x":1}`))
+	var res []byte
+	err = tool.Execute(context.Background(), []byte(`{"x":1}`), func(chunk []byte) error {
+		res = chunk
+		return nil
+	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 	// Extra property should fail schema validation (strict mode)
-	_, err = tool.Execute(context.Background(), []byte(`{"x":1,"extra":2}`))
+	err = tool.Execute(context.Background(), []byte(`{"x":1,"extra":2}`), func([]byte) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -42,7 +46,11 @@ func TestWithTimeout(t *testing.T) {
 	if meta, ok := tool.(ToolMetadata); ok {
 		assert.Equal(t, time.Second, meta.Timeout())
 	}
-	res, err := tool.Execute(context.Background(), []byte(`{}`))
+	var res []byte
+	err = tool.Execute(context.Background(), []byte(`{}`), func(chunk []byte) error {
+		res = chunk
+		return nil
+	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 }
@@ -98,7 +106,11 @@ func TestToolOptions_Combined(t *testing.T) {
 	}, WithStrict(), WithTimeout(time.Millisecond), WithVersion("0.1"))
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	res, err := tool.Execute(context.Background(), []byte(`{"n":21}`))
+	var res []byte
+	err = tool.Execute(context.Background(), []byte(`{"n":21}`), func(chunk []byte) error {
+		res = chunk
+		return nil
+	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
 }

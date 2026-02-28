@@ -61,7 +61,8 @@ type registryOptions struct {
 	maxConcurrency int
 	recoverPanics  bool
 	onBefore       func(context.Context, ToolCall)
-	onAfter        func(context.Context, ToolCall, ToolResult, time.Duration)
+	onAfter        func(context.Context, ToolCall, ExecutionSummary, time.Duration)
+	onChunk        func(context.Context, Chunk)
 }
 
 // WithDefaultTimeout sets the default execution timeout for tools.
@@ -93,9 +94,17 @@ func WithOnBeforeExecute(fn func(context.Context, ToolCall)) RegistryOption {
 	}
 }
 
-// WithOnAfterExecute sets a hook called after each tool execution.
-func WithOnAfterExecute(fn func(context.Context, ToolCall, ToolResult, time.Duration)) RegistryOption {
+// WithOnAfterExecute sets a hook called after each tool execution (always invoked via defer,
+// even on partial success or error). Summary reports chunks/bytes delivered and final error.
+func WithOnAfterExecute(fn func(context.Context, ToolCall, ExecutionSummary, time.Duration)) RegistryOption {
 	return func(o *registryOptions) {
 		o.onAfter = fn
+	}
+}
+
+// WithOnChunk sets a hook called for each chunk successfully delivered (when yield returns nil). Observability only.
+func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
+	return func(o *registryOptions) {
+		o.onChunk = fn
 	}
 }

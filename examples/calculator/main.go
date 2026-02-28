@@ -36,12 +36,15 @@ func main() {
 		ToolName: "add",
 		Args:     []byte(`{"a": 3, "b": 5}`),
 	}
-	result := reg.Execute(context.Background(), call)
-	if result.Error != nil {
-		log.Fatalf("execute: %v", result.Error)
+	var result []byte
+	if err := reg.Execute(context.Background(), call, func(chunk []byte) error {
+		result = chunk
+		return nil
+	}); err != nil {
+		log.Fatalf("execute: %v", err)
 	}
 	var out CalcResult
-	if err := json.Unmarshal(result.Result, &out); err != nil {
+	if err := json.Unmarshal(result, &out); err != nil {
 		log.Fatalf("unmarshal: %v", err)
 	}
 	_, _ = fmt.Fprintf(os.Stdout, "3 + 5 = %d\n", out.Sum)

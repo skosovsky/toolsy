@@ -7,10 +7,11 @@ import (
 
 // Sentinel errors for toolsy. Use errors.Is to check.
 var (
-	ErrToolNotFound = errors.New("tool not found")
-	ErrTimeout      = errors.New("tool execution timeout")
-	ErrValidation   = errors.New("validation failed")
-	ErrShutdown     = errors.New("registry is shutting down")
+	ErrToolNotFound  = errors.New("tool not found")
+	ErrTimeout       = errors.New("tool execution timeout")
+	ErrValidation    = errors.New("validation failed")
+	ErrShutdown      = errors.New("registry is shutting down")
+	ErrStreamAborted = errors.New("stream aborted by caller")
 )
 
 // ClientError is an error that should be sent back to the LLM for self-correction
@@ -60,4 +61,13 @@ func IsSystemError(err error) bool {
 // Used by Extractor.ParseAndValidate and NewDynamicTool execute path so parse errors are consistent.
 func wrapJSONParseError(err error) error {
 	return &ClientError{Reason: "json parse error: " + err.Error()}
+}
+
+// wrapYieldError wraps an error returned by the yield callback so that callers can detect
+// stream abortion via errors.Is(err, ErrStreamAborted). The original cause is preserved for Unwrap.
+func wrapYieldError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %w", ErrStreamAborted, err)
 }

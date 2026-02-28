@@ -10,7 +10,7 @@ import (
 
 // Extractor provides JSON Schema generation and two-layer validation (schema + Validatable)
 // for type T without binding to the Tool interface. Use it in custom orchestrators that need
-// schema export and validated parsing but not the standard Execute([]byte) ([]byte, error) pipeline.
+// schema export and validated parsing but not the full Tool Execute(ctx, argsJSON, yield) pipeline.
 type Extractor[T any] struct {
 	schemaMap map[string]any
 	resolved  *jsonschema.Resolved

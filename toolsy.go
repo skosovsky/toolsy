@@ -13,8 +13,10 @@ type Tool interface {
 	Description() string
 	// Parameters returns a valid JSON Schema as map (compatible with LLM tool definitions).
 	Parameters() map[string]any
-	// Execute accepts raw JSON from the LLM, runs the logic, and returns raw JSON result or error.
-	Execute(ctx context.Context, argsJSON []byte) ([]byte, error)
+	// Execute runs the tool and streams result data via yield. The tool may call yield
+	// once (simple response) or multiple times (streaming). If yield returns an error,
+	// execution must stop and that error is returned (wrapped as ErrStreamAborted).
+	Execute(ctx context.Context, argsJSON []byte, yield func(data []byte) error) error
 }
 
 // ToolMetadata is implemented by tools created with NewTool and provides optional per-tool settings.
@@ -34,10 +36,21 @@ type ToolCall struct {
 	Args     json.RawMessage // JSON payload of arguments
 }
 
-// ToolResult is the outcome of one tool execution (to be sent back to the LLM).
-type ToolResult struct {
+// Chunk is a single stream event from a tool execution. Used by ExecuteBatchStream so the
+// caller can identify which call and tool produced each chunk when multiple tools run in parallel.
+type Chunk struct {
 	CallID   string
 	ToolName string
-	Result   json.RawMessage
-	Error    error
+	Data     []byte
+}
+
+// ExecutionSummary is passed to the after-execution hook (WithOnAfterExecute) when a tool
+// execution finishes (success or error). ChunksDelivered and TotalBytes reflect what was
+// successfully sent via yield before any error.
+type ExecutionSummary struct {
+	CallID          string
+	ToolName        string
+	Error           error
+	ChunksDelivered int
+	TotalBytes      int64
 }
