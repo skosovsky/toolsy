@@ -86,14 +86,7 @@ func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Schema, err
 	}
 	// Remove $id/id so compiler uses our resource URL and does not resolve external refs.
 	stripSchemaIDs(m)
-	// Use an absolute URL so the compiler never treats it as a file path (avoids failures
-	// when cwd contains spaces or non-ASCII characters).
-	schemaURL := "https://toolsy.local/schema.json"
-	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource(schemaURL, m); err != nil {
-		return nil, nil, err
-	}
-	compiled, err := compiler.Compile(schemaURL)
+	compiled, err := compileRawSchema(m)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,6 +137,19 @@ func applyStrictMode(m map[string]any) {
 }
 
 var errNilSchema = errors.New("schema reflection returned nil")
+
+// schemaURL is used when compiling so the compiler does not treat the schema as a file path.
+const schemaURL = "https://toolsy.local/schema.json"
+
+// compileRawSchema compiles a raw JSON Schema map into a validator. The map is not mutated.
+// Callers must ensure the schema is valid (e.g. no conflicting $id that would break resolution).
+func compileRawSchema(schemaMap map[string]any) (*jsonschema.Schema, error) {
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(schemaURL, schemaMap); err != nil {
+		return nil, err
+	}
+	return compiler.Compile(schemaURL)
+}
 
 // stripSchemaIDs removes id and $id from schema so the compiler uses the resource URL.
 func stripSchemaIDs(m map[string]any) {

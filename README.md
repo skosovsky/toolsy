@@ -117,6 +117,33 @@ Both `Extractor.Schema()` and `Tool.Parameters()` return a **shallow copy**: onl
 
 `NewTool` is built on top of `Extractor`; both share the same schema generation and validation logic.
 
+## Dynamic Tools (Runtime API Integration)
+
+When you have a JSON Schema at runtime (e.g. from OpenAPI/Swagger or a remote spec) and no Go struct, use `NewDynamicTool`. The schema map and handler function must be **non-nil**. It performs **Layer 1 only** (schema validation); the handler receives raw `[]byte`. Error handling matches `NewTool`: `ClientError` is passed through for self-correction, other errors are wrapped as `SystemError`. `ToolOption` (e.g. `WithTimeout`, `WithStrict`) is supported. The schema map you pass is **not mutated**: the constructor takes a **deep copy** of it before applying strict mode or stripping `$id`/`id`, so even nested objects in your map stay unchanged. Note: `Tool.Parameters()` still returns a **shallow copy** of the tool’s internal schema (see “Schema / Parameters — shallow-copy contract” above); that contract applies to the runtime Tool object, not to the input of `NewDynamicTool`.
+
+```go
+// Example: register a tool from an OpenAPI-style schema
+schemaFromAPI := map[string]any{
+    "type": "object",
+    "properties": map[string]any{
+        "endpoint": map[string]any{"type": "string", "description": "API path"},
+        "method":   map[string]any{"type": "string", "enum": []any{"GET", "POST"}},
+    },
+    "required": []any{"endpoint", "method"},
+}
+tool, err := toolsy.NewDynamicTool("http_call", "Call HTTP API", schemaFromAPI,
+    func(ctx context.Context, argsJSON []byte) ([]byte, error) {
+        var args struct{ Endpoint, Method string }
+        if err := json.Unmarshal(argsJSON, &args); err != nil { return nil, err }
+        // ... perform request, return result as JSON
+        return resultJSON, nil
+    },
+    toolsy.WithTimeout(15*time.Second),
+)
+if err != nil { ... }
+reg.Register(tool)
+```
+
 ## Custom Type Mappings
 
 By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `RegisterType` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct and has no `$ref`/`$defs` for those types.
@@ -192,9 +219,10 @@ if err := reg.Shutdown(ctx); err != nil {
 | Symbol | Description |
 |--------|-------------|
 | [Tool](https://pkg.go.dev/github.com/skosovsky/toolsy#Tool) | Interface: Name, Description, Parameters (schema), Execute |
-| [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata) | Optional: Timeout, Tags, Version, IsDangerous (for tools created with NewTool) |
+| [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata) | Optional: Timeout, Tags, Version, IsDangerous (for tools from NewTool or NewDynamicTool) |
 | [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [ToolResult](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolResult) | Request/response for one call |
 | [NewTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewTool) | Build a Tool from a typed function `func(ctx, T) (R, error)` |
+| [NewDynamicTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewDynamicTool) | Build a Tool from a raw JSON Schema map (runtime/OpenAPI); Layer 1 validation only, handler gets `[]byte` |
 | [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor) | Schema + validation only (no Execute); use in custom orchestrators |
 | [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry) | Create a registry; use [Register](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Register), [GetTool](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetTool) / [GetAllTools](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetAllTools), and [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute) / [ExecuteBatch](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatch) |
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
