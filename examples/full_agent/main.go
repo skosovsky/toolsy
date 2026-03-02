@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -46,6 +47,7 @@ func main() {
 		toolsy.WithDefaultTimeout(5*time.Second),
 		toolsy.WithMaxConcurrency(4),
 	)
+	reg.Use(toolsy.WithLogging(slog.Default())) // middleware: log every tool start/end
 	reg.Register(add)
 	reg.Register(mul)
 

@@ -104,7 +104,6 @@ func enrichSchemaFromStructTags(schemaMap map[string]any, typ reflect.Type) {
 	// Build json name -> field for root struct
 	jsonToField := make(map[string]reflect.StructField)
 	for field := range typ.Fields() {
-		field := field
 		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
 		if jsonTag == "" || jsonTag == "-" {
 			continue

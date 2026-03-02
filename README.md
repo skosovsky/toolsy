@@ -3,9 +3,13 @@
 **Universal AI Tool Engine for Go** — register typed functions as tools, get JSON Schema for LLMs, validate and execute calls with a single pipeline.
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/skosovsky/toolsy.svg)](https://pkg.go.dev/github.com/skosovsky/toolsy)  
+[![Build Status](https://github.com/skosovsky/toolsy/workflows/Go/badge.svg)](https://github.com/skosovsky/toolsy/actions)  
+[![Coverage](https://img.shields.io/badge/coverage-go%20test-green)](https://github.com/skosovsky/toolsy)  
 Go 1.26+ · [License](LICENSE)
 
-## Quick Start
+**TL;DR** — toolsy is a type-safe framework for creating, routing, and executing LLM tools (Function Calling) in Go. It generates JSON Schema from Go structs, validates input from the LLM, and supports middleware.
+
+## Quick Start (AI-Friendly: GetWeather full cycle)
 
 ```go
 package main
@@ -32,6 +36,9 @@ func main() {
     reg := toolsy.NewRegistry()
     reg.Register(tool)
 
+    // Send schema to your LLM provider (OpenAI, Anthropic, etc.) so it can call the tool
+    _ = tool.Parameters() // JSON Schema map; pass to your LLM SDK (do not mutate—shallow copy)
+
     var result []byte
     err = reg.Execute(context.Background(), toolsy.ToolCall{
         ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`),
@@ -50,19 +57,29 @@ func main() {
 }
 ```
 
-## Concept
+## Key concepts (architecture)
 
-- **Streaming**: All tools use a single contract `Execute(ctx, argsJSON, yield func(Chunk) error)`. `Chunk` carries `CallID`, `ToolName`, `Event` (e.g. `EventProgress` or `EventResult`), `Data`, `IsError`, and optional `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), the tool receives `ErrStreamAborted`.
-- **Single Source of Truth**: One set of struct tags (`json:"field"` for names and omitempty; `jsonschema:"description text"` and optionally `description:"..."` / `enum:"a,b,c"` for schema enrichment) drives both the schema you send to the LLM and the validation of incoming JSON. No duplicate schemas.
-- **Partial Success**: `ExecuteBatchStream` runs multiple tool calls in parallel; each chunk is tagged with `Chunk`. Tool errors are sent as chunks with `IsError: true`; the method returns an error only for critical failures (context cancelled, shutdown). The library serializes yield calls so your callback need not be thread-safe.
-- **Self-Correction**: `ClientError` returns human-readable validation messages (e.g. "field 'city' is required") so the LLM can fix and retry.
+- **Schema Extractor**: Go types become the tool spec. Use struct tags: `json:"field"` (name, omitempty), `jsonschema:"description"`, `description:"..."`, `enum:"a,b,c"`. `Extractor.Schema()` and `Tool.Parameters()` return a shallow copy—do not mutate. Generated schema uses [github.com/google/jsonschema-go](https://github.com/google/jsonschema-go).
+- **Registry**: Holds tools; look up by name with `GetTool(name)` or list all with `GetAllTools()`. `Execute(ctx, call, yield)` runs one call; `ExecuteBatchStream(ctx, calls, yield)` runs many in parallel. Tool errors go into the stream as `Chunk{IsError: true}`; the method returns an error only for critical failures (context cancelled, shutdown). Yield calls are serialized by the library so your callback need not be thread-safe.
+- **Middleware**: Signature `func(Tool) Tool`. Apply with `Registry.Use(WithLogging(...), WithTimeoutMiddleware(...))`; first in the list is the outermost. Use replaces the chain if called again.
+- **Validation**: Two layers before your Go function runs: (1) JSON Schema validation, (2) optional `Validatable.Validate()` on the args struct. Validation failures become `ClientError` so the LLM can self-correct.
 
-## Error Handling
+**Streaming**: All tools use `Execute(ctx, argsJSON, yield func(Chunk) error)`. `Chunk` has `CallID`, `ToolName`, `Event` (e.g. `EventProgress`, `EventResult`), `Data`, `IsError`, `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), execution stops and the tool returns `ErrStreamAborted`.
 
-Tool execution can fail in two ways:
+## Error handling
+
+**For AI agents**: Classify errors and pass the right message back to the LLM.
+
+- **Invalid JSON from LLM** → `ClientError` (parse error). Use `IsClientError(err)` or `errors.Is(err, toolsy.ErrValidation)`; send `err.Error()` to the LLM so it can fix the payload.
+- **Tool not found** → `ErrToolNotFound`. Do not send tool calls for unregistered names; or return a generic message.
+- **Self-correction**: When `IsClientError(err)` is true, return `err.Error()` to the LLM so it can adjust arguments and retry. When `IsSystemError(err)` or `errors.Is(err, toolsy.ErrTimeout)` etc., do **not** expose the underlying message or stack to the LLM—log internally and return a generic user message.
+
+Tool execution fails in two broad ways:
 
 - **ClientError** — invalid input (bad JSON, schema validation, bad enum). Safe to return the message to the LLM for self-correction. Optionally wraps a sentinel (e.g. `ErrValidation`) and supports `Retryable` for transient cases.
 - **SystemError** — internal failure (panic, timeout, DB down). Do not expose the underlying error or stack to the LLM.
+
+**Sentinel errors** (use `errors.Is`): `ErrToolNotFound`, `ErrTimeout`, `ErrValidation`, `ErrShutdown`, `ErrStreamAborted`. Helpers: `IsClientError(err)`, `IsSystemError(err)`.
 
 Use the provided helpers and standard library:
 
@@ -91,6 +108,36 @@ if err != nil {
 ```
 
 **Self-correction loop**: LLM calls tool → gets `ClientError` with reason → adjusts arguments → calls again. Do not use `ClientError` for internal/transient errors; use `SystemError` or wrap with `ErrTimeout` etc.
+
+## Testing (how to test tools)
+
+The `testutil` package provides mocks so you can unit-test tool flows without calling a real LLM.
+
+- **testutil.MockTool** — set `NameVal`, `DescVal`, `ParamsVal`, and `ExecuteFn` to control behavior. Use in tests that need a `Tool` implementation.
+- **testutil.NewTestRegistry(tools...)** — returns a `*toolsy.Registry` with a long timeout and panic recovery, with the given tools already registered.
+
+Example:
+
+```go
+import "github.com/skosovsky/toolsy/testutil"
+
+func TestMyHandler(t *testing.T) {
+    mock := &testutil.MockTool{
+        NameVal: "echo",
+        ExecuteFn: func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {
+            return yield(toolsy.Chunk{Data: args})
+        },
+    }
+    reg := testutil.NewTestRegistry(mock)
+    var result []byte
+    err := reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "echo", Args: []byte(`{"x":1}`)}, func(c toolsy.Chunk) error {
+        result = c.Data
+        return nil
+    })
+    require.NoError(t, err)
+    assert.Equal(t, []byte(`{"x":1}`), result)
+}
+```
 
 ## Custom Validation (Validatable)
 
@@ -262,7 +309,9 @@ if err := reg.Shutdown(ctx); err != nil {
 | [NewDynamicTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewDynamicTool) | Build a Tool from a raw JSON Schema map; handler gets argsJSON and yield func(Chunk) error |
 | [NewProxyTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewProxyTool) | Build a Tool from raw JSON Schema bytes (e.g. MCP); handler gets rawArgs and yield func(Chunk) error |
 | [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor) | Schema + validation only (no Execute); use in custom orchestrators |
-| [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry) | Create a registry; [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute)(ctx, call, yield), [ExecuteBatchStream](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatchStream)(ctx, calls, yield) |
+| [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry) | Create a registry; [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute)(ctx, call, yield), [ExecuteBatchStream](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatchStream)(ctx, calls, yield), [GetTool](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetTool), [GetAllTools](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetAllTools), [Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use), [Shutdown](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Shutdown) |
+| Registry options | WithDefaultTimeout, WithMaxConcurrency, WithRecoverPanics; WithOnBeforeExecute, WithOnAfterExecute (receives [ExecutionSummary](https://pkg.go.dev/github.com/skosovsky/toolsy#ExecutionSummary)), WithOnChunk |
+| ToolOption | WithStrict, WithTimeout, WithTags, WithVersion, WithDangerous (metadata for tools from NewTool/NewDynamicTool) |
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
 | [Middleware](https://pkg.go.dev/github.com/skosovsky/toolsy#Middleware) | WithLogging, WithRecovery, WithTimeoutMiddleware; [Registry.Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use) to apply |
 | [IsClientError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsClientError) / [IsSystemError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsSystemError) | Classify errors; [ErrStreamAborted](https://pkg.go.dev/github.com/skosovsky/toolsy#ErrStreamAborted) when yield fails |

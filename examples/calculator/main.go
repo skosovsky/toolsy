@@ -28,8 +28,21 @@ func main() {
 		log.Fatalf("NewTool: %v", err)
 	}
 
+	type SubResult struct {
+		Diff int `json:"diff"`
+	}
+	sub, err := toolsy.NewTool("sub", "Subtract b from a", func(_ context.Context, args CalcArgs) (SubResult, error) {
+		return SubResult{Diff: args.A - args.B}, nil
+	})
+	if err != nil {
+		log.Fatalf("NewTool sub: %v", err)
+	}
+
 	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(5 * time.Second))
 	reg.Register(add)
+	reg.Register(sub)
+	// Schema for LLM: pass add.Parameters() or sub.Parameters() to your provider (do not mutate)
+	_ = add.Parameters()
 
 	call := toolsy.ToolCall{
 		ID:       "1",
