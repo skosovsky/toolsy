@@ -38,14 +38,37 @@ func TestNewTool_Execute_Success(t *testing.T) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
-	var res []byte
+	var out Result
 	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
-		res = c.Data
+		assert.Nil(t, c.Data, "Data must be nil for typed result (zero-cost)")
+		out = c.RawData.(Result)
 		return nil
 	})
 	require.NoError(t, err)
-	var out Result
-	require.NoError(t, json.Unmarshal(res, &out))
+	assert.Equal(t, 6, out.Y)
+}
+
+// TestNewTool_RawData_ZeroCost verifies that NewTool yields RawData only, Data is nil (no json.Marshal in core).
+func TestNewTool_RawData_ZeroCost(t *testing.T) {
+	type Args struct {
+		X int `json:"x"`
+	}
+	type MyOut struct {
+		Y int `json:"y"`
+	}
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, a Args) (MyOut, error) {
+		return MyOut{Y: a.X + 1}, nil
+	})
+	require.NoError(t, err)
+	var chunk Chunk
+	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
+		chunk = c
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Nil(t, chunk.Data)
+	require.NotNil(t, chunk.RawData)
+	out := chunk.RawData.(MyOut)
 	assert.Equal(t, 6, out.Y)
 }
 

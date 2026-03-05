@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -89,16 +88,14 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var callCount int
-	var singleChunk []byte
+	var out R
 	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
 		callCount++
-		singleChunk = c.Data
+		out = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, callCount)
-	var out R
-	require.NoError(t, json.Unmarshal(singleChunk, &out))
 	assert.Equal(t, 6, out.Y)
 }
 
@@ -148,11 +145,8 @@ func TestRegistry_ExecuteBatchStream_ChunkTags(t *testing.T) {
 	}
 	require.Contains(t, byID, "c1")
 	require.Contains(t, byID, "c2")
-	var r R
-	require.NoError(t, json.Unmarshal(byID["c1"].Data, &r))
-	assert.Equal(t, 2, r.Y)
-	require.NoError(t, json.Unmarshal(byID["c2"].Data, &r))
-	assert.Equal(t, 4, r.Y)
+	assert.Equal(t, 2, byID["c1"].RawData.(R).Y)
+	assert.Equal(t, 4, byID["c2"].RawData.(R).Y)
 }
 
 func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
@@ -222,7 +216,7 @@ func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 		assert.Equal(t, "double", c.ToolName)
 		assert.NotEmpty(t, c.CallID)
 		if !c.IsError {
-			assert.NotEmpty(t, c.Data)
+			assert.NotNil(t, c.RawData)
 		}
 	}
 }

@@ -29,17 +29,14 @@ func TestRegistry_Register_Execute(t *testing.T) {
 	reg.Register(tool)
 	all := reg.GetAllTools()
 	require.Len(t, all, 1)
-	var result []byte
+	var out R
 	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "double", Args: raw(`{"x": 7}`),
 	}, func(c Chunk) error {
-		result = c.Data
+		out = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	var out R
-	require.NoError(t, json.Unmarshal(result, &out))
 	assert.Equal(t, 14, out.Y)
 }
 
@@ -158,6 +155,113 @@ func TestRegistry_Execute_PanicInYield(t *testing.T) {
 	assert.Equal(t, 1, lastSummary.ChunksDelivered)
 }
 
+// TestContextSafeYield verifies that when context is cancelled after receiving some chunks,
+// the tool's yield sees ctx.Err() and returns; no panic, no goroutine leak.
+func TestContextSafeYield(t *testing.T) {
+	type A struct {
+		N int `json:"n"`
+	}
+	var yieldsBeforeCancel int32
+	tool, err := NewStreamTool("slow_stream", "Yields N with delay", func(ctx context.Context, a A, yield func(Chunk) error) error {
+		for i := 0; i < a.N; i++ {
+			if ctx.Err() != nil {
+				break
+			}
+			atomic.StoreInt32(&yieldsBeforeCancel, int32(i+1))
+			if err := yield(Chunk{Event: EventResult, Data: []byte{byte('0' + i)}}); err != nil {
+				return err
+			}
+			time.Sleep(30 * time.Millisecond)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithDefaultTimeout(time.Second))
+	reg.Register(tool)
+	ctx, cancel := context.WithCancel(context.Background())
+	var received int
+	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "slow_stream", Args: raw(`{"n": 10}`)}, func(_ Chunk) error {
+		received++
+		if received == 2 {
+			cancel()
+		}
+		return nil
+	})
+	// After cancel we may get context.Canceled or nil (if Execute returned before timeout)
+	_ = err
+	assert.LessOrEqual(t, received, 3, "at most 2 requested chunks plus one possibly in flight")
+	assert.LessOrEqual(t, atomic.LoadInt32(&yieldsBeforeCancel), int32(3), "tool should stop after context cancel")
+}
+
+// TestExecuteIter_BreakCancelsContext verifies that breaking out of for range ExecuteIter
+// cancels the child context and the tool exits (push-to-push); no extra yield after break.
+func TestExecuteIter_BreakCancelsContext(t *testing.T) {
+	type A struct {
+		N int `json:"n"`
+	}
+	var yieldCount int32
+	tool, err := NewStreamTool("iter_stream", "Yields N", func(ctx context.Context, a A, yield func(Chunk) error) error {
+		for i := 0; i < a.N; i++ {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			atomic.StoreInt32(&yieldCount, int32(i+1))
+			if err := yield(Chunk{Event: EventResult, Data: []byte{byte('0' + i)}}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithDefaultTimeout(time.Second))
+	reg.Register(tool)
+	call := ToolCall{ID: "iter1", ToolName: "iter_stream", Args: raw(`{"n": 5}`)}
+	iterations := 0
+	for chunk, err := range reg.ExecuteIter(context.Background(), call) {
+		if err != nil {
+			break
+		}
+		iterations++
+		_ = chunk
+		if iterations >= 1 {
+			break
+		}
+	}
+	assert.Equal(t, 1, iterations)
+	// Tool must have seen at most 1 yield (after break we cancel and return context.Canceled from callback).
+	assert.LessOrEqual(t, atomic.LoadInt32(&yieldCount), int32(1))
+}
+
+// TestExecuteIter_FullPass verifies that iterating fully over ExecuteIter delivers all chunks and final error (nil or err).
+func TestExecuteIter_FullPass(t *testing.T) {
+	type A struct {
+		X int `json:"x"`
+	}
+	type R struct {
+		Y int `json:"y"`
+	}
+	tool, err := NewTool("double", "Double", func(_ context.Context, a A) (R, error) {
+		return R{Y: a.X * 2}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry()
+	reg.Register(tool)
+	call := ToolCall{ID: "1", ToolName: "double", Args: raw(`{"x": 21}`)}
+	var chunks []Chunk
+	var finalErr error
+	for chunk, err := range reg.ExecuteIter(context.Background(), call) {
+		if err != nil {
+			finalErr = err
+			break
+		}
+		chunks = append(chunks, chunk)
+	}
+	require.Len(t, chunks, 1)
+	assert.Nil(t, chunks[0].Data)
+	assert.Equal(t, 42, chunks[0].RawData.(R).Y)
+	assert.NoError(t, finalErr)
+}
+
 // TestRegistry_OnChunk_OnlySuccessfulChunks verifies that WithOnChunk is invoked only for
 // successfully delivered chunks (when yield returns nil), and Chunk has correct CallID, ToolName, Data.
 // ExecutionSummary reflects only successfully delivered chunks/bytes.
@@ -237,8 +341,8 @@ func TestRegistry_ExecuteBatchStream_PartialSuccess(t *testing.T) {
 			errorChunks++
 			continue
 		}
-		if c.ToolName == "double" && len(c.Data) > 0 {
-			require.NoError(t, json.Unmarshal(c.Data, &out))
+		if c.ToolName == "double" && c.RawData != nil {
+			out = c.RawData.(R)
 			assert.True(t, out.Y == 2 || out.Y == 6)
 		}
 	}
@@ -381,7 +485,8 @@ func TestRegistry_ObservabilityHooks(t *testing.T) {
 	assert.Equal(t, "add_one", lastCall.ToolName)
 	assert.Equal(t, "h1", lastSummary.CallID)
 	assert.Equal(t, 1, lastSummary.ChunksDelivered)
-	assert.GreaterOrEqual(t, lastSummary.TotalBytes, int64(1), "one chunk delivered")
+	// Typed result: Data is nil, so TotalBytes is 0
+	assert.Equal(t, int64(0), lastSummary.TotalBytes)
 	assert.GreaterOrEqual(t, lastDuration, time.Duration(0))
 }
 
@@ -421,7 +526,7 @@ func TestRegistry_ExecuteBatchStream_ErrorIsolation(t *testing.T) {
 		c := &chunks[i]
 		if c.IsError {
 			errChunk = c
-		} else if c.ToolName == "ok_later" && len(c.Data) > 0 {
+		} else if c.ToolName == "ok_later" && c.RawData != nil {
 			okChunk = c
 		}
 	}
@@ -429,8 +534,7 @@ func TestRegistry_ExecuteBatchStream_ErrorIsolation(t *testing.T) {
 	assert.Equal(t, "f1", errChunk.CallID)
 	assert.Equal(t, "fail_soon", errChunk.ToolName)
 	require.NotNil(t, okChunk, "expected one success chunk for ok_later")
-	var out R
-	require.NoError(t, json.Unmarshal(okChunk.Data, &out))
+	out := okChunk.RawData.(R)
 	assert.Equal(t, 6, out.Y)
 }
 
@@ -478,14 +582,12 @@ func TestRegistry_Register_Overwrite(t *testing.T) {
 	got, ok := reg.GetTool("same")
 	require.True(t, ok)
 	require.Same(t, second, got)
-	var result []byte
+	var out R
 	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "same", Args: raw(`{"x": 5}`)}, func(c Chunk) error {
-		result = c.Data
+		out = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
-	var out R
-	require.NoError(t, json.Unmarshal(result, &out))
 	assert.Equal(t, 50, out.Y)
 }
 

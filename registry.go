@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"slices"
 	"sync"
 	"time"
@@ -143,7 +144,11 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	}
 
 	// Wrap yield: fill CallID/ToolName, count only !IsError chunks, call onChunk for successfully delivered non-error chunks.
+	// Context-safe: do not call yield if context is already cancelled (avoids goroutine leaks).
 	toolYield := func(c Chunk) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if c.CallID == "" {
 			c.CallID = call.ID
 		}
@@ -163,6 +168,34 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 
 	summary.Error = tool.Execute(ctx, call.Args, toolYield)
 	return summary.Error
+}
+
+// ExecuteIter runs one tool call and returns an iterator over (Chunk, error) pairs.
+// Push-to-push: no channels or extra goroutines; the iterator calls Execute with a callback that forwards to yield.
+// When the consumer breaks out of the loop, cancel() is called and Execute exits via context.Canceled.
+// Once yield returns false, the iterator must not call yield again (iter contract).
+func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chunk, error] {
+	return func(yield func(Chunk, error) bool) {
+		ctxChild, cancel := context.WithCancel(ctx)
+		defer cancel()
+		var consumerStopped bool
+
+		err := r.Execute(ctxChild, call, func(c Chunk) error {
+			if consumerStopped {
+				return context.Canceled
+			}
+			if !yield(c, nil) {
+				consumerStopped = true
+				cancel()
+				return context.Canceled
+			}
+			return nil
+		})
+
+		if !consumerStopped && err != nil && err != context.Canceled {
+			yield(Chunk{}, err)
+		}
+	}
 }
 
 func (r *Registry) acquireSemaphore(ctx context.Context) error {

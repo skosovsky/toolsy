@@ -76,14 +76,12 @@ func TestRegistry_Use(t *testing.T) {
 	reg.Register(tool)
 	reg.Use(WithRecovery(), WithLogging(slog.Default()))
 	args, _ := json.Marshal(A{X: 2})
-	var result []byte
+	var r R
 	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)}, func(c Chunk) error {
-		result = c.Data
+		r = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
-	var r R
-	require.NoError(t, json.Unmarshal(result, &r))
 	assert.Equal(t, 3, r.Y)
 }
 
@@ -106,16 +104,14 @@ func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
 	reg.Register(tool)
 	reg.Use(WithRecovery())
 	reg.Use(WithLogging(logger))
-	var result []byte
+	var r R
 	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)}, func(c Chunk) error {
-		result = c.Data
+		r = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
 	logStr := buf.String()
 	// With double-wrap we would see "tool start" twice (Logging(Logging(tool))). With rewrap-from-raw we see once.
 	require.Equal(t, 1, strings.Count(logStr, "tool start"))
-	var r R
-	require.NoError(t, json.Unmarshal(result, &r))
 	assert.Equal(t, 6, r.Y)
 }

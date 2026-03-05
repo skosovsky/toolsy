@@ -16,7 +16,6 @@ package main
 
 import (
     "context"
-    "encoding/json"
     "github.com/skosovsky/toolsy"
 )
 
@@ -39,21 +38,17 @@ func main() {
     // Send schema to your LLM provider (OpenAI, Anthropic, etc.) so it can call the tool
     _ = tool.Parameters() // JSON Schema map; pass to your LLM SDK (do not mutate—shallow copy)
 
-    var result []byte
+    var out Out
     err = reg.Execute(context.Background(), toolsy.ToolCall{
         ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`),
     }, func(c toolsy.Chunk) error {
-        result = c.Data
+        out = c.RawData.(Out)
         return nil
     })
     if err != nil {
         panic(err)
     }
-    var out Out
-    if err := json.Unmarshal(result, &out); err != nil {
-        panic(err)
-    }
-    // out.Temp == 22.5
+    // out.Temp == 22.5 (zero-cost: no json.Unmarshal)
 }
 ```
 
@@ -64,7 +59,21 @@ func main() {
 - **Middleware**: Signature `func(Tool) Tool`. Apply with `Registry.Use(WithLogging(...), WithTimeoutMiddleware(...))`; first in the list is the outermost. Use replaces the chain if called again.
 - **Validation**: Two layers before your Go function runs: (1) JSON Schema validation, (2) optional `Validatable.Validate()` on the args struct. Validation failures become `ClientError` so the LLM can self-correct.
 
-**Streaming**: All tools use `Execute(ctx, argsJSON, yield func(Chunk) error)`. `Chunk` has `CallID`, `ToolName`, `Event` (e.g. `EventProgress`, `EventResult`), `Data`, `IsError`, `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), execution stops and the tool returns `ErrStreamAborted`.
+**Streaming**: All tools use `Execute(ctx, call, yield func(Chunk) error)`. `Chunk` has `CallID`, `ToolName`, `Event` (e.g. `EventProgress`, `EventResult`), `Data`, `RawData`, `IsError`, `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), execution stops and the tool returns `ErrStreamAborted`. For iteration over chunks (Go 1.23+), use `ExecuteIter(ctx, call) iter.Seq2[Chunk, error]`: `for chunk, err := range reg.ExecuteIter(ctx, call) { ... }`; on `break`, the context is cancelled and the tool exits (push-to-push, no extra goroutines).
+
+**ExecuteIter (Go 1.23+)** — Use a `for range` over `reg.ExecuteIter(ctx, call)` to consume chunks; when you `break`, the child context is cancelled and the tool’s execution stops without leaving extra goroutines:
+
+```go
+for chunk, err := range reg.ExecuteIter(ctx, toolsy.ToolCall{ID: "1", ToolName: "my_tool", Args: args}) {
+    if err != nil {
+        // final error from Execute (e.g. tool error, timeout)
+        return err
+    }
+    // use chunk.RawData or chunk.Data
+}
+```
+
+**RawData and zero-cost** — For tools built with `NewTool` or `NewStreamTool`, the core does **not** call `json.Marshal`; the typed result is in `Chunk.RawData`, and `Data` is nil. **Local agent**: use a type assertion with zero CPU cost, e.g. `out := chunk.RawData.(MyStruct)`. **External client (MCP/HTTP)**: serialize at the boundary with `json.Marshal(chunk.RawData)` when sending over the wire. Use `Data` only for raw byte streams (e.g. file download, streaming text) where the tool writes bytes into `Data` and leaves `RawData` nil.
 
 ## Error handling
 
@@ -85,7 +94,7 @@ Use the provided helpers and standard library:
 
 ```go
 err := reg.Execute(ctx, call, func(c toolsy.Chunk) error {
-    // c.Data is the payload; c.IsError true means error message in Data
+    // c.RawData for typed result (NewTool); c.Data for raw bytes or error text; c.IsError true means error in Data
     return nil
 })
 if err != nil {

@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -51,7 +50,7 @@ func main() {
 	reg.Register(add)
 	reg.Register(mul)
 
-	// ExecuteBatchStream: run multiple calls in parallel; yield receives Chunk (CallID, ToolName, Data)
+	// ExecuteBatchStream: run multiple calls in parallel; yield receives Chunk (CallID, ToolName, RawData for NewTool).
 	calls := []toolsy.ToolCall{
 		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
 		{ID: "2", ToolName: "mul", Args: []byte(`{"a": 3, "b": 4}`)},
@@ -63,20 +62,15 @@ func main() {
 			log.Printf("tool error [%s]: %s", c.ToolName, c.Data)
 			return nil
 		}
+		if c.RawData == nil {
+			return nil
+		}
 		switch c.ToolName {
 		case "add":
-			var out AddOut
-			if e := json.Unmarshal(c.Data, &out); e != nil {
-				log.Printf("unmarshal add result: %v", e)
-				return nil
-			}
+			out := c.RawData.(AddOut)
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", idx, out.Sum)
 		case "mul":
-			var out MulOut
-			if e := json.Unmarshal(c.Data, &out); e != nil {
-				log.Printf("unmarshal mul result: %v", e)
-				return nil
-			}
+			out := c.RawData.(MulOut)
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] mul: product=%d\n", idx, out.Product)
 		}
 		idx++

@@ -19,7 +19,8 @@ type tool struct {
 }
 
 // NewTool builds a Tool from a typed function. Schema and validation are delegated to Extractor[T].
-// Execute runs ParseAndValidate, fn, marshals the result, then calls yield once with Chunk{Event: EventResult, Data: b}.
+// Execute runs ParseAndValidate, fn, then calls yield once with Chunk{Event: EventResult, RawData: res, Data: nil}.
+// No json.Marshal in the core; the caller uses chunk.RawData.(*MyStruct) for zero-cost access.
 // If yield returns an error, it is returned as ErrStreamAborted (via wrapYieldError).
 // Returns an error if schema generation fails (e.g. unsupported type).
 func NewTool[T any, R any](
@@ -44,11 +45,7 @@ func NewTool[T any, R any](
 		if err != nil {
 			return wrapHandlerError(err)
 		}
-		b, err := json.Marshal(res)
-		if err != nil {
-			return &SystemError{Err: err}
-		}
-		if err := yield(Chunk{Event: EventResult, Data: b}); err != nil {
+		if err := yield(Chunk{Event: EventResult, RawData: res, Data: nil}); err != nil {
 			return wrapYieldError(err)
 		}
 		return nil
@@ -64,7 +61,8 @@ func NewTool[T any, R any](
 
 // NewStreamTool builds a Tool from a typed streaming function. Same schema/validation as NewTool,
 // but the handler receives yield func(Chunk) error and may call it multiple times. Zero chunks is valid (side-effects only).
-// If yield returns an error, execution must stop and that error is returned as ErrStreamAborted.
+// For typed results put the value in Chunk.RawData and leave Data nil (zero-cost); use Data only for raw byte
+// streams (file chunks, streaming text). If yield returns an error, execution must stop and that error is returned as ErrStreamAborted.
 func NewStreamTool[T any](
 	name, description string,
 	fn func(ctx context.Context, args T, yield func(Chunk) error) error,

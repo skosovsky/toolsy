@@ -98,18 +98,17 @@ func ExampleRegistry_Execute() {
 	}
 	reg := NewRegistry()
 	reg.Register(tool)
-	var result []byte
+	var out Out
 	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "add_one", Args: []byte(`{"x": 5}`),
 	}, func(c Chunk) error {
-		result = c.Data
+		out = c.RawData.(Out)
 		return nil
 	})
 	if err != nil {
 		panic(err)
 	}
-	// result is []byte(`{"y":6}`)
-	_ = result
+	_ = out // out.Y == 6
 	// Output:
 }
 

@@ -2,6 +2,7 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -82,14 +83,15 @@ func ExampleRegistry_Use() {
 	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
 	reg.Use(WithLogging(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))), WithTimeoutMiddleware(2*time.Second))
 	reg.Register(tool)
-	var result []byte
+	var out Out
 	_ = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "double", Args: []byte(`{"n": 21}`),
 	}, func(c Chunk) error {
-		result = c.Data
+		out = c.RawData.(Out)
 		return nil
 	})
-	fmt.Printf("result: %s", result)
+	b, _ := json.Marshal(out)
+	fmt.Printf("result: %s", b)
 	// Output (logger at Error level may produce no extra lines):
 	// result: {"double":42}
 }

@@ -22,13 +22,13 @@ func TestWithStrict(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 	// Valid args
-	var res []byte
+	var res R
 	err = tool.Execute(context.Background(), []byte(`{"x":1}`), func(c Chunk) error {
-		res = c.Data
+		res = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
-	require.NotNil(t, res)
+	assert.Equal(t, 1, res.Y)
 	// Extra property should fail schema validation (strict mode)
 	err = tool.Execute(context.Background(), []byte(`{"x":1,"extra":2}`), func(Chunk) error { return nil })
 	require.Error(t, err)
@@ -46,13 +46,11 @@ func TestWithTimeout(t *testing.T) {
 	if meta, ok := tool.(ToolMetadata); ok {
 		assert.Equal(t, time.Second, meta.Timeout())
 	}
-	var res []byte
 	err = tool.Execute(context.Background(), []byte(`{}`), func(c Chunk) error {
-		res = c.Data
+		require.NotNil(t, c.RawData)
 		return nil
 	})
 	require.NoError(t, err)
-	require.NotNil(t, res)
 }
 
 func TestWithTags(t *testing.T) {
@@ -106,11 +104,11 @@ func TestToolOptions_Combined(t *testing.T) {
 	}, WithStrict(), WithTimeout(time.Millisecond), WithVersion("0.1"))
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	var res []byte
+	var res R
 	err = tool.Execute(context.Background(), []byte(`{"n":21}`), func(c Chunk) error {
-		res = c.Data
+		res = c.RawData.(R)
 		return nil
 	})
 	require.NoError(t, err)
-	require.NotNil(t, res)
+	assert.Equal(t, 42, res.Double)
 }

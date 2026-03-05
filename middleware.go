@@ -136,10 +136,9 @@ func (r *Registry) Use(middlewares ...Middleware) {
 	defer r.mu.Unlock()
 	r.middlewares = middlewares
 	for name, raw := range r.rawTools {
-		t := raw
 		for i := len(middlewares) - 1; i >= 0; i-- {
-			t = middlewares[i](t)
+			raw = middlewares[i](raw)
 		}
-		r.tools[name] = t
+		r.tools[name] = raw
 	}
 }

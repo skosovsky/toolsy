@@ -44,12 +44,18 @@ type ToolCall struct {
 }
 
 // Chunk is a single stream event from a tool execution. Registry (and ExecuteBatchStream) set
-// CallID and ToolName when forwarding; tools may set only Data and optionally Event, IsError, Metadata.
+// CallID and ToolName when forwarding; tools may set Data, RawData, and optionally Event, IsError, Metadata.
+//
+// For typed results (NewTool, NewStreamTool): the core fills RawData and leaves Data nil (zero-cost;
+// no json.Marshal in the core). The caller uses a type assertion, e.g. chunk.RawData.(*MyStruct).
+// Data is used only for raw byte streams (file chunks, streaming text) when the tool puts bytes
+// in Data and leaves RawData nil. Serialization to JSON is delegated to the boundary (orchestrator/network).
 type Chunk struct {
 	CallID   string
 	ToolName string
-	Event    string // EventProgress or EventResult
-	Data     []byte
+	Event    string         // EventProgress or EventResult
+	Data     []byte         // raw bytes: file chunks, streaming text; nil for typed results from NewTool/NewStreamTool
+	RawData  any            // typed result from NewTool/NewStreamTool (no marshal in core); nil for dynamic/proxy or errors
 	IsError  bool           // true if Data contains error message text
 	Metadata map[string]any // optional: progress 0-100, etc.
 }
