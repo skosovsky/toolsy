@@ -1,10 +1,16 @@
-.PHONY: test lint bench fuzz cover
+.PHONY: test lint bench fuzz cover test-all lint-all
 
 test:
 	@go test -race -count=1 ./...
 
+test-all: test
+	@cd mcp && go test -race -count=1 ./...
+
 lint:
 	@golangci-lint run ./...
+
+lint-all: lint
+	@cd mcp && golangci-lint run ./...
 
 bench:
 	@go test -bench=. -benchmem ./...
