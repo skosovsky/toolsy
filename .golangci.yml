@@ -62,3 +62,7 @@ issues:
         - revive
     - path: vendor/
       text: ".*"
+    # BearerToken in ClientOptions is caller-provided auth; struct is not JSON-serialized.
+    - path: 'agents/client\.go'
+      linters: [gosec]
+      text: 'G117'
