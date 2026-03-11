@@ -326,6 +326,53 @@ if err := reg.Shutdown(ctx); err != nil {
 | [IsClientError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsClientError) / [IsSystemError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsSystemError) | Classify errors; [ErrStreamAborted](https://pkg.go.dev/github.com/skosovsky/toolsy#ErrStreamAborted) when yield fails |
 | [RegisterType](https://pkg.go.dev/github.com/skosovsky/toolsy#RegisterType) | Register a custom type → JSON Schema type/format; call at startup before first NewTool/NewExtractor |
 
+## Contracts (OpenAPI, GraphQL, gRPC)
+
+The `contracts/` directory contains three **isolated** submodules that translate external API contracts into `toolsy.Tool` instances. Each has its own `go.mod`; use them when you have an OpenAPI spec, a GraphQL endpoint, or a gRPC server with reflection.
+
+- **contracts/openapi** — `ParseURL(ctx, specURL, opts)` loads an OpenAPI 3.x spec from a URL, filters by methods/tags, and returns one tool per operation. Options: `BaseURL`, `AuthHeader`, `AllowedMethods`, `AllowedTags`, `MaxResponseBytes`.
+- **contracts/graphql** — `Introspect(ctx, endpoint, opts)` sends the standard introspection query, then builds one tool per root Query/Mutation. Request body is always `{"query": "<static>", "variables": <args>}` (no string concatenation from user input). Options: `AuthHeader`, `Operations` (e.g. `["query"]` for read-only), `MaxResponseBytes`.
+- **contracts/grpc** — `ConnectAndReflect(ctx, target, opts)` dials the server, uses gRPC Server Reflection to discover services/methods, and returns one tool per RPC. Options: `DialOptions`, `Services` (allowlist), `MaxResponseBytes`.
+
+Register the returned tools with your registry in a loop (one tool per call to `Register`):
+
+```go
+import (
+    "context"
+    "github.com/skosovsky/toolsy"
+    openapi "github.com/skosovsky/toolsy/contracts/openapi"
+    "github.com/skosovsky/toolsy/contracts/graphql"
+    "github.com/skosovsky/toolsy/contracts/grpc"
+)
+
+func main() {
+    reg := toolsy.NewRegistry()
+    ctx := context.Background()
+
+    // OpenAPI: tools from a spec URL
+    openapiTools, err := openapi.ParseURL(ctx, "https://api.example.com/openapi.json", openapi.Options{
+        BaseURL: "https://api.example.com", AuthHeader: "Bearer sk-...",
+        AllowedMethods: []string{"GET", "POST"}, MaxResponseBytes: 512 * 1024,
+    })
+    if err != nil { panic(err) }
+    for _, t := range openapiTools { reg.Register(t) }
+
+    // GraphQL: tools from introspection
+    gqlTools, err := graphql.Introspect(ctx, "https://api.example.com/graphql", graphql.Options{
+        AuthHeader: "Bearer sk-...", Operations: []string{"query", "mutation"},
+    })
+    if err != nil { panic(err) }
+    for _, t := range gqlTools { reg.Register(t) }
+
+    // gRPC: tools from server reflection
+    grpcTools, err := grpc.ConnectAndReflect(ctx, "localhost:50051", grpc.Options{})
+    if err != nil { panic(err) }
+    for _, t := range grpcTools { reg.Register(t) }
+}
+```
+
+See [contracts/README.md](contracts/README.md) for more details and module-specific options.
+
 ## Installation
 
 ```bash
