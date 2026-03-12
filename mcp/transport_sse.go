@@ -281,7 +281,10 @@ func (t *sseTransportImpl) call(ctx context.Context, method string, params any) 
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Resolve relative POST URL against initial URL base.
-	base, _ := url.Parse(t.initialURL)
+	base, err := url.Parse(t.initialURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid initial URL: %w", err)
+	}
 	if postU, parseErr := base.Parse(postURL); parseErr == nil {
 		httpReq.URL = postU
 	}
@@ -340,7 +343,10 @@ func (t *sseTransportImpl) notify(ctx context.Context, method string, params any
 		return err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	base, _ := url.Parse(t.initialURL)
+	base, err := url.Parse(t.initialURL)
+	if err != nil {
+		return fmt.Errorf("invalid initial URL: %w", err)
+	}
 	postU, _ := base.Parse(postURL)
 	if postU != nil {
 		httpReq.URL = postU

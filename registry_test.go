@@ -450,6 +450,55 @@ func TestRegistry_MaxConcurrency(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestRegistry_TimeoutDuringSemaphoreWait ensures WithDefaultTimeout applies to the whole execution,
+// including time spent waiting for the semaphore (queue wait).
+func TestRegistry_TimeoutDuringSemaphoreWait(t *testing.T) {
+	type A struct {
+		X int `json:"x"`
+	}
+	type R struct{}
+	// Blocker holds the slot without respecting ctx so the second call can time out while waiting.
+	blocker, err := NewTool("blocker", "Blocks", func(_ context.Context, _ A) (R, error) {
+		time.Sleep(300 * time.Millisecond)
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxConcurrency(1), WithDefaultTimeout(50*time.Millisecond))
+	reg.Register(blocker)
+	ctx := context.Background()
+	go func() {
+		_ = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "blocker", Args: raw(`{"x":1}`)}, func(Chunk) error { return nil })
+	}()
+	time.Sleep(15 * time.Millisecond) // let first call acquire the slot
+	err = reg.Execute(ctx, ToolCall{ID: "2", ToolName: "blocker", Args: raw(`{"x":2}`)}, func(Chunk) error { return nil })
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrTimeout, "second call must time out while waiting for semaphore")
+}
+
+// TestRegistry_TimeoutMinimumHierarchy ensures effective timeout is min(registry default, per-tool timeout).
+// When tool has a longer timeout than registry, the registry default wins.
+func TestRegistry_TimeoutMinimumHierarchy(t *testing.T) {
+	type A struct {
+		X int `json:"x"`
+	}
+	type R struct{}
+	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ A) (R, error) {
+		select {
+		case <-ctx.Done():
+			return R{}, ctx.Err()
+		case <-time.After(200 * time.Millisecond):
+			return R{}, nil
+		}
+	}, WithTimeout(200*time.Millisecond))
+	require.NoError(t, err)
+	reg := NewRegistry(WithDefaultTimeout(30 * time.Millisecond))
+	reg.Register(tool)
+	ctx := context.Background()
+	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "slow", Args: raw(`{"x":1}`)}, func(Chunk) error { return nil })
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrTimeout, "effective timeout must be registry 30ms, not tool 200ms")
+}
+
 func TestRegistry_ObservabilityHooks(t *testing.T) {
 	type A struct {
 		X int `json:"x"`
@@ -488,6 +537,50 @@ func TestRegistry_ObservabilityHooks(t *testing.T) {
 	// Typed result: Data is nil, so TotalBytes is 0
 	assert.Equal(t, int64(0), lastSummary.TotalBytes)
 	assert.GreaterOrEqual(t, lastDuration, time.Duration(0))
+}
+
+// TestRegistry_ObservabilityHooks_AsyncToolOnlySeesAcceptedPhase verifies that WithOnBeforeExecute,
+// WithOnAfterExecute, and WithOnChunk observe only the synchronous "accepted" phase of an async tool;
+// background chunks produced by the base tool are not visible to these hooks.
+func TestRegistry_ObservabilityHooks_AsyncToolOnlySeesAcceptedPhase(t *testing.T) {
+	done := make(chan struct{})
+	base, err := NewTool("worker", "Worker", func(_ context.Context, _ struct{}) (struct{}, error) {
+		return struct{}{}, nil
+	})
+	require.NoError(t, err)
+	// Wrap so the base yields multiple chunks in the background; we only care that hooks see one (accepted).
+	asyncBase := &asyncYieldTool{base: base, done: done}
+	asyncTool := AsAsyncTool(asyncBase)
+	var beforeCount, chunkCount, afterCount int32
+	reg := NewRegistry(
+		WithOnBeforeExecute(func(context.Context, ToolCall) { atomic.AddInt32(&beforeCount, 1) }),
+		WithOnChunk(func(context.Context, Chunk) { atomic.AddInt32(&chunkCount, 1) }),
+		WithOnAfterExecute(func(context.Context, ToolCall, ExecutionSummary, time.Duration) { atomic.AddInt32(&afterCount, 1) }),
+	)
+	reg.Register(asyncTool)
+	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "worker", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.NoError(t, err)
+	<-done
+	require.Equal(t, int32(1), atomic.LoadInt32(&beforeCount))
+	require.Equal(t, int32(1), atomic.LoadInt32(&chunkCount), "OnChunk must see only the accepted chunk, not background chunks")
+	require.Equal(t, int32(1), atomic.LoadInt32(&afterCount))
+}
+
+// asyncYieldTool is a Tool that wraps another and yields multiple chunks in Execute (for observability boundary test).
+type asyncYieldTool struct {
+	base Tool
+	done chan struct{}
+}
+
+func (t *asyncYieldTool) Name() string       { return t.base.Name() }
+func (t *asyncYieldTool) Description() string { return t.base.Description() }
+func (t *asyncYieldTool) Parameters() map[string]any { return t.base.Parameters() }
+func (t *asyncYieldTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
+	_ = yield(Chunk{Event: EventProgress, RawData: "chunk1"})
+	_ = yield(Chunk{Event: EventProgress, RawData: "chunk2"})
+	_ = yield(Chunk{Event: EventResult, RawData: "chunk3"})
+	close(t.done)
+	return t.base.Execute(ctx, args, yield)
 }
 
 // TestRegistry_ExecuteBatchStream_ErrorIsolation verifies that when one tool fails and another succeeds,

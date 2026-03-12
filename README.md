@@ -287,11 +287,11 @@ reg.Register(myTool)
 
 - **WithLogging(logger)** — logs tool start, end, duration, and errors.
 - **WithRecovery()** — recovers panics and returns a `SystemError` instead of crashing.
-- **WithTimeoutMiddleware(d)** — overrides the registry default timeout for the wrapped tool.
+- **WithTimeoutMiddleware(d)** — shortens the effective timeout for the wrapped tool (minimum with registry default).
 
 Order in `Use(...)` matters: the first middleware is the outermost (runs first). Calling `Use` multiple times replaces the chain; pass all middlewares in one call.
 
-**Timeout hierarchy**: The effective timeout for a call is the minimum of: (1) registry default from `WithDefaultTimeout(d)`, (2) per-tool timeout from `WithTimeout(d)` (ToolOption), (3) middleware timeout from `WithTimeoutMiddleware(d)` if applied. The innermost timeout wins.
+**Timeout hierarchy**: The effective timeout for a call is the **minimum** of: (1) registry default from `WithDefaultTimeout(d)`, (2) per-tool timeout from `WithTimeout(d)` (ToolOption), (3) middleware timeout from `WithTimeoutMiddleware(d)` if applied. The registry default is an upper bound; per-tool and middleware can only shorten it, never extend it.
 
 ## Graceful Shutdown
 
@@ -304,6 +304,44 @@ if err := reg.Shutdown(ctx); err != nil {
     log.Printf("shutdown: %v", err)
 }
 // After Shutdown returns, Execute/ExecuteBatchStream return ErrShutdown
+```
+
+## Advanced Usage
+
+### Event-Driven Async Tools
+
+For long-running tasks (reports, batch jobs), use `AsAsyncTool` so the LLM gets an immediate `task_id` and the work runs in a goroutine. When the task completes, `WithOnComplete` is called with all collected chunks and the final error. If the client's yield returns an error (e.g. stream closed), the goroutine is not started (yield-guard), and `Execute` returns that error wrapped as `ErrStreamAborted`. If the incoming context is already cancelled before yielding `accepted`, `Execute` returns the context error and does not start the background job. Background execution is protected by a local panic/timeout envelope: panics in the base tool are recovered and reported to `OnComplete` as a `SystemError`. When run via `Registry`, the registry's effective timeout (from `WithDefaultTimeout` or per-tool `ToolMetadata.Timeout`) applies to the whole call: **queue wait** (acquire semaphore) and **sync phase** are under that timeout, and the **async background run** uses the same effective timeout so long-running background work is bounded. If the base tool implements `ToolMetadata` with `Timeout() > 0`, it is still applied in the background when not run via Registry. Registry middlewares (e.g. `WithLogging`, `WithRecovery`) and global logging apply only to the synchronous "accepted" phase; the background phase does not go through the same middleware chain. When tools are executed via `Registry`, async background jobs are **tracked**: the execution slot (semaphore) is held until the background job finishes, and `Registry.Shutdown` waits for both in-flight synchronous executions and accepted async background jobs before returning.
+
+```go
+// Example: Sending task completion to an Event Bus
+asyncTool := toolsy.AsAsyncTool(heavyReportTool, toolsy.WithOnComplete(
+    func(ctx context.Context, taskID string, chunks []toolsy.Chunk, err error) {
+        kafkaProducer.Publish("tool_events", map[string]any{
+            "task_id": taskID,
+            "status":  "completed",
+            "error":   err,
+        })
+    },
+))
+reg.Register(asyncTool)
+```
+
+The first chunk the client receives has `RawData` of type `toolsy.AsyncAccepted` with `status: "accepted"` and `task_id` (hex string). `OnComplete` receives all chunks collected from the base tool's stream; for high-volume or long-running streaming tools, this buffers output in memory until the task finishes.
+
+### Role-Based Registries (Dynamic Prompts)
+
+Use `OverrideTool` to reuse the same tool logic with different names or descriptions for different agent roles, without mutating the original tool. When you override the name with `WithNewName`, runtime chunks emitted during `Execute` have `Chunk.ToolName` set to that name (alias consistency). Override schema passed to `WithNewParameters(map[string]any)` is stored as a defensive deep copy so later mutations of the caller's map do not affect the wrapper; `Parameters()` returns a shallow copy of the stored schema.
+
+```go
+// Reusing the same execution logic but changing the LLM instructions
+seniorDBATool := toolsy.OverrideTool(sqlTool,
+    toolsy.WithNewDescription("Execute complex JOINs. Only use if strictly necessary."),
+)
+juniorTool := toolsy.OverrideTool(sqlTool,
+    toolsy.WithNewDescription("Fetch data. NEVER use DROP or DELETE."),
+)
+reg.Register(seniorDBATool)
+// or reg.Register(juniorTool) depending on the active role
 ```
 
 ## API Overview
@@ -323,6 +361,7 @@ if err := reg.Shutdown(ctx); err != nil {
 | ToolOption | WithStrict, WithTimeout, WithTags, WithVersion, WithDangerous (metadata for tools from NewTool/NewDynamicTool) |
 | [Validatable](https://pkg.go.dev/github.com/skosovsky/toolsy#Validatable) | Optional Layer 2 validation: implement `Validate() error` on your args struct |
 | [Middleware](https://pkg.go.dev/github.com/skosovsky/toolsy#Middleware) | WithLogging, WithRecovery, WithTimeoutMiddleware; [Registry.Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use) to apply |
+| [AsAsyncTool](https://pkg.go.dev/github.com/skosovsky/toolsy#AsAsyncTool) / [OverrideTool](https://pkg.go.dev/github.com/skosovsky/toolsy#OverrideTool) | Async: fire-and-forget with task_id and OnComplete; Override: replace Name, Description, or Parameters for role-based prompts |
 | [IsClientError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsClientError) / [IsSystemError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsSystemError) | Classify errors; [ErrStreamAborted](https://pkg.go.dev/github.com/skosovsky/toolsy#ErrStreamAborted) when yield fails |
 | [RegisterType](https://pkg.go.dev/github.com/skosovsky/toolsy#RegisterType) | Register a custom type → JSON Schema type/format; call at startup before first NewTool/NewExtractor |
 

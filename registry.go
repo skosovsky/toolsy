@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+// context key for async background job tracker (same package only).
+type ctxKeyAsyncTracker struct{}
+
+var ctxKeyAsyncTrackerVal = &ctxKeyAsyncTracker{}
+
+// asyncTracker is set in context by Registry.Execute so AsAsyncTool can register background work.
+// Track() adds to running and returns done() that must be called when the background job finishes;
+// done() also triggers release of the execution slot (semaphore + running).
+// effectiveTimeout is the registry-level timeout (covers queue wait + execution); AsAsyncTool uses it for background run when set.
+type asyncTracker struct {
+	track             func() (done func())
+	effectiveTimeout  time.Duration
+}
+
 // Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
 type Registry struct {
 	tools       map[string]Tool
@@ -100,6 +114,20 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	r.running.Add(1)
 	r.mu.Unlock()
 
+	// Apply effective timeout before acquireSemaphore so queue wait is within the timeout budget.
+	// Effective timeout is the minimum of registry default and per-tool timeout (README timeout hierarchy).
+	timeout := r.opts.timeout
+	if tm, ok := tool.(ToolMetadata); ok && tm.Timeout() > 0 {
+		if timeout <= 0 || tm.Timeout() < timeout {
+			timeout = tm.Timeout()
+		}
+	}
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	if err = r.acquireSemaphore(ctx); err != nil {
 		r.running.Done()
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -107,18 +135,23 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 		}
 		return err
 	}
-	defer r.releaseSemaphore()
-	defer r.running.Done()
-
-	timeout := r.opts.timeout
-	if tm, ok := tool.(ToolMetadata); ok && tm.Timeout() > 0 {
-		timeout = tm.Timeout()
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { r.releaseSemaphore(); r.running.Done() }) }
+	asyncTracked := false
+	tracker := &asyncTracker{
+		track: func() (done func()) {
+			r.running.Add(1)
+			asyncTracked = true
+			return func() { r.running.Done(); release() }
+		},
+		effectiveTimeout: timeout,
 	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
+	ctx = context.WithValue(ctx, ctxKeyAsyncTrackerVal, tracker)
+	defer func() {
+		if !asyncTracked {
+			release()
+		}
+	}()
 
 	var summary ExecutionSummary
 	summary.CallID = call.ID
@@ -269,6 +302,8 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 }
 
 // Shutdown closes the registry for new calls and waits for in-flight executions or ctx to cancel.
+// Both synchronous executions and background jobs started by AsAsyncTool (when run via Registry) are tracked;
+// Shutdown blocks until all of them finish or ctx is cancelled.
 func (r *Registry) Shutdown(ctx context.Context) error {
 	r.mu.Lock()
 	select {

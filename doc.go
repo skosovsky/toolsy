@@ -19,6 +19,7 @@
 //
 // Use Extractor for schema generation and validation without a full Tool pipeline (e.g. in custom orchestrators).
 // Use NewDynamicTool when the schema is only available at runtime (e.g. from OpenAPI); handler receives yield for streaming.
+// Advanced wrappers: AsAsyncTool for fire-and-forget execution with immediate task_id and optional OnComplete; OverrideTool for runtime name/description/parameters override (e.g. prompt management).
 // Schema generation and validation use github.com/google/jsonschema-go.
 // Schema and Parameters: Extractor.Schema() and Tool.Parameters() return a shallow copy (top-level map only);
 // nested maps are shared—do not mutate the returned value or nested maps; treat as read-only or clone deeply if modifying.
