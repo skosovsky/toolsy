@@ -66,3 +66,6 @@ issues:
     - path: 'agents/client\.go'
       linters: [gosec]
       text: 'G117'
+    # Package "mail" and types MailSender/MailReader match toolskit spec (naming).
+    - path: 'toolkits/mail/.+\.go$'
+      linters: [revive]
