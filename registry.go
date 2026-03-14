@@ -221,8 +221,11 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	}
 
 	if r.opts.validator != nil {
-		if vErr := r.opts.validator.Validate(ctx, call.ToolName, call.Args); vErr != nil {
-			summary.Error = &ClientError{Reason: "tool execution failed: validation error: " + vErr.Error(), Err: ErrValidation}
+		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Args)); vErr != nil {
+			summary.Error = &ClientError{
+				Reason: "tool execution failed: security validation failed: " + vErr.Error() + ". Please fix the arguments and try again.",
+				Err:   ErrValidation,
+			}
 			return summary.Error
 		}
 	}

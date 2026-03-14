@@ -86,7 +86,7 @@ type registryOptions struct {
 	maxSteps       int
 	maxRetries     int
 	recoverPanics  bool
-	validator      ArgumentValidator
+	validator      Validator
 	onBefore       func(context.Context, ToolCall)
 	onAfter        func(context.Context, ToolCall, ExecutionSummary, time.Duration)
 	onChunk        func(context.Context, Chunk)
@@ -129,8 +129,8 @@ func WithRecoverPanics(enable bool) RegistryOption {
 	}
 }
 
-// WithValidator configures a raw-argument validator executed before tool unmarshaling.
-func WithValidator(v ArgumentValidator) RegistryOption {
+// WithValidator configures a validator run before tool unmarshaling (fail-closed).
+func WithValidator(v Validator) RegistryOption {
 	return func(o *registryOptions) {
 		o.validator = v
 	}

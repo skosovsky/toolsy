@@ -39,10 +39,11 @@ type ToolMetadata interface {
 	Sensitivity() string
 }
 
-// ArgumentValidator validates raw tool arguments before the tool unmarshals them.
-// Applications can plug in stricter validation/policy engines without coupling toolsy to them.
-type ArgumentValidator interface {
-	Validate(ctx context.Context, toolName string, rawArgs []byte) error
+// Validator checks JSON arguments before tool execution (e.g. guardrails).
+// If Validate returns an error, execution is aborted and the error is returned to the caller (fail-closed).
+// Applications can wrap external policy engines (e.g. guardy) without coupling toolsy to them.
+type Validator interface {
+	Validate(ctx context.Context, toolName string, argsJSON string) error
 }
 
 // ToolCall is a single execution request (as produced by the LLM).

@@ -631,6 +631,37 @@ func TestRegistry_ExecuteBatchStream_ErrorIsolation(t *testing.T) {
 	assert.Equal(t, 6, out.Y)
 }
 
+// TestRegistry_ExecuteBatchStream_ValidatorFailure_ErrorChunk is a regression test for the batch bridge:
+// when the validator fails, the error is mapped to Chunk{IsError: true} with LLM-readable message,
+// and the tool handler is never called (fail-closed; atomic counter stays 0).
+func TestRegistry_ExecuteBatchStream_ValidatorFailure_ErrorChunk(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	var handlerCalls atomic.Int32
+	tool, err := NewTool("guarded", "Guarded", func(_ context.Context, _ A) (R, error) {
+		handlerCalls.Add(1)
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithValidator(&testValidator{validateFn: func(_ context.Context, _, _ string) error {
+		return errors.New("security validation failed")
+	}}))
+	reg.Register(tool)
+	calls := []ToolCall{{ID: "1", ToolName: "guarded", Args: raw(`{}`)}}
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(context.Background(), calls, func(c Chunk) error {
+		chunks = append(chunks, c)
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, chunks, 1, "expected exactly one chunk (error)")
+	c := chunks[0]
+	assert.True(t, c.IsError, "chunk must be error-path for validator failure")
+	assert.Contains(t, string(c.Data), "security validation failed", "error text must be LLM-readable")
+	assert.Contains(t, string(c.Data), "Please fix the arguments and try again", "error text must hint self-correction")
+	assert.Equal(t, int32(0), handlerCalls.Load(), "handler must not be called (fail-closed)")
+}
+
 func TestRegistry_ExecuteBatchStream_Empty(t *testing.T) {
 	reg := NewRegistry()
 	err := reg.ExecuteBatchStream(context.Background(), nil, func(Chunk) error { return nil })
@@ -739,13 +770,13 @@ func TestRegistry_OnAfter_ErrorPath(t *testing.T) {
 }
 
 
-type testArgumentValidator struct {
-	validateFn func(ctx context.Context, toolName string, rawArgs []byte) error
+type testValidator struct {
+	validateFn func(ctx context.Context, toolName string, argsJSON string) error
 }
 
-func (v *testArgumentValidator) Validate(ctx context.Context, toolName string, rawArgs []byte) error {
+func (v *testValidator) Validate(ctx context.Context, toolName string, argsJSON string) error {
 	if v.validateFn != nil {
-		return v.validateFn(ctx, toolName, rawArgs)
+		return v.validateFn(ctx, toolName, argsJSON)
 	}
 	return nil
 }
@@ -761,9 +792,9 @@ func TestRegistry_Validator_BlocksExecution(t *testing.T) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
-	reg := NewRegistry(WithValidator(&testArgumentValidator{validateFn: func(_ context.Context, toolName string, rawArgs []byte) error {
+	reg := NewRegistry(WithValidator(&testValidator{validateFn: func(_ context.Context, toolName string, argsJSON string) error {
 		assert.Equal(t, "sql", toolName)
-		if string(rawArgs) == `{"query":"drop table users"}` {
+		if argsJSON == `{"query":"drop table users"}` {
 			return errors.New("drop table detected")
 		}
 		return nil
@@ -774,7 +805,8 @@ func TestRegistry_Validator_BlocksExecution(t *testing.T) {
 	require.False(t, executed, "tool must not execute when validator rejects raw args")
 	require.True(t, IsClientError(err))
 	require.ErrorIs(t, err, ErrValidation)
-	assert.Contains(t, err.Error(), "validation error")
+	assert.Contains(t, err.Error(), "security validation failed")
+	assert.Contains(t, err.Error(), "Please fix the arguments and try again")
 }
 
 func TestRegistry_Validator_PassesValidArgs(t *testing.T) {
@@ -788,7 +820,7 @@ func TestRegistry_Validator_PassesValidArgs(t *testing.T) {
 		return R{OK: a.Query == "select 1"}, nil
 	})
 	require.NoError(t, err)
-	reg := NewRegistry(WithValidator(&testArgumentValidator{validateFn: func(_ context.Context, _ string, _ []byte) error {
+	reg := NewRegistry(WithValidator(&testValidator{validateFn: func(_ context.Context, _ string, _ string) error {
 		return nil
 	}}))
 	reg.Register(tool)
@@ -821,6 +853,56 @@ func TestRegistry_Validator_NilByDefault(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 7, out.N)
+}
+
+// TestRegistry_Validator_IncrementsExecutionCount ensures counters are incremented before validator runs,
+// so a validator failure still consumes one step/retry (governance order: counters -> validator -> execution).
+func TestRegistry_Validator_IncrementsExecutionCount(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	var executed bool
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		executed = true
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithValidator(&testValidator{validateFn: func(_ context.Context, _, _ string) error {
+		return errors.New("always reject")
+	}}))
+	reg.Register(tool)
+	ctx := WithExecutionCounter(context.Background())
+	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.Error(t, err)
+	require.False(t, executed)
+	assert.Equal(t, int64(1), ExecutionCount(ctx), "execution count must increment even when validator fails")
+}
+
+// TestRegistry_Validator_MaxRetries_StopsLoop ensures that when validator always fails, the loop
+// is terminated by ErrMaxRetriesExceeded after N+1 attempts (EDoS protection).
+// Contract: WithMaxRetries(N) = 1 primary call + N retries; hard-stop (ErrMaxRetriesExceeded) on the (N+2)-th call of the same tool.
+func TestRegistry_Validator_MaxRetries_StopsLoop(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	var executed bool
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		executed = true
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxRetries(2), WithValidator(&testValidator{validateFn: func(_ context.Context, _, _ string) error {
+		return errors.New("reject")
+	}}))
+	reg.Register(tool)
+	ctx := WithExecutionCounter(context.Background())
+	for i := 1; i <= 3; i++ {
+		err = reg.Execute(ctx, ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+		require.Error(t, err)
+		require.True(t, IsClientError(err))
+		require.ErrorIs(t, err, ErrValidation)
+	}
+	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
+	require.False(t, executed)
 }
 
 func TestRegistry_MaxSteps_ExceedsLimit(t *testing.T) {
@@ -874,6 +956,8 @@ func TestRegistry_MaxSteps_Zero(t *testing.T) {
 	assert.Equal(t, int64(3), ExecutionCount(ctx), "counter tracks executions even when max-steps limit is disabled")
 }
 
+// TestRegistry_MaxRetries_ExceedsLimit verifies MaxRetries contract: WithMaxRetries(N) allows 1 primary + N retries
+// (N+1 executions total); the (N+2)-th call returns ErrMaxRetriesExceeded.
 func TestRegistry_MaxRetries_ExceedsLimit(t *testing.T) {
 	type A struct{}
 	type R struct{}
