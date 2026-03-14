@@ -118,6 +118,44 @@ if err != nil {
 
 **Self-correction loop**: LLM calls tool → gets `ClientError` with reason → adjusts arguments → calls again. Do not use `ClientError` for internal/transient errors; use `SystemError` or wrap with `ErrTimeout` etc.
 
+## Tool Security and Validation
+
+`toolsy` supports runtime guards without coupling to external policy engines.
+
+- **ArgumentValidator**: `WithValidator(v)` runs before unmarshaling. Errors return `ClientError` + `ErrValidation` with message `tool execution failed: validation error: ...`.
+- **Loop breaker**: `WithExecutionCounter(ctx)` tracks executions; `WithMaxSteps(n)` and `WithMaxRetries(n)` (if n>0) enforce limits and return `ErrMaxStepsExceeded` or `ErrMaxRetriesExceeded` when exceeded. Counters increment on every execution when present, even if limits are 0.
+- **Security metadata**: tools expose `IsReadOnly`, `RequiresConfirmation`, and `Sensitivity` via `ToolMetadata` for orchestrators.
+
+```go
+validator := myGuardyValidator{}
+reg := toolsy.NewRegistry(
+    toolsy.WithValidator(validator),
+    toolsy.WithMaxSteps(8),
+    toolsy.WithMaxRetries(2),
+)
+
+sessionCtx := toolsy.WithExecutionCounter(context.Background())
+if err := reg.Execute(sessionCtx, toolsy.ToolCall{
+    ID: "1", ToolName: "write_invoice", Args: []byte(`{"amount":100}`),
+}, func(c toolsy.Chunk) error { return nil }); errors.Is(err, toolsy.ErrMaxStepsExceeded) {
+    // stop the agent loop
+}
+```
+
+```go
+tool, _ := toolsy.NewTool(
+    "delete_user",
+    "Delete a user account",
+    func(ctx context.Context, a DeleteUserArgs) (struct{}, error) { return struct{}{}, nil },
+    toolsy.WithRequiresConfirmation(),
+    toolsy.WithSensitivity("critical"),
+)
+if meta, ok := tool.(toolsy.ToolMetadata); ok {
+    _ = meta.RequiresConfirmation()
+    _ = meta.Sensitivity()
+}
+```
+
 ## Testing (how to test tools)
 
 The `testutil` package provides mocks so you can unit-test tool flows without calling a real LLM.

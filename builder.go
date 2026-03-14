@@ -268,6 +268,10 @@ func (t *tool) Tags() []string         { return append([]string(nil), t.opts.tag
 func (t *tool) Version() string        { return t.opts.version }
 func (t *tool) IsDangerous() bool      { return t.opts.dangerous }
 
+func (t *tool) IsReadOnly() bool             { return t.opts.readOnly }
+func (t *tool) RequiresConfirmation() bool   { return t.opts.requiresConfirmation }
+func (t *tool) Sensitivity() string          { return t.opts.sensitivity }
+
 // wrapHandlerError passes through ClientError; wraps other errors as SystemError.
 func wrapHandlerError(err error) error {
 	if err == nil {

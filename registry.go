@@ -175,6 +175,27 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	if r.opts.onBefore != nil {
 		r.opts.onBefore(ctx, call)
 	}
+	if c, ok := ctx.Value(ctxKeyExecCounterVal).(*execCounter); ok {
+		step := c.count.Add(1)
+		if r.opts.maxSteps > 0 && step > int64(r.opts.maxSteps) {
+			summary.Error = ErrMaxStepsExceeded
+			return summary.Error
+		}
+
+		c.mu.Lock()
+		if c.lastTool == call.ToolName {
+			retries := c.retries.Add(1)
+			if r.opts.maxRetries > 0 && retries > int64(r.opts.maxRetries) {
+				c.mu.Unlock()
+				summary.Error = ErrMaxRetriesExceeded
+				return summary.Error
+			}
+		} else {
+			c.lastTool = call.ToolName
+			c.retries.Store(0) // retries count only repeated calls of the same tool
+		}
+		c.mu.Unlock()
+	}
 
 	// Wrap yield: fill CallID/ToolName, count only !IsError chunks, call onChunk for successfully delivered non-error chunks.
 	// Context-safe: do not call yield if context is already cancelled (avoids goroutine leaks).
@@ -199,7 +220,17 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 		return yieldErr
 	}
 
+	if r.opts.validator != nil {
+		if vErr := r.opts.validator.Validate(ctx, call.ToolName, call.Args); vErr != nil {
+			summary.Error = &ClientError{Reason: "tool execution failed: validation error: " + vErr.Error(), Err: ErrValidation}
+			return summary.Error
+		}
+	}
+
 	summary.Error = tool.Execute(ctx, call.Args, toolYield)
+	if errors.Is(summary.Error, context.DeadlineExceeded) {
+		summary.Error = ErrTimeout
+	}
 	return summary.Error
 }
 
@@ -271,6 +302,7 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 
 	var wg sync.WaitGroup
 	for _, call := range calls {
+		call := call // loop capture
 		wg.Go(func() {
 			toolYield := func(c Chunk) error {
 				if c.CallID == "" {

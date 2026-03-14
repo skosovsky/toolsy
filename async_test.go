@@ -240,10 +240,13 @@ type timeoutMock struct {
 	timeout time.Duration
 }
 
-func (m *timeoutMock) Timeout() time.Duration { return m.timeout }
-func (m *timeoutMock) Tags() []string         { return nil }
-func (m *timeoutMock) Version() string        { return "" }
-func (m *timeoutMock) IsDangerous() bool      { return false }
+func (m *timeoutMock) Timeout() time.Duration      { return m.timeout }
+func (m *timeoutMock) Tags() []string              { return nil }
+func (m *timeoutMock) Version() string             { return "" }
+func (m *timeoutMock) IsDangerous() bool           { return false }
+func (m *timeoutMock) IsReadOnly() bool            { return false }
+func (m *timeoutMock) RequiresConfirmation() bool  { return false }
+func (m *timeoutMock) Sensitivity() string         { return "" }
 
 func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
 	var (

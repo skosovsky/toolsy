@@ -7,11 +7,14 @@ import (
 
 // toolOptions hold optional tool settings (timeout, strict, tags, etc.).
 type toolOptions struct {
-	strict    bool
-	timeout   time.Duration
-	tags      []string
-	version   string
-	dangerous bool
+	strict               bool
+	timeout              time.Duration
+	tags                 []string
+	version              string
+	dangerous            bool
+	readOnly             bool
+	requiresConfirmation bool
+	sensitivity          string
 }
 
 // ToolOption configures a tool (e.g. WithStrict, WithTimeout).
@@ -53,13 +56,37 @@ func WithDangerous() ToolOption {
 	}
 }
 
+// WithReadOnly marks the tool as read-only.
+func WithReadOnly() ToolOption {
+	return func(o *toolOptions) {
+		o.readOnly = true
+	}
+}
+
+// WithRequiresConfirmation marks the tool as requiring human confirmation before execution.
+func WithRequiresConfirmation() ToolOption {
+	return func(o *toolOptions) {
+		o.requiresConfirmation = true
+	}
+}
+
+// WithSensitivity sets the sensitivity level metadata for the tool.
+func WithSensitivity(level string) ToolOption {
+	return func(o *toolOptions) {
+		o.sensitivity = level
+	}
+}
+
 // RegistryOption configures a Registry.
 type RegistryOption func(*registryOptions)
 
 type registryOptions struct {
 	timeout        time.Duration
 	maxConcurrency int
+	maxSteps       int
+	maxRetries     int
 	recoverPanics  bool
+	validator      ArgumentValidator
 	onBefore       func(context.Context, ToolCall)
 	onAfter        func(context.Context, ToolCall, ExecutionSummary, time.Duration)
 	onChunk        func(context.Context, Chunk)
@@ -80,10 +107,32 @@ func WithMaxConcurrency(n int) RegistryOption {
 	}
 }
 
+// WithMaxSteps limits the total number of tool executions within a shared execution-counter context.
+// The limit is enforced only when ctx was wrapped with WithExecutionCounter.
+func WithMaxSteps(n int) RegistryOption {
+	return func(o *registryOptions) {
+		o.maxSteps = n
+	}
+}
+
+// WithMaxRetries limits the number of retries (repeated calls with the same ToolName) within a shared context.
+func WithMaxRetries(n int) RegistryOption {
+	return func(o *registryOptions) {
+		o.maxRetries = n
+	}
+}
+
 // WithRecoverPanics enables panic recovery in Execute (returns SystemError).
 func WithRecoverPanics(enable bool) RegistryOption {
 	return func(o *registryOptions) {
 		o.recoverPanics = enable
+	}
+}
+
+// WithValidator configures a raw-argument validator executed before tool unmarshaling.
+func WithValidator(v ArgumentValidator) RegistryOption {
+	return func(o *registryOptions) {
+		o.validator = v
 	}
 }
 

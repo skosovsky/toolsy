@@ -66,6 +66,24 @@ func (b *toolBase) IsDangerous() bool {
 	}
 	return false
 }
+func (b *toolBase) IsReadOnly() bool {
+	if tm, ok := b.next.(ToolMetadata); ok {
+		return tm.IsReadOnly()
+	}
+	return false
+}
+func (b *toolBase) RequiresConfirmation() bool {
+	if tm, ok := b.next.(ToolMetadata); ok {
+		return tm.RequiresConfirmation()
+	}
+	return false
+}
+func (b *toolBase) Sensitivity() string {
+	if tm, ok := b.next.(ToolMetadata); ok {
+		return tm.Sensitivity()
+	}
+	return ""
+}
 
 type middlewareTool struct {
 	toolBase

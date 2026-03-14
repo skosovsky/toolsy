@@ -92,6 +92,58 @@ func TestWithDangerous(t *testing.T) {
 	}
 }
 
+
+func TestWithReadOnly(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("t", "d", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	}, WithReadOnly())
+	require.NoError(t, err)
+	meta, ok := tool.(ToolMetadata)
+	require.True(t, ok)
+	assert.True(t, meta.IsReadOnly())
+}
+
+func TestWithRequiresConfirmation(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("t", "d", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	}, WithRequiresConfirmation())
+	require.NoError(t, err)
+	meta, ok := tool.(ToolMetadata)
+	require.True(t, ok)
+	assert.True(t, meta.RequiresConfirmation())
+}
+
+func TestWithSensitivity(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("t", "d", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	}, WithSensitivity("critical"))
+	require.NoError(t, err)
+	meta, ok := tool.(ToolMetadata)
+	require.True(t, ok)
+	assert.Equal(t, "critical", meta.Sensitivity())
+}
+
+func TestToolMetadata_SecurityFields(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("t", "d", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	}, WithReadOnly(), WithRequiresConfirmation(), WithSensitivity("high"), WithDangerous())
+	require.NoError(t, err)
+	meta, ok := tool.(ToolMetadata)
+	require.True(t, ok)
+	assert.True(t, meta.IsReadOnly())
+	assert.True(t, meta.RequiresConfirmation())
+	assert.Equal(t, "high", meta.Sensitivity())
+	assert.True(t, meta.IsDangerous())
+}
+
 func TestToolOptions_Combined(t *testing.T) {
 	type A struct {
 		N int `json:"n"`

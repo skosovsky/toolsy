@@ -737,3 +737,192 @@ func TestRegistry_OnAfter_ErrorPath(t *testing.T) {
 	assert.Equal(t, "fail", lastSummary.ToolName)
 	assert.ErrorIs(t, lastSummary.Error, errSentinel)
 }
+
+
+type testArgumentValidator struct {
+	validateFn func(ctx context.Context, toolName string, rawArgs []byte) error
+}
+
+func (v *testArgumentValidator) Validate(ctx context.Context, toolName string, rawArgs []byte) error {
+	if v.validateFn != nil {
+		return v.validateFn(ctx, toolName, rawArgs)
+	}
+	return nil
+}
+
+func TestRegistry_Validator_BlocksExecution(t *testing.T) {
+	type A struct {
+		Query string `json:"query"`
+	}
+	type R struct{}
+	var executed bool
+	tool, err := NewTool("sql", "SQL", func(_ context.Context, _ A) (R, error) {
+		executed = true
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithValidator(&testArgumentValidator{validateFn: func(_ context.Context, toolName string, rawArgs []byte) error {
+		assert.Equal(t, "sql", toolName)
+		if string(rawArgs) == `{"query":"drop table users"}` {
+			return errors.New("drop table detected")
+		}
+		return nil
+	}}))
+	reg.Register(tool)
+	err = reg.Execute(context.Background(), ToolCall{ID: "v1", ToolName: "sql", Args: raw(`{"query":"drop table users"}`)}, func(Chunk) error { return nil })
+	require.Error(t, err)
+	require.False(t, executed, "tool must not execute when validator rejects raw args")
+	require.True(t, IsClientError(err))
+	require.ErrorIs(t, err, ErrValidation)
+	assert.Contains(t, err.Error(), "validation error")
+}
+
+func TestRegistry_Validator_PassesValidArgs(t *testing.T) {
+	type A struct {
+		Query string `json:"query"`
+	}
+	type R struct {
+		OK bool `json:"ok"`
+	}
+	tool, err := NewTool("sql", "SQL", func(_ context.Context, a A) (R, error) {
+		return R{OK: a.Query == "select 1"}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithValidator(&testArgumentValidator{validateFn: func(_ context.Context, _ string, _ []byte) error {
+		return nil
+	}}))
+	reg.Register(tool)
+	var out R
+	err = reg.Execute(context.Background(), ToolCall{ID: "v2", ToolName: "sql", Args: raw(`{"query":"select 1"}`)}, func(c Chunk) error {
+		out = c.RawData.(R)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.True(t, out.OK)
+}
+
+func TestRegistry_Validator_NilByDefault(t *testing.T) {
+	type A struct {
+		N int `json:"n"`
+	}
+	type R struct {
+		N int `json:"n"`
+	}
+	tool, err := NewTool("echo", "Echo", func(_ context.Context, a A) (R, error) {
+		return R{N: a.N}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry()
+	reg.Register(tool)
+	var out R
+	err = reg.Execute(context.Background(), ToolCall{ID: "v3", ToolName: "echo", Args: raw(`{"n":7}`)}, func(c Chunk) error {
+		out = c.RawData.(R)
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 7, out.N)
+}
+
+func TestRegistry_MaxSteps_ExceedsLimit(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxSteps(3))
+	reg.Register(tool)
+	ctx := WithExecutionCounter(context.Background())
+	for i := 1; i <= 3; i++ {
+		err = reg.Execute(ctx, ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+		require.NoError(t, err)
+	}
+	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.ErrorIs(t, err, ErrMaxStepsExceeded)
+	assert.Equal(t, int64(4), ExecutionCount(ctx))
+}
+
+func TestRegistry_MaxSteps_NoCounterInCtx(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxSteps(1))
+	reg.Register(tool)
+	for i := 0; i < 3; i++ {
+		err = reg.Execute(context.Background(), ToolCall{ID: "n", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+		require.NoError(t, err)
+	}
+}
+
+func TestRegistry_MaxSteps_Zero(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxSteps(0))
+	reg.Register(tool)
+	ctx := WithExecutionCounter(context.Background())
+	for i := 0; i < 3; i++ {
+		err = reg.Execute(ctx, ToolCall{ID: "z", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+		require.NoError(t, err)
+	}
+	assert.Equal(t, int64(3), ExecutionCount(ctx), "counter tracks executions even when max-steps limit is disabled")
+}
+
+func TestRegistry_MaxRetries_ExceedsLimit(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	reg := NewRegistry(WithMaxRetries(2))
+	reg.Register(tool)
+	ctx := WithExecutionCounter(context.Background())
+	for i := 1; i <= 3; i++ {
+		err = reg.Execute(ctx, ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+		require.NoError(t, err)
+	}
+	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
+	assert.Equal(t, int64(3), RetriesCount(ctx)) // 1 initial + 2 retries allowed; 4th call increments to 3 and exceeds
+}
+
+func TestRegistry_MaxRetries_ResetOnDifferentTool(t *testing.T) {
+	type A struct{}
+	type R struct{}
+	tool1, err := NewTool("noop1", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	tool2, err := NewTool("noop2", "Noop", func(_ context.Context, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+
+	reg := NewRegistry(WithMaxRetries(2))
+	reg.Register(tool1)
+	reg.Register(tool2)
+
+	ctx := WithExecutionCounter(context.Background())
+	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.NoError(t, err)
+	err = reg.Execute(ctx, ToolCall{ID: "2", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.NoError(t, err)
+	err = reg.Execute(ctx, ToolCall{ID: "3", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.NoError(t, err)
+	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
+
+	err = reg.Execute(ctx, ToolCall{ID: "5", ToolName: "noop2", Args: raw(`{}`)}, func(Chunk) error { return nil })
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), RetriesCount(ctx)) // reset to 0 for the new tool (no retries yet)
+}
+
+
+

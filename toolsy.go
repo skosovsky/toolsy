@@ -34,6 +34,15 @@ type ToolMetadata interface {
 	Tags() []string
 	Version() string
 	IsDangerous() bool
+	IsReadOnly() bool
+	RequiresConfirmation() bool
+	Sensitivity() string
+}
+
+// ArgumentValidator validates raw tool arguments before the tool unmarshals them.
+// Applications can plug in stricter validation/policy engines without coupling toolsy to them.
+type ArgumentValidator interface {
+	Validate(ctx context.Context, toolName string, rawArgs []byte) error
 }
 
 // ToolCall is a single execution request (as produced by the LLM).

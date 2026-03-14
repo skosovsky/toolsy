@@ -194,10 +194,13 @@ type metadataMock struct {
 	isDangerous bool
 }
 
-func (m *metadataMock) Timeout() time.Duration { return m.timeout }
-func (m *metadataMock) Tags() []string         { return m.tags }
-func (m *metadataMock) Version() string        { return m.version }
-func (m *metadataMock) IsDangerous() bool       { return m.isDangerous }
+func (m *metadataMock) Timeout() time.Duration     { return m.timeout }
+func (m *metadataMock) Tags() []string              { return m.tags }
+func (m *metadataMock) Version() string             { return m.version }
+func (m *metadataMock) IsDangerous() bool           { return m.isDangerous }
+func (m *metadataMock) IsReadOnly() bool            { return false }
+func (m *metadataMock) RequiresConfirmation() bool  { return false }
+func (m *metadataMock) Sensitivity() string         { return "" }
 
 // TestOverrideTool_ToolMetadataDelegation ensures OverrideTool delegates Timeout/Tags/Version/IsDangerous
 // to the base tool via embedded toolBase, so Registry.Execute uses correct metadata for timeout and behavior.

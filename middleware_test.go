@@ -115,3 +115,26 @@ func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
 	require.Equal(t, 1, strings.Count(logStr, "tool start"))
 	assert.Equal(t, 6, r.Y)
 }
+
+
+type localMetaTool struct{ minTool }
+
+func (m *localMetaTool) Timeout() time.Duration     { return time.Second }
+func (m *localMetaTool) Tags() []string             { return []string{"x"} }
+func (m *localMetaTool) Version() string            { return "1.0.0" }
+func (m *localMetaTool) IsDangerous() bool          { return true }
+func (m *localMetaTool) IsReadOnly() bool           { return true }
+func (m *localMetaTool) RequiresConfirmation() bool { return true }
+func (m *localMetaTool) Sensitivity() string        { return "critical" }
+
+
+func TestToolBase_SecurityDelegation(t *testing.T) {
+	wrapped := &toolBase{next: &localMetaTool{minTool{name: "meta", params: map[string]any{}}}}
+	assert.True(t, wrapped.IsReadOnly())
+	assert.True(t, wrapped.RequiresConfirmation())
+	assert.Equal(t, "critical", wrapped.Sensitivity())
+	assert.True(t, wrapped.IsDangerous())
+	assert.Equal(t, time.Second, wrapped.Timeout())
+	assert.Equal(t, []string{"x"}, wrapped.Tags())
+	assert.Equal(t, "1.0.0", wrapped.Version())
+}
