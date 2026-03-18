@@ -75,6 +75,20 @@ for chunk, err := range reg.ExecuteIter(ctx, toolsy.ToolCall{ID: "1", ToolName: 
 
 **RawData and zero-cost** — For tools built with `NewTool` or `NewStreamTool`, the core does **not** call `json.Marshal`; the typed result is in `Chunk.RawData`, and `Data` is nil. **Local agent**: use a type assertion with zero CPU cost, e.g. `out := chunk.RawData.(MyStruct)`. **External client (MCP/HTTP)**: serialize at the boundary with `json.Marshal(chunk.RawData)` when sending over the wire. Use `Data` only for raw byte streams (e.g. file download, streaming text) where the tool writes bytes into `Data` and leaves `RawData` nil.
 
+## toolsy-gen
+
+`toolsy-gen` generates Go DTOs, handler interfaces, and `toolsy.Tool` factories from YAML or JSON tool manifests:
+
+```bash
+go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
+```
+
+- Input: recursive scan of `*.yaml`, `*.yml`, and `*.json`; if no path is passed, the current directory is scanned.
+- Supported schema subset: root `parameters.type` must be `object`; top-level properties may be `string`, `string` with `format: date-time`, `integer`, `boolean`, or arrays of those scalar types.
+- Clean-break validation: missing `description`, nested objects, arrays of objects, `$ref`, `oneOf` / `allOf` / `anyOf`, `not`, and `patternProperties` are hard errors.
+- Required semantics: generated DTOs include `validate:"required"` on required fields, generated `Validate()` performs zero-dependency post-unmarshal checks where possible, and raw JSON Schema remains the source of truth through `NewProxyTool`.
+- Stream semantics: generated streaming tools emit `EventProgress` for intermediate chunks and a terminal `EventResult` for the last successful item; empty successful streams emit an empty terminal result chunk.
+
 ## Error handling
 
 **For AI agents**: Classify errors and pass the right message back to the LLM.
