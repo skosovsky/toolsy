@@ -76,49 +76,82 @@ func docToTools(_ context.Context, doc *openapi3.T, opts *Options) ([]toolsy.Too
 		if pathItem == nil {
 			continue
 		}
-		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
-			var op *openapi3.Operation
-			switch method {
-			case http.MethodGet:
-				op = pathItem.Get
-			case http.MethodPost:
-				op = pathItem.Post
-			case http.MethodPut:
-				op = pathItem.Put
-			case http.MethodPatch:
-				op = pathItem.Patch
-			case http.MethodDelete:
-				op = pathItem.Delete
-			default:
-				continue
-			}
-			if !includeOperation(op, method, opts) {
-				continue
-			}
-			name := toolNameFromOperation(op.OperationID, strings.ToLower(method), path, usedNames)
-			desc := op.Summary
-			if desc == "" {
-				desc = op.Description
-			}
-			if desc == "" {
-				desc = method + " " + path
-			}
-			schemaBytes, err := operationToJSONSchema(op, pathItem)
-			if err != nil {
-				return nil, fmt.Errorf("openapi: schema %s %s: %w", method, path, err)
-			}
-			pathNames, queryNames, bodyNames := operationParamSets(op, pathItem, path)
-			pathTemplate := path
-			methodCopy := method
-			optsCopy := *opts
-			tool, err := toolsy.NewProxyTool(name, desc, schemaBytes, func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-				return execute(ctx, methodCopy, pathTemplate, pathNames, queryNames, bodyNames, argsJSON, &optsCopy, yield)
-			})
-			if err != nil {
-				return nil, fmt.Errorf("openapi: tool %s: %w", name, err)
-			}
-			tools = append(tools, tool)
+		forPath, err := toolsForPath(path, pathItem, opts, usedNames)
+		if err != nil {
+			return nil, err
 		}
+		tools = append(tools, forPath...)
 	}
 	return tools, nil
+}
+
+func toolsForPath(
+	path string,
+	pathItem *openapi3.PathItem,
+	opts *Options,
+	usedNames map[string]bool,
+) ([]toolsy.Tool, error) {
+	var tools []toolsy.Tool
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		op := operationForMethod(pathItem, method)
+		if !includeOperation(op, method, opts) {
+			continue
+		}
+		name := toolNameFromOperation(op.OperationID, strings.ToLower(method), path, usedNames)
+		desc := op.Summary
+		if desc == "" {
+			desc = op.Description
+		}
+		if desc == "" {
+			desc = method + " " + path
+		}
+		schemaBytes, err := operationToJSONSchema(op, pathItem)
+		if err != nil {
+			return nil, fmt.Errorf("openapi: schema %s %s: %w", method, path, err)
+		}
+		pathNames, queryNames, bodyNames := operationParamSets(op, pathItem, path)
+		pathTemplate := path
+		methodCopy := method
+		optsCopy := *opts
+		tool, err := toolsy.NewProxyTool(
+			name,
+			desc,
+			schemaBytes,
+			func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+				return execute(
+					ctx,
+					methodCopy,
+					pathTemplate,
+					pathNames,
+					queryNames,
+					bodyNames,
+					argsJSON,
+					&optsCopy,
+					yield,
+				)
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("openapi: tool %s: %w", name, err)
+		}
+		tools = append(tools, tool)
+	}
+	return tools, nil
+}
+
+func operationForMethod(pathItem *openapi3.PathItem, method string) *openapi3.Operation {
+	switch method {
+	case http.MethodGet:
+		return pathItem.Get
+	case http.MethodPost:
+		return pathItem.Post
+	case http.MethodPut:
+		return pathItem.Put
+	case http.MethodPatch:
+		return pathItem.Patch
+	case http.MethodDelete:
+		return pathItem.Delete
+	default:
+		return nil
+	}
 }

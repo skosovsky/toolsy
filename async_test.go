@@ -53,12 +53,15 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, RawData: "done"})
 		},
 	}
-	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, taskID string, chunks []toolsy.Chunk, err error) {
-		gotID = taskID
-		gotChunks = chunks
-		gotErr = err
-		done.Done()
-	}))
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, taskID string, chunks []toolsy.Chunk, err error) {
+			gotID = taskID
+			gotChunks = chunks
+			gotErr = err
+			done.Done()
+		}),
+	)
 
 	err := wrapped.Execute(context.Background(), []byte(`{}`), func(_ toolsy.Chunk) error {
 		return nil
@@ -96,10 +99,13 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 			return wantErr
 		},
 	}
-	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
-		gotErr = err
-		done.Done()
-	}))
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
 	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.NoError(t, err)
 	done.Wait()
@@ -162,7 +168,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 
 // TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground verifies that a second ctx.Err() check
 // immediately before yield(accepted) ensures "cancelled before accepted => no accepted, no background".
-// We cancel context from another goroutine shortly after Execute starts; when we get context.Canceled,
+// We cancel context from another goroutine shortly after Execute starts; when we get [context.Canceled],
 // OnComplete must never be called.
 func TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground(t *testing.T) {
 	var onCompleteCalled int32
@@ -175,7 +181,7 @@ func TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground(t *testing.T) {
 	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(context.Context, string, []toolsy.Chunk, error) {
 		atomic.StoreInt32(&onCompleteCalled, 1)
 	}))
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		atomic.StoreInt32(&onCompleteCalled, 0)
 		ctx, cancel := context.WithCancel(context.Background())
 		var err error
@@ -189,11 +195,17 @@ func TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground(t *testing.T) {
 		<-done
 		if errors.Is(err, context.Canceled) {
 			time.Sleep(50 * time.Millisecond)
-			require.Zero(t, atomic.LoadInt32(&onCompleteCalled), "OnComplete must not run when Execute returned context.Canceled (cancel before yield)")
+			require.Zero(
+				t,
+				atomic.LoadInt32(&onCompleteCalled),
+				"OnComplete must not run when Execute returned context.Canceled (cancel before yield)",
+			)
 			return
 		}
 	}
-	t.Skip("context was not canceled before yield in 30 runs; second check is still exercised by TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine")
+	t.Skip(
+		"context was not canceled before yield in 30 runs; second check is still exercised by TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine",
+	)
 }
 
 func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
@@ -208,10 +220,13 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 			panic("intentional panic for test")
 		},
 	}
-	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
-		gotErr = err
-		done.Done()
-	}))
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
 	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.NoError(t, err)
 	done.Wait()
@@ -225,9 +240,12 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 			return nil
 		},
 	}
-	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, _ error) {
-		panic("callback panic for test")
-	}))
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, _ error) {
+			panic("callback panic for test")
+		}),
+	)
 	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.NoError(t, err)
 	time.Sleep(80 * time.Millisecond) // allow goroutine to run and OnComplete to panic and be recovered
@@ -237,16 +255,17 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 // timeoutMock implements Tool and ToolMetadata so AsAsyncTool applies per-tool timeout in the background.
 type timeoutMock struct {
 	*testutil.MockTool
+
 	timeout time.Duration
 }
 
-func (m *timeoutMock) Timeout() time.Duration      { return m.timeout }
-func (m *timeoutMock) Tags() []string              { return nil }
-func (m *timeoutMock) Version() string             { return "" }
-func (m *timeoutMock) IsDangerous() bool           { return false }
-func (m *timeoutMock) IsReadOnly() bool            { return false }
-func (m *timeoutMock) RequiresConfirmation() bool  { return false }
-func (m *timeoutMock) Sensitivity() string         { return "" }
+func (m *timeoutMock) Timeout() time.Duration     { return m.timeout }
+func (m *timeoutMock) Tags() []string             { return nil }
+func (m *timeoutMock) Version() string            { return "" }
+func (m *timeoutMock) IsDangerous() bool          { return false }
+func (m *timeoutMock) IsReadOnly() bool           { return false }
+func (m *timeoutMock) RequiresConfirmation() bool { return false }
+func (m *timeoutMock) Sensitivity() string        { return "" }
 
 func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
 	var (
@@ -268,10 +287,13 @@ func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
 		},
 		timeout: 5 * time.Millisecond,
 	}
-	wrapped := toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
-		gotErr = err
-		done.Done()
-	}))
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
 	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.NoError(t, err)
 	done.Wait()
@@ -302,15 +324,26 @@ func TestAsAsyncTool_RegistryTimeoutMinimumHierarchy(t *testing.T) {
 		timeout: 200 * time.Millisecond, // tool wants 200ms
 	}
 	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(25 * time.Millisecond))
-	reg.Register(toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
-		gotErr = err
-		done.Done()
-	})))
-	err := reg.Execute(context.Background(), toolsy.ToolCall{ID: "1", ToolName: "long_tool", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+	reg.Register(
+		toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		})),
+	)
+	err := reg.Execute(
+		context.Background(),
+		toolsy.ToolCall{ID: "1", ToolName: "long_tool", Args: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	done.Wait()
 	require.Error(t, gotErr)
-	require.ErrorIs(t, gotErr, context.DeadlineExceeded, "effective timeout must be min(registry 25ms, tool 200ms) = 25ms")
+	require.ErrorIs(
+		t,
+		gotErr,
+		context.DeadlineExceeded,
+		"effective timeout must be min(registry 25ms, tool 200ms) = 25ms",
+	)
 }
 
 // TestAsAsyncTool_RegistryDefaultTimeoutAppliesToBackground ensures that when run via Registry,
@@ -333,11 +366,17 @@ func TestAsAsyncTool_RegistryDefaultTimeoutAppliesToBackground(t *testing.T) {
 		},
 	}
 	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(15 * time.Millisecond))
-	reg.Register(toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
-		gotErr = err
-		done.Done()
-	})))
-	err := reg.Execute(context.Background(), toolsy.ToolCall{ID: "1", ToolName: "slow_via_registry", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+	reg.Register(
+		toolsy.AsAsyncTool(base, toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		})),
+	)
+	err := reg.Execute(
+		context.Background(),
+		toolsy.ToolCall{ID: "1", ToolName: "slow_via_registry", Args: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	done.Wait()
 	require.Error(t, gotErr)
@@ -358,7 +397,11 @@ func TestAsAsyncTool_ShutdownWaitsForBackground(t *testing.T) {
 	reg := toolsy.NewRegistry()
 	reg.Register(asyncTool)
 	ctx := context.Background()
-	err := reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "slow_async", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+	err := reg.Execute(
+		ctx,
+		toolsy.ToolCall{ID: "1", ToolName: "slow_async", Args: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -387,11 +430,19 @@ func TestAsAsyncTool_ConcurrencySlotHeldUntilBackgroundDone(t *testing.T) {
 	reg := toolsy.NewRegistry(toolsy.WithMaxConcurrency(1))
 	reg.Register(toolsy.AsAsyncTool(base))
 	ctx := context.Background()
-	err := reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "holds_slot", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+	err := reg.Execute(
+		ctx,
+		toolsy.ToolCall{ID: "1", ToolName: "holds_slot", Args: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	// Async returned immediately; background still running. Second call should block until first background completes.
 	go func() {
-		_ = reg.Execute(ctx, toolsy.ToolCall{ID: "2", ToolName: "holds_slot", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+		_ = reg.Execute(
+			ctx,
+			toolsy.ToolCall{ID: "2", ToolName: "holds_slot", Args: []byte(`{}`)},
+			func(toolsy.Chunk) error { return nil },
+		)
 		close(secondStarted)
 	}()
 	select {

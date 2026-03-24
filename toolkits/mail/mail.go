@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,9 @@ import (
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
+
+// maxSearchInboxLimit is the maximum number of inbox search results per tool call.
+const maxSearchInboxLimit = 100
 
 // OutgoingMessage is passed to MailSender.Send.
 type OutgoingMessage struct {
@@ -80,7 +84,7 @@ type readResult struct {
 // At least one of sender or reader must be non-nil.
 func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Tool, error) {
 	if sender == nil && reader == nil {
-		return nil, fmt.Errorf("toolkit/mail: at least one of sender or reader must be provided")
+		return nil, errors.New("toolkit/mail: at least one of sender or reader must be provided")
 	}
 	var o options
 	for _, opt := range opts {
@@ -132,7 +136,11 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 
 func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes int) (sendResult, error) {
 	if len(args.To) == 0 {
-		return sendResult{}, &toolsy.ClientError{Reason: "at least one recipient (to) is required", Err: toolsy.ErrValidation}
+		return sendResult{}, &toolsy.ClientError{
+			Reason:    "at least one recipient (to) is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	body := args.Body
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
@@ -148,14 +156,18 @@ func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes 
 func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (searchResult, error) {
 	query := strings.TrimSpace(args.Query)
 	if query == "" {
-		return searchResult{}, &toolsy.ClientError{Reason: "query is required (empty query would return entire inbox)", Err: toolsy.ErrValidation}
+		return searchResult{}, &toolsy.ClientError{
+			Reason:    "query is required (empty query would return entire inbox)",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	limit := args.Limit
 	if limit <= 0 {
 		limit = 10
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > maxSearchInboxLimit {
+		limit = maxSearchInboxLimit
 	}
 	list, err := reader.Search(ctx, query, limit)
 	if err != nil {
@@ -180,7 +192,11 @@ func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (s
 func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes int) (readResult, error) {
 	messageID := strings.TrimSpace(args.MessageID)
 	if messageID == "" {
-		return readResult{}, &toolsy.ClientError{Reason: "message_id is required", Err: toolsy.ErrValidation}
+		return readResult{}, &toolsy.ClientError{
+			Reason:    "message_id is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	msg, err := reader.Read(ctx, messageID)
 	if err != nil {
@@ -211,7 +227,7 @@ func escapeCell(s string) string {
 // looksLikeHTML returns true if body contains what appears to be an HTML tag (e.g. <p>, </div>),
 // so plain text with angle brackets (e.g. "x < 5" or XML snippets) is not converted.
 func looksLikeHTML(body string) bool {
-	for i := 0; i < len(body); i++ {
+	for i := range len(body) {
 		if body[i] != '<' {
 			continue
 		}

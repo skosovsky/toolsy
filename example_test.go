@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"os"
 	"time"
 )
 
@@ -81,7 +81,10 @@ func ExampleRegistry_Use() {
 		return
 	}
 	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
-	reg.Use(WithLogging(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))), WithTimeoutMiddleware(2*time.Second))
+	reg.Use(
+		WithLogging(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))),
+		WithTimeoutMiddleware(2*time.Second),
+	)
 	reg.Register(tool)
 	var out Out
 	_ = reg.Execute(context.Background(), ToolCall{
@@ -92,6 +95,6 @@ func ExampleRegistry_Use() {
 	})
 	b, _ := json.Marshal(out)
 	fmt.Printf("result: %s", b)
-	// Output (logger at Error level may produce no extra lines):
+	// Output:
 	// result: {"double":42}
 }

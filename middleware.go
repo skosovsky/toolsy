@@ -87,11 +87,12 @@ func (b *toolBase) Sensitivity() string {
 
 type middlewareTool struct {
 	toolBase
+
 	logger *slog.Logger
 }
 
 func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
-	m.logger.Info("tool start", "tool", m.next.Name())
+	m.logger.InfoContext(ctx, "tool start", "tool", m.next.Name())
 	start := time.Now()
 	var chunks, totalBytes int64
 	yieldWrapped := func(c Chunk) error {
@@ -105,7 +106,19 @@ func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func(Ch
 	defer func() {
 		dur := time.Since(start)
 		if err != nil {
-			m.logger.Error("tool error", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes, "error", err)
+			m.logger.Error(
+				"tool error",
+				"tool",
+				m.next.Name(),
+				"duration",
+				dur,
+				"chunks",
+				chunks,
+				"bytes",
+				totalBytes,
+				"error",
+				err,
+			)
 		} else {
 			m.logger.Info("tool end", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes)
 		}
@@ -127,6 +140,7 @@ func (r *recoveryTool) Execute(ctx context.Context, args []byte, yield func(Chun
 
 type timeoutTool struct {
 	toolBase
+
 	timeout time.Duration
 }
 

@@ -27,23 +27,11 @@ func TestRunHelpWritesUsageToStdout(t *testing.T) {
 }
 
 func TestRunSuccessPrintsGeneratedFiles(t *testing.T) {
-	t.Parallel()
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-
 	dir := filepath.Join(t.TempDir(), "apptools")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(cwd)
-	})
+	t.Chdir(dir)
 
 	if err := os.WriteFile(filepath.Join(dir, "book.yaml"), []byte(`
 name: "book_appointment"
@@ -55,7 +43,7 @@ parameters:
       type: string
       description: "Doctor id"
   required: ["doctor_id"]
-`), 0o644); err != nil {
+`), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -80,7 +68,7 @@ func TestRunErrorPrefixesToolName(t *testing.T) {
 	t.Parallel()
 
 	dir := filepath.Join(t.TempDir(), "apptools")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte(`
@@ -91,7 +79,7 @@ parameters:
   properties:
     doctor_id:
       type: string
-`), 0o644); err != nil {
+`), 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 

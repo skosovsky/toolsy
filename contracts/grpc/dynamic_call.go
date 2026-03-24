@@ -14,7 +14,14 @@ import (
 
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 
-func invokeRPC(ctx context.Context, cc *grpc.ClientConn, method protoreflect.MethodDescriptor, argsJSON []byte, opts *Options, yield func(toolsy.Chunk) error) error {
+func invokeRPC(
+	ctx context.Context,
+	cc *grpc.ClientConn,
+	method protoreflect.MethodDescriptor,
+	argsJSON []byte,
+	opts *Options,
+	yield func(toolsy.Chunk) error,
+) error {
 	req := dynamicpb.NewMessage(method.Input())
 	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
 	if err := unmarshaler.Unmarshal(argsJSON, req); err != nil {

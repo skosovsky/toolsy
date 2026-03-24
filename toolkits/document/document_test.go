@@ -23,14 +23,17 @@ func TestExtractCSV_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	var result extractResult
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(extractResult); ok {
-				result = r
+	require.NoError(
+		t,
+		tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(extractResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Text, "a")
 	require.Contains(t, result.Text, "b")
 	require.Contains(t, result.Text, "1")
@@ -47,14 +50,17 @@ func TestExtractCSV_MultilineCellNormalized(t *testing.T) {
 	require.NoError(t, err)
 
 	var result extractResult
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(extractResult); ok {
-				result = r
+	require.NoError(
+		t,
+		tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(extractResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	// Multiline cell should be normalized to "line1 line2" so table does not break
 	require.Contains(t, result.Text, "line1 line2")
 	require.Contains(t, result.Text, "Alice")
@@ -69,7 +75,11 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"file_path":"`+path+`"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		[]byte(`{"file_path":"`+path+`"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "unsupported")
@@ -79,7 +89,11 @@ func TestExtract_URLDisabled(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"url":"https://example.com/file.pdf"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		[]byte(`{"url":"https://example.com/file.pdf"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "URL fetch is disabled")
@@ -114,7 +128,11 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	tool, err := AsTool(WithMaxBytes(1024 * 1024))
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		[]byte(`{"file_path":"`+csvPath+`"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "too large")
@@ -128,7 +146,9 @@ func minimalDOCX(t *testing.T, dir string) string {
 	require.NoError(t, err)
 	defer func() { _ = f.Close() }()
 	w := zip.NewWriter(f)
-	body := []byte(`<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello DOCX</w:t></w:r></w:p></w:body></w:document>`)
+	body := []byte(
+		`<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello DOCX</w:t></w:r></w:p></w:body></w:document>`,
+	)
 	docW, err := w.Create("word/document.xml")
 	require.NoError(t, err)
 	_, err = docW.Write(body)
@@ -146,14 +166,17 @@ func TestExtract_DOCX_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	var result extractResult
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"file_path":"`+docxPath+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(extractResult); ok {
-				result = r
+	require.NoError(
+		t,
+		tool.Execute(context.Background(), []byte(`{"file_path":"`+docxPath+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(extractResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Text, "Hello DOCX")
 }
 
@@ -161,7 +184,11 @@ func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 	tool, err := AsTool(WithAllowRemote(true))
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"url":"http://127.0.0.1:9999/file.pdf"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		[]byte(`{"url":"http://127.0.0.1:9999/file.pdf"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "private or loopback")
@@ -178,14 +205,17 @@ func TestExtract_Remote_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	var result extractResult
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`/data.csv"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(extractResult); ok {
-				result = r
+	require.NoError(
+		t,
+		tool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`/data.csv"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(extractResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Text, "col1")
 	require.Contains(t, result.Text, "1")
 }
@@ -202,14 +232,21 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 
 	var result extractResult
 	// URL with query string: format should be taken from path (.csv), not from ?sig=...
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`/file.csv?sig=abc"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(extractResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			[]byte(`{"url":"`+server.URL+`/file.csv?sig=abc"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(extractResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Text, "a")
 	require.Contains(t, result.Text, "1")
 }
@@ -225,7 +262,11 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	// Initial URL is our test server (allowed with WithAllowPrivateIPs); redirect to loopback is still blocked
-	err = tool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`/doc.csv"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		[]byte(`{"url":"`+server.URL+`/doc.csv"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "private or loopback")

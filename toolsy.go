@@ -57,7 +57,7 @@ type ToolCall struct {
 // CallID and ToolName when forwarding; tools may set Data, RawData, and optionally Event, IsError, Metadata.
 //
 // For typed results (NewTool, NewStreamTool): the core fills RawData and leaves Data nil (zero-cost;
-// no json.Marshal in the core). The caller uses a type assertion, e.g. chunk.RawData.(*MyStruct).
+// no [json.Marshal] in the core). The caller uses a type assertion, e.g. chunk.RawData.(*MyStruct).
 // Data is used only for raw byte streams (file chunks, streaming text) when the tool puts bytes
 // in Data and leaves RawData nil. Serialization to JSON is delegated to the boundary (orchestrator/network).
 type Chunk struct {

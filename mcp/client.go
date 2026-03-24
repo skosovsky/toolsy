@@ -13,18 +13,28 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const progressChunkBufferSize = 8
+
 // ClientOption configures the MCP client.
 type ClientOption func(*ClientOptions)
 
 // ClientOptions holds client configuration.
 type ClientOptions struct {
-	Roots []string
+	Roots  []string
+	Logger *slog.Logger
 }
 
 // WithClientRoots sets the root paths (e.g. workspace folders) to announce to the server.
 func WithClientRoots(roots []string) ClientOption {
 	return func(o *ClientOptions) {
 		o.Roots = roots
+	}
+}
+
+// WithClientLogger sets the logger for client warnings (e.g. failed notifications). If nil, [slog.Default] is used.
+func WithClientLogger(logger *slog.Logger) ClientOption {
+	return func(o *ClientOptions) {
+		o.Logger = logger
 	}
 }
 
@@ -45,16 +55,32 @@ type Client struct {
 
 // NewClient creates an MCP client. Call Initialize before using GetTools, GetResourceTool, or GetPrompts.
 func NewClient(transport Transport, opts ...ClientOption) *Client {
-	o := ClientOptions{}
+	o := ClientOptions{
+		Roots:  nil,
+		Logger: nil,
+	}
 	for _, opt := range opts {
 		opt(&o)
 	}
 	c := &Client{
-		transport: transport,
-		opts:      o,
+		transport:         transport,
+		opts:              o,
+		initMu:            sync.Mutex{},
+		initialized:       false,
+		initErr:           nil,
+		serverCaps:        nil,
+		progressCallbacks: sync.Map{},
+		progressCounter:   atomic.Uint64{},
 	}
 	transport.OnNotification(MethodProgress, c.handleProgress)
 	return c
+}
+
+func (c *Client) clientLogger() *slog.Logger {
+	if c.opts.Logger != nil {
+		return c.opts.Logger
+	}
+	return slog.Default()
 }
 
 func (c *Client) handleProgress(params []byte) {
@@ -63,9 +89,11 @@ func (c *Client) handleProgress(params []byte) {
 		return
 	}
 	if val, ok := c.progressCallbacks.Load(p.ProgressToken); ok {
-		if fn, ok := val.(func([]byte)); ok {
-			fn(params)
+		fn, fnOK := val.(func([]byte))
+		if !fnOK {
+			return
 		}
+		fn(params)
 	}
 }
 
@@ -103,6 +131,7 @@ func (c *Client) Initialize(ctx context.Context) error {
 	paramsBytes, _ := json.Marshal(params)
 	var paramsWithRoots struct {
 		InitializeParams
+
 		Roots []string `json:"roots,omitempty"`
 	}
 	_ = json.Unmarshal(paramsBytes, &paramsWithRoots)
@@ -122,7 +151,7 @@ func (c *Client) Initialize(ctx context.Context) error {
 	// MCP spec requires sending notifications/initialized after successful Initialize;
 	// without it the server may stay in "waiting" state and not respond to further requests.
 	if err := c.transport.Notify(ctx, MethodInitialized, struct{}{}); err != nil {
-		slog.Warn("mcp: failed to send notifications/initialized", "err", err)
+		c.clientLogger().WarnContext(ctx, "mcp: failed to send notifications/initialized", "err", err)
 	}
 	return nil
 }
@@ -176,114 +205,29 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 	return nil
 }
 
+func toolDescription(m *MCPTool) string {
+	if m.Description != "" {
+		return m.Description
+	}
+	if m.Title != "" {
+		return m.Title
+	}
+	return m.Name
+}
+
+func defaultToolInputSchemaJSON() []byte {
+	return []byte(`{"type":"object","properties":{}}`)
+}
+
 func (c *Client) toolToProxy(_ context.Context, m *MCPTool) (toolsy.Tool, error) {
 	name := m.Name
-	description := m.Description
-	if description == "" {
-		description = m.Title
-	}
-	if description == "" {
-		description = name
-	}
+	description := toolDescription(m)
 	schema := m.InputSchema
 	if len(schema) == 0 {
-		schema = []byte(`{"type":"object","properties":{}}`)
+		schema = defaultToolInputSchemaJSON()
 	}
-	transport := c.transport
 	handler := func(ctx context.Context, rawArgs []byte, yield func(toolsy.Chunk) error) error {
-		progressToken := c.nextProgressToken()
-		callParams := ToolsCallParams{
-			Name:          name,
-			Arguments:     rawArgs,
-			ProgressToken: progressToken,
-		}
-		progressCh := make(chan toolsy.Chunk, 8)
-		done := make(chan struct{})
-		defer close(done)
-		progressFn := func(params []byte) {
-			select {
-			case <-done:
-				return
-			default:
-			}
-			var p ProgressParams
-			if json.Unmarshal(params, &p) != nil {
-				return
-			}
-			meta := map[string]any{"progressToken": p.ProgressToken}
-			if p.Progress >= 0 {
-				meta["progress"] = p.Progress
-			}
-			if p.Total > 0 {
-				meta["total"] = p.Total
-			}
-			if p.ProgressMessage != "" {
-				meta["progressMessage"] = p.ProgressMessage
-			}
-			select {
-			case progressCh <- toolsy.Chunk{Event: toolsy.EventProgress, Metadata: meta}:
-			case <-done:
-			}
-		}
-		c.progressCallbacks.Store(progressToken, progressFn)
-		defer c.progressCallbacks.Delete(progressToken)
-
-		resultCh := make(chan callResultWithErr, 1)
-		go func() {
-			res, reqID, err := transport.Call(ctx, MethodToolsCall, callParams)
-			resultCh <- callResultWithErr{res: res, requestID: reqID, err: err}
-		}()
-
-		for {
-			select {
-			case <-ctx.Done():
-				// Call may not have sent to resultCh yet; get requestID only if available, then send cancelled only if non-empty.
-				var cancelID string
-				select {
-				case r := <-resultCh:
-					cancelID = r.requestID
-				default:
-				}
-				if cancelID != "" {
-					_ = transport.Notify(context.Background(), MethodCancelled, CancelledParams{RequestID: json.RawMessage(`"` + cancelID + `"`)})
-				}
-				return toolsy.ErrStreamAborted
-			case r := <-resultCh:
-				if r.err != nil {
-					return r.err
-				}
-				mapped, formatErr := FormatContent(r.res)
-				chunkData := r.res
-				chunkIsError := false
-				if formatErr == nil {
-					chunkData = mapped.Data
-					chunkIsError = mapped.IsError
-				}
-				if err := yield(toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, IsError: chunkIsError}); err != nil {
-					if r.requestID != "" {
-						_ = transport.Notify(context.Background(), MethodCancelled, CancelledParams{RequestID: json.RawMessage(`"` + r.requestID + `"`)})
-					}
-					return toolsy.ErrStreamAborted
-				}
-				return nil
-			case ch, ok := <-progressCh:
-				if !ok {
-					return nil
-				}
-				if err := yield(ch); err != nil {
-					var cancelID string
-					select {
-					case r := <-resultCh:
-						cancelID = r.requestID
-					default:
-					}
-					if cancelID != "" {
-						_ = transport.Notify(context.Background(), MethodCancelled, CancelledParams{RequestID: json.RawMessage(`"` + cancelID + `"`)})
-					}
-					return toolsy.ErrStreamAborted
-				}
-			}
-		}
+		return c.runMCPToolCall(ctx, name, rawArgs, yield)
 	}
 	return toolsy.NewProxyTool(name, description, schema, handler)
 }
@@ -292,6 +236,132 @@ type callResultWithErr struct {
 	res       []byte
 	requestID string
 	err       error
+}
+
+func (c *Client) notifyCancelledRequest(requestID string) {
+	if requestID == "" {
+		return
+	}
+	_ = c.transport.Notify(
+		context.Background(),
+		MethodCancelled,
+		CancelledParams{RequestID: json.RawMessage(`"` + requestID + `"`)},
+	)
+}
+
+func (c *Client) startToolsCallAsync(
+	ctx context.Context,
+	transport Transport,
+	callParams ToolsCallParams,
+	resultCh chan<- callResultWithErr,
+) {
+	go func() {
+		res, reqID, err := transport.Call(ctx, MethodToolsCall, callParams)
+		resultCh <- callResultWithErr{res: res, requestID: reqID, err: err}
+	}()
+}
+
+func readRequestIDIfReady(ch <-chan callResultWithErr) string {
+	select {
+	case r := <-ch:
+		return r.requestID
+	default:
+		return ""
+	}
+}
+
+func (c *Client) newToolProgressForwarder(progressCh chan toolsy.Chunk, done chan struct{}) func([]byte) {
+	return func(params []byte) {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		var p ProgressParams
+		if json.Unmarshal(params, &p) != nil {
+			return
+		}
+		meta := map[string]any{"progressToken": p.ProgressToken}
+		if p.Progress >= 0 {
+			meta["progress"] = p.Progress
+		}
+		if p.Total > 0 {
+			meta["total"] = p.Total
+		}
+		if p.ProgressMessage != "" {
+			meta["progressMessage"] = p.ProgressMessage
+		}
+		select {
+		case progressCh <- toolsy.Chunk{Event: toolsy.EventProgress, Metadata: meta}:
+		case <-done:
+		}
+	}
+}
+
+func (c *Client) runMCPToolCall(
+	ctx context.Context,
+	name string,
+	rawArgs []byte,
+	yield func(toolsy.Chunk) error,
+) error {
+	transport := c.transport
+	progressToken := c.nextProgressToken()
+	callParams := ToolsCallParams{
+		Name:          name,
+		Arguments:     rawArgs,
+		ProgressToken: progressToken,
+	}
+	progressCh := make(chan toolsy.Chunk, progressChunkBufferSize)
+	done := make(chan struct{})
+	defer close(done)
+
+	progressFn := c.newToolProgressForwarder(progressCh, done)
+	c.progressCallbacks.Store(progressToken, progressFn)
+	defer c.progressCallbacks.Delete(progressToken)
+
+	resultCh := make(chan callResultWithErr, 1)
+	c.startToolsCallAsync(ctx, transport, callParams, resultCh)
+
+	for {
+		select {
+		case <-ctx.Done():
+			c.notifyCancelledRequest(readRequestIDIfReady(resultCh))
+			return toolsy.ErrStreamAborted
+		case r := <-resultCh:
+			return c.handleToolCallResult(r, yield)
+		case ch, ok := <-progressCh:
+			if !ok {
+				return nil
+			}
+			if err := yield(ch); err != nil {
+				c.notifyCancelledRequest(readRequestIDIfReady(resultCh))
+				return toolsy.ErrStreamAborted
+			}
+		}
+	}
+}
+
+func (c *Client) handleToolCallResult(
+	r callResultWithErr,
+	yield func(toolsy.Chunk) error,
+) error {
+	if r.err != nil {
+		return r.err
+	}
+	mapped, formatErr := FormatContent(r.res)
+	chunkData := r.res
+	chunkIsError := false
+	if formatErr == nil {
+		chunkData = mapped.Data
+		chunkIsError = mapped.IsError
+	}
+	if err := yield(
+		toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, IsError: chunkIsError},
+	); err != nil {
+		c.notifyCancelledRequest(r.requestID)
+		return toolsy.ErrStreamAborted
+	}
+	return nil
 }
 
 func (c *Client) nextProgressToken() string {

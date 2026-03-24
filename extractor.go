@@ -57,7 +57,7 @@ func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 		if IsClientError(err) {
 			return zero, err
 		}
-		return zero, &ClientError{Reason: err.Error(), Err: ErrValidation}
+		return zero, &ClientError{Reason: err.Error(), Retryable: false, Err: ErrValidation}
 	}
 	return args, nil
 }

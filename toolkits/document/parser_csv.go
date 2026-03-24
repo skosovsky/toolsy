@@ -27,7 +27,7 @@ func parseCSV(r io.Reader, maxBytes int) (string, error) {
 	}
 	b.WriteString("\n")
 	// Separator
-	for i := 0; i < len(rows[0]); i++ {
+	for i := range len(rows[0]) {
 		if i > 0 {
 			b.WriteString(" | ")
 		}

@@ -66,17 +66,15 @@ func TestOverrideTool_ThreadSafety(t *testing.T) {
 	}
 	require.NotNil(t, base)
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			w1 := toolsy.OverrideTool(base, toolsy.WithNewName("w1"))
 			w2 := toolsy.OverrideTool(base, toolsy.WithNewDescription("desc2"))
 			_ = w1.Name()
 			_ = w2.Description()
 			_ = w1.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
 			_ = w2.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -131,7 +129,12 @@ func TestOverrideTool_Parameters_NestedMutationDoesNotAffectStoredSchema(t *test
 	require.True(t, ok)
 	innerProps2, ok := user2["properties"].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, map[string]any{"type": "string"}, innerProps2["name"], "nested properties must be unchanged by caller mutation")
+	require.Equal(
+		t,
+		map[string]any{"type": "string"},
+		innerProps2["name"],
+		"nested properties must be unchanged by caller mutation",
+	)
 }
 
 // TestOverrideTool_Parameters_StringSliceAndStringMapCopied verifies that []string and map[string]string
@@ -155,13 +158,17 @@ func TestOverrideTool_Parameters_StringSliceAndStringMapCopied(t *testing.T) {
 
 	// Mutate the original slices/maps after registration
 	requiredSlice[0] = "mutated"
-	requiredSlice = append(requiredSlice, "c")
 	extraMap["format"] = "date-time"
 	delete(extraMap, "pattern")
 
 	p2 := wrapped.Parameters()
 	require.Equal(t, []string{"a", "b"}, p2["required"], "[]string must be copied at WithNewParameters")
-	require.Equal(t, map[string]string{"format": "date", "pattern": "^x"}, p2["x-extra"], "map[string]string must be copied at WithNewParameters")
+	require.Equal(
+		t,
+		map[string]string{"format": "date", "pattern": "^x"},
+		p2["x-extra"],
+		"map[string]string must be copied at WithNewParameters",
+	)
 }
 
 // TestOverrideTool_Execute_ChunkToolNameUsesAlias verifies that when the base tool sets Chunk.ToolName,
@@ -188,19 +195,20 @@ func TestOverrideTool_Execute_ChunkToolNameUsesAlias(t *testing.T) {
 // metadataMock implements Tool and ToolMetadata for testing OverrideTool delegation.
 type metadataMock struct {
 	*testutil.MockTool
-	timeout    time.Duration
-	tags       []string
-	version    string
+
+	timeout     time.Duration
+	tags        []string
+	version     string
 	isDangerous bool
 }
 
 func (m *metadataMock) Timeout() time.Duration     { return m.timeout }
-func (m *metadataMock) Tags() []string              { return m.tags }
-func (m *metadataMock) Version() string             { return m.version }
-func (m *metadataMock) IsDangerous() bool           { return m.isDangerous }
-func (m *metadataMock) IsReadOnly() bool            { return false }
-func (m *metadataMock) RequiresConfirmation() bool  { return false }
-func (m *metadataMock) Sensitivity() string         { return "" }
+func (m *metadataMock) Tags() []string             { return m.tags }
+func (m *metadataMock) Version() string            { return m.version }
+func (m *metadataMock) IsDangerous() bool          { return m.isDangerous }
+func (m *metadataMock) IsReadOnly() bool           { return false }
+func (m *metadataMock) RequiresConfirmation() bool { return false }
+func (m *metadataMock) Sensitivity() string        { return "" }
 
 // TestOverrideTool_ToolMetadataDelegation ensures OverrideTool delegates Timeout/Tags/Version/IsDangerous
 // to the base tool via embedded toolBase, so Registry.Execute uses correct metadata for timeout and behavior.
@@ -234,7 +242,7 @@ func TestOverrideTool_Parameters_MapSliceDeepCopy(t *testing.T) {
 	}
 	item := map[string]any{"key": "value", "nested": map[string]any{"a": 1}}
 	overrideSchema := map[string]any{
-		"type": "object",
+		"type":  "object",
 		"items": []map[string]any{item, {"second": true}},
 	}
 	wrapped := toolsy.OverrideTool(base, toolsy.WithNewParameters(overrideSchema))

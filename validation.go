@@ -6,7 +6,7 @@ type Validatable interface {
 	Validate() error
 }
 
-// schemaValidator validates a JSON-like value (e.g. map[string]any from json.Unmarshal).
+// schemaValidator validates a JSON-like value (e.g. map[string]any from [json.Unmarshal]).
 // Used by both static Extractor and dynamic Tool. *jsonschema.Resolved implements it.
 type schemaValidator interface {
 	Validate(v any) error
@@ -16,7 +16,7 @@ type schemaValidator interface {
 // Caller must unmarshal JSON and pass the result; parse errors are reported by the caller (e.g. Extractor.ParseAndValidate or Tool Execute).
 func validateAgainstSchema(validate schemaValidator, v any) error {
 	if err := validate.Validate(v); err != nil {
-		return &ClientError{Reason: err.Error(), Err: ErrValidation}
+		return &ClientError{Reason: err.Error(), Retryable: false, Err: ErrValidation}
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package document
 import (
 	"archive/zip"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -48,31 +49,36 @@ func extractTextFromWordXML(raw []byte, maxBytes int) (string, error) {
 	dec := xml.NewDecoder(strings.NewReader(string(raw)))
 	for {
 		tok, err := dec.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			return "", err
 		}
-		if t, ok := tok.(xml.StartElement); ok {
-			wml := t.Name.Space == "" || strings.Contains(t.Name.Space, "wordprocessingml")
-			if t.Name.Local == "p" && wml {
-				// Paragraph: newline before next paragraph content
-				if b.Len() > 0 {
-					b.WriteString("\n")
-				}
-			}
-			if t.Name.Local == "t" && wml {
-				// Next token(s) may be CharData (text inside w:t)
-				inner, _ := dec.Token()
-				if cd, ok := inner.(xml.CharData); ok {
-					b.Write(cd)
-				}
-			}
+		t, ok := tok.(xml.StartElement)
+		if !ok {
+			continue
 		}
+		appendWordMLFromStartElement(t, dec, &b)
 		if b.Len() > maxBytes {
 			return truncateUTF8(b.String(), maxBytes), nil
 		}
 	}
 	return truncateUTF8(b.String(), maxBytes), nil
+}
+
+func appendWordMLFromStartElement(t xml.StartElement, dec *xml.Decoder, b *strings.Builder) {
+	wml := t.Name.Space == "" || strings.Contains(t.Name.Space, "wordprocessingml")
+	if t.Name.Local == "p" && wml {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+	}
+	if t.Name.Local != "t" || !wml {
+		return
+	}
+	inner, _ := dec.Token()
+	if cd, ok := inner.(xml.CharData); ok {
+		b.Write(cd)
+	}
 }

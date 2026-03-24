@@ -77,14 +77,21 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 	inspectTool := tools[0]
 
 	var result inspectResult
-	require.NoError(t, inspectTool.Execute(context.Background(), []byte(`{"table_names":["users","nonexistent_table_xyz"]}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(inspectResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		inspectTool.Execute(
+			context.Background(),
+			[]byte(`{"table_names":["users","nonexistent_table_xyz"]}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(inspectResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Schema, "## Table: users")
 	require.Contains(t, result.Schema, "## Table: nonexistent_table_xyz")
 	require.Contains(t, result.Schema, "Table not found or has no columns")
@@ -102,14 +109,21 @@ func TestExecuteRead_Success(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	require.NoError(t, executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id, name FROM t"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		executeTool.Execute(
+			context.Background(),
+			[]byte(`{"query":"SELECT id, name FROM t"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(executeResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Result, "alice")
 	require.Equal(t, 1, result.RowCount)
 }
@@ -128,14 +142,17 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	require.NoError(t, executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id FROM t"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
+	require.NoError(
+		t,
+		executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id FROM t"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(executeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Result, "[Truncated: max rows reached]")
 	require.Equal(t, 5, result.RowCount)
 }
@@ -146,7 +163,11 @@ func TestExecuteRead_BlocksWrite(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	err = executeTool.Execute(context.Background(), []byte(`{"query":"INSERT INTO t VALUES (1)"}`), func(toolsy.Chunk) error { return nil })
+	err = executeTool.Execute(
+		context.Background(),
+		[]byte(`{"query":"INSERT INTO t VALUES (1)"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
@@ -157,7 +178,11 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	err = executeTool.Execute(context.Background(), []byte(`{"query":"SELECT 1; DELETE FROM t"}`), func(toolsy.Chunk) error { return nil })
+	err = executeTool.Execute(
+		context.Background(),
+		[]byte(`{"query":"SELECT 1; DELETE FROM t"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "multiple statements")
@@ -170,7 +195,11 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	err = executeTool.Execute(context.Background(), []byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`), func(toolsy.Chunk) error { return nil })
+	err = executeTool.Execute(
+		context.Background(),
+		[]byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "read-only")
@@ -189,14 +218,18 @@ func TestExecuteRead_KeywordInStringAllowed(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	err = executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
+	err = executeTool.Execute(
+		context.Background(),
+		[]byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`),
+		func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(executeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	require.Contains(t, result.Result, "INSERT")
 }
@@ -210,14 +243,18 @@ func TestExecuteRead_KeywordInCommentAllowed(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	err = executeTool.Execute(context.Background(), []byte(`{"query":"SELECT 1 AS x -- INSERT here"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
+	err = executeTool.Execute(
+		context.Background(),
+		[]byte(`{"query":"SELECT 1 AS x -- INSERT here"}`),
+		func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(executeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, result.RowCount, 1)
 }
@@ -234,14 +271,21 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	require.NoError(t, executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id, name FROM t"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		executeTool.Execute(
+			context.Background(),
+			[]byte(`{"query":"SELECT id, name FROM t"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(executeResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	// Pipe in cell should be escaped so table does not break
 	require.Contains(t, result.Result, "\\|")
 }
@@ -278,14 +322,21 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 	executeTool := tools[1]
 
 	var result executeResult
-	require.NoError(t, executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id, long_text FROM t"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(executeResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		executeTool.Execute(
+			context.Background(),
+			[]byte(`{"query":"SELECT id, long_text FROM t"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(executeResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	// Cell value should be truncated to 5 chars + "..."
 	require.Contains(t, result.Result, "...")
 	require.NotContains(t, result.Result, "abcdefghijklmnop")

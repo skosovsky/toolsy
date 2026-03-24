@@ -3,6 +3,7 @@ package sqltool
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -28,12 +29,16 @@ type executeResult struct {
 	RowCount int    `json:"row_count"`
 }
 
-const truncationSuffix = "\n[Truncated: max rows reached]"
+const (
+	truncationSuffix = "\n[Truncated: max rows reached]"
+	// ellipsisSuffixLen is the byte length of "..." appended when truncating cell text.
+	ellipsisSuffixLen = 3
+)
 
 // AsTools returns sql_inspect_schema and sql_execute_read tools. db must use a read-only user in production.
 func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, error) {
 	if db == nil {
-		return nil, fmt.Errorf("toolkit/sqltool: db is nil")
+		return nil, errors.New("toolkit/sqltool: db is nil")
 	}
 	d, err := newDialect(driverName)
 	if err != nil {
@@ -66,41 +71,26 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/sqltool: build execute tool: %w", err)
 	}
-
 	return []toolsy.Tool{inspectTool, executeTool}, nil
 }
 
-func doInspectSchema(ctx context.Context, db *sql.DB, driverName string, d dialect, o *options, tableNames []string) (inspectResult, error) {
+func doInspectSchema(
+	ctx context.Context,
+	db *sql.DB,
+	driverName string,
+	d dialect,
+	o *options,
+	tableNames []string,
+) (inspectResult, error) {
 	tables := tableNames
+	var err error
 	if len(tables) == 0 {
-		q := d.listTablesQuery()
-		rows, err := db.QueryContext(ctx, q)
+		tables, err = fetchTableNamesFromDB(ctx, db, d, o)
 		if err != nil {
-			return inspectResult{}, fmt.Errorf("toolkit/sqltool: list tables: %w", err)
-		}
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				_ = rows.Close()
-				return inspectResult{}, fmt.Errorf("toolkit/sqltool: scan table name: %w", err)
-			}
-			if len(o.allowedTables) == 0 || contains(o.allowedTables, name) {
-				tables = append(tables, name)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			_ = rows.Close()
 			return inspectResult{}, err
 		}
-		_ = rows.Close()
 	} else if len(o.allowedTables) > 0 {
-		filtered := make([]string, 0, len(tables))
-		for _, t := range tables {
-			if contains(o.allowedTables, t) {
-				filtered = append(filtered, t)
-			}
-		}
-		tables = filtered
+		tables = filterTablesByAllowlist(tables, o.allowedTables)
 	}
 
 	var b strings.Builder
@@ -114,64 +104,133 @@ func doInspectSchema(ctx context.Context, db *sql.DB, driverName string, d diale
 		if err := ctx.Err(); err != nil {
 			return inspectResult{}, fmt.Errorf("toolkit/sqltool: %w", err)
 		}
-		q, args := d.columnsQuery(table)
-		rows, err := db.QueryContext(ctx, q, args...)
-		if err != nil {
-			return inspectResult{}, fmt.Errorf("toolkit/sqltool: columns for %s: %w", table, err)
-		}
-		var rowCount int
-		for rows.Next() {
-			var name, dataType, nullableStr, defaultVal string
-			if driverLower == "sqlite3" || driverLower == "sqlite" {
-				var cid, notnull, pk int64
-				var dflt sql.NullString
-				if err := rows.Scan(&cid, &name, &dataType, &notnull, &dflt, &pk); err != nil {
-					_ = rows.Close()
-					return inspectResult{}, fmt.Errorf("toolkit/sqltool: scan column: %w", err)
-				}
-				if notnull == 0 {
-					nullableStr = "YES"
-				} else {
-					nullableStr = "NO"
-				}
-				if dflt.Valid {
-					defaultVal = dflt.String
-				}
-			} else {
-				var def sql.NullString
-				if err := rows.Scan(&name, &dataType, &nullableStr, &def); err != nil {
-					_ = rows.Close()
-					return inspectResult{}, err
-				}
-				if def.Valid {
-					defaultVal = def.String
-				}
-			}
-			if rowCount == 0 {
-				fmt.Fprintf(&b, "## Table: %s\n\n| Column | Type | Nullable | Default |\n|--------|------|----------|--------|\n", table)
-			}
-			rowCount++
-			if b.Len() < o.maxSchemaBytes {
-				fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
-			}
-		}
-		_ = rows.Close()
-		if err := rows.Err(); err != nil {
+		if err := appendColumnsToSchema(ctx, db, driverLower, d, o, table, &b); err != nil {
 			return inspectResult{}, err
-		}
-		if rowCount == 0 {
-			fmt.Fprintf(&b, "## Table: %s\n\nTable not found or has no columns.\n\n", table)
-		} else {
-			b.WriteString("\n")
 		}
 	}
 	return inspectResult{Schema: strings.TrimSpace(b.String())}, nil
 }
 
-// forbiddenReadOnlyKeywords are SQL keywords that must not appear in execute_read (defense-in-depth).
-var forbiddenReadOnlyKeywords = []string{
-	"INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE",
-	"EXEC", "EXECUTE", "CALL", "GRANT", "REVOKE",
+func fetchTableNamesFromDB(ctx context.Context, db *sql.DB, d dialect, o *options) ([]string, error) {
+	rows, err := db.QueryContext(ctx, d.listTablesQuery())
+	if err != nil {
+		return nil, fmt.Errorf("toolkit/sqltool: list tables: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var tables []string
+	for rows.Next() {
+		var name string
+		if scanErr := rows.Scan(&name); scanErr != nil {
+			return nil, fmt.Errorf("toolkit/sqltool: scan table name: %w", scanErr)
+		}
+		if len(o.allowedTables) == 0 || contains(o.allowedTables, name) {
+			tables = append(tables, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return tables, nil
+}
+
+func filterTablesByAllowlist(tables, allowed []string) []string {
+	filtered := make([]string, 0, len(tables))
+	for _, t := range tables {
+		if contains(allowed, t) {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
+}
+
+func appendColumnsToSchema(
+	ctx context.Context,
+	db *sql.DB,
+	driverLower string,
+	d dialect,
+	o *options,
+	table string,
+	b *strings.Builder,
+) error {
+	q, args := d.columnsQuery(table)
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return fmt.Errorf("toolkit/sqltool: columns for %s: %w", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var rowCount int
+	for rows.Next() {
+		name, dataType, nullableStr, defaultVal, scanErr := scanColumnRow(rows, driverLower)
+		if scanErr != nil {
+			return scanErr
+		}
+		if rowCount == 0 {
+			fmt.Fprintf(
+				b,
+				"## Table: %s\n\n| Column | Type | Nullable | Default |\n|--------|------|----------|--------|\n",
+				table,
+			)
+		}
+		rowCount++
+		if b.Len() < o.maxSchemaBytes {
+			fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if rowCount == 0 {
+		fmt.Fprintf(b, "## Table: %s\n\nTable not found or has no columns.\n\n", table)
+	} else {
+		b.WriteString("\n")
+	}
+	return nil
+}
+
+func scanColumnRow(rows *sql.Rows, driverLower string) (string, string, string, string, error) {
+	var name, dataType, nullableStr, defaultVal string
+	if driverLower == "sqlite3" || driverLower == "sqlite" {
+		var cid, notnull, pk int64
+		var dflt sql.NullString
+		if scanErr := rows.Scan(&cid, &name, &dataType, &notnull, &dflt, &pk); scanErr != nil {
+			return "", "", "", "", fmt.Errorf("toolkit/sqltool: scan column: %w", scanErr)
+		}
+		if notnull == 0 {
+			nullableStr = "YES"
+		} else {
+			nullableStr = "NO"
+		}
+		if dflt.Valid {
+			defaultVal = dflt.String
+		}
+		return name, dataType, nullableStr, defaultVal, nil
+	}
+	var def sql.NullString
+	if scanErr := rows.Scan(&name, &dataType, &nullableStr, &def); scanErr != nil {
+		return "", "", "", "", scanErr
+	}
+	if def.Valid {
+		defaultVal = def.String
+	}
+	return name, dataType, nullableStr, defaultVal, nil
+}
+
+// forbiddenReadOnlyKeywords returns SQL keywords that must not appear in execute_read (defense-in-depth).
+func forbiddenReadOnlyKeywords() []string {
+	return []string{
+		"INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE",
+		"EXEC", "EXECUTE", "CALL", "GRANT", "REVOKE",
+	}
+}
+
+func validationClientError(reason string) *toolsy.ClientError {
+	return &toolsy.ClientError{
+		Reason:    reason,
+		Retryable: false,
+		Err:       toolsy.ErrValidation,
+	}
 }
 
 // validateReadOnlyQuery uses a minimal SQL scanner to reject multi-statement and DML/DDL
@@ -179,7 +238,7 @@ var forbiddenReadOnlyKeywords = []string{
 func validateReadOnlyQuery(query string) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return &toolsy.ClientError{Reason: "query is required", Err: toolsy.ErrValidation}
+		return validationClientError("query is required")
 	}
 	upper := strings.ToUpper(query)
 	firstToken, tokens, err := sqlTokensOutsideStringsAndComments(upper)
@@ -187,11 +246,12 @@ func validateReadOnlyQuery(query string) error {
 		return err
 	}
 	if firstToken != "SELECT" && firstToken != "WITH" {
-		return &toolsy.ClientError{Reason: "only SELECT and WITH (CTE) queries are allowed", Err: toolsy.ErrValidation}
+		return validationClientError("only SELECT and WITH (CTE) queries are allowed")
 	}
+	forbidden := forbiddenReadOnlyKeywords()
 	for _, tok := range tokens {
-		if slices.Contains(forbiddenReadOnlyKeywords, tok) {
-			return &toolsy.ClientError{Reason: "only read-only SELECT queries are allowed", Err: toolsy.ErrValidation}
+		if slices.Contains(forbidden, tok) {
+			return validationClientError("only read-only SELECT queries are allowed")
 		}
 	}
 	return nil
@@ -199,95 +259,143 @@ func validateReadOnlyQuery(query string) error {
 
 // sqlTokensOutsideStringsAndComments returns the first token, all identifier tokens (outside strings/comments),
 // or an error if ";" is found outside string/comment. Used for read-only validation.
-func sqlTokensOutsideStringsAndComments(upper string) (firstToken string, tokens []string, err error) {
-	const (
-		stateNormal = iota
-		stateSingleQuote
-		stateDoubleQuote
-		stateLineComment
-		stateBlockComment
-	)
-	var tok strings.Builder
-	state := stateNormal
-	i := 0
-	for i < len(upper) {
-		c := upper[i]
-		switch state {
-		case stateNormal:
-			switch {
-			case c == '\'':
-				state = stateSingleQuote
-				i++
-			case c == '"':
-				state = stateDoubleQuote
-				i++
-			case c == '-' && i+1 < len(upper) && upper[i+1] == '-':
-				state = stateLineComment
-				i += 2
-			case c == '/' && i+1 < len(upper) && upper[i+1] == '*':
-				state = stateBlockComment
-				i += 2
-			case c == ';':
-				return "", nil, &toolsy.ClientError{Reason: "multiple statements not allowed", Err: toolsy.ErrValidation}
-			case (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_':
-				tok.Reset()
-				for i < len(upper) {
-					cc := upper[i]
-					if (cc >= 'A' && cc <= 'Z') || (cc >= '0' && cc <= '9') || cc == '_' {
-						tok.WriteByte(cc)
-						i++
-					} else {
-						break
-					}
-				}
-				s := tok.String()
-				if s != "" {
-					tokens = append(tokens, s)
-				}
-				continue
-			default:
-				i++
+func sqlTokensOutsideStringsAndComments(upper string) (string, []string, error) {
+	s := &upperSQLScan{
+		upper:  upper,
+		i:      0,
+		state:  scanStateNormal,
+		tok:    strings.Builder{},
+		tokens: nil,
+	}
+	return s.run()
+}
+
+const (
+	scanStateNormal = iota
+	scanStateSingleQuote
+	scanStateDoubleQuote
+	scanStateLineComment
+	scanStateBlockComment
+)
+
+type upperSQLScan struct {
+	upper  string
+	i      int
+	state  int
+	tok    strings.Builder
+	tokens []string
+}
+
+func (s *upperSQLScan) run() (string, []string, error) {
+	for s.i < len(s.upper) {
+		switch s.state {
+		case scanStateNormal:
+			if err := s.stepNormal(); err != nil {
+				return "", nil, err
 			}
-		case stateSingleQuote:
-			if c == '\'' {
-				if i+1 < len(upper) && upper[i+1] == '\'' {
-					i += 2 // escaped quote
-				} else {
-					state = stateNormal
-					i++
-				}
-			} else {
-				i++
-			}
-		case stateDoubleQuote:
-			if c == '"' {
-				if i+1 < len(upper) && upper[i+1] == '"' {
-					i += 2
-				} else {
-					state = stateNormal
-					i++
-				}
-			} else {
-				i++
-			}
-		case stateLineComment:
-			if c == '\n' || c == '\r' {
-				state = stateNormal
-			}
-			i++
-		case stateBlockComment:
-			if c == '*' && i+1 < len(upper) && upper[i+1] == '/' {
-				state = stateNormal
-				i += 2
-			} else {
-				i++
-			}
+		case scanStateSingleQuote:
+			s.stepSingleQuote()
+		case scanStateDoubleQuote:
+			s.stepDoubleQuote()
+		case scanStateLineComment:
+			s.stepLineComment()
+		case scanStateBlockComment:
+			s.stepBlockComment()
 		}
 	}
-	if len(tokens) == 0 {
-		return "", tokens, &toolsy.ClientError{Reason: "only SELECT and WITH (CTE) queries are allowed", Err: toolsy.ErrValidation}
+	if len(s.tokens) == 0 {
+		return "", s.tokens, validationClientError("only SELECT and WITH (CTE) queries are allowed")
 	}
-	return tokens[0], tokens, nil
+	return s.tokens[0], s.tokens, nil
+}
+
+func (s *upperSQLScan) stepNormal() error {
+	c := s.upper[s.i]
+	switch {
+	case c == '\'':
+		s.state = scanStateSingleQuote
+		s.i++
+	case c == '"':
+		s.state = scanStateDoubleQuote
+		s.i++
+	case c == '-' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '-':
+		s.state = scanStateLineComment
+		s.i += 2
+	case c == '/' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '*':
+		s.state = scanStateBlockComment
+		s.i += 2
+	case c == ';':
+		return validationClientError("multiple statements not allowed")
+	case (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_':
+		s.i = s.appendIdentifierToken()
+	default:
+		s.i++
+	}
+	return nil
+}
+
+func (s *upperSQLScan) appendIdentifierToken() int {
+	s.tok.Reset()
+	i := s.i
+	for i < len(s.upper) {
+		cc := s.upper[i]
+		if (cc >= 'A' && cc <= 'Z') || (cc >= '0' && cc <= '9') || cc == '_' {
+			s.tok.WriteByte(cc)
+			i++
+		} else {
+			break
+		}
+	}
+	if tok := s.tok.String(); tok != "" {
+		s.tokens = append(s.tokens, tok)
+	}
+	return i
+}
+
+func (s *upperSQLScan) stepSingleQuote() {
+	c := s.upper[s.i]
+	if c == '\'' {
+		if s.i+1 < len(s.upper) && s.upper[s.i+1] == '\'' {
+			s.i += 2 // escaped quote
+		} else {
+			s.state = scanStateNormal
+			s.i++
+		}
+	} else {
+		s.i++
+	}
+}
+
+func (s *upperSQLScan) stepDoubleQuote() {
+	c := s.upper[s.i]
+	if c == '"' {
+		if s.i+1 < len(s.upper) && s.upper[s.i+1] == '"' {
+			s.i += 2
+		} else {
+			s.state = scanStateNormal
+			s.i++
+		}
+	} else {
+		s.i++
+	}
+}
+
+func (s *upperSQLScan) stepLineComment() {
+	c := s.upper[s.i]
+	if c == '\n' || c == '\r' {
+		s.state = scanStateNormal
+	}
+	s.i++
+}
+
+func (s *upperSQLScan) stepBlockComment() {
+	c := s.upper[s.i]
+	if c == '*' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '/' {
+		s.state = scanStateNormal
+		s.i += 2
+	} else {
+		s.i++
+	}
 }
 
 func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (executeResult, error) {
@@ -306,22 +414,8 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (e
 	if err != nil {
 		return executeResult{}, err
 	}
-	// Build Markdown table header (escape pipe and newlines for valid table)
 	var b strings.Builder
-	for i, c := range cols {
-		if i > 0 {
-			b.WriteString(" | ")
-		}
-		b.WriteString(escapeMarkdownCell(c))
-	}
-	b.WriteString("\n")
-	for i := range cols {
-		if i > 0 {
-			b.WriteString(" | ")
-		}
-		b.WriteString("---")
-	}
-	b.WriteString("\n")
+	writeMarkdownTableHeader(&b, cols)
 
 	scanDest := make([]any, len(cols))
 	vals := make([]sql.NullString, len(cols))
@@ -337,16 +431,7 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (e
 		if err := rows.Scan(scanDest...); err != nil {
 			return executeResult{}, err
 		}
-		for i, v := range vals {
-			if i > 0 {
-				b.WriteString(" | ")
-			}
-			s := ""
-			if v.Valid {
-				s = escapeMarkdownCell(truncateCell(v.String, o.maxCellBytes))
-			}
-			b.WriteString(s)
-		}
+		appendMarkdownDataRow(&b, vals, o.maxCellBytes)
 		b.WriteString("\n")
 		rowCount++
 	}
@@ -356,11 +441,41 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (e
 	return executeResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount}, nil
 }
 
+func writeMarkdownTableHeader(b *strings.Builder, cols []string) {
+	for i, c := range cols {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		b.WriteString(escapeMarkdownCell(c))
+	}
+	b.WriteString("\n")
+	for i := range cols {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		b.WriteString("---")
+	}
+	b.WriteString("\n")
+}
+
+func appendMarkdownDataRow(b *strings.Builder, vals []sql.NullString, maxCellBytes int) {
+	for i, v := range vals {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		s := ""
+		if v.Valid {
+			s = escapeMarkdownCell(truncateCell(v.String, maxCellBytes))
+		}
+		b.WriteString(s)
+	}
+}
+
 func truncateCell(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}
-	need := maxBytes - 3
+	need := maxBytes - ellipsisSuffixLen
 	if need <= 0 {
 		if maxBytes <= 0 {
 			return ""

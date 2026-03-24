@@ -12,7 +12,7 @@
 //
 // # Key concepts
 //
-//   - Streaming: Tool.Execute and Registry.Execute use yield func(Chunk) error. Chunk has CallID, ToolName, Event (EventProgress/EventResult), Data, RawData, IsError, Metadata. For NewTool/NewStreamTool typed results, the core fills RawData and leaves Data nil (zero-cost); use chunk.RawData.(MyStruct). For Go 1.23+, ExecuteIter(ctx, call) returns iter.Seq2[Chunk, error] for for-range iteration; breaking the loop cancels the context. Use NewStreamTool for multi-chunk responses.
+//   - Streaming: Tool.Execute and Registry.Execute use yield func(Chunk) error. Chunk has CallID, ToolName, Event (EventProgress/EventResult), Data, RawData, IsError, Metadata. For NewTool/NewStreamTool typed results, the core fills RawData and leaves Data nil (zero-cost); use chunk.RawData.(MyStruct). For Go 1.23+, ExecuteIter(ctx, call) returns [iter.Seq2][Chunk, error] for for-range iteration; breaking the loop cancels the context. Use NewStreamTool for multi-chunk responses.
 //   - Single Source of Truth: one set of struct tags (json, jsonschema, description, enum) drives schema and validation.
 //   - Partial Success: ExecuteBatchStream runs calls in parallel; tool errors are sent as Chunk with IsError: true; the method returns error only for critical failures (context cancel, shutdown).
 //   - Self-Correction: ClientError carries human-readable messages back to the LLM. Yield errors become ErrStreamAborted. The after-execution hook (WithOnAfterExecute) receives ExecutionSummary.

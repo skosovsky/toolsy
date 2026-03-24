@@ -20,7 +20,7 @@ type tool struct {
 
 // NewTool builds a Tool from a typed function. Schema and validation are delegated to Extractor[T].
 // Execute runs ParseAndValidate, fn, then calls yield once with Chunk{Event: EventResult, RawData: res, Data: nil}.
-// No json.Marshal in the core; the caller uses chunk.RawData.(*MyStruct) for zero-cost access.
+// No [json.Marshal] in the core; the caller uses chunk.RawData.(*MyStruct) for zero-cost access.
 // If yield returns an error, it is returned as ErrStreamAborted (via wrapYieldError).
 // Returns an error if schema generation fails (e.g. unsupported type).
 func NewTool[T any, R any](
@@ -57,6 +57,52 @@ func NewTool[T any, R any](
 		execute:     execute,
 		opts:        o,
 	}, nil
+}
+
+// deepCopySchemaFromMap returns a defensive deep copy of schemaMap for mutation (strict mode, strip IDs).
+func deepCopySchemaFromMap(schemaMap map[string]any) (map[string]any, error) {
+	data, err := json.Marshal(schemaMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
+	}
+	var schemaCopy map[string]any
+	if err := json.Unmarshal(data, &schemaCopy); err != nil {
+		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
+	}
+	return schemaCopy, nil
+}
+
+// rawArgsValidatedExecute builds the execute closure shared by NewDynamicTool and NewProxyTool:
+// unmarshal args, validate against compiled schema, then run handler with yield wrapping.
+func rawArgsValidatedExecute(
+	compiled schemaValidator,
+	handler func(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error,
+) func(context.Context, []byte, func(Chunk) error) error {
+	return func(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
+		var v any
+		if err := json.Unmarshal(argsJSON, &v); err != nil {
+			return wrapJSONParseError(err)
+		}
+		if err := validateAgainstSchema(compiled, v); err != nil {
+			return err
+		}
+		yieldWrapped := func(c Chunk) error {
+			if err := yield(c); err != nil {
+				return wrapYieldError(err)
+			}
+			return nil
+		}
+		if err := handler(ctx, argsJSON, yieldWrapped); err != nil {
+			if IsClientError(err) {
+				return err
+			}
+			if errors.Is(err, ErrStreamAborted) {
+				return err
+			}
+			return wrapHandlerError(err)
+		}
+		return nil
+	}
 }
 
 // NewStreamTool builds a Tool from a typed streaming function. Same schema/validation as NewTool,
@@ -123,19 +169,14 @@ func NewDynamicTool(
 		opt(&o)
 	}
 	if schemaMap == nil {
-		return nil, fmt.Errorf("dynamic schema map must not be nil")
+		return nil, errors.New("dynamic schema map must not be nil")
 	}
 	if fn == nil {
-		return nil, fmt.Errorf("dynamic tool handler must not be nil")
+		return nil, errors.New("dynamic tool handler must not be nil")
 	}
-	// Defensive deep copy before any modifications so caller's map is never mutated.
-	data, err := json.Marshal(schemaMap)
+	schemaCopy, err := deepCopySchemaFromMap(schemaMap)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
-	}
-	var schemaCopy map[string]any
-	if err := json.Unmarshal(data, &schemaCopy); err != nil {
-		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
+		return nil, err
 	}
 	if o.strict {
 		applyStrictMode(schemaCopy)
@@ -145,31 +186,7 @@ func NewDynamicTool(
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile dynamic schema: %w", err)
 	}
-	execute := func(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
-		var v any
-		if err := json.Unmarshal(argsJSON, &v); err != nil {
-			return wrapJSONParseError(err)
-		}
-		if err := validateAgainstSchema(compiled, v); err != nil {
-			return err
-		}
-		yieldWrapped := func(c Chunk) error {
-			if err := yield(c); err != nil {
-				return wrapYieldError(err)
-			}
-			return nil
-		}
-		if err := fn(ctx, argsJSON, yieldWrapped); err != nil {
-			if IsClientError(err) {
-				return err
-			}
-			if errors.Is(err, ErrStreamAborted) {
-				return err
-			}
-			return wrapHandlerError(err)
-		}
-		return nil
-	}
+	execute := rawArgsValidatedExecute(compiled, fn)
 	return &tool{
 		name:        name,
 		description: description,
@@ -193,21 +210,17 @@ func NewProxyTool(
 		opt(&o)
 	}
 	if len(rawJSONSchema) == 0 {
-		return nil, fmt.Errorf("proxy schema must not be empty")
+		return nil, errors.New("proxy schema must not be empty")
 	}
 	if handler == nil {
-		return nil, fmt.Errorf("proxy tool handler must not be nil")
+		return nil, errors.New("proxy tool handler must not be nil")
 	}
-	var schemaCopy map[string]any
-	if err := json.Unmarshal(rawJSONSchema, &schemaCopy); err != nil {
+	var parsed map[string]any
+	if err := json.Unmarshal(rawJSONSchema, &parsed); err != nil {
 		return nil, fmt.Errorf("failed to parse proxy schema: %w", err)
 	}
-	// Deep copy so we can mutate
-	data, err := json.Marshal(schemaCopy)
+	schemaCopy, err := deepCopySchemaFromMap(parsed)
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy proxy schema: %w", err)
-	}
-	if err := json.Unmarshal(data, &schemaCopy); err != nil {
 		return nil, fmt.Errorf("failed to copy proxy schema: %w", err)
 	}
 	if o.strict {
@@ -218,31 +231,7 @@ func NewProxyTool(
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile proxy schema: %w", err)
 	}
-	execute := func(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
-		var v any
-		if err := json.Unmarshal(argsJSON, &v); err != nil {
-			return wrapJSONParseError(err)
-		}
-		if err := validateAgainstSchema(compiled, v); err != nil {
-			return err
-		}
-		yieldWrapped := func(c Chunk) error {
-			if err := yield(c); err != nil {
-				return wrapYieldError(err)
-			}
-			return nil
-		}
-		if err := handler(ctx, argsJSON, yieldWrapped); err != nil {
-			if IsClientError(err) {
-				return err
-			}
-			if errors.Is(err, ErrStreamAborted) {
-				return err
-			}
-			return wrapHandlerError(err)
-		}
-		return nil
-	}
+	execute := rawArgsValidatedExecute(compiled, handler)
 	return &tool{
 		name:        name,
 		description: description,
@@ -268,9 +257,9 @@ func (t *tool) Tags() []string         { return append([]string(nil), t.opts.tag
 func (t *tool) Version() string        { return t.opts.version }
 func (t *tool) IsDangerous() bool      { return t.opts.dangerous }
 
-func (t *tool) IsReadOnly() bool             { return t.opts.readOnly }
-func (t *tool) RequiresConfirmation() bool   { return t.opts.requiresConfirmation }
-func (t *tool) Sensitivity() string          { return t.opts.sensitivity }
+func (t *tool) IsReadOnly() bool           { return t.opts.readOnly }
+func (t *tool) RequiresConfirmation() bool { return t.opts.requiresConfirmation }
+func (t *tool) Sensitivity() string        { return t.opts.sensitivity }
 
 // wrapHandlerError passes through ClientError; wraps other errors as SystemError.
 func wrapHandlerError(err error) error {

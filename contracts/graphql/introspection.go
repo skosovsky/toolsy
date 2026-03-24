@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,23 +14,31 @@ import (
 )
 
 // introspectionQuery uses fragment TypeRef for full type depth (e.g. [String!] -> NON_NULL(LIST(NON_NULL(SCALAR)))).
-const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
+const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
 
 type introResponse struct {
 	Data   *introData   `json:"data"`
 	Errors []introError `json:"errors,omitempty"`
 }
 
+type introTypeName struct {
+	Name string `json:"name"`
+}
+
+type introSchemaType struct {
+	Name   string       `json:"name"`
+	Kind   string       `json:"kind"`
+	Fields []introField `json:"fields"`
+}
+
+type introSchema struct {
+	QueryType    *introTypeName    `json:"queryType"`
+	MutationType *introTypeName    `json:"mutationType"`
+	Types        []introSchemaType `json:"types"`
+}
+
 type introData struct {
-	Schema struct {
-		QueryType    *struct{ Name string } `json:"queryType"`
-		MutationType *struct{ Name string } `json:"mutationType"`
-		Types        []struct {
-			Name   string       `json:"name"`
-			Kind   string       `json:"kind"`
-			Fields []introField `json:"fields"`
-		} `json:"types"`
-	} `json:"__schema"`
+	Schema introSchema `json:"__schema"`
 }
 
 type introError struct {
@@ -43,6 +52,58 @@ type introField struct {
 
 // Introspect calls the GraphQL endpoint with the introspection query, then builds one tool per root query/mutation.
 func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.Tool, error) {
+	data, err := postIntrospection(ctx, endpoint, opts)
+	if err != nil {
+		return nil, err
+	}
+	ir, err := parseIntroResponse(data)
+	if err != nil {
+		return nil, err
+	}
+	schema := ir.Data.Schema
+	allowedOps := opts.Operations
+	if len(allowedOps) == 0 {
+		allowedOps = []string{"query", "mutation"}
+	}
+	allowedSet := make(map[string]bool)
+	for _, o := range allowedOps {
+		allowedSet[strings.ToLower(o)] = true
+	}
+	typeMap := buildTypeMap(schema.Types)
+	var tools []toolsy.Tool
+	usedNames := make(map[string]bool)
+	tools, err = appendToolsForOperationKind(
+		tools,
+		"query",
+		"GraphQL query: ",
+		schema.QueryType,
+		allowedSet["query"],
+		typeMap,
+		endpoint,
+		opts,
+		usedNames,
+	)
+	if err != nil {
+		return nil, err
+	}
+	tools, err = appendToolsForOperationKind(
+		tools,
+		"mutation",
+		"GraphQL mutation: ",
+		schema.MutationType,
+		allowedSet["mutation"],
+		typeMap,
+		endpoint,
+		opts,
+		usedNames,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return tools, nil
+}
+
+func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]byte, error) {
 	client := opts.httpClient()
 	body := map[string]string{"query": introspectionQuery}
 	bodyBytes, err := json.Marshal(body)
@@ -69,6 +130,10 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("graphql: introspection HTTP %d: %s", resp.StatusCode, string(data))
 	}
+	return data, nil
+}
+
+func parseIntroResponse(data []byte) (*introResponse, error) {
 	var ir introResponse
 	if err := json.Unmarshal(data, &ir); err != nil {
 		return nil, fmt.Errorf("graphql: parse intro: %w", err)
@@ -81,74 +146,69 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 		return nil, fmt.Errorf("graphql: introspection errors: %s", msg)
 	}
 	if ir.Data == nil {
-		return nil, fmt.Errorf("graphql: introspection: no data in response")
+		return nil, errors.New("graphql: introspection: no data in response")
 	}
-	schema := ir.Data.Schema
-	allowedOps := opts.Operations
-	if len(allowedOps) == 0 {
-		allowedOps = []string{"query", "mutation"}
-	}
-	allowedSet := make(map[string]bool)
-	for _, o := range allowedOps {
-		allowedSet[strings.ToLower(o)] = true
-	}
+	return &ir, nil
+}
 
+func buildTypeMap(types []introSchemaType) map[string][]introField {
 	typeMap := make(map[string][]introField)
-	for _, t := range schema.Types {
+	for _, t := range types {
 		typeMap[t.Name] = t.Fields
 	}
+	return typeMap
+}
 
-	var tools []toolsy.Tool
-	usedNames := make(map[string]bool)
-
-	if allowedSet["query"] && schema.QueryType != nil {
-		rootName := schema.QueryType.Name
-		if fields, ok := typeMap[rootName]; ok {
-			for _, f := range fields {
-				name := toolName(f.Name, usedNames)
-				schemaBytes, err := argsToJSONSchema(f.Args)
-				if err != nil {
-					return nil, fmt.Errorf("graphql: schema %s: %w", f.Name, err)
-				}
-				queryText := buildStaticQuery("query", f.Name, f.Args)
-				endpointCopy := endpoint
-				optsCopy := opts
-				tool, err := toolsy.NewProxyTool(name, "GraphQL query: "+f.Name, schemaBytes, func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-					return executeGraphQL(ctx, endpointCopy, queryText, argsJSON, &optsCopy, yield)
-				})
-				if err != nil {
-					return nil, fmt.Errorf("graphql: tool %s: %w", name, err)
-				}
-				tools = append(tools, tool)
-			}
-		}
+func appendToolsForOperationKind(
+	tools []toolsy.Tool,
+	kind string,
+	descPrefix string,
+	root *introTypeName,
+	allowed bool,
+	typeMap map[string][]introField,
+	endpoint string,
+	opts Options,
+	usedNames map[string]bool,
+) ([]toolsy.Tool, error) {
+	if !allowed || root == nil {
+		return tools, nil
 	}
-	if allowedSet["mutation"] && schema.MutationType != nil {
-		rootName := schema.MutationType.Name
-		if fields, ok := typeMap[rootName]; ok {
-			for _, f := range fields {
-				name := toolName(f.Name, usedNames)
-				schemaBytes, err := argsToJSONSchema(f.Args)
-				if err != nil {
-					return nil, fmt.Errorf("graphql: schema %s: %w", f.Name, err)
-				}
-				queryText := buildStaticQuery("mutation", f.Name, f.Args)
-				endpointCopy := endpoint
-				optsCopy := opts
-				tool, err := toolsy.NewProxyTool(name, "GraphQL mutation: "+f.Name, schemaBytes, func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-					return executeGraphQL(ctx, endpointCopy, queryText, argsJSON, &optsCopy, yield)
-				})
-				if err != nil {
-					return nil, fmt.Errorf("graphql: tool %s: %w", name, err)
-				}
-				tools = append(tools, tool)
-			}
+	fields, ok := typeMap[root.Name]
+	if !ok {
+		return tools, nil
+	}
+	for _, f := range fields {
+		name := toolName(f.Name, usedNames)
+		schemaBytes, err := argsToJSONSchema(f.Args)
+		if err != nil {
+			return nil, fmt.Errorf("graphql: schema %s: %w", f.Name, err)
 		}
+		queryText := buildStaticQuery(kind, f.Name, f.Args)
+		endpointCopy := endpoint
+		optsCopy := opts
+		tool, err := toolsy.NewProxyTool(
+			name,
+			descPrefix+f.Name,
+			schemaBytes,
+			func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+				return executeGraphQL(ctx, endpointCopy, queryText, argsJSON, &optsCopy, yield)
+			},
+		)
+		if err != nil {
+			return nil, fmt.Errorf("graphql: tool %s: %w", name, err)
+		}
+		tools = append(tools, tool)
 	}
 	return tools, nil
 }
 
-func executeGraphQL(ctx context.Context, endpoint, queryText string, argsJSON []byte, opts *Options, yield func(toolsy.Chunk) error) error {
+func executeGraphQL(
+	ctx context.Context,
+	endpoint, queryText string,
+	argsJSON []byte,
+	opts *Options,
+	yield func(toolsy.Chunk) error,
+) error {
 	var variables map[string]any
 	if len(argsJSON) > 0 {
 		if err := json.Unmarshal(argsJSON, &variables); err != nil {

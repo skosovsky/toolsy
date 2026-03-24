@@ -1,4 +1,3 @@
-//nolint:revive // package name matches toolskit spec
 package mail
 
 import (
@@ -53,7 +52,14 @@ func TestMailSend_ArgsPassed(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tools, 1)
 
-	require.NoError(t, tools[0].Execute(context.Background(), []byte(`{"to":["a@b.com"],"subject":"Hi","body":"Hello"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			[]byte(`{"to":["a@b.com"],"subject":"Hi","body":"Hello"}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 }
 
 func TestMailSend_EmptyTo_ClientError(t *testing.T) {
@@ -61,7 +67,11 @@ func TestMailSend_EmptyTo_ClientError(t *testing.T) {
 	tools, err := AsTools(sender, nil)
 	require.NoError(t, err)
 
-	err = tools[0].Execute(context.Background(), []byte(`{"to":[],"subject":"x","body":"y"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[0].Execute(
+		context.Background(),
+		[]byte(`{"to":[],"subject":"x","body":"y"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "recipient")
@@ -77,14 +87,17 @@ func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
 	searchTool := tools[0]
 
 	var result searchResult
-	require.NoError(t, searchTool.Execute(context.Background(), []byte(`{"query":"test","limit":5}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(searchResult); ok {
-				result = r
+	require.NoError(
+		t,
+		searchTool.Execute(context.Background(), []byte(`{"query":"test","limit":5}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(searchResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Results, "1")
 	require.Contains(t, result.Results, "a@b.com")
 	require.Contains(t, result.Results, "Test")
@@ -96,14 +109,20 @@ func TestMailSearch_EmptyQuery_ClientError(t *testing.T) {
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
-	err = tools[0].Execute(context.Background(), []byte(`{"query":"   ","limit":5}`), func(toolsy.Chunk) error { return nil })
+	err = tools[0].Execute(
+		context.Background(),
+		[]byte(`{"query":"   ","limit":5}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "query")
 }
 
 func TestMailReadMessage_ReturnsBody(t *testing.T) {
-	reader := &mockReader{read: MessageBody{ID: "1", From: "x@y.com", Subject: "Subj", Body: "Body text", Date: "2026-03-11"}}
+	reader := &mockReader{
+		read: MessageBody{ID: "1", From: "x@y.com", Subject: "Subj", Body: "Body text", Date: "2026-03-11"},
+	}
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 	readTool := tools[1]
@@ -138,7 +157,11 @@ func TestMailRead_WhitespaceOnlyMessageID_ClientError(t *testing.T) {
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{"message_id":"   \t"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		[]byte(`{"message_id":"   \t"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "message_id")
@@ -202,11 +225,20 @@ func TestMailSend_HandlerError_Wrapped(t *testing.T) {
 	tools, err := AsTools(sender, nil)
 	require.NoError(t, err)
 
-	err = tools[0].Execute(context.Background(), []byte(`{"to":["a@b.com"],"subject":"x","body":"y"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[0].Execute(
+		context.Background(),
+		[]byte(`{"to":["a@b.com"],"subject":"x","body":"y"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	msg := err.Error()
-	require.True(t, strings.Contains(msg, "toolkit/mail") || strings.Contains(msg, "smtp") || strings.Contains(msg, "internal system error"),
-		"error should mention toolkit/mail, smtp, or system: %s", msg)
+	require.True(
+		t,
+		strings.Contains(msg, "toolkit/mail") || strings.Contains(msg, "smtp") ||
+			strings.Contains(msg, "internal system error"),
+		"error should mention toolkit/mail, smtp, or system: %s",
+		msg,
+	)
 }
 
 func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {

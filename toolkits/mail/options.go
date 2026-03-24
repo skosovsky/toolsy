@@ -1,4 +1,3 @@
-//nolint:revive // package name matches toolskit spec
 package mail
 
 // Option configures AsTools (read-only mode, body limit, tool names).

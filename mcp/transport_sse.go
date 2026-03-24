@@ -5,14 +5,21 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+const (
+	rpcJSONLineScannerMaxBytes = 1024 * 1024
+	sseCallResponseTimeout     = 30 * time.Second
 )
 
 // SSETransport connects to an MCP server over HTTP SSE. The initial URL is used for GET (event stream);
@@ -56,8 +63,19 @@ func NewSSETransport(initialURL string) *SSETransport {
 	impl := &sseTransportImpl{
 		initialURL:     initialURL,
 		client:         &http.Client{Timeout: 0},
+		startMu:        sync.Mutex{},
+		started:        false,
+		startErr:       nil,
+		postURL:        "",
+		streamErr:      nil,
+		postURLMu:      sync.RWMutex{},
 		ready:          make(chan struct{}),
+		readyOnce:      sync.Once{},
+		requestID:      atomic.Uint64{},
+		pending:        sync.Map{},
 		readerDone:     make(chan struct{}),
+		bodyCloser:     nil,
+		notifyMu:       sync.Mutex{},
 		notifyHandlers: make(map[string]func(params []byte)),
 	}
 	return &SSETransport{impl: impl}
@@ -118,7 +136,7 @@ func (t *sseTransportImpl) start(ctx context.Context) error {
 func (t *sseTransportImpl) readLoop(body io.Reader) {
 	defer close(t.readerDone)
 	scanner := bufio.NewScanner(body)
-	scanner.Buffer(nil, 1024*1024)
+	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	var eventType, data string
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -140,7 +158,7 @@ func (t *sseTransportImpl) readLoop(body io.Reader) {
 	}
 	err := scanner.Err()
 	if err == nil {
-		err = fmt.Errorf("sse stream closed")
+		err = errors.New("sse stream closed")
 	}
 	t.unblockAllPending(err)
 	t.postURLMu.Lock()
@@ -165,6 +183,10 @@ func (t *sseTransportImpl) handleSSEEvent(eventType, data string) {
 	if data == "" {
 		return
 	}
+	t.dispatchSSEJSONRPCData(data)
+}
+
+func (t *sseTransportImpl) dispatchSSEJSONRPCData(data string) {
 	var raw struct {
 		ID     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
@@ -193,8 +215,11 @@ func (t *sseTransportImpl) handleSSEEvent(eventType, data string) {
 	}
 	id := fmt.Sprint(idAny)
 	if chVal, ok := t.pending.LoadAndDelete(id); ok {
-		ch := chVal.(chan *sseCallResult)
-		res := &sseCallResult{}
+		ch, chOK := chVal.(chan *sseCallResult)
+		if !chOK {
+			return
+		}
+		res := &sseCallResult{Result: nil, Err: nil}
 		if raw.Error != nil {
 			res.Err = fmt.Errorf("json-rpc error %d: %s", raw.Error.Code, raw.Error.Message)
 		} else {
@@ -211,9 +236,12 @@ func (t *sseTransportImpl) handleSSEEvent(eventType, data string) {
 func (t *sseTransportImpl) unblockAllPending(err error) {
 	t.pending.Range(func(key, value any) bool {
 		t.pending.Delete(key)
-		ch := value.(chan *sseCallResult)
+		ch, ok := value.(chan *sseCallResult)
+		if !ok {
+			return true
+		}
 		select {
-		case ch <- &sseCallResult{Err: err}:
+		case ch <- &sseCallResult{Result: nil, Err: err}:
 		default:
 		}
 		close(ch)
@@ -225,7 +253,7 @@ func (t *sseTransportImpl) getPostURL() (string, error) {
 	select {
 	case <-t.ready:
 	default:
-		return "", fmt.Errorf("endpoint not yet received")
+		return "", errors.New("endpoint not yet received")
 	}
 	t.postURLMu.RLock()
 	u := t.postURL
@@ -235,7 +263,7 @@ func (t *sseTransportImpl) getPostURL() (string, error) {
 		return "", err
 	}
 	if u == "" {
-		return "", fmt.Errorf("endpoint not received")
+		return "", errors.New("endpoint not received")
 	}
 	return u, nil
 }
@@ -258,7 +286,7 @@ func (t *sseTransportImpl) call(ctx context.Context, method string, params any) 
 		}
 	}
 	id := t.requestID.Add(1)
-	idStr := fmt.Sprintf("%d", id)
+	idStr := strconv.FormatUint(id, 10)
 	req := Request{
 		JSONRPC: JSONRPCVersion,
 		ID:      json.RawMessage(idStr),
@@ -296,7 +324,7 @@ func (t *sseTransportImpl) call(ctx context.Context, method string, params any) 
 	}
 	_ = resp.Body.Close()
 
-	timer := time.NewTimer(30 * time.Second)
+	timer := time.NewTimer(sseCallResponseTimeout)
 	defer timer.Stop()
 	// Response arrives asynchronously via the SSE stream; wait for it.
 	select {
@@ -384,7 +412,7 @@ func (t *sseTransportImpl) close() error {
 		_ = t.bodyCloser.Close()
 	}
 	<-t.readerDone
-	t.unblockAllPending(fmt.Errorf("transport closed"))
+	t.unblockAllPending(errors.New("transport closed"))
 	return nil
 }
 

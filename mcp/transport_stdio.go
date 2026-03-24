@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"os/exec"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,7 +18,7 @@ import (
 // StdioTransportOption configures StdioTransport.
 type StdioTransportOption func(*stdioTransport)
 
-// WithLogger sets the logger for stderr of the child process. If not set, slog.Default() is used.
+// WithLogger sets the logger for stderr of the child process. If not set, [slog.Default] is used.
 func WithLogger(logger *slog.Logger) StdioTransportOption {
 	return func(t *stdioTransport) {
 		if logger != nil {
@@ -72,8 +73,13 @@ type stdioTransport struct {
 	notifyHandlers map[string]func(params []byte)
 }
 
+// StdioTransport is the public type that implements Transport.
+type StdioTransport struct {
+	impl *stdioTransport
+}
+
 // NewStdioTransport creates a transport that runs a child process and uses stdin/stdout for JSON-RPC.
-// Stderr is forwarded to the logger. Use WithLogger to set a custom logger; otherwise slog.Default() is used.
+// Stderr is forwarded to the logger. Use WithLogger to set a custom logger; otherwise [slog.Default] is used.
 func NewStdioTransport(executable string, args []string, opts ...StdioTransportOption) *StdioTransport {
 	t := &stdioTransport{
 		executable:       executable,
@@ -81,18 +87,25 @@ func NewStdioTransport(executable string, args []string, opts ...StdioTransportO
 		logger:           slog.Default(),
 		firstLineTimeout: stdioFirstLineTimeout,
 		firstLineSeen:    make(chan struct{}),
+		firstLineOnce:    sync.Once{},
+		startMu:          sync.Mutex{},
+		started:          false,
+		startErr:         nil,
+		cmd:              nil,
+		cmdCancel:        nil,
+		stdin:            nil,
+		stdout:           nil,
+		requestID:        atomic.Uint64{},
+		pending:          sync.Map{},
 		readerDone:       make(chan struct{}),
+		writeMu:          sync.Mutex{},
+		notifyMu:         sync.Mutex{},
 		notifyHandlers:   make(map[string]func(params []byte)),
 	}
 	for _, opt := range opts {
 		opt(t)
 	}
 	return &StdioTransport{impl: t}
-}
-
-// StdioTransport is the public type that implements Transport.
-type StdioTransport struct {
-	impl *stdioTransport
 }
 
 // Start starts the child process and the stdout read loop.
@@ -191,7 +204,7 @@ func (t *stdioTransport) readLoop() {
 	defer close(t.readerDone)
 
 	scanner := bufio.NewScanner(t.stdout)
-	scanner.Buffer(nil, 1024*1024)
+	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		t.firstLineOnce.Do(func() { close(t.firstLineSeen) })
@@ -204,7 +217,7 @@ func (t *stdioTransport) readLoop() {
 	// Process exited or stdout closed: unblock all pending Call.
 	err := scanner.Err()
 	if err == nil {
-		err = fmt.Errorf("process stdout closed")
+		err = errors.New("process stdout closed")
 	}
 	t.unblockAllPending(err)
 }
@@ -243,8 +256,11 @@ func (t *stdioTransport) dispatchMessage(line []byte) {
 	}
 	id := fmt.Sprint(idAny)
 	if chVal, ok := t.pending.LoadAndDelete(id); ok {
-		ch := chVal.(chan *callResult)
-		res := &callResult{}
+		ch, chOK := chVal.(chan *callResult)
+		if !chOK {
+			return
+		}
+		res := &callResult{Result: nil, Err: nil}
 		if raw.Error != nil {
 			res.Err = fmt.Errorf("json-rpc error %d: %s", raw.Error.Code, raw.Error.Message)
 		} else {
@@ -262,9 +278,12 @@ func (t *stdioTransport) dispatchMessage(line []byte) {
 func (t *stdioTransport) unblockAllPending(err error) {
 	t.pending.Range(func(key, value any) bool {
 		t.pending.Delete(key)
-		ch := value.(chan *callResult)
+		ch, ok := value.(chan *callResult)
+		if !ok {
+			return true
+		}
 		select {
-		case ch <- &callResult{Err: err}:
+		case ch <- &callResult{Result: nil, Err: err}:
 		default:
 		}
 		close(ch)
@@ -286,7 +305,7 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) ([
 	t.startMu.Unlock()
 
 	id := t.requestID.Add(1)
-	idStr := fmt.Sprintf("%d", id)
+	idStr := strconv.FormatUint(id, 10)
 
 	var paramsRaw json.RawMessage
 	if params != nil {
@@ -324,7 +343,7 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) ([
 		return nil, idStr, ctx.Err()
 	case res, ok := <-ch:
 		if !ok {
-			return nil, idStr, fmt.Errorf("response channel closed")
+			return nil, idStr, errors.New("response channel closed")
 		}
 		if res.Err != nil {
 			return nil, idStr, res.Err

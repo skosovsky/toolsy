@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,19 +21,10 @@ import (
 
 // ConnectAndReflect dials the gRPC server, uses reflection to discover services/methods, and returns one toolsy.Tool per RPC method.
 func ConnectAndReflect(ctx context.Context, target string, opts Options) ([]toolsy.Tool, error) {
-	dialOpts := opts.DialOptions
-	if len(dialOpts) == 0 {
-		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	}
-	cc, err := grpc.NewClient(target, dialOpts...)
+	dialOpts := dialOptsOrDefault(opts)
+	cc, stream, err := openReflectionStream(ctx, target, dialOpts)
 	if err != nil {
-		return nil, fmt.Errorf("grpc: dial: %w", err)
-	}
-	refClient := reflectionpb.NewServerReflectionClient(cc)
-	stream, err := refClient.ServerReflectionInfo(ctx)
-	if err != nil {
-		_ = cc.Close()
-		return nil, fmt.Errorf("grpc: reflection stream: %w", err)
+		return nil, err
 	}
 	svcNames, files, err := listServicesAndBuildFiles(stream)
 	if err != nil {
@@ -40,7 +32,41 @@ func ConnectAndReflect(ctx context.Context, target string, opts Options) ([]tool
 		return nil, fmt.Errorf("grpc: list services: %w", err)
 	}
 	_ = stream.CloseSend()
+	return buildToolsFromRegistry(cc, svcNames, files, opts)
+}
 
+func dialOptsOrDefault(opts Options) []grpc.DialOption {
+	dialOpts := opts.DialOptions
+	if len(dialOpts) == 0 {
+		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	}
+	return dialOpts
+}
+
+func openReflectionStream(
+	ctx context.Context,
+	target string,
+	dialOpts []grpc.DialOption,
+) (*grpc.ClientConn, reflectionpb.ServerReflection_ServerReflectionInfoClient, error) {
+	cc, err := grpc.NewClient(target, dialOpts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("grpc: dial: %w", err)
+	}
+	refClient := reflectionpb.NewServerReflectionClient(cc)
+	stream, err := refClient.ServerReflectionInfo(ctx)
+	if err != nil {
+		_ = cc.Close()
+		return nil, nil, fmt.Errorf("grpc: reflection stream: %w", err)
+	}
+	return cc, stream, nil
+}
+
+func buildToolsFromRegistry(
+	cc *grpc.ClientConn,
+	svcNames []string,
+	files *protoregistry.Files,
+	opts Options,
+) ([]toolsy.Tool, error) {
 	allowedServices := make(map[string]bool)
 	for _, s := range opts.Services {
 		allowedServices[s] = true
@@ -77,9 +103,14 @@ func ConnectAndReflect(ctx context.Context, target string, opts Options) ([]tool
 			mCopy := m
 			optsCopy := opts
 			ccCopy := cc
-			tool, err := toolsy.NewProxyTool(name, descStr, schemaBytes, func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-				return invokeRPC(ctx, ccCopy, mCopy, argsJSON, &optsCopy, yield)
-			})
+			tool, err := toolsy.NewProxyTool(
+				name,
+				descStr,
+				schemaBytes,
+				func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+					return invokeRPC(ctx, ccCopy, mCopy, argsJSON, &optsCopy, yield)
+				},
+			)
 			if err != nil {
 				_ = cc.Close()
 				return nil, fmt.Errorf("grpc: tool %s: %w", name, err)
@@ -94,7 +125,9 @@ func ConnectAndReflect(ctx context.Context, target string, opts Options) ([]tool
 }
 
 // listServicesAndBuildFiles sends ListServicesRequest, then FileContainingSymbol for each service, and returns service names and a merged Files registry.
-func listServicesAndBuildFiles(stream reflectionpb.ServerReflection_ServerReflectionInfoClient) ([]string, *protoregistry.Files, error) {
+func listServicesAndBuildFiles(
+	stream reflectionpb.ServerReflection_ServerReflectionInfoClient,
+) ([]string, *protoregistry.Files, error) {
 	// Request list of services.
 	req := &reflectionpb.ServerReflectionRequest{
 		MessageRequest: &reflectionpb.ServerReflectionRequest_ListServices{
@@ -113,16 +146,16 @@ func listServicesAndBuildFiles(stream reflectionpb.ServerReflection_ServerReflec
 		if errResp := resp.GetErrorResponse(); errResp != nil {
 			return nil, nil, fmt.Errorf("grpc: reflection list_services error: %s", errResp.GetErrorMessage())
 		}
-		return nil, nil, fmt.Errorf("grpc: reflection: unexpected response type")
+		return nil, nil, errors.New("grpc: reflection: unexpected response type")
 	}
 	var svcNames []string
 	for _, s := range listResp.GetService() {
-		if s != nil && s.Name != "" {
-			svcNames = append(svcNames, s.Name)
+		if s != nil && s.GetName() != "" {
+			svcNames = append(svcNames, s.GetName())
 		}
 	}
 	if len(svcNames) == 0 {
-		return nil, nil, fmt.Errorf("grpc: reflection: no services")
+		return nil, nil, errors.New("grpc: reflection: no services")
 	}
 	// Build registry from FileContainingSymbol for each service.
 	files, err := buildRegistry(stream, svcNames)
@@ -134,7 +167,10 @@ func listServicesAndBuildFiles(stream reflectionpb.ServerReflection_ServerReflec
 
 // buildRegistry collects FileDescriptorProto for each service via FileContainingSymbol,
 // deduplicates by file name, and returns a merged protoregistry.Files.
-func buildRegistry(stream reflectionpb.ServerReflection_ServerReflectionInfoClient, services []string) (*protoregistry.Files, error) {
+func buildRegistry(
+	stream reflectionpb.ServerReflection_ServerReflectionInfoClient,
+	services []string,
+) (*protoregistry.Files, error) {
 	seenFiles := make(map[string]bool)
 	var allFiles []*descriptorpb.FileDescriptorProto
 
@@ -158,7 +194,7 @@ func buildRegistry(stream reflectionpb.ServerReflection_ServerReflectionInfoClie
 			}
 			continue
 		}
-		for _, fdBytes := range fdResp.FileDescriptorProto {
+		for _, fdBytes := range fdResp.GetFileDescriptorProto() {
 			fd := &descriptorpb.FileDescriptorProto{}
 			if err := proto.Unmarshal(fdBytes, fd); err != nil {
 				return nil, err

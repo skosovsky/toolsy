@@ -87,9 +87,7 @@ func cloneStringMap(m map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(m))
-	for k, val := range m {
-		out[k] = val
-	}
+	maps.Copy(out, m)
 	return out
 }
 
@@ -130,6 +128,7 @@ func OverrideTool(base Tool, opts ...OverrideOption) Tool {
 
 type overriddenTool struct {
 	toolBase
+
 	opts *overrideOptions
 }
 

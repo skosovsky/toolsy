@@ -62,7 +62,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 }
 
 func doGET(ctx context.Context, o *options, rawURL string) (httpResult, error) {
-	u, err := validateURL(rawURL, o.allowedDomains, o.allowPrivateIPs)
+	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
 		return httpResult{}, err
 	}
@@ -90,16 +90,16 @@ func doGET(ctx context.Context, o *options, rawURL string) (httpResult, error) {
 }
 
 func doPOST(ctx context.Context, o *options, rawURL string, jsonBody map[string]any) (httpResult, error) {
-	u, err := validateURL(rawURL, o.allowedDomains, o.allowPrivateIPs)
+	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
 		return httpResult{}, err
 	}
 
 	var reqBody io.Reader
 	if len(jsonBody) > 0 {
-		bodyBytes, err := json.Marshal(jsonBody)
-		if err != nil {
-			return httpResult{}, fmt.Errorf("toolkit/httptool: marshal body: %w", err)
+		bodyBytes, marshalErr := json.Marshal(jsonBody)
+		if marshalErr != nil {
+			return httpResult{}, fmt.Errorf("toolkit/httptool: marshal body: %w", marshalErr)
 		}
 		reqBody = bytes.NewReader(bodyBytes)
 	}

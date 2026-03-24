@@ -57,14 +57,21 @@ func TestRequestApproval_Approved(t *testing.T) {
 	approvalTool := tools[0]
 
 	var decision string
-	require.NoError(t, approvalTool.Execute(context.Background(), []byte(`{"action":"delete","reason":"user asked"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(approvalResult); ok {
-				decision = r.Decision
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		approvalTool.Execute(
+			context.Background(),
+			[]byte(`{"action":"delete","reason":"user asked"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(approvalResult); ok {
+						decision = r.Decision
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, "APPROVED", decision)
 }
 
@@ -75,14 +82,21 @@ func TestRequestApproval_Rejected(t *testing.T) {
 	approvalTool := tools[0]
 
 	var decision string
-	require.NoError(t, approvalTool.Execute(context.Background(), []byte(`{"action":"delete","reason":"test"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(approvalResult); ok {
-				decision = r.Decision
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		approvalTool.Execute(
+			context.Background(),
+			[]byte(`{"action":"delete","reason":"test"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(approvalResult); ok {
+						decision = r.Decision
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, "REJECTED", decision)
 }
 
@@ -92,7 +106,14 @@ func TestRequestApproval_ArgsPassedCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	approvalTool := tools[0]
 
-	require.NoError(t, approvalTool.Execute(context.Background(), []byte(`{"action":"send_email","reason":"user requested"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		approvalTool.Execute(
+			context.Background(),
+			[]byte(`{"action":"send_email","reason":"user requested"}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 	require.Equal(t, "send_email", h.lastAction)
 	require.Equal(t, "user requested", h.lastReason)
 }
@@ -103,7 +124,11 @@ func TestRequestApproval_HandlerError(t *testing.T) {
 	require.NoError(t, err)
 	approvalTool := tools[0]
 
-	err = approvalTool.Execute(context.Background(), []byte(`{"action":"x","reason":"y"}`), func(toolsy.Chunk) error { return nil })
+	err = approvalTool.Execute(
+		context.Background(),
+		[]byte(`{"action":"x","reason":"y"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assertErrorContainsToolkitHuman(t, err)
 }
@@ -115,14 +140,21 @@ func TestAskClarification_ReturnsAnswer(t *testing.T) {
 	clarificationTool := tools[1]
 
 	var answer string
-	require.NoError(t, clarificationTool.Execute(context.Background(), []byte(`{"question":"Which button?"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(clarificationResult); ok {
-				answer = r.Answer
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		clarificationTool.Execute(
+			context.Background(),
+			[]byte(`{"question":"Which button?"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(clarificationResult); ok {
+						answer = r.Answer
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, "Use the blue button", answer)
 }
 
@@ -132,7 +164,14 @@ func TestAskClarification_ArgsPassedCorrectly(t *testing.T) {
 	require.NoError(t, err)
 	clarificationTool := tools[1]
 
-	require.NoError(t, clarificationTool.Execute(context.Background(), []byte(`{"question":"What is the deadline?"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		clarificationTool.Execute(
+			context.Background(),
+			[]byte(`{"question":"What is the deadline?"}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 	require.Equal(t, "What is the deadline?", h.lastQuestion)
 }
 
@@ -142,7 +181,11 @@ func TestAskClarification_HandlerError(t *testing.T) {
 	require.NoError(t, err)
 	clarificationTool := tools[1]
 
-	err = clarificationTool.Execute(context.Background(), []byte(`{"question":"x"}`), func(toolsy.Chunk) error { return nil })
+	err = clarificationTool.Execute(
+		context.Background(),
+		[]byte(`{"question":"x"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assertErrorContainsToolkitHuman(t, err)
 }

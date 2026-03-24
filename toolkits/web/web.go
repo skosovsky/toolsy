@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/skosovsky/toolsy"
 )
+
+// maxSearchResultsDisplayed is the maximum number of search hits included in the markdown list (before truncation).
+const maxSearchResultsDisplayed = 50
 
 // SearchResult is a single search hit from SearchProvider.
 type SearchResult struct {
@@ -41,7 +45,7 @@ type scrapeResult struct {
 // AsTools returns web_search and web_scrape tools. SearchProvider is required for web_search.
 func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 	if provider == nil {
-		return nil, fmt.Errorf("toolkit/web: SearchProvider is required")
+		return nil, errors.New("toolkit/web: SearchProvider is required")
 	}
 	var o options
 	for _, opt := range opts {
@@ -77,7 +81,11 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 func doSearch(ctx context.Context, provider SearchProvider, query string) (searchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return searchResult{}, &toolsy.ClientError{Reason: "query is required", Err: toolsy.ErrValidation}
+		return searchResult{}, &toolsy.ClientError{
+			Reason:    "query is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	results, err := provider.Search(ctx, query)
 	if err != nil {
@@ -94,7 +102,7 @@ func doSearch(ctx context.Context, provider SearchProvider, query string) (searc
 			b.WriteString(escapeMarkdown(r.Snippet))
 		}
 		b.WriteString("\n")
-		if i >= 49 {
+		if i+1 == maxSearchResultsDisplayed {
 			b.WriteString("... [truncated]\n")
 			break
 		}
@@ -105,9 +113,13 @@ func doSearch(ctx context.Context, provider SearchProvider, query string) (searc
 func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return scrapeResult{}, &toolsy.ClientError{Reason: "url is required", Err: toolsy.ErrValidation}
+		return scrapeResult{}, &toolsy.ClientError{
+			Reason:    "url is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
-	u, err := validateScrapeURL(rawURL, o.allowPrivateIPs, o.blockedDomains)
+	u, err := validateScrapeURL(ctx, rawURL, o.allowPrivateIPs, o.blockedDomains)
 	if err != nil {
 		return scrapeResult{}, err
 	}
@@ -139,14 +151,22 @@ func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, err
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return scrapeResult{}, &toolsy.ClientError{Reason: "fetch failed: " + resp.Status, Err: toolsy.ErrValidation}
+		return scrapeResult{}, &toolsy.ClientError{
+			Reason:    "fetch failed: " + resp.Status,
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(o.maxPageBytes)+1))
 	if err != nil {
 		return scrapeResult{}, fmt.Errorf("toolkit/web: read body: %w", err)
 	}
 	if len(body) > o.maxPageBytes {
-		return scrapeResult{}, &toolsy.ClientError{Reason: "page too large", Err: toolsy.ErrValidation}
+		return scrapeResult{}, &toolsy.ClientError{
+			Reason:    "page too large",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	markdown, err := o.scraper.HTMLToMarkdown(string(body), o.maxPageBytes)
 	if err != nil {

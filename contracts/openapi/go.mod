@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/contracts/openapi
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/getkin/kin-openapi v0.133.0

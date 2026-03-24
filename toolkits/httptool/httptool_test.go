@@ -27,14 +27,17 @@ func TestHTTPGet_Success(t *testing.T) {
 	getTool := tools[0]
 
 	var result httpResult
-	require.NoError(t, getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(httpResult); ok {
-				result = r
+	require.NoError(
+		t,
+		getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(httpResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Equal(t, 200, result.Status)
 	require.Equal(t, "hello", result.Body)
 }
@@ -44,7 +47,11 @@ func TestHTTPGet_DomainBlocked(t *testing.T) {
 	require.NoError(t, err)
 	getTool := tools[0]
 
-	err = getTool.Execute(context.Background(), []byte(`{"url":"https://evil.com/path"}`), func(toolsy.Chunk) error { return nil })
+	err = getTool.Execute(
+		context.Background(),
+		[]byte(`{"url":"https://evil.com/path"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
@@ -69,14 +76,17 @@ func TestHTTPGet_Truncation(t *testing.T) {
 	getTool := tools[0]
 
 	var result httpResult
-	require.NoError(t, getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(httpResult); ok {
-				result = r
+	require.NoError(
+		t,
+		getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(httpResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Equal(t, 200, result.Status)
 	require.Contains(t, result.Body, "[Truncated]")
 	require.LessOrEqual(t, len(result.Body), 20+len(truncationSuffix)+2)
@@ -101,14 +111,21 @@ func TestHTTPPost_Success(t *testing.T) {
 	postTool := tools[1]
 
 	var result httpResult
-	require.NoError(t, postTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`","json_body":{"key":"value"}}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(httpResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		postTool.Execute(
+			context.Background(),
+			[]byte(`{"url":"`+srv.URL+`","json_body":{"key":"value"}}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(httpResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, 200, result.Status)
 	require.Equal(t, "ok", result.Body)
 	require.Contains(t, received, "key")
@@ -131,7 +148,14 @@ func TestHTTPPost_ContentTypeSet(t *testing.T) {
 	require.NoError(t, err)
 	postTool := tools[1]
 
-	require.NoError(t, postTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`","json_body":{"a":1}}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		postTool.Execute(
+			context.Background(),
+			[]byte(`{"url":"`+srv.URL+`","json_body":{"a":1}}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 	require.Equal(t, "application/json", gotContentType)
 }
 
@@ -155,7 +179,14 @@ func TestHTTPPost_EmptyBody(t *testing.T) {
 	postTool := tools[1]
 
 	// POST with URL only, no json_body
-	require.NoError(t, postTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		postTool.Execute(
+			context.Background(),
+			[]byte(`{"url":"`+srv.URL+`"}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 	require.Equal(t, 0, bodyLen, "body must be empty when json_body is omitted")
 	require.Empty(t, contentType, "Content-Type must not be set when body is empty")
 }
@@ -176,7 +207,10 @@ func TestHTTPGet_HeadersApplied(t *testing.T) {
 	require.NoError(t, err)
 	getTool := tools[0]
 
-	require.NoError(t, getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(toolsy.Chunk) error { return nil }),
+	)
 	require.Equal(t, "test-value", gotHeader)
 }
 
@@ -195,14 +229,17 @@ func TestHTTPGet_ServerError(t *testing.T) {
 	getTool := tools[0]
 
 	var result httpResult
-	require.NoError(t, getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(httpResult); ok {
-				result = r
+	require.NoError(
+		t,
+		getTool.Execute(context.Background(), []byte(`{"url":"`+srv.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(httpResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Equal(t, 500, result.Status)
 	require.Equal(t, "server error", result.Body)
 }

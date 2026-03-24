@@ -49,7 +49,7 @@ func snapshotAndRestoreCustomTypes(t *testing.T) {
 
 func TestGenerateSchema_Simple(t *testing.T) {
 	type Simple struct {
-		Location string `json:"location" jsonschema:"City name"`
+		Location string `json:"location"       jsonschema:"City name"`
 		Unit     string `json:"unit,omitempty" jsonschema:"Temperature unit"`
 	}
 	m, resolved, err := generateSchema[Simple](false)
@@ -67,7 +67,7 @@ func TestGenerateSchema_Simple(t *testing.T) {
 // TestGenerateSchema_StructTagsDescriptionAndEnum verifies enrichSchemaFromStructTags adds description and enum from struct tags.
 func TestGenerateSchema_StructTagsDescriptionAndEnum(t *testing.T) {
 	type WithTags struct {
-		Status string `json:"status" enum:"ok,fail" description:"System status"`
+		Status string `description:"System status" enum:"ok,fail" json:"status"`
 	}
 	m, _, err := generateSchema[WithTags](false)
 	require.NoError(t, err)
@@ -95,28 +95,21 @@ func TestGenerateSchema_StrictMode(t *testing.T) {
 	m, _, err := generateSchema[Root](true)
 	require.NoError(t, err)
 	require.NotNil(t, m)
-	// All objects should have additionalProperties: false
+	assertStrictModeAdditionalProperties(t, m)
+}
+
+// assertStrictModeAdditionalProperties walks the schema tree and checks every object with
+// "properties" has additionalProperties: false (strict mode contract).
+func assertStrictModeAdditionalProperties(t *testing.T, root map[string]any) {
+	t.Helper()
 	var check func(map[string]any)
 	check = func(m map[string]any) {
 		if m == nil {
 			return
 		}
-		if _, hasProps := m["properties"]; hasProps {
-			v, ok := m["additionalProperties"]
-			assert.True(t, ok, "expected additionalProperties in object schema")
-			assert.Equal(t, false, v)
-		}
+		assertObjectHasAdditionalPropertiesFalse(t, m)
 		for _, val := range m {
-			switch v := val.(type) {
-			case map[string]any:
-				check(v)
-			case []any:
-				for _, item := range v {
-					if m2, ok := item.(map[string]any); ok {
-						check(m2)
-					}
-				}
-			}
+			strictWalkSchemaChildren(t, check, val)
 		}
 		if defs, ok := m["$defs"].(map[string]any); ok {
 			for _, d := range defs {
@@ -126,7 +119,31 @@ func TestGenerateSchema_StrictMode(t *testing.T) {
 			}
 		}
 	}
-	check(m)
+	check(root)
+}
+
+func assertObjectHasAdditionalPropertiesFalse(t *testing.T, m map[string]any) {
+	t.Helper()
+	if _, hasProps := m["properties"]; !hasProps {
+		return
+	}
+	v, ok := m["additionalProperties"]
+	assert.True(t, ok, "expected additionalProperties in object schema")
+	assert.Equal(t, false, v)
+}
+
+func strictWalkSchemaChildren(t *testing.T, check func(map[string]any), val any) {
+	t.Helper()
+	switch v := val.(type) {
+	case map[string]any:
+		check(v)
+	case []any:
+		for _, item := range v {
+			if m2, ok := item.(map[string]any); ok {
+				check(m2)
+			}
+		}
+	}
 }
 
 func TestApplyStrictMode(t *testing.T) {
@@ -239,17 +256,22 @@ func noRefInSchemaTree(schemaMap map[string]any) bool {
 		return false
 	}
 	for _, val := range schemaMap {
-		switch v := val.(type) {
-		case map[string]any:
-			if !noRefInSchemaTree(v) {
-				return false
-			}
-		case []any:
-			for _, item := range v {
-				if m2, ok := item.(map[string]any); ok {
-					if !noRefInSchemaTree(m2) {
-						return false
-					}
+		if !noRefInSchemaValue(val) {
+			return false
+		}
+	}
+	return true
+}
+
+func noRefInSchemaValue(val any) bool {
+	switch v := val.(type) {
+	case map[string]any:
+		return noRefInSchemaTree(v)
+	case []any:
+		for _, item := range v {
+			if m2, ok := item.(map[string]any); ok {
+				if !noRefInSchemaTree(m2) {
+					return false
 				}
 			}
 		}

@@ -48,7 +48,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	assert.Equal(t, 6, out.Y)
 }
 
-// TestNewTool_RawData_ZeroCost verifies that NewTool yields RawData only, Data is nil (no json.Marshal in core).
+// TestNewTool_RawData_ZeroCost verifies that NewTool yields RawData only, Data is nil (no [json.Marshal] in core).
 func TestNewTool_RawData_ZeroCost(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
@@ -195,16 +195,21 @@ func BenchmarkExecute(b *testing.B) {
 	argsJSON := []byte(`{"x": 42}`)
 	yield := func(Chunk) error { return nil }
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = tool.Execute(ctx, argsJSON, yield)
 	}
 }
 
 func TestNewProxyTool(t *testing.T) {
 	rawSchema := []byte(`{"type":"object","properties":{"x":{"type":"integer"}},"required":["x"]}`)
-	tool, err := NewProxyTool("proxy_echo", "Echo args as result", rawSchema, func(_ context.Context, rawArgs []byte, yield func(Chunk) error) error {
-		return yield(Chunk{Event: EventResult, Data: rawArgs})
-	})
+	tool, err := NewProxyTool(
+		"proxy_echo",
+		"Echo args as result",
+		rawSchema,
+		func(_ context.Context, rawArgs []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: rawArgs})
+		},
+	)
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 	assert.Equal(t, "proxy_echo", tool.Name())

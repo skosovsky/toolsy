@@ -74,11 +74,19 @@ func doCurrent(o *options) (currentResult, error) {
 
 func doCalculate(o *options, args calculateArgs) (calculateResult, error) {
 	if args.BaseDate == "" {
-		return calculateResult{}, &toolsy.ClientError{Reason: "base_date is required", Err: toolsy.ErrValidation}
+		return calculateResult{}, &toolsy.ClientError{
+			Reason:    "base_date is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	baseDate, err := time.Parse(time.RFC3339, args.BaseDate)
 	if err != nil {
-		return calculateResult{}, &toolsy.ClientError{Reason: "invalid base_date: must be RFC3339 (e.g. 2026-03-11T12:00:00Z)", Err: toolsy.ErrValidation}
+		return calculateResult{}, &toolsy.ClientError{
+			Reason:    "invalid base_date: must be RFC3339 (e.g. 2026-03-11T12:00:00Z)",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	// DST-safe: perform arithmetic in configured location so calendar days respect DST boundaries
 	inLoc := baseDate.In(o.location)

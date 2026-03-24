@@ -13,7 +13,7 @@ import (
 // Both methods block the agent goroutine until the human responds.
 // Implementations MUST listen to ctx.Done() and return ctx.Err()
 // if the context is cancelled (e.g. session closed, timeout expired).
-// The orchestrator should use context.WithTimeout to bound wait time.
+// The orchestrator should use [context.WithTimeout] to bound wait time.
 type EscalationHandler interface {
 	ApproveAction(ctx context.Context, action, reason string) (bool, error)
 	ProvideClarification(ctx context.Context, question string) (string, error)
@@ -50,9 +50,9 @@ func AsTools(handler EscalationHandler, opts ...Option) ([]toolsy.Tool, error) {
 		o.clarificationName,
 		o.clarificationDesc,
 		func(ctx context.Context, args clarificationArgs) (clarificationResult, error) {
-			answer, err := handler.ProvideClarification(ctx, args.Question)
-			if err != nil {
-				return clarificationResult{}, fmt.Errorf("toolkit/human: provide clarification: %w", err)
+			answer, clarErr := handler.ProvideClarification(ctx, args.Question)
+			if clarErr != nil {
+				return clarificationResult{}, fmt.Errorf("toolkit/human: provide clarification: %w", clarErr)
 			}
 			return clarificationResult{Answer: answer}, nil
 		},

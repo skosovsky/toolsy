@@ -32,7 +32,7 @@ func WithBearerToken(token string) func(*ClientOptions) {
 	}
 }
 
-// WithHTTPClient sets a custom HTTP client (e.g. for TLS). If nil, http.DefaultClient is used.
+// WithHTTPClient sets a custom HTTP client (e.g. for TLS). If nil, [http.DefaultClient] is used.
 func WithHTTPClient(client *http.Client) func(*ClientOptions) {
 	return func(o *ClientOptions) {
 		o.HTTPClient = client
@@ -41,7 +41,7 @@ func WithHTTPClient(client *http.Client) func(*ClientOptions) {
 
 // NewClient creates a client for the Agent Protocol server at baseURL. Options can customize auth and HTTP client.
 func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
-	o := ClientOptions{}
+	var o ClientOptions
 	for _, opt := range opts {
 		opt(&o)
 	}

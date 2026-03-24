@@ -2,6 +2,7 @@ package fstool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -55,7 +56,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		return nil, fmt.Errorf("toolkit/fstool: base dir: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("toolkit/fstool: base dir is not a directory")
+		return nil, errors.New("toolkit/fstool: base dir is not a directory")
 	}
 
 	var o options
@@ -115,7 +116,11 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 		return listResult{}, fmt.Errorf("toolkit/fstool: stat: %w", err)
 	}
 	if !info.IsDir() {
-		return listResult{}, &toolsy.ClientError{Reason: "path is not a directory", Err: toolsy.ErrValidation}
+		return listResult{}, &toolsy.ClientError{
+			Reason:    "path is not a directory",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	entries, err := os.ReadDir(resolved)
 	if err != nil {
@@ -123,10 +128,9 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 	}
 	infos := make([]entryInfo, 0, len(entries))
 	for _, e := range entries {
-		ei := entryInfo{Name: e.Name(), IsDir: e.IsDir()}
+		ei := entryInfo{Name: e.Name(), IsDir: e.IsDir(), Size: 0}
 		if !e.IsDir() {
-			fi, err := e.Info()
-			if err == nil {
+			if fi, infoErr := e.Info(); infoErr == nil {
 				ei.Size = fi.Size()
 			}
 		}
@@ -150,7 +154,11 @@ func doReadFile(_ context.Context, baseDir string, o *options, path string) (rea
 		return readResult{}, fmt.Errorf("toolkit/fstool: stat file: %w", err)
 	}
 	if info.IsDir() {
-		return readResult{}, &toolsy.ClientError{Reason: "path is a directory, not a file", Err: toolsy.ErrValidation}
+		return readResult{}, &toolsy.ClientError{
+			Reason:    "path is a directory, not a file",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	content, err := readAndTruncate(f, o.maxBytes)
 	if err != nil {
@@ -165,8 +173,8 @@ func doWriteFile(_ context.Context, baseDir, path, content string) (statusResult
 		return statusResult{}, err
 	}
 	parent := filepath.Dir(target)
-	if err := os.MkdirAll(parent, 0o750); err != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: mkdir: %w", err)
+	if mkdirErr := os.MkdirAll(parent, 0o750); mkdirErr != nil {
+		return statusResult{}, fmt.Errorf("toolkit/fstool: mkdir: %w", mkdirErr)
 	}
 	// Post-creation symlink check: resolve parent and ensure still under sandbox
 	resolvedParent, err := filepath.EvalSymlinks(parent)
@@ -181,26 +189,35 @@ func doWriteFile(_ context.Context, baseDir, path, content string) (statusResult
 	if err != nil {
 		return statusResult{}, fmt.Errorf("toolkit/fstool: base dir: %w", err)
 	}
-	if err := pathUnderBase(baseCanon, resolvedParent); err != nil {
-		return statusResult{}, err
+	if uerr := pathUnderBase(baseCanon, resolvedParent); uerr != nil {
+		return statusResult{}, uerr
 	}
 	finalPath := filepath.Join(resolvedParent, filepath.Base(target))
 	// If target already exists and is a symlink, ensure it does not point outside sandbox
-	if fi, err := os.Lstat(finalPath); err == nil {
-		if fi.Mode()&os.ModeSymlink != 0 {
-			resolvedTarget, err := filepath.EvalSymlinks(finalPath)
-			if err != nil {
-				return statusResult{}, fmt.Errorf("toolkit/fstool: resolve target symlink: %w", err)
-			}
-			if err := pathUnderBase(baseCanon, resolvedTarget); err != nil {
-				return statusResult{}, err
-			}
-		}
+	if symErr := checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath); symErr != nil {
+		return statusResult{}, symErr
 	}
-	if err := os.WriteFile(finalPath, []byte(content), 0o600); err != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: write file: %w", err)
+	if writeErr := os.WriteFile(finalPath, []byte(content), 0o600); writeErr != nil {
+		return statusResult{}, fmt.Errorf("toolkit/fstool: write file: %w", writeErr)
 	}
 	return statusResult{Status: "Success"}, nil
+}
+
+// checkWriteTargetSymlinkWithinSandbox returns nil if finalPath is absent, not a symlink, or resolves inside baseCanon.
+func checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath string) error {
+	fi, statErr := os.Lstat(finalPath)
+	if statErr != nil {
+		// Match prior behavior: symlink check only runs when Lstat succeeds (path exists).
+		return nil //nolint:nilerr // intentional: ignore Lstat errors (not found, permission, etc.)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	resolvedTarget, err := filepath.EvalSymlinks(finalPath)
+	if err != nil {
+		return fmt.Errorf("toolkit/fstool: resolve target symlink: %w", err)
+	}
+	return pathUnderBase(baseCanon, resolvedTarget)
 }
 
 // readAndTruncate reads up to maxBytes from r. If more is available, returns UTF-8 safe truncation + suffix.

@@ -23,6 +23,7 @@ func NewScratchpad(opts ...Option) *Scratchpad {
 		opt(&o)
 	}
 	return &Scratchpad{
+		mu:       sync.RWMutex{},
 		facts:    make(map[string]string),
 		maxFacts: o.maxFacts,
 	}
@@ -60,8 +61,9 @@ func (s *Scratchpad) pinHandler(_ context.Context, args pinArgs) (statusResult, 
 	if s.maxFacts > 0 && len(s.facts) >= s.maxFacts {
 		if _, exists := s.facts[args.Key]; !exists {
 			return statusResult{}, &toolsy.ClientError{
-				Reason: "memory limit reached",
-				Err:    toolsy.ErrValidation,
+				Reason:    "memory limit reached",
+				Retryable: false,
+				Err:       toolsy.ErrValidation,
 			}
 		}
 	}

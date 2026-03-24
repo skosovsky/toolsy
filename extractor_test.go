@@ -1,6 +1,7 @@
 package toolsy
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -189,27 +190,30 @@ type countValidatable struct {
 	X int `json:"x"`
 }
 
-var layer2ValidateCallCount int
+// Test-only: count Validate() invocations for countValidatable (no JSON field).
+//
+//nolint:gochecknoglobals // Counter shared with Validate(); scoped to this test file.
+var layer2ValidateCallCount atomic.Int32
 
 func (c countValidatable) Validate() error {
-	layer2ValidateCallCount++
+	layer2ValidateCallCount.Add(1)
 	return nil
 }
 
 // TestExtractor_ParseAndValidate_ValidatableNotCalledTwice ensures Layer-2 validation
 // runs at most once per parse (no double call for pointer-receiver fallback).
 func TestExtractor_ParseAndValidate_ValidatableNotCalledTwice(t *testing.T) {
-	layer2ValidateCallCount = 0
-	defer func() { layer2ValidateCallCount = 0 }()
+	layer2ValidateCallCount.Store(0)
+	defer func() { layer2ValidateCallCount.Store(0) }()
 	ext, err := NewExtractor[countValidatable](false)
 	require.NoError(t, err)
 	_, err = ext.ParseAndValidate([]byte(`{"x": 1}`))
 	require.NoError(t, err)
-	assert.Equal(t, 1, layer2ValidateCallCount, "Validate() must be called exactly once")
+	assert.Equal(t, int32(1), layer2ValidateCallCount.Load(), "Validate() must be called exactly once")
 }
 
 // TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic ensures ParseAndValidate with T=any
-// and JSON "null" does not panic (runLayer2Validation guards reflect.TypeOf(nil)).
+// and JSON "null" does not panic (runLayer2Validation guards [reflect.TypeOf](nil)).
 func TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic(t *testing.T) {
 	ext, err := NewExtractor[any](false)
 	if err != nil {

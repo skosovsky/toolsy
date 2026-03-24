@@ -50,6 +50,10 @@ func TestNewTestRegistry(t *testing.T) {
 	all := reg.GetAllTools()
 	require.Len(t, all, 1)
 	assert.Equal(t, "m", all[0].Name())
-	err := reg.Execute(context.Background(), toolsy.ToolCall{ID: "1", ToolName: "m", Args: []byte(`{}`)}, func(toolsy.Chunk) error { return nil })
+	err := reg.Execute(
+		context.Background(),
+		toolsy.ToolCall{ID: "1", ToolName: "m", Args: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 }

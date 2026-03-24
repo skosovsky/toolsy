@@ -91,7 +91,14 @@ func TestFSWriteFile_Success(t *testing.T) {
 	require.NoError(t, err)
 	writeTool := tools[2]
 
-	require.NoError(t, writeTool.Execute(context.Background(), []byte(`{"path":"a/b/f.txt","content":"written"}`), func(toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		writeTool.Execute(
+			context.Background(),
+			[]byte(`{"path":"a/b/f.txt","content":"written"}`),
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
 	data, err := os.ReadFile(filepath.Join(base, "a", "b", "f.txt")) // #nosec G304 -- path under test base
 	require.NoError(t, err)
 	require.Equal(t, "written", string(data))
@@ -110,7 +117,11 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 	require.NoError(t, err)
 	writeTool := tools[2]
 
-	err = writeTool.Execute(context.Background(), []byte(`{"path":"uploads/link/evil.txt","content":"x"}`), func(toolsy.Chunk) error { return nil })
+	err = writeTool.Execute(
+		context.Background(),
+		[]byte(`{"path":"uploads/link/evil.txt","content":"x"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "outside sandbox")
@@ -129,10 +140,17 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 	require.NoError(t, err)
 	writeTool := tools[2]
 
-	err = writeTool.Execute(context.Background(), []byte(`{"path":"report.txt","content":"x"}`), func(toolsy.Chunk) error { return nil })
+	err = writeTool.Execute(
+		context.Background(),
+		[]byte(`{"path":"report.txt","content":"x"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	// Framework may wrap error; ensure write was rejected (sandbox escape blocked)
-	require.True(t, strings.Contains(err.Error(), "outside sandbox") || strings.Contains(err.Error(), "internal system error"))
+	require.True(
+		t,
+		strings.Contains(err.Error(), "outside sandbox") || strings.Contains(err.Error(), "internal system error"),
+	)
 }
 
 func TestFSWriteFile_ReadOnlyBlocked(t *testing.T) {
@@ -147,7 +165,11 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 	require.NoError(t, err)
 	listTool := tools[0]
 
-	err = listTool.Execute(context.Background(), []byte(`{"path":"../../etc"}`), func(toolsy.Chunk) error { return nil })
+	err = listTool.Execute(
+		context.Background(),
+		[]byte(`{"path":"../../etc"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }

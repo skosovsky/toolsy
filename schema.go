@@ -11,6 +11,9 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// Package-wide registry for custom type→JSON Schema mappings (see RegisterType).
+//
+//nolint:gochecknoglobals // Process-wide map protected by mutex; RegisterType is at init/runtime.
 var (
 	customTypesMu sync.RWMutex
 	customTypes   = make(map[reflect.Type]*jsonschema.Schema)
@@ -19,7 +22,7 @@ var (
 // RegisterType registers a custom Go type to be mapped to a JSON Schema type/format in generated schemas.
 // emptyInstance is a value of the type to register (e.g. uuid.UUID{}, or MyMoney{}); it must not be nil.
 // jsonType is the JSON Schema type (e.g. "string", "number"); it must not be empty.
-// format is optional (e.g. "uuid", "decimal"). Registration is by reflect.TypeOf(emptyInstance).
+// format is optional (e.g. "uuid", "decimal"). Registration is by [reflect.TypeOf](emptyInstance).
 // Pointer fields (*T) use the same mapping as T; call RegisterType once for the value type.
 // Call RegisterType at application startup before the first NewTool or NewExtractor.
 func RegisterType(emptyInstance any, jsonType, format string) {
@@ -70,8 +73,8 @@ func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Resolved, e
 		return nil, nil, err
 	}
 	var schemaMap map[string]any
-	if err := json.Unmarshal(data, &schemaMap); err != nil {
-		return nil, nil, err
+	if unmarshalErr := json.Unmarshal(data, &schemaMap); unmarshalErr != nil {
+		return nil, nil, unmarshalErr
 	}
 	enrichSchemaFromStructTags(schemaMap, reflect.TypeOf(*new(T)))
 	if strict {
@@ -119,17 +122,21 @@ func enrichSchemaFromStructTags(schemaMap map[string]any, typ reflect.Type) {
 		if !ok {
 			continue
 		}
-		if desc := field.Tag.Get("description"); desc != "" {
-			prop["description"] = desc
+		enrichPropertyFromStructField(prop, field)
+	}
+}
+
+func enrichPropertyFromStructField(prop map[string]any, field reflect.StructField) {
+	if desc := field.Tag.Get("description"); desc != "" {
+		prop["description"] = desc
+	}
+	if enumStr := field.Tag.Get("enum"); enumStr != "" {
+		parts := strings.Split(enumStr, ",")
+		enum := make([]any, len(parts))
+		for i, p := range parts {
+			enum[i] = strings.TrimSpace(p)
 		}
-		if enumStr := field.Tag.Get("enum"); enumStr != "" {
-			parts := strings.Split(enumStr, ",")
-			enum := make([]any, len(parts))
-			for i, p := range parts {
-				enum[i] = strings.TrimSpace(p)
-			}
-			prop["enum"] = enum
-		}
+		prop["enum"] = enum
 	}
 }
 

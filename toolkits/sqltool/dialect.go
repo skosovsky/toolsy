@@ -20,7 +20,10 @@ func newDialect(driverName string) (dialect, error) {
 	case "sqlite3", "sqlite":
 		return &sqliteDialect{}, nil
 	default:
-		return nil, fmt.Errorf("toolkit/sqltool: unsupported driver %q (use postgres, pgx, mysql, sqlite3, sqlite)", driverName)
+		return nil, fmt.Errorf(
+			"toolkit/sqltool: unsupported driver %q (use postgres, pgx, mysql, sqlite3, sqlite)",
+			driverName,
+		)
 	}
 }
 

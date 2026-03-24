@@ -34,9 +34,13 @@ func (a validatableArgs) Validate() error {
 }
 
 func TestValidatable_Implemented(t *testing.T) {
-	tool, err := NewTool("validatable_tool", "desc", func(_ context.Context, _ validatableArgs) (struct{ Ok bool }, error) {
-		return struct{ Ok bool }{Ok: true}, nil
-	})
+	tool, err := NewTool(
+		"validatable_tool",
+		"desc",
+		func(_ context.Context, _ validatableArgs) (struct{ Ok bool }, error) {
+			return struct{ Ok bool }{Ok: true}, nil
+		},
+	)
 	require.NoError(t, err)
 	// Valid: low <= high
 	var res struct{ Ok bool }
@@ -67,9 +71,13 @@ func (a *pointerValidatableArgs) Validate() error {
 }
 
 func TestValidatable_PointerReceiver(t *testing.T) {
-	tool, err := NewTool("ptr_validatable", "desc", func(_ context.Context, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
-		return struct{ Ok bool }{Ok: true}, nil
-	})
+	tool, err := NewTool(
+		"ptr_validatable",
+		"desc",
+		func(_ context.Context, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
+			return struct{ Ok bool }{Ok: true}, nil
+		},
+	)
 	require.NoError(t, err)
 	// Valid: min <= max
 	var res struct{ Ok bool }

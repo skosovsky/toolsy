@@ -1,3 +1,4 @@
+// Command toolsy-gen generates Go DTOs, handlers, and tool factories from YAML/JSON manifests.
 package main
 
 import (

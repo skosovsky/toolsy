@@ -1,0 +1,26 @@
+go 1.26.1
+
+use (
+	.
+	./adapters/sandbox/docker
+	./adapters/sandbox/e2b
+	./adapters/sandbox/host
+	./adapters/sandbox/starlark
+	./adapters/sandbox/wazero
+	./agents
+	./contracts/graphql
+	./contracts/grpc
+	./contracts/openapi
+	./mcp
+	./toolkits/document
+	./toolkits/fstool
+	./toolkits/httptool
+	./toolkits/human
+	./toolkits/mail
+	./toolkits/memory
+	./toolkits/prompts
+	./toolkits/rag
+	./toolkits/sqltool
+	./toolkits/timetool
+	./toolkits/web
+)

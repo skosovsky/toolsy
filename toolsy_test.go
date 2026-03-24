@@ -29,18 +29,16 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	assert.Equal(t, "progress", EventProgress)
 	assert.Equal(t, "result", EventResult)
 	c := Chunk{
-		CallID:   "id1",
-		ToolName: "t1",
 		Event:    EventResult,
-		Data:     []byte("ok"),
 		IsError:  false,
 		Metadata: map[string]any{"percent": 50},
 	}
 	assert.Equal(t, EventResult, c.Event)
 	assert.False(t, c.IsError)
 	assert.Equal(t, 50, c.Metadata["percent"])
-	cErr := Chunk{Event: EventResult, Data: []byte("fail"), IsError: true}
+	cErr := Chunk{Data: []byte("fail"), IsError: true}
 	assert.True(t, cErr.IsError)
+	assert.Equal(t, []byte("fail"), cErr.Data)
 }
 
 // Ensure Tool interface is satisfied by a minimal impl (used in tests later).

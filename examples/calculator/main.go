@@ -12,6 +12,8 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const exampleRegistryTimeout = 5 * time.Second
+
 func main() {
 	type CalcArgs struct {
 		A int `json:"a"`
@@ -38,7 +40,7 @@ func main() {
 		log.Fatalf("NewTool sub: %v", err)
 	}
 
-	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(5 * time.Second))
+	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(exampleRegistryTimeout))
 	reg.Register(add)
 	reg.Register(sub)
 	// Schema for LLM: pass add.Parameters() or sub.Parameters() to your provider (do not mutate)

@@ -170,6 +170,30 @@ if meta, ok := tool.(toolsy.ToolMetadata); ok {
 }
 ```
 
+## Sandboxed Code Execution
+
+For agent-written code, use the root package [`github.com/skosovsky/toolsy/exectool`](./exectool/README.md). It builds a single `exec_code` tool with a dynamic `language` enum derived from the configured sandbox.
+
+- **LLM-facing package:** `github.com/skosovsky/toolsy/exectool`
+- **Adapters:** `github.com/skosovsky/toolsy/adapters/sandbox/host`, `starlark`, `wazero`, `docker`, `e2b`
+- **Timeout model:** set only in Go with `exectool.WithTimeout(...)`; it is intentionally absent from the JSON Schema shown to the LLM.
+- **Starlark model:** expose only `starlark`; do not advertise `python` unless there is a real Python runtime behind it.
+- **Wazero model:** expose a text language such as `jq` or `rego`, not raw `wasm`.
+- **E2B model:** keep the adapter transport-agnostic and forward `RunRequest.Env` into the remote process layer.
+- **Cleanup model:** container and remote adapters use bounded cleanup timeouts so timeout paths cannot hang indefinitely.
+
+```go
+sb := starlarksandbox.New()
+tool, err := exectool.New(
+    sb,
+    exectool.WithTimeout(2*time.Second),
+    exectool.WithAllowedLanguages("starlark"),
+)
+if err != nil {
+    panic(err)
+}
+```
+
 ## Testing (how to test tools)
 
 The `testutil` package provides mocks so you can unit-test tool flows without calling a real LLM.

@@ -47,14 +47,21 @@ func TestAsTool_RoleAndVariables(t *testing.T) {
 	tool, err := AsTool(p)
 	require.NoError(t, err)
 	var result string
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(getResult); ok {
-				result = res.Instructions
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			[]byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if res, ok := c.RawData.(getResult); ok {
+						result = res.Instructions
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, "You are a doctor for Ivan.", result)
 	require.Equal(t, 1, p.callCount)
 	require.Equal(t, "doctor", p.lastRoleID)

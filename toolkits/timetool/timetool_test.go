@@ -40,14 +40,21 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 	calculateTool := tools[1]
 
 	var result calculateResult
-	require.NoError(t, calculateTool.Execute(context.Background(), []byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(calculateResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		calculateTool.Execute(
+			context.Background(),
+			[]byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(calculateResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Regexp(t, rfc3339Re, result.Result)
 	parsed, err := time.Parse(time.RFC3339, result.Result)
 	require.NoError(t, err)
@@ -61,7 +68,11 @@ func TestTimeCalculate_InvalidBaseDate_ClientError(t *testing.T) {
 	require.NoError(t, err)
 	calculateTool := tools[1]
 
-	err = calculateTool.Execute(context.Background(), []byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`), func(toolsy.Chunk) error { return nil })
+	err = calculateTool.Execute(
+		context.Background(),
+		[]byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "invalid base_date")
@@ -72,7 +83,11 @@ func TestTimeCalculate_EmptyBaseDate_ClientError(t *testing.T) {
 	require.NoError(t, err)
 	calculateTool := tools[1]
 
-	err = calculateTool.Execute(context.Background(), []byte(`{"add_days":0,"add_hours":0}`), func(toolsy.Chunk) error { return nil })
+	err = calculateTool.Execute(
+		context.Background(),
+		[]byte(`{"add_days":0,"add_hours":0}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "base_date")
@@ -89,14 +104,21 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 	// 2026-03-08 02:00 EST -> add 1 day -> 2026-03-09 (DST starts March 8 2026 in US)
 	base := "2026-03-08T07:00:00Z" // 02:00 EST
 	var result calculateResult
-	require.NoError(t, calculateTool.Execute(context.Background(), []byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(calculateResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		calculateTool.Execute(
+			context.Background(),
+			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(calculateResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	parsed, err := time.Parse(time.RFC3339, result.Result)
 	require.NoError(t, err)
 	require.Equal(t, 9, parsed.Day())
@@ -114,14 +136,21 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 	// 2026-11-01 00:30 EDT (UTC 04:30) -> add 1 calendar day in NY -> 2026-11-02 00:30 EST (wall clock)
 	base := "2026-11-01T04:30:00Z"
 	var result calculateResult
-	require.NoError(t, calculateTool.Execute(context.Background(), []byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(calculateResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		calculateTool.Execute(
+			context.Background(),
+			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(calculateResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	parsed, err := time.Parse(time.RFC3339, result.Result)
 	require.NoError(t, err)
 	require.Equal(t, 2, parsed.Day())
@@ -143,14 +172,21 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 
 	base := "2026-03-08T07:00:00Z" // 02:00 EST
 	var result calculateResult
-	require.NoError(t, calculateTool.Execute(context.Background(), []byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(calculateResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		calculateTool.Execute(
+			context.Background(),
+			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(calculateResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	parsed, err := time.Parse(time.RFC3339, result.Result)
 	require.NoError(t, err)
 	parsedNY := parsed.In(loc)

@@ -12,24 +12,30 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const exampleRegistryTimeout = 5 * time.Second
+
 func main() {
 	type QueryArgs struct {
 		Limit int `json:"limit" jsonschema:"Max results"`
 	}
-	tool, err := toolsy.NewStreamTool("stream_numbers", "Stream numbers 1..N", func(_ context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
-		for i := 1; i <= q.Limit; i++ {
-			chunk, _ := json.Marshal(map[string]int{"n": i})
-			if err := yield(toolsy.Chunk{Data: chunk}); err != nil {
-				return err // e.g. ErrStreamAborted if client closed
+	tool, err := toolsy.NewStreamTool(
+		"stream_numbers",
+		"Stream numbers 1..N",
+		func(_ context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
+			for i := 1; i <= q.Limit; i++ {
+				chunk, _ := json.Marshal(map[string]int{"n": i})
+				if err := yield(toolsy.Chunk{Data: chunk}); err != nil {
+					return err // e.g. ErrStreamAborted if client closed
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 	if err != nil {
 		log.Fatalf("NewStreamTool: %v", err)
 	}
 
-	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(5 * time.Second))
+	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(exampleRegistryTimeout))
 	reg.Register(tool)
 
 	call := toolsy.ToolCall{ID: "1", ToolName: "stream_numbers", Args: []byte(`{"limit": 3}`)}

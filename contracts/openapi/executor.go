@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,69 +17,46 @@ import (
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 
 // execute runs the HTTP request for one operation: path params in path, query params in query string, body params in body only.
-func execute(ctx context.Context, method, pathTemplate string, pathParamNames, queryParamNames []string, bodyParamNames []string, argsJSON []byte, opts *Options, yield func(toolsy.Chunk) error) error {
+func execute(
+	ctx context.Context,
+	method, pathTemplate string,
+	pathParamNames, queryParamNames []string,
+	bodyParamNames []string,
+	argsJSON []byte,
+	opts *Options,
+	yield func(toolsy.Chunk) error,
+) error {
 	client := opts.httpClient()
 	baseURL := strings.TrimSuffix(opts.BaseURL, "/")
 	if baseURL == "" {
-		return fmt.Errorf("openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)")
+		return errors.New("openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)")
 	}
 
-	var args map[string]any
-	if err := json.Unmarshal(argsJSON, &args); err != nil {
-		return fmt.Errorf("openapi: invalid args JSON: %w", err)
-	}
-
-	pathParamsSet := make(map[string]bool)
-	for _, p := range pathParamNames {
-		pathParamsSet[p] = true
-	}
-	queryParamsSet := make(map[string]bool)
-	for _, p := range queryParamNames {
-		queryParamsSet[p] = true
-	}
-
-	path := pathTemplate
-	for k, v := range args {
-		if !pathParamsSet[k] {
-			continue
-		}
-		placeholder := "{" + k + "}"
-		if strings.Contains(path, placeholder) {
-			path = strings.ReplaceAll(path, placeholder, url.PathEscape(fmt.Sprint(v)))
-		}
-	}
-
-	u, err := url.Parse(baseURL)
+	args, err := parseArgsJSON(argsJSON)
 	if err != nil {
-		return fmt.Errorf("openapi: base URL: %w", err)
+		return err
 	}
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + strings.TrimPrefix(path, "/")
 
-	q := u.Query()
-	for k, v := range args {
-		if pathParamsSet[k] || !queryParamsSet[k] {
-			continue
-		}
-		q.Set(k, fmt.Sprint(v))
+	pathParamsSet := paramNameSet(pathParamNames)
+	queryParamsSet := paramNameSet(queryParamNames)
+
+	substitutedPath := substitutePathParams(pathTemplate, args, pathParamsSet)
+	u, err := buildRequestURL(baseURL, substitutedPath, args, pathParamsSet, queryParamsSet)
+	if err != nil {
+		return err
 	}
-	u.RawQuery = q.Encode()
 
 	var body io.Reader
 	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
+		b, marshalErr := marshalRequestBodyJSON(bodyParamNames, args)
+		if marshalErr != nil {
+			return marshalErr
+		}
 		if len(bodyParamNames) > 0 {
-			bodyObj := make(map[string]any)
-			for _, k := range bodyParamNames {
-				if v, ok := args[k]; ok {
-					bodyObj[k] = v
-				}
-			}
-			bodyBytes, err := json.Marshal(bodyObj)
-			if err != nil {
-				return fmt.Errorf("openapi: marshal body: %w", err)
-			}
-			body = bytes.NewReader(bodyBytes)
+			body = bytes.NewReader(b)
 		}
 	}
+
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return fmt.Errorf("openapi: request: %w", err)
@@ -110,4 +88,73 @@ func execute(ctx context.Context, method, pathTemplate string, pathParamNames, q
 	}
 
 	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data})
+}
+
+func parseArgsJSON(argsJSON []byte) (map[string]any, error) {
+	var args map[string]any
+	if err := json.Unmarshal(argsJSON, &args); err != nil {
+		return nil, fmt.Errorf("openapi: invalid args JSON: %w", err)
+	}
+	return args, nil
+}
+
+func paramNameSet(names []string) map[string]bool {
+	m := make(map[string]bool, len(names))
+	for _, p := range names {
+		m[p] = true
+	}
+	return m
+}
+
+func substitutePathParams(pathTemplate string, args map[string]any, pathParamsSet map[string]bool) string {
+	path := pathTemplate
+	for k, v := range args {
+		if !pathParamsSet[k] {
+			continue
+		}
+		placeholder := "{" + k + "}"
+		if strings.Contains(path, placeholder) {
+			path = strings.ReplaceAll(path, placeholder, url.PathEscape(fmt.Sprint(v)))
+		}
+	}
+	return path
+}
+
+func buildRequestURL(
+	baseURL, substitutedPath string,
+	args map[string]any,
+	pathParamsSet, queryParamsSet map[string]bool,
+) (*url.URL, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("openapi: base URL: %w", err)
+	}
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + strings.TrimPrefix(substitutedPath, "/")
+
+	q := u.Query()
+	for k, v := range args {
+		if pathParamsSet[k] || !queryParamsSet[k] {
+			continue
+		}
+		q.Set(k, fmt.Sprint(v))
+	}
+	u.RawQuery = q.Encode()
+	return u, nil
+}
+
+func marshalRequestBodyJSON(bodyParamNames []string, args map[string]any) ([]byte, error) {
+	if len(bodyParamNames) == 0 {
+		return nil, nil
+	}
+	bodyObj := make(map[string]any)
+	for _, k := range bodyParamNames {
+		if v, ok := args[k]; ok {
+			bodyObj[k] = v
+		}
+	}
+	bodyBytes, err := json.Marshal(bodyObj)
+	if err != nil {
+		return nil, fmt.Errorf("openapi: marshal body: %w", err)
+	}
+	return bodyBytes, nil
 }

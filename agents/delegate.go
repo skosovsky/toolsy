@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -41,10 +42,10 @@ func formatStepOutput(text string, artifacts []Artifact) string {
 // inputSchema is the JSON Schema the orchestrator must satisfy; args are sent as task input.
 func AsTool(name, description string, inputSchema []byte, client *Client) (toolsy.Tool, error) {
 	if client == nil {
-		return nil, fmt.Errorf("agents: client is nil")
+		return nil, errors.New("agents: client is nil")
 	}
 	if len(inputSchema) == 0 {
-		return nil, fmt.Errorf("agents: inputSchema must not be empty")
+		return nil, errors.New("agents: inputSchema must not be empty")
 	}
 	return toolsy.NewProxyTool(name, description, inputSchema,
 		func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {
@@ -85,10 +86,10 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 // AsBackgroundTool creates a toolsy.Tool that starts a task and returns the task_id immediately without waiting for completion.
 func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.Tool, error) {
 	if client == nil {
-		return nil, fmt.Errorf("agents: client is nil")
+		return nil, errors.New("agents: client is nil")
 	}
 	if len(schema) == 0 {
-		return nil, fmt.Errorf("agents: schema must not be empty")
+		return nil, errors.New("agents: schema must not be empty")
 	}
 	return toolsy.NewProxyTool(name, desc, schema,
 		func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {

@@ -52,7 +52,26 @@ func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 
 type asyncTool struct {
 	toolBase
+
 	opts *asyncOptions
+}
+
+const taskIDRandomBytes = 16
+
+// asyncBackgroundFromContext reads registry-injected async tracking from ctx.
+func asyncBackgroundFromContext(ctx context.Context) (func(), time.Duration) {
+	v := ctx.Value(asyncTrackerCtxKey{})
+	if v == nil {
+		return nil, 0
+	}
+	tr, ok := v.(*asyncTracker)
+	if !ok {
+		return nil, 0
+	}
+	if tr.track != nil {
+		return tr.track(), tr.effectiveTimeout
+	}
+	return nil, tr.effectiveTimeout
 }
 
 func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
@@ -74,22 +93,11 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 	if err := yield(chunk); err != nil {
 		return wrapYieldError(err)
 	}
-	var bgDone func()
-	var bgTimeout time.Duration
-	if v := ctx.Value(ctxKeyAsyncTrackerVal); v != nil {
-		if tr, ok := v.(*asyncTracker); ok {
-			if tr.track != nil {
-				bgDone = tr.track()
-			}
-			if tr.effectiveTimeout > 0 {
-				bgTimeout = tr.effectiveTimeout
-			}
-		}
-	}
+	bgDone, bgTimeout := asyncBackgroundFromContext(ctx)
 	if bgTimeout == 0 {
 		bgTimeout = t.Timeout()
 	}
-	go func() {
+	go func(parentCtx context.Context) {
 		if bgDone != nil {
 			defer bgDone()
 		}
@@ -98,12 +106,15 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 			collected = append(collected, c)
 			return nil
 		}
-		bgCtx := context.Background()
+
+		baseCtx := context.WithoutCancel(parentCtx)
+		bgCtx := baseCtx
 		if bgTimeout > 0 {
 			var cancel context.CancelFunc
 			bgCtx, cancel = context.WithTimeout(bgCtx, bgTimeout)
 			defer cancel()
 		}
+
 		var executionErr error
 		defer func() {
 			if r := recover(); r != nil {
@@ -112,17 +123,18 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 			if t.opts.onComplete != nil {
 				func() {
 					defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
-					t.opts.onComplete(context.Background(), taskID, collected, executionErr)
+					t.opts.onComplete(baseCtx, taskID, collected, executionErr)
 				}()
 			}
 		}()
+
 		executionErr = t.next.Execute(bgCtx, argsJSON, collectYield)
-	}()
+	}(ctx)
 	return nil
 }
 
 func generateTaskID() (string, error) {
-	b := make([]byte, 16)
+	b := make([]byte, taskIDRandomBytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("async: generate task_id: %w", err)
 	}

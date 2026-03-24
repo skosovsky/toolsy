@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+const (
+	graphqlTypeKindNonNull = "NON_NULL"
+	graphqlTypeKindList    = "LIST"
+)
+
 // graphQLTypeRef matches GraphQL introspection __Type for type references (supports arbitrary depth via OfType).
 type graphQLTypeRef struct {
 	Name   string          `json:"name"`
@@ -26,7 +31,7 @@ func argsToJSONSchema(args []ArgSpec) ([]byte, error) {
 			continue
 		}
 		props[a.Name] = graphQLTypeToJSONSchemaInner(&a.Type)
-		if a.Type.Kind == "NON_NULL" {
+		if a.Type.Kind == graphqlTypeKindNonNull {
 			required = append(required, a.Name)
 		}
 	}
@@ -41,10 +46,10 @@ func graphQLTypeToJSONSchemaInner(t *graphQLTypeRef) map[string]any {
 	if t == nil {
 		return map[string]any{"type": "string"}
 	}
-	if t.Kind == "NON_NULL" && t.OfType != nil {
+	if t.Kind == graphqlTypeKindNonNull && t.OfType != nil {
 		return graphQLTypeToJSONSchemaInner(t.OfType)
 	}
-	if t.Kind == "LIST" && t.OfType != nil {
+	if t.Kind == graphqlTypeKindList && t.OfType != nil {
 		return map[string]any{"type": "array", "items": graphQLTypeToJSONSchemaInner(t.OfType)}
 	}
 	// Scalar or named type
@@ -95,10 +100,10 @@ func graphQLTypeString(t *graphQLTypeRef) string {
 	if t == nil {
 		return "String"
 	}
-	if t.Kind == "NON_NULL" && t.OfType != nil {
+	if t.Kind == graphqlTypeKindNonNull && t.OfType != nil {
 		return graphQLTypeString(t.OfType) + "!"
 	}
-	if t.Kind == "LIST" && t.OfType != nil {
+	if t.Kind == graphqlTypeKindList && t.OfType != nil {
 		return "[" + graphQLTypeString(t.OfType) + "]"
 	}
 	return t.Name

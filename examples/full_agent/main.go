@@ -12,8 +12,33 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const (
+	exampleDefaultTimeout = 5 * time.Second
+	exampleMaxConcurrency = 4
+)
+
 func main() {
-	// Define tools
+	add, mul, err := buildTools()
+	if err != nil {
+		log.Fatalf("build tools: %v", err)
+	}
+	reg := toolsy.NewRegistry(
+		toolsy.WithDefaultTimeout(exampleDefaultTimeout),
+		toolsy.WithMaxConcurrency(exampleMaxConcurrency),
+	)
+	reg.Use(toolsy.WithLogging(slog.Default())) // middleware: log every tool start/end
+	reg.Register(add)
+	reg.Register(mul)
+
+	if err := runBatchStream(reg); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "batch error: %v\n", err)
+		if toolsy.IsClientError(err) {
+			_, _ = fmt.Fprintln(os.Stderr, "  -> client error, LLM may retry with fixed input")
+		}
+	}
+}
+
+func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 	type AddIn struct {
 		A int `json:"a"`
 		B int `json:"b"`
@@ -25,7 +50,7 @@ func main() {
 		return AddOut{Sum: in.A + in.B}, nil
 	})
 	if err != nil {
-		log.Fatalf("NewTool add: %v", err)
+		return nil, nil, err
 	}
 
 	type MulIn struct {
@@ -39,25 +64,25 @@ func main() {
 		return MulOut{Product: in.A * in.B}, nil
 	})
 	if err != nil {
-		log.Fatalf("NewTool mul: %v", err)
+		return nil, nil, err
 	}
+	return add, mul, nil
+}
 
-	reg := toolsy.NewRegistry(
-		toolsy.WithDefaultTimeout(5*time.Second),
-		toolsy.WithMaxConcurrency(4),
-	)
-	reg.Use(toolsy.WithLogging(slog.Default())) // middleware: log every tool start/end
-	reg.Register(add)
-	reg.Register(mul)
-
-	// ExecuteBatchStream: run multiple calls in parallel; yield receives Chunk (CallID, ToolName, RawData for NewTool).
+func runBatchStream(reg *toolsy.Registry) error {
+	type AddOut struct {
+		Sum int `json:"sum"`
+	}
+	type MulOut struct {
+		Product int `json:"product"`
+	}
 	calls := []toolsy.ToolCall{
 		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
 		{ID: "2", ToolName: "mul", Args: []byte(`{"a": 3, "b": 4}`)},
 		{ID: "3", ToolName: "add", Args: []byte(`{"a": 10, "b": 20}`)},
 	}
 	var idx int
-	err = reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {
+	return reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {
 		if c.IsError {
 			log.Printf("tool error [%s]: %s", c.ToolName, c.Data)
 			return nil
@@ -67,19 +92,21 @@ func main() {
 		}
 		switch c.ToolName {
 		case "add":
-			out := c.RawData.(AddOut)
+			out, ok := c.RawData.(AddOut)
+			if !ok {
+				log.Printf("unexpected RawData type for add: %T", c.RawData)
+				break
+			}
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", idx, out.Sum)
 		case "mul":
-			out := c.RawData.(MulOut)
+			out, ok := c.RawData.(MulOut)
+			if !ok {
+				log.Printf("unexpected RawData type for mul: %T", c.RawData)
+				break
+			}
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] mul: product=%d\n", idx, out.Product)
 		}
 		idx++
 		return nil
 	})
-	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "batch error: %v\n", err)
-		if toolsy.IsClientError(err) {
-			_, _ = fmt.Fprintln(os.Stderr, "  -> client error, LLM may retry with fixed input")
-		}
-	}
 }

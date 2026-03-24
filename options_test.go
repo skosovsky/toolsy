@@ -92,7 +92,6 @@ func TestWithDangerous(t *testing.T) {
 	}
 }
 
-
 func TestWithReadOnly(t *testing.T) {
 	type A struct{}
 	type R struct{}

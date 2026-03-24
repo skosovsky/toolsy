@@ -69,14 +69,17 @@ func TestWebScrape_Success(t *testing.T) {
 	scrapeTool := tools[1]
 
 	var result scrapeResult
-	require.NoError(t, scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(scrapeResult); ok {
-				result = r
+	require.NoError(
+		t,
+		scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(scrapeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Markdown, "Hello")
 	require.Contains(t, result.Markdown, "world")
 }
@@ -94,14 +97,17 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 	scrapeTool := tools[1]
 
 	var result scrapeResult
-	require.NoError(t, scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(scrapeResult); ok {
-				result = r
+	require.NoError(
+		t,
+		scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(scrapeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Markdown, "Content")
 	require.NotContains(t, result.Markdown, "alert")
 	require.NotContains(t, result.Markdown, ".x{}")
@@ -112,7 +118,11 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 	tools, err := AsTools(provider)
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{"url":"http://127.0.0.1:9999/"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		[]byte(`{"url":"http://127.0.0.1:9999/"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "private")
@@ -123,14 +133,23 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 	tools, err := AsTools(provider)
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{"url":"http://0.0.0.0:80/"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		[]byte(`{"url":"http://0.0.0.0:80/"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
 
 func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
 	// Subdomain of a blocked domain is also blocked (exact match or host ends with .blocked)
-	_, err := validateScrapeURL("http://api.evil.example.com/", true, []string{"evil.example.com"})
+	_, err := validateScrapeURL(
+		context.Background(),
+		"http://api.evil.example.com/",
+		true,
+		[]string{"evil.example.com"},
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "blocked")
@@ -146,7 +165,11 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		[]byte(`{"url":"`+server.URL+`"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	// Redirect to loopback is rejected by CheckRedirect (ClientError) or connection fails; scrape must not succeed
 }
@@ -167,14 +190,17 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 	require.NoError(t, err)
 
 	var result scrapeResult
-	require.NoError(t, tools[1].Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(scrapeResult); ok {
-				result = r
+	require.NoError(
+		t,
+		tools[1].Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(scrapeResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.True(t, customCalled)
 	require.Equal(t, "custom output", result.Markdown)
 }
@@ -213,7 +239,11 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 		WithBlockedDomains([]string{"blocked-internal.example"}))
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		[]byte(`{"url":"`+server.URL+`"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "blocked")

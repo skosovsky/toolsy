@@ -3,6 +3,7 @@ package toolsygen
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,16 +12,121 @@ import (
 	"testing"
 )
 
+func testGen() *generator {
+	return &generator{fs: newDefaultOSFacade()}
+}
+
+// memDirEnt is a minimal [fs.DirEntry] for testing walkDir without a real directory tree.
+type memDirEnt struct {
+	name  string
+	isDir bool
+}
+
+func (e memDirEnt) Name() string { return e.name }
+
+func (e memDirEnt) IsDir() bool { return e.isDir }
+
+func (e memDirEnt) Type() fs.FileMode {
+	if e.isDir {
+		return fs.ModeDir
+	}
+	return 0
+}
+
+func (e memDirEnt) Info() (fs.FileInfo, error) { return nil, fs.ErrNotExist }
+
+func TestWalkDirUsesInjectedReadDir(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "virt")
+	sub := filepath.Join(root, "sub")
+	tree := map[string][]os.DirEntry{
+		root: {
+			memDirEnt{name: "sub", isDir: true},
+			memDirEnt{name: "m.yaml", isDir: false},
+		},
+		sub: {
+			memDirEnt{name: "n.yaml", isDir: false},
+		},
+	}
+	facade := newDefaultOSFacade()
+	facade.readDir = func(name string) ([]os.DirEntry, error) {
+		ents, ok := tree[name]
+		if !ok {
+			return nil, &os.PathError{Op: "readdir", Path: name, Err: os.ErrNotExist}
+		}
+		return ents, nil
+	}
+	g := &generator{fs: facade}
+
+	var walked []string
+	err := g.walkDir(context.Background(), root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !d.IsDir() {
+			walked = append(walked, path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walkDir: %v", err)
+	}
+	sort.Strings(walked)
+	want := []string{
+		filepath.Join(root, "m.yaml"),
+		filepath.Join(root, "sub", "n.yaml"),
+	}
+	if len(walked) != len(want) {
+		t.Fatalf("got %v, want %v", walked, want)
+	}
+	for i := range want {
+		if walked[i] != want[i] {
+			t.Fatalf("walked[%d] = %q, want %q", i, walked[i], want[i])
+		}
+	}
+}
+
+func TestGenerateWithFSParityWithGenerate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	dir := t.TempDir()
+	cfg := Config{Inputs: []string{dir}}
+	r1, err1 := Generate(ctx, cfg)
+	r2, err2 := generateWithFS(ctx, cfg, newDefaultOSFacade())
+	if err1 != nil || err2 != nil {
+		t.Fatalf("errors: %v, %v", err1, err2)
+	}
+	if len(r1.Files) != len(r2.Files) {
+		t.Fatalf("result mismatch: %+v vs %+v", r1, r2)
+	}
+}
+
 func TestDiscoverManifestsSortedAndSkipsHidden(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "b.yaml"), "name: b\ndescription: b\nparameters:\n  type: object\n  properties: {}\n")
-	writeFile(t, filepath.Join(root, "nested", "a.json"), `{"name":"a","description":"a","parameters":{"type":"object","properties":{}}}`)
-	writeFile(t, filepath.Join(root, ".git", "ignored.yaml"), "name: ignored\ndescription: ignored\nparameters:\n  type: object\n  properties: {}\n")
-	writeFile(t, filepath.Join(root, "vendor", "ignored.yml"), "name: ignored\ndescription: ignored\nparameters:\n  type: object\n  properties: {}\n")
+	writeFile(
+		t,
+		filepath.Join(root, "b.yaml"),
+		"name: b\ndescription: b\nparameters:\n  type: object\n  properties: {}\n",
+	)
+	writeFile(
+		t,
+		filepath.Join(root, "nested", "a.json"),
+		`{"name":"a","description":"a","parameters":{"type":"object","properties":{}}}`,
+	)
+	writeFile(
+		t,
+		filepath.Join(root, ".git", "ignored.yaml"),
+		"name: ignored\ndescription: ignored\nparameters:\n  type: object\n  properties: {}\n",
+	)
+	writeFile(
+		t,
+		filepath.Join(root, "vendor", "ignored.yml"),
+		"name: ignored\ndescription: ignored\nparameters:\n  type: object\n  properties: {}\n",
+	)
 
-	paths, err := discoverManifests(context.Background(), []string{root})
+	paths, err := testGen().discoverManifests(context.Background(), []string{root})
 	if err != nil {
 		t.Fatalf("discover manifests: %v", err)
 	}
@@ -47,7 +153,7 @@ func TestInferPackageNameMixedPackages(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "a.go"), "package alpha\n")
 	writeFile(t, filepath.Join(dir, "b.go"), "package beta\n")
 
-	_, err := inferPackageName(dir)
+	_, err := testGen().inferPackageName(dir)
 	if err == nil || !strings.Contains(err.Error(), "mixed package names") {
 		t.Fatalf("inferPackageName error = %v, want mixed package names", err)
 	}
@@ -122,7 +228,6 @@ parameters:
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -130,7 +235,7 @@ parameters:
 			path := filepath.Join(dir, "tool.yaml")
 			writeFile(t, path, strings.TrimSpace(tt.manifest))
 
-			_, err := loadManifest(path)
+			_, err := testGen().loadManifest(path)
 			if err == nil || !strings.Contains(err.Error(), tt.wantSubstr) {
 				t.Fatalf("loadManifest error = %v, want substring %q", err, tt.wantSubstr)
 			}
@@ -142,7 +247,7 @@ func TestRenderManifestImportsAndPackageFallback(t *testing.T) {
 	t.Parallel()
 
 	dir := filepath.Join(t.TempDir(), "apptools")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "book_appointment.yaml")
@@ -163,7 +268,7 @@ parameters:
   required: ["doctor_id", "slot_time"]
 `)
 
-	m, err := loadManifest(path)
+	m, err := testGen().loadManifest(path)
 	if err != nil {
 		t.Fatalf("loadManifest: %v", err)
 	}
@@ -198,14 +303,14 @@ func TestValidateManifestSetDetectsCollisions(t *testing.T) {
 
 	dirOne := filepath.Join(t.TempDir(), "one")
 	dirTwo := filepath.Join(t.TempDir(), "two")
-	if err := os.MkdirAll(dirOne, 0o755); err != nil {
+	if err := os.MkdirAll(dirOne, 0o750); err != nil {
 		t.Fatalf("mkdir one: %v", err)
 	}
-	if err := os.MkdirAll(dirTwo, 0o755); err != nil {
+	if err := os.MkdirAll(dirTwo, 0o750); err != nil {
 		t.Fatalf("mkdir two: %v", err)
 	}
 
-	errs := validateManifestSet([]*manifest{
+	errs := testGen().validateManifestSet([]*manifest{
 		{
 			Path:          filepath.Join(dirOne, "tool.yaml"),
 			Dir:           dirOne,
@@ -235,7 +340,7 @@ func TestGenerateDetectsExistingSymbolCollision(t *testing.T) {
 	t.Parallel()
 
 	dir := filepath.Join(t.TempDir(), "apptools")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 	writeFile(t, filepath.Join(dir, "existing.go"), "package apptools\n\ntype BookAppointmentInput struct{}\n")
@@ -266,13 +371,10 @@ func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
 	secondPath := filepath.Join(dir, "second_gen.go")
 	writeFile(t, firstPath, "original")
 
-	originalRename := osRename
-	t.Cleanup(func() {
-		osRename = originalRename
-	})
-
+	fs := newDefaultOSFacade()
+	originalRename := fs.rename
 	renameCalls := 0
-	osRename = func(oldPath, newPath string) error {
+	fs.rename = func(oldPath, newPath string) error {
 		renameCalls++
 		if renameCalls == 3 {
 			return errors.New("forced rename failure")
@@ -280,7 +382,8 @@ func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
 		return originalRename(oldPath, newPath)
 	}
 
-	err := commitFilesAtomically(context.Background(), []generatedFile{
+	g := &generator{fs: fs}
+	err := g.commitFilesAtomically(context.Background(), []generatedFile{
 		{Path: firstPath, Content: []byte("updated")},
 		{Path: secondPath, Content: []byte("created")},
 	}, 0o644)
@@ -288,6 +391,7 @@ func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
 		t.Fatalf("commitFilesAtomically error = %v, want forced rename failure", err)
 	}
 
+	// #nosec G304 -- firstPath is created inside this test workspace.
 	data, readErr := os.ReadFile(firstPath)
 	if readErr != nil {
 		t.Fatalf("read restored first file: %v", readErr)
@@ -309,14 +413,18 @@ func TestToolsyGenEndToEnd(t *testing.T) {
 		t.Fatalf("symlink repo root: %v", err)
 	}
 
-	writeFile(t, filepath.Join(moduleDir, "go.mod"), "module fixture\n\ngo 1.26.0\n\nrequire github.com/skosovsky/toolsy v0.0.0\n\nreplace github.com/skosovsky/toolsy => "+repoLink+"\n")
+	writeFile(
+		t,
+		filepath.Join(moduleDir, "go.mod"),
+		"module fixture\n\ngo 1.26.1\n\nrequire github.com/skosovsky/toolsy v0.0.0\n\nreplace github.com/skosovsky/toolsy => "+repoLink+"\n",
+	)
 
 	appDir := filepath.Join(moduleDir, "apptools")
 	streamDir := filepath.Join(moduleDir, "streamtools")
-	if err := os.MkdirAll(appDir, 0o755); err != nil {
+	if err := os.MkdirAll(appDir, 0o750); err != nil {
 		t.Fatalf("mkdir apptools: %v", err)
 	}
-	if err := os.MkdirAll(streamDir, 0o755); err != nil {
+	if err := os.MkdirAll(streamDir, 0o750); err != nil {
 		t.Fatalf("mkdir streamtools: %v", err)
 	}
 
@@ -524,10 +632,10 @@ func TestGeneratedStreamTool(t *testing.T) {
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("mkdir %s: %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(strings.TrimLeft(content, "\n")), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(strings.TrimLeft(content, "\n")), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }
@@ -554,6 +662,7 @@ func findRepoRoot(t *testing.T) string {
 func runGo(t *testing.T, dir, cache string, args ...string) {
 	t.Helper()
 
+	// #nosec G204 -- test helper runs controlled go subcommands.
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOCACHE="+cache, "GOSUMDB=off")

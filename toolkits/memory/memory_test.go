@@ -25,7 +25,14 @@ func TestScratchpad_PinRead(t *testing.T) {
 	// Pin a fact
 	pinTool, _ := reg.GetTool("memory_pin_fact")
 	require.NotNil(t, pinTool)
-	require.NoError(t, pinTool.Execute(context.Background(), []byte(`{"key":"allergy","value":"penicillin"}`), func(_ toolsy.Chunk) error { return nil }))
+	require.NoError(
+		t,
+		pinTool.Execute(
+			context.Background(),
+			[]byte(`{"key":"allergy","value":"penicillin"}`),
+			func(_ toolsy.Chunk) error { return nil },
+		),
+	)
 
 	// Read and verify
 	readTool, _ := reg.GetTool("memory_read_all")
@@ -55,7 +62,11 @@ func TestScratchpad_PinUnpinRead(t *testing.T) {
 	readTool, _ := reg.GetTool("memory_read_all")
 	unpinTool, _ := reg.GetTool("memory_unpin_fact")
 
-	_ = pinTool.Execute(context.Background(), []byte(`{"key":"x","value":"y"}`), func(toolsy.Chunk) error { return nil })
+	_ = pinTool.Execute(
+		context.Background(),
+		[]byte(`{"key":"x","value":"y"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	_ = unpinTool.Execute(context.Background(), []byte(`{"key":"x"}`), func(toolsy.Chunk) error { return nil })
 
 	var result string
@@ -77,14 +88,17 @@ func TestScratchpad_UnpinNotFound(t *testing.T) {
 	unpinTool := tools[2]
 
 	var status string
-	require.NoError(t, unpinTool.Execute(context.Background(), []byte(`{"key":"nonexistent"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(statusResult); ok {
-				status = r.Status
+	require.NoError(
+		t,
+		unpinTool.Execute(context.Background(), []byte(`{"key":"nonexistent"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(statusResult); ok {
+					status = r.Status
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Equal(t, "Ignored: key not found", status)
 }
 

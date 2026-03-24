@@ -15,14 +15,18 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	type Args struct {
 		N int `json:"n"`
 	}
-	tool, err := NewStreamTool("stream", "Stream N chunks", func(_ context.Context, a Args, yield func(Chunk) error) error {
-		for i := 0; i < a.N; i++ {
-			if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
-				return err
+	tool, err := NewStreamTool(
+		"stream",
+		"Stream N chunks",
+		func(_ context.Context, a Args, yield func(Chunk) error) error {
+			for i := range a.N {
+				if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
+					return err
+				}
 			}
-		}
-		return nil
-	})
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	var chunks [][]byte
 	err = tool.Execute(context.Background(), []byte(`{"n": 3}`), func(c Chunk) error {
@@ -41,10 +45,14 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 		X int `json:"x"`
 	}
 	yieldErr := errors.New("client closed")
-	tool, err := NewStreamTool("abort", "Abort on yield", func(_ context.Context, _ Args, yield func(Chunk) error) error {
-		_ = yield(Chunk{Data: []byte("first")})
-		return yield(Chunk{Data: []byte("second")}) // will return yieldErr from caller
-	})
+	tool, err := NewStreamTool(
+		"abort",
+		"Abort on yield",
+		func(_ context.Context, _ Args, yield func(Chunk) error) error {
+			_ = yield(Chunk{Data: []byte("first")})
+			return yield(Chunk{Data: []byte("second")}) // will return yieldErr from caller
+		},
+	)
 	require.NoError(t, err)
 	var received [][]byte
 	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(c Chunk) error {
@@ -163,9 +171,9 @@ func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
 	require.NoError(t, err)
 	reg := NewRegistry()
 	reg.Register(tool)
-	const N = 20
-	calls := make([]ToolCall, N)
-	for i := range N {
+	const n = 20
+	calls := make([]ToolCall, n)
+	for i := range n {
 		calls[i] = ToolCall{ID: fmt.Sprintf("id-%d", i), ToolName: "inc", Args: []byte(`{"x": 0}`)}
 	}
 	var mu sync.Mutex
@@ -177,7 +185,7 @@ func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Equal(t, N, yieldCalls)
+	assert.Equal(t, n, yieldCalls)
 }
 
 // TestRegistry_ExecuteBatchStream_YieldError verifies that when the batch yield callback returns

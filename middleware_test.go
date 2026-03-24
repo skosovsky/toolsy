@@ -77,10 +77,14 @@ func TestRegistry_Use(t *testing.T) {
 	reg.Use(WithRecovery(), WithLogging(slog.Default()))
 	args, _ := json.Marshal(A{X: 2})
 	var r R
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)}, func(c Chunk) error {
-		r = c.RawData.(R)
-		return nil
-	})
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)},
+		func(c Chunk) error {
+			r = c.RawData.(R)
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, 3, r.Y)
 }
@@ -105,17 +109,20 @@ func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
 	reg.Use(WithRecovery())
 	reg.Use(WithLogging(logger))
 	var r R
-	err = reg.Execute(context.Background(), ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)}, func(c Chunk) error {
-		r = c.RawData.(R)
-		return nil
-	})
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)},
+		func(c Chunk) error {
+			r = c.RawData.(R)
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	logStr := buf.String()
 	// With double-wrap we would see "tool start" twice (Logging(Logging(tool))). With rewrap-from-raw we see once.
 	require.Equal(t, 1, strings.Count(logStr, "tool start"))
 	assert.Equal(t, 6, r.Y)
 }
-
 
 type localMetaTool struct{ minTool }
 
@@ -126,7 +133,6 @@ func (m *localMetaTool) IsDangerous() bool          { return true }
 func (m *localMetaTool) IsReadOnly() bool           { return true }
 func (m *localMetaTool) RequiresConfirmation() bool { return true }
 func (m *localMetaTool) Sensitivity() string        { return "critical" }
-
 
 func TestToolBase_SecurityDelegation(t *testing.T) {
 	wrapped := &toolBase{next: &localMetaTool{minTool{name: "meta", params: map[string]any{}}}}

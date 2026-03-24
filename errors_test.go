@@ -42,8 +42,8 @@ func TestErrorsIs_As(t *testing.T) {
 	}{
 		{"ClientError direct", &ClientError{Reason: "x"}, ErrValidation, false, true, false},
 		{"SystemError direct", &SystemError{Err: ErrTimeout}, ErrTimeout, true, false, true},
-		{"wrapped ClientError", wrapErr{err: &ClientError{Reason: "y"}}, nil, false, true, false},
-		{"wrapped SystemError", wrapErr{err: &SystemError{Err: ErrTimeout}}, ErrTimeout, true, false, true},
+		{"wrapped ClientError", wrapError{err: &ClientError{Reason: "y"}}, nil, false, true, false},
+		{"wrapped SystemError", wrapError{err: &SystemError{Err: ErrTimeout}}, ErrTimeout, true, false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -63,24 +63,24 @@ func TestIsClientError(t *testing.T) {
 	require.True(t, IsClientError(&ClientError{Reason: "x"}))
 	require.False(t, IsClientError(&SystemError{Err: errors.New("x")}))
 	require.False(t, IsClientError(ErrToolNotFound))
-	require.True(t, IsClientError(wrapErr{err: &ClientError{Reason: "y"}}))
+	require.True(t, IsClientError(wrapError{err: &ClientError{Reason: "y"}}))
 }
 
 func TestIsSystemError(t *testing.T) {
 	require.True(t, IsSystemError(&SystemError{Err: errors.New("x")}))
-	require.True(t, IsSystemError(wrapErr{err: &SystemError{Err: ErrTimeout}}))
+	require.True(t, IsSystemError(wrapError{err: &SystemError{Err: ErrTimeout}}))
 	require.False(t, IsSystemError(&ClientError{Reason: "x"}))
 	require.False(t, IsSystemError(ErrToolNotFound))
 }
 
-type wrapErr struct {
+type wrapError struct {
 	err error
 }
 
-func (e wrapErr) Error() string {
+func (e wrapError) Error() string {
 	if e.err == nil {
 		return ""
 	}
 	return "wrap: " + e.err.Error()
 }
-func (e wrapErr) Unwrap() error { return e.err }
+func (e wrapError) Unwrap() error { return e.err }
