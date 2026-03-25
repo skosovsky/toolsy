@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,25 +57,36 @@ type asyncTool struct {
 	opts *asyncOptions
 }
 
-const taskIDRandomBytes = 16
-
-// asyncBackgroundFromContext reads registry-injected async tracking from ctx.
-func asyncBackgroundFromContext(ctx context.Context) (func(), time.Duration) {
-	v := ctx.Value(asyncTrackerCtxKey{})
-	if v == nil {
-		return nil, 0
-	}
-	tr, ok := v.(*asyncTracker)
-	if !ok {
-		return nil, 0
-	}
-	if tr.track != nil {
-		return tr.track(), tr.effectiveTimeout
-	}
-	return nil, tr.effectiveTimeout
+type asyncRuntime struct {
+	registry          *Registry
+	effectiveTimeout  time.Duration
+	backgroundStarted atomic.Bool
 }
 
-func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
+func newAsyncRuntime(registry *Registry, effectiveTimeout time.Duration) *asyncRuntime {
+	return &asyncRuntime{
+		registry:          registry,
+		effectiveTimeout:  effectiveTimeout,
+		backgroundStarted: atomic.Bool{},
+	}
+}
+
+const taskIDRandomBytes = 16
+
+func (r *asyncRuntime) trackBackground() func() {
+	if r == nil || r.registry == nil {
+		return nil
+	}
+	r.backgroundStarted.Store(true)
+	r.registry.running.Add(1)
+	return func() {
+		r.registry.running.Done()
+		r.registry.releaseSemaphore()
+		r.registry.running.Done()
+	}
+}
+
+func (t *asyncTool) Execute(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -90,10 +102,19 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err := yield(chunk); err != nil {
+	normalized, err := normalizeChunk(chunk)
+	if err != nil {
+		return err
+	}
+	if err := yield(normalized); err != nil {
 		return wrapYieldError(err)
 	}
-	bgDone, bgTimeout := asyncBackgroundFromContext(ctx)
+	var bgDone func()
+	bgTimeout := time.Duration(0)
+	if run.async != nil {
+		bgDone = run.async.trackBackground()
+		bgTimeout = run.async.effectiveTimeout
+	}
 	if bgTimeout == 0 {
 		bgTimeout = t.Timeout()
 	}
@@ -114,6 +135,8 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 			bgCtx, cancel = context.WithTimeout(bgCtx, bgTimeout)
 			defer cancel()
 		}
+		bgRun := run
+		bgRun.async = nil
 
 		var executionErr error
 		defer func() {
@@ -128,7 +151,7 @@ func (t *asyncTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chu
 			}
 		}()
 
-		executionErr = t.next.Execute(bgCtx, argsJSON, collectYield)
+		executionErr = t.next.Execute(bgCtx, bgRun, argsJSON, collectYield)
 	}(ctx)
 	return nil
 }

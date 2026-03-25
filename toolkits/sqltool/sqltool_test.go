@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/sqlutil"
 )
 
 func openSQLite(t *testing.T) *sql.DB {
@@ -30,14 +31,17 @@ func TestInspectSchema_Success(t *testing.T) {
 	inspectTool := tools[0]
 
 	var result inspectResult
-	require.NoError(t, inspectTool.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(inspectResult); ok {
-				result = r
+	require.NoError(
+		t,
+		inspectTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(inspectResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Schema, "users")
 	require.Contains(t, result.Schema, "id")
 	require.Contains(t, result.Schema, "name")
@@ -55,14 +59,17 @@ func TestInspectSchema_AllowedTables(t *testing.T) {
 	inspectTool := tools[0]
 
 	var result inspectResult
-	require.NoError(t, inspectTool.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(inspectResult); ok {
-				result = r
+	require.NoError(
+		t,
+		inspectTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(inspectResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Contains(t, result.Schema, "## Table: a")
 	require.NotContains(t, result.Schema, "## Table: b")
 }
@@ -81,6 +88,7 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 		t,
 		inspectTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"table_names":["users","nonexistent_table_xyz"]}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -113,6 +121,7 @@ func TestExecuteRead_Success(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"query":"SELECT id, name FROM t"}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -144,14 +153,19 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 	var result executeResult
 	require.NoError(
 		t,
-		executeTool.Execute(context.Background(), []byte(`{"query":"SELECT id FROM t"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(executeResult); ok {
-					result = r
+		executeTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"query":"SELECT id FROM t"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(executeResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Result, "[Truncated: max rows reached]")
 	require.Equal(t, 5, result.RowCount)
@@ -165,6 +179,7 @@ func TestExecuteRead_BlocksWrite(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"INSERT INTO t VALUES (1)"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -180,6 +195,7 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"SELECT 1; DELETE FROM t"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -197,6 +213,7 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -220,6 +237,7 @@ func TestExecuteRead_KeywordInStringAllowed(t *testing.T) {
 	var result executeResult
 	err = executeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`),
 		func(c toolsy.Chunk) error {
 			if c.RawData != nil {
@@ -245,6 +263,7 @@ func TestExecuteRead_KeywordInCommentAllowed(t *testing.T) {
 	var result executeResult
 	err = executeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"SELECT 1 AS x -- INSERT here"}`),
 		func(c toolsy.Chunk) error {
 			if c.RawData != nil {
@@ -275,6 +294,7 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"query":"SELECT id, name FROM t"}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -326,6 +346,7 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"query":"SELECT id, long_text FROM t"}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -340,4 +361,63 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 	// Cell value should be truncated to 5 chars + "..."
 	require.Contains(t, result.Result, "...")
 	require.NotContains(t, result.Result, "abcdefghijklmnop")
+}
+
+func TestValidateReadOnlyQuery_LexicalSubset(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr string
+	}{
+		{
+			name:  "simple select",
+			query: "SELECT id FROM t",
+		},
+		{
+			name:  "single quoted string escapes are ignored",
+			query: "SELECT 'O''Reilly', label FROM t WHERE label = 'INSERT'",
+		},
+		{
+			name:  "double quoted identifiers are ignored",
+			query: `SELECT "колонка", "A""B" FROM "таблица"`,
+		},
+		{
+			name:  "line comment newline resumes scanning",
+			query: "SELECT -- INSERT\n id FROM t",
+		},
+		{
+			name:  "block comment is ignored",
+			query: "SELECT /* DELETE FROM x */ id FROM t",
+		},
+		{
+			name:  "nested block comments unsupported first closer wins",
+			query: "SELECT /* outer /* inner */ FROM t",
+		},
+		{
+			name:  "unicode identifiers outside quotes are ignored by scanner",
+			query: "SELECT колонка FROM t",
+		},
+		{
+			name:    "multiple statements blocked",
+			query:   "SELECT 1; DELETE FROM t",
+			wantErr: "multiple statements",
+		},
+		{
+			name:    "comment only query rejected",
+			query:   "/* only comment */",
+			wantErr: "only SELECT and WITH",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sqlutil.ValidateReadOnlyQuery(tt.query)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }

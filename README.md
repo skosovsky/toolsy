@@ -16,6 +16,7 @@ package main
 
 import (
     "context"
+    "encoding/json"
     "github.com/skosovsky/toolsy"
 )
 
@@ -42,24 +43,23 @@ func main() {
     err = reg.Execute(context.Background(), toolsy.ToolCall{
         ID: "1", ToolName: "weather", Args: []byte(`{"city":"Moscow"}`),
     }, func(c toolsy.Chunk) error {
-        out = c.RawData.(Out)
-        return nil
+        return json.Unmarshal(c.Data, &out)
     })
     if err != nil {
         panic(err)
     }
-    // out.Temp == 22.5 (zero-cost: no json.Unmarshal)
+    // out.Temp == 22.5
 }
 ```
 
 ## Key concepts (architecture)
 
 - **Schema Extractor**: Go types become the tool spec. Use struct tags: `json:"field"` (name, omitempty), `jsonschema:"description"`, `description:"..."`, `enum:"a,b,c"`. `Extractor.Schema()` and `Tool.Parameters()` return a shallow copy—do not mutate. Generated schema uses [github.com/google/jsonschema-go](https://github.com/google/jsonschema-go).
-- **Registry**: Holds tools; look up by name with `GetTool(name)` or list all with `GetAllTools()`. `Execute(ctx, call, yield)` runs one call; `ExecuteBatchStream(ctx, calls, yield)` runs many in parallel. Tool errors go into the stream as `Chunk{IsError: true}`; the method returns an error only for critical failures (context cancelled, shutdown). Yield calls are serialized by the library so your callback need not be thread-safe.
+- **Registry**: Holds tools; look up by name with `GetTool(name)` or list all with `GetAllTools()`. `Execute(ctx, call, yield)` runs one call; `ExecuteBatchStream(ctx, calls, yield)` runs many in parallel. Tool errors go into the stream as `Chunk{IsError: true, MimeType: toolsy.MimeTypeText}`; the method returns an error only for critical failures (context cancelled, shutdown). Yield calls are serialized by the library so your callback need not be thread-safe.
 - **Middleware**: Signature `func(Tool) Tool`. Apply with `Registry.Use(WithLogging(...), WithTimeoutMiddleware(...))`; first in the list is the outermost. Use replaces the chain if called again.
 - **Validation**: Two layers before your Go function runs: (1) JSON Schema validation, (2) optional `Validatable.Validate()` on the args struct. Validation failures become `ClientError` so the LLM can self-correct.
 
-**Streaming**: All tools use `Execute(ctx, call, yield func(Chunk) error)`. `Chunk` has `CallID`, `ToolName`, `Event` (e.g. `EventProgress`, `EventResult`), `Data`, `RawData`, `IsError`, `Metadata`. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (e.g. client disconnected), execution stops and the tool returns `ErrStreamAborted`. For iteration over chunks (Go 1.23+), use `ExecuteIter(ctx, call) iter.Seq2[Chunk, error]`: `for chunk, err := range reg.ExecuteIter(ctx, call) { ... }`; on `break`, the context is cancelled and the tool exits (push-to-push, no extra goroutines).
+**Streaming**: Tools implement `Execute(ctx, run, argsJSON, yield func(Chunk) error)`, and registry/session execution passes runtime dependencies through `ToolCall.Run`. `Chunk` has `CallID`, `ToolName`, `Event` (for example `EventProgress`, `EventResult`, `EventSuspend`), `Data`, `MimeType`, `RawData`, `IsError`, `Metadata`. `Data + MimeType` are the primary payload contract. `NewTool` calls yield once; `NewStreamTool` and `NewDynamicTool` can call it multiple times. If yield returns an error (for example client disconnected), execution stops and the tool returns `ErrStreamAborted`. For iteration over chunks (Go 1.23+), use `ExecuteIter(ctx, call) iter.Seq2[Chunk, error]`: `for chunk, err := range reg.ExecuteIter(ctx, call) { ... }`; on `break`, the context is cancelled and the tool exits (push-to-push, no extra goroutines).
 
 **ExecuteIter (Go 1.23+)** — Use a `for range` over `reg.ExecuteIter(ctx, call)` to consume chunks; when you `break`, the child context is cancelled and the tool’s execution stops without leaving extra goroutines:
 
@@ -69,11 +69,13 @@ for chunk, err := range reg.ExecuteIter(ctx, toolsy.ToolCall{ID: "1", ToolName: 
         // final error from Execute (e.g. tool error, timeout)
         return err
     }
-    // use chunk.RawData or chunk.Data
+    // use chunk.Data (+ chunk.MimeType), or chunk.RawData for local compatibility
 }
 ```
 
-**RawData and zero-cost** — For tools built with `NewTool` or `NewStreamTool`, the core does **not** call `json.Marshal`; the typed result is in `Chunk.RawData`, and `Data` is nil. **Local agent**: use a type assertion with zero CPU cost, e.g. `out := chunk.RawData.(MyStruct)`. **External client (MCP/HTTP)**: serialize at the boundary with `json.Marshal(chunk.RawData)` when sending over the wire. Use `Data` only for raw byte streams (e.g. file download, streaming text) where the tool writes bytes into `Data` and leaves `RawData` nil.
+**RawData compatibility** — For tools built with `NewTool` or `NewStreamTool`, the core serializes typed results into `Chunk.Data` as JSON and sets `Chunk.MimeType` to `application/json`. `Chunk.RawData` remains available as a deprecated compatibility field for local typed callers that want direct assertions, for example `out := chunk.RawData.(MyStruct)`. Prefer `Data + MimeType` at process and transport boundaries.
+
+**RunContext and runtime auth** — `ToolCall.Run` carries runtime-only dependencies such as `CredentialsProvider`. This keeps business dependencies out of hidden `context.Value` paths while still allowing `ctx` to handle cancellation, deadlines, and request-scoped values.
 
 ## toolsy-gen
 
@@ -102,13 +104,13 @@ Tool execution fails in two broad ways:
 - **ClientError** — invalid input (bad JSON, schema validation, bad enum). Safe to return the message to the LLM for self-correction. Optionally wraps a sentinel (e.g. `ErrValidation`) and supports `Retryable` for transient cases.
 - **SystemError** — internal failure (panic, timeout, DB down). Do not expose the underlying error or stack to the LLM.
 
-**Sentinel errors** (use `errors.Is`): `ErrToolNotFound`, `ErrTimeout`, `ErrValidation`, `ErrShutdown`, `ErrStreamAborted`. Helpers: `IsClientError(err)`, `IsSystemError(err)`.
+**Sentinel errors** (use `errors.Is`): `ErrToolNotFound`, `ErrTimeout`, `ErrValidation`, `ErrShutdown`, `ErrStreamAborted`, `ErrSuspend`. Helpers: `IsClientError(err)`, `IsSystemError(err)`.
 
 Use the provided helpers and standard library:
 
 ```go
 err := reg.Execute(ctx, call, func(c toolsy.Chunk) error {
-    // c.RawData for typed result (NewTool); c.Data for raw bytes or error text; c.IsError true means error in Data
+    // c.Data + c.MimeType are the primary payload; c.RawData is compatibility-only
     return nil
 })
 if err != nil {
@@ -137,19 +139,17 @@ if err != nil {
 `toolsy` supports runtime guards without coupling to external policy engines.
 
 - **Validator**: `WithValidator(v)` runs before unmarshaling (fail-closed). Implement `Validator` with `Validate(ctx, toolName, argsJSON string) error`. On validation failure the error goes via the **error-path**: `Execute` returns `ClientError` + `ErrValidation` with message `tool execution failed: security validation failed: <details>. Please fix the arguments and try again.` In `ExecuteBatchStream`, the same error is mapped to a chunk with `IsError: true` and `Data` set to the error message (for self-correction).
-- **Loop breaker**: `WithExecutionCounter(ctx)` tracks executions; `WithMaxSteps(n)` and `WithMaxRetries(n)` (if n>0) enforce limits and return `ErrMaxStepsExceeded` or `ErrMaxRetriesExceeded` when exceeded. Counters increment on every execution when present, even if limits are 0.
+- **Loop breaker**: `Session` owns step budgeting. Create a session with `NewSession(reg, WithMaxSteps(n))` and call `session.Execute(...)` / `session.ExecuteIter(...)`. Every physical tool call consumes one step, including validation failures and caller-managed retries. When the budget is exceeded, execution returns `ErrMaxStepsExceeded`.
 - **Security metadata**: tools expose `IsReadOnly`, `RequiresConfirmation`, and `Sensitivity` via `ToolMetadata` for orchestrators.
 
 ```go
 validator := myGuardyValidator{}
 reg := toolsy.NewRegistry(
     toolsy.WithValidator(validator),
-    toolsy.WithMaxSteps(8),
-    toolsy.WithMaxRetries(2),
 )
 
-sessionCtx := toolsy.WithExecutionCounter(context.Background())
-if err := reg.Execute(sessionCtx, toolsy.ToolCall{
+session := toolsy.NewSession(reg, toolsy.WithMaxSteps(8))
+if err := session.Execute(context.Background(), toolsy.ToolCall{
     ID: "1", ToolName: "write_invoice", Args: []byte(`{"amount":100}`),
 }, func(c toolsy.Chunk) error { return nil }); errors.Is(err, toolsy.ErrMaxStepsExceeded) {
     // stop the agent loop
@@ -209,13 +209,16 @@ import "github.com/skosovsky/toolsy/testutil"
 func TestMyHandler(t *testing.T) {
     mock := &testutil.MockTool{
         NameVal: "echo",
-        ExecuteFn: func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {
-            return yield(toolsy.Chunk{Data: args})
+        ExecuteFn: func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+            _ = run
+            return yield(toolsy.Chunk{Data: args, MimeType: toolsy.MimeTypeJSON})
         },
     }
     reg := testutil.NewTestRegistry(mock)
     var result []byte
-    err := reg.Execute(ctx, toolsy.ToolCall{ID: "1", ToolName: "echo", Args: []byte(`{"x":1}`)}, func(c toolsy.Chunk) error {
+    err := reg.Execute(ctx, toolsy.ToolCall{
+        ID: "1", ToolName: "echo", Args: []byte(`{"x":1}`), Run: toolsy.RunContext{},
+    }, func(c toolsy.Chunk) error {
         result = c.Data
         return nil
     })
@@ -268,7 +271,7 @@ When you have a raw JSON Schema as bytes (e.g. from an MCP server or external sp
 rawSchema := []byte(`{"type":"object","properties":{"q":{"type":"string"}},"required":["q"]}`)
 tool, err := toolsy.NewProxyTool("search", "Search", rawSchema, func(ctx context.Context, rawArgs []byte, yield func(toolsy.Chunk) error) error {
     // rawArgs is validated; stream result
-    return yield(toolsy.Chunk{Data: result})
+    return yield(toolsy.Chunk{Data: result, MimeType: toolsy.MimeTypeJSON})
 })
 ```
 
@@ -290,8 +293,8 @@ tool, err := toolsy.NewDynamicTool("http_call", "Call HTTP API", schemaFromAPI,
     func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
         var args struct{ Endpoint, Method string }
         if err := json.Unmarshal(argsJSON, &args); err != nil { return err }
-        // ... perform request, stream result via yield(toolsy.Chunk{Data: resultJSON})
-        return yield(toolsy.Chunk{Data: resultJSON})
+        // ... perform request, stream result via yield(toolsy.Chunk{Data: resultJSON, MimeType: toolsy.MimeTypeJSON})
+        return yield(toolsy.Chunk{Data: resultJSON, MimeType: toolsy.MimeTypeJSON})
     },
     toolsy.WithTimeout(15*time.Second),
 )
@@ -306,7 +309,7 @@ For tools that produce multiple chunks (e.g. RAG search, logs), use `NewStreamTo
 ```go
 tool, err := toolsy.NewStreamTool("search", "Search docs", func(ctx context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
     for _, doc := range search(q.Query) {
-        if err := yield(toolsy.Chunk{Data: mustMarshal(doc)}); err != nil { return err }
+        if err := yield(toolsy.Chunk{Data: mustMarshal(doc), MimeType: toolsy.MimeTypeJSON}); err != nil { return err }
     }
     return nil
 })
@@ -314,16 +317,24 @@ tool, err := toolsy.NewStreamTool("search", "Search docs", func(ctx context.Cont
 
 ## Custom Type Mappings
 
-By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `RegisterType` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct for those fields.
+By default, custom Go types (e.g. `uuid.UUID`, or your own `MyMoney` type) are reflected as objects or may not match what the LLM expects. Use `SchemaRegistry` to map such types to a JSON Schema `type` and optional `format` so the generated schema is correct for those fields.
 
-Call `RegisterType` at application startup, **before** the first `NewTool` or `NewExtractor`:
+For simple tools and extractors you usually do not need any setup: if you do not pass a registry, `NewTool`, `NewStreamTool`, and `NewExtractor` create an isolated local registry automatically.
+
+When you need shared mappings across multiple tools or extractors, create a registry explicitly and pass it through `WithSchemaRegistry(...)` or `NewExtractorWithConfig(...)`:
 
 ```go
 import "github.com/google/uuid"
 
-func init() {
-    toolsy.RegisterType(uuid.UUID{}, "string", "uuid")
-}
+registry := toolsy.NewSchemaRegistry()
+registry.RegisterType(uuid.UUID{}, "string", "uuid")
+
+tool, err := toolsy.NewTool(
+    "create_user",
+    "Create a user",
+    createUser,
+    toolsy.WithSchemaRegistry(registry),
+)
 ```
 
 Pointer fields are supported automatically: if you register `MyMoney{}`, then a field `*MyMoney` will use the same mapping (no need to register `*MyMoney` separately).
@@ -333,12 +344,26 @@ Example for a custom “money” type:
 ```go
 type MyMoney struct{}
 
-func init() {
-    toolsy.RegisterType(MyMoney{}, "number", "decimal")
-}
+registry := toolsy.NewSchemaRegistry()
+registry.RegisterType(MyMoney{}, "number", "decimal")
 ```
 
 After registration, any struct that has a `MyMoney` or `*MyMoney` field will get `type: number`, `format: decimal` in the schema for that field.
+
+For extractors, use the convenience API by default:
+
+```go
+extractor, err := toolsy.NewExtractor[Invoice](true)
+```
+
+Or opt into a shared registry explicitly:
+
+```go
+extractor, err := toolsy.NewExtractorWithConfig[Invoice](toolsy.SchemaConfig{
+    Strict:   true,
+    Registry: registry,
+})
+```
 
 ## Strict Mode
 
@@ -402,7 +427,7 @@ asyncTool := toolsy.AsAsyncTool(heavyReportTool, toolsy.WithOnComplete(
 reg.Register(asyncTool)
 ```
 
-The first chunk the client receives has `RawData` of type `toolsy.AsyncAccepted` with `status: "accepted"` and `task_id` (hex string). `OnComplete` receives all chunks collected from the base tool's stream; for high-volume or long-running streaming tools, this buffers output in memory until the task finishes.
+The first chunk the client receives is a JSON result chunk with `MimeType` set to `application/json`; `Data` contains the serialized `toolsy.AsyncAccepted` payload with `status: "accepted"` and `task_id` (hex string). `RawData` is also populated for compatibility during this major version. `OnComplete` receives all chunks collected from the base tool's stream; for high-volume or long-running streaming tools, this buffers output in memory until the task finishes.
 
 ### Role-Based Registries (Dynamic Prompts)
 
@@ -424,14 +449,14 @@ reg.Register(seniorDBATool)
 
 | Symbol                                                                                                                                                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Tool](https://pkg.go.dev/github.com/skosovsky/toolsy#Tool)                                                                                                   | Interface: Name, Description, Parameters (schema), Execute(ctx, argsJSON, yield)                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata)                                                                                   | Optional: Timeout, Tags, Version, IsDangerous (for tools from NewTool or NewDynamicTool)                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [Chunk](https://pkg.go.dev/github.com/skosovsky/toolsy#Chunk)                           | Request; Chunk is stream event (CallID, ToolName, Event, Data, IsError, Metadata)                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| [Tool](https://pkg.go.dev/github.com/skosovsky/toolsy#Tool)                                                                                                   | Interface: Name, Description, Parameters (schema), Execute(ctx, run, argsJSON, yield)                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| [ToolMetadata](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolMetadata)                                                                                   | Optional: Timeout, Tags, Version, IsDangerous, IsReadOnly, RequiresConfirmation, Sensitivity                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| [ToolCall](https://pkg.go.dev/github.com/skosovsky/toolsy#ToolCall) / [Chunk](https://pkg.go.dev/github.com/skosovsky/toolsy#Chunk)                           | Request; ToolCall carries `Run RunContext`; Chunk is stream event (CallID, ToolName, Event, Data, MimeType, RawData, IsError, Metadata)                                                                                                                                                                                                                                                                                                                                                                                                              |
 | [NewTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewTool)                                                                                             | Build a Tool from a typed function `func(ctx, T) (R, error)`; calls yield(Chunk) once                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | [NewStreamTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewStreamTool)                                                                                 | Build a Tool with streaming handler `func(ctx, T, yield func(Chunk) error) error`                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | [NewDynamicTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewDynamicTool)                                                                               | Build a Tool from a raw JSON Schema map; handler gets argsJSON and yield func(Chunk) error                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | [NewProxyTool](https://pkg.go.dev/github.com/skosovsky/toolsy#NewProxyTool)                                                                                   | Build a Tool from raw JSON Schema bytes (e.g. MCP); handler gets rawArgs and yield func(Chunk) error                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor)           | Schema + validation only (no Execute); use in custom orchestrators                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| [Extractor](https://pkg.go.dev/github.com/skosovsky/toolsy#Extractor) / [NewExtractor](https://pkg.go.dev/github.com/skosovsky/toolsy#NewExtractor)           | Schema + validation only (no Execute); use in custom orchestrators; shared custom type mappings go through `SchemaRegistry`                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | [NewRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#NewRegistry)                                                                                     | Create a registry; [Execute](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Execute)(ctx, call, yield), [ExecuteBatchStream](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.ExecuteBatchStream)(ctx, calls, yield), [GetTool](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetTool), [GetAllTools](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.GetAllTools), [Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use), [Shutdown](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Shutdown) |
 | Registry options                                                                                                                                              | WithDefaultTimeout, WithMaxConcurrency, WithRecoverPanics; WithOnBeforeExecute, WithOnAfterExecute (receives [ExecutionSummary](https://pkg.go.dev/github.com/skosovsky/toolsy#ExecutionSummary)), WithOnChunk                                                                                                                                                                                                                                                                                                                                         |
 | ToolOption                                                                                                                                                    | WithStrict, WithTimeout, WithTags, WithVersion, WithDangerous (metadata for tools from NewTool/NewDynamicTool)                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -439,14 +464,14 @@ reg.Register(seniorDBATool)
 | [Middleware](https://pkg.go.dev/github.com/skosovsky/toolsy#Middleware)                                                                                       | WithLogging, WithRecovery, WithTimeoutMiddleware; [Registry.Use](https://pkg.go.dev/github.com/skosovsky/toolsy#Registry.Use) to apply                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | [AsAsyncTool](https://pkg.go.dev/github.com/skosovsky/toolsy#AsAsyncTool) / [OverrideTool](https://pkg.go.dev/github.com/skosovsky/toolsy#OverrideTool)       | Async: fire-and-forget with task_id and OnComplete; Override: replace Name, Description, or Parameters for role-based prompts                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | [IsClientError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsClientError) / [IsSystemError](https://pkg.go.dev/github.com/skosovsky/toolsy#IsSystemError) | Classify errors; [ErrStreamAborted](https://pkg.go.dev/github.com/skosovsky/toolsy#ErrStreamAborted) when yield fails                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| [RegisterType](https://pkg.go.dev/github.com/skosovsky/toolsy#RegisterType)                                                                                   | Register a custom type → JSON Schema type/format; call at startup before first NewTool/NewExtractor                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| [SchemaRegistry](https://pkg.go.dev/github.com/skosovsky/toolsy#SchemaRegistry)                                                                               | Per-registry custom type → JSON Schema mappings; pass via `WithSchemaRegistry(...)` or `NewExtractorWithConfig(...)`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Contracts (OpenAPI, GraphQL, gRPC)
 
 The `contracts/` directory contains three **isolated** submodules that translate external API contracts into `toolsy.Tool` instances. Each has its own `go.mod`; use them when you have an OpenAPI spec, a GraphQL endpoint, or a gRPC server with reflection.
 
-- **contracts/openapi** — `ParseURL(ctx, specURL, opts)` loads an OpenAPI 3.x spec from a URL, filters by methods/tags, and returns one tool per operation. Options: `BaseURL`, `AuthHeader`, `AllowedMethods`, `AllowedTags`, `MaxResponseBytes`.
-- **contracts/graphql** — `Introspect(ctx, endpoint, opts)` sends the standard introspection query, then builds one tool per root Query/Mutation. Request body is always `{"query": "<static>", "variables": <args>}` (no string concatenation from user input). Options: `AuthHeader`, `Operations` (e.g. `["query"]` for read-only), `MaxResponseBytes`.
+- **contracts/openapi** — `ParseURL(ctx, specURL, opts)` loads an OpenAPI 3.x spec from a URL, filters by methods/tags, and returns one tool per operation. Options: `BaseURL`, `AllowedMethods`, `AllowedTags`, `MaxResponseBytes`. Runtime `Authorization` headers come from `ToolCall.Run.Credentials`.
+- **contracts/graphql** — `Introspect(ctx, endpoint, opts)` sends the standard introspection query, then builds one tool per root Query/Mutation. Request body is always `{"query": "<static>", "variables": <args>}` (no string concatenation from user input). Options: `IntrospectionAuthHeader`, `Operations` (for example `["query"]` for read-only), `MaxResponseBytes`. Runtime execution auth comes from `ToolCall.Run.Credentials`.
 - **contracts/grpc** — `ConnectAndReflect(ctx, target, opts)` dials the server, uses gRPC Server Reflection to discover services/methods, and returns one tool per RPC. Options: `DialOptions`, `Services` (allowlist), `MaxResponseBytes`.
 
 Register the returned tools with your registry in a loop (one tool per call to `Register`):
@@ -466,15 +491,17 @@ func main() {
 
     // OpenAPI: tools from a spec URL
     openapiTools, err := openapi.ParseURL(ctx, "https://api.example.com/openapi.json", openapi.Options{
-        BaseURL: "https://api.example.com", AuthHeader: "Bearer sk-...",
-        AllowedMethods: []string{"GET", "POST"}, MaxResponseBytes: 512 * 1024,
+        BaseURL: "https://api.example.com",
+        AllowedMethods: []string{"GET", "POST"},
+        MaxResponseBytes: 512 * 1024,
     })
     if err != nil { panic(err) }
     for _, t := range openapiTools { reg.Register(t) }
 
     // GraphQL: tools from introspection
     gqlTools, err := graphql.Introspect(ctx, "https://api.example.com/graphql", graphql.Options{
-        AuthHeader: "Bearer sk-...", Operations: []string{"query", "mutation"},
+        IntrospectionAuthHeader: "Bearer discovery-token",
+        Operations: []string{"query", "mutation"},
     })
     if err != nil { panic(err) }
     for _, t := range gqlTools { reg.Register(t) }

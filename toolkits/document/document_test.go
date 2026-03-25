@@ -25,14 +25,19 @@ func TestExtractCSV_Success(t *testing.T) {
 	var result extractResult
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(extractResult); ok {
-					result = r
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"file_path":"`+csvPath+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(extractResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Text, "a")
 	require.Contains(t, result.Text, "b")
@@ -52,14 +57,19 @@ func TestExtractCSV_MultilineCellNormalized(t *testing.T) {
 	var result extractResult
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), []byte(`{"file_path":"`+csvPath+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(extractResult); ok {
-					result = r
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"file_path":"`+csvPath+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(extractResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	// Multiline cell should be normalized to "line1 line2" so table does not break
 	require.Contains(t, result.Text, "line1 line2")
@@ -77,6 +87,7 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"file_path":"`+path+`"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -91,6 +102,7 @@ func TestExtract_URLDisabled(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"https://example.com/file.pdf"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -103,7 +115,7 @@ func TestExtract_EmptyArgs(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
@@ -130,6 +142,7 @@ func TestExtract_FileTooLarge(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"file_path":"`+csvPath+`"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -168,14 +181,19 @@ func TestExtract_DOCX_Success(t *testing.T) {
 	var result extractResult
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), []byte(`{"file_path":"`+docxPath+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(extractResult); ok {
-					result = r
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"file_path":"`+docxPath+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(extractResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Text, "Hello DOCX")
 }
@@ -186,6 +204,7 @@ func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"http://127.0.0.1:9999/file.pdf"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -207,14 +226,19 @@ func TestExtract_Remote_Success(t *testing.T) {
 	var result extractResult
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`/data.csv"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(extractResult); ok {
-					result = r
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"url":"`+server.URL+`/data.csv"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(extractResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Text, "col1")
 	require.Contains(t, result.Text, "1")
@@ -236,6 +260,7 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 		t,
 		tool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"url":"`+server.URL+`/file.csv?sig=abc"}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -264,6 +289,7 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 	// Initial URL is our test server (allowed with WithAllowPrivateIPs); redirect to loopback is still blocked
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"`+server.URL+`/doc.csv"}`),
 		func(toolsy.Chunk) error { return nil },
 	)

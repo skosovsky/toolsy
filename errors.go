@@ -7,13 +7,13 @@ import (
 
 // Sentinel errors for toolsy. Use [errors.Is] to check.
 var (
-	ErrToolNotFound       = errors.New("tool not found")
-	ErrTimeout            = errors.New("tool execution timeout")
-	ErrValidation         = errors.New("validation failed")
-	ErrShutdown           = errors.New("registry is shutting down")
-	ErrStreamAborted      = errors.New("stream aborted by caller")
-	ErrMaxStepsExceeded   = errors.New("max execution steps exceeded")
-	ErrMaxRetriesExceeded = errors.New("max execution retries exceeded")
+	ErrToolNotFound     = errors.New("tool not found")
+	ErrTimeout          = errors.New("tool execution timeout")
+	ErrValidation       = errors.New("validation failed")
+	ErrShutdown         = errors.New("registry is shutting down")
+	ErrStreamAborted    = errors.New("stream aborted by caller")
+	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
+	ErrSuspend          = errors.New("execution suspended: waiting for external input")
 )
 
 // ClientError is an error that should be sent back to the LLM for self-correction

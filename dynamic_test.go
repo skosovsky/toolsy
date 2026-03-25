@@ -25,7 +25,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 		"A dynamic tool",
 		schema,
 		func(_ context.Context, argsJSON []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: argsJSON})
+			return yield(Chunk{Data: argsJSON, MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 	assert.Equal(t, "A dynamic tool", tool.Description())
 
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 42}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 42}`), func(c Chunk) error {
 		res = c.Data
 		return nil
 	})
@@ -58,19 +58,19 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 		"Weather",
 		schema,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`)})
+			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
 
 	yieldNop := func(Chunk) error { return nil }
 	// Missing required field
-	err = tool.Execute(context.Background(), []byte(`{}`), yieldNop)
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), yieldNop)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 
 	// Invalid enum
-	err = tool.Execute(context.Background(), []byte(`{"unit": "kelvin"}`), yieldNop)
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"unit": "kelvin"}`), yieldNop)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -118,7 +118,7 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(Chunk) error { return nil })
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 	var ce *ClientError
@@ -130,7 +130,7 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 		return errors.New("internal failure")
 	})
 	require.NoError(t, err)
-	err = tool2.Execute(context.Background(), []byte(`{"x": 1}`), func(Chunk) error { return nil })
+	err = tool2.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsSystemError(err))
 }
@@ -143,7 +143,7 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 		"Meta",
 		schema,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`)})
+			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithTimeout(30*time.Second),
 		WithTags("a", "b"),
@@ -174,7 +174,7 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 		"Strict",
 		schema,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`)})
+			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
 	)
@@ -211,7 +211,7 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 		"No mutate",
 		schemaMap,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`)})
+			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
 	)
@@ -243,7 +243,7 @@ func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *te
 		"Isolated",
 		schemaMap,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`)})
+			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 			}
 			for i := range args.N {
 				chunk := []byte{byte('0' + i)}
-				if err := yield(Chunk{Data: chunk}); err != nil {
+				if err := yield(Chunk{Data: chunk, MimeType: MimeTypeText}); err != nil {
 					return err
 				}
 			}
@@ -302,7 +302,7 @@ func TestNewDynamicTool_MultipleChunks(t *testing.T) {
 	require.NotNil(t, tool)
 
 	var chunks [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"n": 4}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"n": 4}`), func(c Chunk) error {
 		chunks = append(chunks, append([]byte(nil), c.Data...))
 		return nil
 	})
@@ -327,7 +327,7 @@ func TestNewDynamicTool_ZeroChunks(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var count int
-	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error {
 		count++
 		return nil
 	})
@@ -347,13 +347,13 @@ func TestNewDynamicTool_YieldError(t *testing.T) {
 		"Abort on yield",
 		schema,
 		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			_ = yield(Chunk{Data: []byte("first")})
-			return yield(Chunk{Data: []byte("second")})
+			_ = yield(Chunk{Data: []byte("first"), MimeType: MimeTypeText})
+			return yield(Chunk{Data: []byte("second"), MimeType: MimeTypeText})
 		},
 	)
 	require.NoError(t, err)
 	var received [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(c Chunk) error {
 		received = append(received, append([]byte(nil), c.Data...))
 		if string(c.Data) == "first" {
 			return nil

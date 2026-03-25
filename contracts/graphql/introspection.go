@@ -11,7 +11,10 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
+
+const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 
 // introspectionQuery uses fragment TypeRef for full type depth (e.g. [String!] -> NON_NULL(LIST(NON_NULL(SCALAR)))).
 const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
@@ -115,8 +118,8 @@ func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]by
 		return nil, fmt.Errorf("graphql: request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if opts.AuthHeader != "" {
-		req.Header.Set("Authorization", opts.AuthHeader)
+	if opts.IntrospectionAuthHeader != "" {
+		req.Header.Set("Authorization", opts.IntrospectionAuthHeader)
 	}
 	resp, err := client.Do(req) // #nosec G704 -- endpoint from caller config, not user input
 	if err != nil {
@@ -186,12 +189,12 @@ func appendToolsForOperationKind(
 		queryText := buildStaticQuery(kind, f.Name, f.Args)
 		endpointCopy := endpoint
 		optsCopy := opts
-		tool, err := toolsy.NewProxyTool(
+		tool, err := toolsy.NewProxyToolWithRun(
 			name,
 			descPrefix+f.Name,
 			schemaBytes,
-			func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-				return executeGraphQL(ctx, endpointCopy, queryText, argsJSON, &optsCopy, yield)
+			func(ctx context.Context, run toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+				return executeGraphQL(ctx, run, name, endpointCopy, queryText, argsJSON, &optsCopy, yield)
 			},
 		)
 		if err != nil {
@@ -204,6 +207,8 @@ func appendToolsForOperationKind(
 
 func executeGraphQL(
 	ctx context.Context,
+	run toolsy.RunContext,
+	toolName string,
 	endpoint, queryText string,
 	argsJSON []byte,
 	opts *Options,
@@ -228,25 +233,23 @@ func executeGraphQL(
 		return fmt.Errorf("graphql: request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if opts.AuthHeader != "" {
-		req.Header.Set("Authorization", opts.AuthHeader)
+	if run.Credentials != nil {
+		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
+		if authErr != nil {
+			return fmt.Errorf("graphql: credentials for %s: %w", toolName, authErr)
+		}
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
+		}
 	}
 	resp, err := opts.httpClient().Do(req) // #nosec G704 -- endpoint from caller config, not user input
 	if err != nil {
 		return fmt.Errorf("graphql: do: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(resp.Body)
+	data, err := textutil.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("graphql: read: %w", err)
 	}
-	const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
-	maxBytes := opts.maxResponseBytes()
-	if maxBytes > 0 && len(data) > maxBytes {
-		truncated := make([]byte, maxBytes, maxBytes+len(truncationSuffix))
-		copy(truncated, data[:maxBytes])
-		truncated = append(truncated, truncationSuffix...)
-		data = truncated
-	}
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data})
+	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(data), MimeType: toolsy.MimeTypeText})
 }

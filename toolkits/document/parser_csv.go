@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 // parseCSV reads CSV from r and returns a Markdown table. Truncates to maxBytes (UTF-8 safe).
@@ -44,10 +46,10 @@ func parseCSV(r io.Reader, maxBytes int) (string, error) {
 		}
 		b.WriteString("\n")
 		if b.Len() > maxBytes {
-			return truncateUTF8(b.String(), maxBytes), nil
+			return textutil.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
 		}
 	}
-	return truncateUTF8(b.String(), maxBytes), nil
+	return textutil.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
 }
 
 // escapeMarkdownCell escapes pipe and normalizes newlines so multiline cells do not break the Markdown table.

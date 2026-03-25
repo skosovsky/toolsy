@@ -35,14 +35,22 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 	searchTool := tools[0]
 
 	var result searchResult
-	require.NoError(t, searchTool.Execute(context.Background(), []byte(`{"query":"test"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(searchResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		searchTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"query":"test"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(searchResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Results, "Example")
 	require.Contains(t, result.Results, "https://example.com")
 	require.Contains(t, result.Results, "An example site")
@@ -51,7 +59,12 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 func TestWebSearch_EmptyQuery_ClientError(t *testing.T) {
 	tools, err := AsTools(&mockSearchProvider{})
 	require.NoError(t, err)
-	err = tools[0].Execute(context.Background(), []byte(`{"query":"  "}`), func(toolsy.Chunk) error { return nil })
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{"query":"  "}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
@@ -71,14 +84,19 @@ func TestWebScrape_Success(t *testing.T) {
 	var result scrapeResult
 	require.NoError(
 		t,
-		scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(scrapeResult); ok {
-					result = r
+		scrapeTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"url":"`+server.URL+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(scrapeResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Markdown, "Hello")
 	require.Contains(t, result.Markdown, "world")
@@ -99,14 +117,19 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 	var result scrapeResult
 	require.NoError(
 		t,
-		scrapeTool.Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(scrapeResult); ok {
-					result = r
+		scrapeTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"url":"`+server.URL+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(scrapeResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Markdown, "Content")
 	require.NotContains(t, result.Markdown, "alert")
@@ -120,6 +143,7 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"http://127.0.0.1:9999/"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -135,6 +159,7 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"http://0.0.0.0:80/"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -167,6 +192,7 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"`+server.URL+`"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -192,14 +218,19 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 	var result scrapeResult
 	require.NoError(
 		t,
-		tools[1].Execute(context.Background(), []byte(`{"url":"`+server.URL+`"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(scrapeResult); ok {
-					result = r
+		tools[1].Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"url":"`+server.URL+`"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(scrapeResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.True(t, customCalled)
 	require.Equal(t, "custom output", result.Markdown)
@@ -219,9 +250,9 @@ func TestAsTools_NilProvider_Error(t *testing.T) {
 	require.Contains(t, err.Error(), "SearchProvider")
 }
 
-func TestDefaultScraper_StripsTags(t *testing.T) {
+func TestHTMLScraper_StripsTags(t *testing.T) {
 	html := `<p>Text</p><script>huge();</script><style>body{}</style>`
-	s := newDefaultScraper()
+	s := newHTMLScraper()
 	out, err := s.HTMLToMarkdown(html, 10000)
 	require.NoError(t, err)
 	require.Contains(t, out, "Text")
@@ -241,6 +272,7 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"url":"`+server.URL+`"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -249,9 +281,9 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 	require.Contains(t, err.Error(), "blocked")
 }
 
-func TestDefaultScraper_StripsLayoutElements(t *testing.T) {
+func TestHTMLScraper_StripsLayoutElements(t *testing.T) {
 	html := `<header><p>Site header</p></header><main><p>Main content here</p></main><nav>Links</nav><aside>Sidebar</aside><footer>Copyright</footer>`
-	s := newDefaultScraper()
+	s := newHTMLScraper()
 	out, err := s.HTMLToMarkdown(html, 10000)
 	require.NoError(t, err)
 	require.Contains(t, out, "Main content here")

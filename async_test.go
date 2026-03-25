@@ -17,7 +17,7 @@ import (
 func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "heavy",
-		ExecuteFn: func(_ context.Context, _ []byte, _ func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
@@ -25,7 +25,7 @@ func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	wrapped := toolsy.AsAsyncTool(base)
 
 	var accepted toolsy.AsyncAccepted
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
 		if c.RawData != nil {
 			if a, ok := c.RawData.(toolsy.AsyncAccepted); ok {
 				accepted = a
@@ -49,7 +49,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		NameVal: "echo",
-		ExecuteFn: func(_ context.Context, _ []byte, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ []byte, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, RawData: "done"})
 		},
 	}
@@ -63,7 +63,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 		}),
 	)
 
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(_ toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(_ toolsy.Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -77,12 +77,17 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 func TestAsAsyncTool_NilCallback(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "nop",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
 	wrapped := toolsy.AsAsyncTool(base)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 }
 
@@ -95,7 +100,7 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		NameVal: "fail",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			return wantErr
 		},
 	}
@@ -106,7 +111,12 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 			done.Done()
 		}),
 	)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	done.Wait()
 	require.ErrorIs(t, gotErr, wantErr)
@@ -118,7 +128,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 	var callbackMu sync.Mutex
 	base := &testutil.MockTool{
 		NameVal: "slow",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			time.Sleep(50 * time.Millisecond)
 			return nil
 		},
@@ -128,7 +138,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 		callbackCalled = true
 		callbackMu.Unlock()
 	}))
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(toolsy.Chunk) error {
 		return yieldErr
 	})
 	require.ErrorIs(t, err, toolsy.ErrStreamAborted)
@@ -147,7 +157,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	var callbackMu sync.Mutex
 	base := &testutil.MockTool{
 		NameVal: "nop",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
@@ -156,7 +166,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 		callbackCalled = true
 		callbackMu.Unlock()
 	}))
-	err := wrapped.Execute(ctx, []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(ctx, toolsy.RunContext{}, []byte(`{}`), func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
 	require.ErrorIs(t, err, context.Canceled)
 	time.Sleep(50 * time.Millisecond)
@@ -174,7 +184,7 @@ func TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground(t *testing.T) {
 	var onCompleteCalled int32
 	base := &testutil.MockTool{
 		NameVal: "nop",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
@@ -187,7 +197,7 @@ func TestAsAsyncTool_ContextCanceledBeforeYield_NoBackground(t *testing.T) {
 		var err error
 		done := make(chan struct{})
 		go func() {
-			err = wrapped.Execute(ctx, []byte(`{}`), func(toolsy.Chunk) error { return nil })
+			err = wrapped.Execute(ctx, toolsy.RunContext{}, []byte(`{}`), func(toolsy.Chunk) error { return nil })
 			close(done)
 		}()
 		time.Sleep(1 * time.Millisecond)
@@ -216,7 +226,7 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		NameVal: "panic_tool",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			panic("intentional panic for test")
 		},
 	}
@@ -227,7 +237,12 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 			done.Done()
 		}),
 	)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	done.Wait()
 	require.True(t, toolsy.IsSystemError(gotErr), "OnComplete must receive SystemError when base panics")
@@ -236,7 +251,7 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "ok",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
@@ -246,7 +261,12 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 			panic("callback panic for test")
 		}),
 	)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	time.Sleep(80 * time.Millisecond) // allow goroutine to run and OnComplete to panic and be recovered
 	// If we reach here without the test process crashing, the callback panic was isolated.
@@ -276,7 +296,7 @@ func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
 	base := &timeoutMock{
 		MockTool: &testutil.MockTool{
 			NameVal: "slow",
-			ExecuteFn: func(ctx context.Context, _ []byte, _ func(toolsy.Chunk) error) error {
+			ExecuteFn: func(ctx context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -294,7 +314,12 @@ func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
 			done.Done()
 		}),
 	)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	done.Wait()
 	require.Error(t, gotErr)
@@ -312,7 +337,7 @@ func TestAsAsyncTool_RegistryTimeoutMinimumHierarchy(t *testing.T) {
 	base := &timeoutMock{
 		MockTool: &testutil.MockTool{
 			NameVal: "long_tool",
-			ExecuteFn: func(ctx context.Context, _ []byte, _ func(toolsy.Chunk) error) error {
+			ExecuteFn: func(ctx context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -356,7 +381,7 @@ func TestAsAsyncTool_RegistryDefaultTimeoutAppliesToBackground(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		NameVal: "slow_via_registry",
-		ExecuteFn: func(ctx context.Context, _ []byte, _ func(toolsy.Chunk) error) error {
+		ExecuteFn: func(ctx context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -387,7 +412,7 @@ func TestAsAsyncTool_ShutdownWaitsForBackground(t *testing.T) {
 	workDone := make(chan struct{})
 	base := &testutil.MockTool{
 		NameVal: "slow_async",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			time.Sleep(50 * time.Millisecond)
 			close(workDone)
 			return nil
@@ -421,7 +446,7 @@ func TestAsAsyncTool_ConcurrencySlotHeldUntilBackgroundDone(t *testing.T) {
 	firstDone := make(chan struct{})
 	base := &testutil.MockTool{
 		NameVal: "holds_slot",
-		ExecuteFn: func(context.Context, []byte, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 			time.Sleep(80 * time.Millisecond)
 			close(firstDone)
 			return nil

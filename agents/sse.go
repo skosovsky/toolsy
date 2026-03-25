@@ -26,6 +26,7 @@ const (
 func (c *Client) streamStepsOnce(
 	ctx context.Context,
 	taskID, lastEventID string,
+	authHeader string,
 	yield func(Step, error) bool,
 ) (string, bool, bool, error) {
 	urlStr := c.baseURL + fmt.Sprintf(streamStepsPath, url.PathEscape(taskID))
@@ -37,8 +38,8 @@ func (c *Client) streamStepsOnce(
 	if lastEventID != "" {
 		req.Header.Set("Last-Event-ID", lastEventID)
 	}
-	if c.opts.BearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.opts.BearerToken)
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
 	}
 	// #nosec G704 -- baseURL is from caller config; caller is responsible for trust.
 	resp, err := c.httpClient().Do(req)
@@ -148,7 +149,7 @@ func parseSSESteps(r io.Reader, yield func(Step, error) bool) (string, bool, boo
 
 // StreamSteps connects to GET /ap/v1/agent/tasks/{task_id}/steps?stream=true and returns an iterator over steps.
 // On connection drop (e.g. EOF), it reconnects with Last-Event-ID after a 1s backoff (respecting context).
-func (c *Client) StreamSteps(ctx context.Context, taskID string) iter.Seq2[Step, error] {
+func (c *Client) StreamSteps(ctx context.Context, taskID, authHeader string) iter.Seq2[Step, error] {
 	return func(yield func(Step, error) bool) {
 		var lastID string
 		firstRun := true
@@ -156,7 +157,7 @@ func (c *Client) StreamSteps(ctx context.Context, taskID string) iter.Seq2[Step,
 		for {
 			var done, yieldedAny bool
 			var err error
-			lastID, done, yieldedAny, err = c.streamStepsOnce(ctx, taskID, lastID, yield)
+			lastID, done, yieldedAny, err = c.streamStepsOnce(ctx, taskID, lastID, authHeader, yield)
 			if err != nil {
 				yield(zero, err)
 				return

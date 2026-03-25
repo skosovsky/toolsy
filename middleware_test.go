@@ -17,12 +17,12 @@ func TestWithLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	inner := &minTool{name: "log_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-		return yield(Chunk{Data: []byte(`{"ok":true}`)})
+	inner.execute = func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		return yield(Chunk{Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
 	}
 	wrapped := WithLogging(logger)(inner)
 	var out []byte
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), RunContext{}, []byte(`{}`), func(c Chunk) error {
 		out = c.Data
 		return nil
 	})
@@ -36,11 +36,11 @@ func TestWithLogging(t *testing.T) {
 
 func TestWithRecovery(t *testing.T) {
 	inner := &minTool{name: "panic_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ []byte, _ func(Chunk) error) error {
+	inner.execute = func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
 		panic("test panic")
 	}
 	wrapped := WithRecovery()(inner)
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(Chunk) error { return nil })
+	err := wrapped.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	var sysErr *SystemError
 	require.ErrorAs(t, err, &sysErr)
@@ -50,13 +50,13 @@ func TestWithRecovery(t *testing.T) {
 
 func TestWithTimeoutMiddleware(t *testing.T) {
 	inner := &minTool{name: "slow", desc: "desc", params: map[string]any{}}
-	inner.execute = func(ctx context.Context, _ []byte, _ func(Chunk) error) error {
+	inner.execute = func(ctx context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
 		<-ctx.Done()
 		return ctx.Err()
 	}
 	wrapped := WithTimeoutMiddleware(5 * time.Millisecond)(inner)
 	ctx := context.Background()
-	err := wrapped.Execute(ctx, []byte(`{}`), func(Chunk) error { return nil })
+	err := wrapped.Execute(ctx, RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }

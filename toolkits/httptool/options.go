@@ -1,6 +1,9 @@
 package httptool
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // Option configures AsTools (client, allowed domains, headers, limits, names).
 type Option func(*options)
@@ -60,6 +63,16 @@ func WithHeaders(h map[string]string) Option {
 	return func(o *options) {
 		o.headers = h
 	}
+}
+
+func hasForbiddenHeaders(headers map[string]string) bool {
+	for k := range headers {
+		switch strings.ToLower(k) {
+		case "authorization", "proxy-authorization":
+			return true
+		}
+	}
+	return false
 }
 
 // WithMaxResponseBody sets the maximum response body size in bytes (default 512KB). Truncated body gets "[Truncated]" suffix.

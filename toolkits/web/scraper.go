@@ -2,9 +2,10 @@ package web
 
 import (
 	"regexp"
-	"unicode/utf8"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
+
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 // Scraper converts a raw HTML string to clean Markdown (e.g. for LLM context).
@@ -13,8 +14,8 @@ type Scraper interface {
 	HTMLToMarkdown(html string, maxBytes int) (string, error)
 }
 
-// defaultScraper strips heavy tags then converts HTML to Markdown.
-type defaultScraper struct{}
+// htmlScraper strips heavy tags then converts HTML to Markdown.
+type htmlScraper struct{}
 
 var (
 	stripScript   = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>\s*`)
@@ -27,11 +28,11 @@ var (
 	stripAside    = regexp.MustCompile(`(?is)<aside[^>]*>.*?</aside>\s*`)
 )
 
-func newDefaultScraper() *defaultScraper {
-	return &defaultScraper{}
+func newHTMLScraper() *htmlScraper {
+	return &htmlScraper{}
 }
 
-func (d *defaultScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) {
+func (d *htmlScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) {
 	// Remove script, style, noscript, iframe to avoid blowing LLM context
 	html = stripScript.ReplaceAllString(html, "")
 	html = stripStyle.ReplaceAllString(html, "")
@@ -47,26 +48,7 @@ func (d *defaultScraper) HTMLToMarkdown(html string, maxBytes int) (string, erro
 	if err != nil {
 		return "", err
 	}
-	return truncateUTF8(markdown, maxBytes), nil
+	return textutil.TruncateStringUTF8(markdown, maxBytes, truncateSuffix), nil
 }
 
 const truncateSuffix = "\n[Truncated]"
-
-func truncateUTF8(s string, maxBytes int) string {
-	if len(s) <= maxBytes {
-		return s
-	}
-	need := maxBytes - len(truncateSuffix)
-	if need <= 0 {
-		return truncateSuffix
-	}
-	n := 0
-	for _, r := range s {
-		rn := utf8.RuneLen(r)
-		if n+rn > need {
-			return s[:n] + truncateSuffix
-		}
-		n += rn
-	}
-	return s
-}

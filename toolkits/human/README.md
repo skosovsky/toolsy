@@ -1,6 +1,6 @@
-# Toolsy: Human Toolkit (HITL escalation)
+# Toolsy: Human Toolkit (Suspend-First HITL)
 
-**Description:** Lets the agent request human approval for dangerous actions and ask for clarification. Both tools block the agent goroutine until the human responds via your `EscalationHandler` implementation.
+**Description:** Lets the agent request human approval for dangerous actions and ask for clarification without blocking the tool goroutine. Each tool yields one suspend chunk and then returns `toolsy.ErrSuspend`.
 
 ## Installation
 
@@ -17,10 +17,10 @@ go get github.com/skosovsky/toolsy/toolkits/human
 | `request_approval`       | Request human approval for an action | `{"action": "string", "reason": "string"}`         |
 | `ask_human_clarification`| Ask a human for clarification        | `{"question": "string"}`                           |
 
-## Configuration and security
+## Configuration
 
 - **Tool names and descriptions:** Use `WithApprovalName`, `WithApprovalDescription`, `WithClarificationName`, `WithClarificationDescription` to customize.
-- **Blocking behaviour:** Both tools block the calling goroutine until the handler returns. Implementations of `EscalationHandler` MUST listen to `ctx.Done()` and return `ctx.Err()` when the context is cancelled (e.g. session closed, timeout). The orchestrator should use `context.WithTimeout` to bound wait time.
+- **Suspend-first behaviour:** `request_approval` and `ask_human_clarification` each emit one JSON chunk with `EventSuspend` and `MimeTypeJSON`, then return `toolsy.ErrSuspend`. The orchestrator is responsible for checkpointing state, pausing the run, and resuming later with external input.
 
 ## Quick start
 
@@ -28,15 +28,18 @@ go get github.com/skosovsky/toolsy/toolkits/human
 package main
 
 import (
+	"context"
+	"errors"
+
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/toolkits/human"
 )
 
 func main() {
+	ctx := context.Background()
 	reg := toolsy.NewRegistry()
 
-	handler := &myHandler{} // implements human.EscalationHandler
-	tools, err := human.AsTools(handler)
+	tools, err := human.AsTools()
 	if err != nil {
 		panic(err)
 	}
@@ -44,34 +47,31 @@ func main() {
 		reg.Register(tool)
 	}
 
-	// When executing agent tools, use context.WithTimeout so approval/clarification don't block forever.
+	err = reg.Execute(ctx, toolsy.ToolCall{
+		ID: "1", ToolName: "request_approval", Args: []byte(`{"action":"delete","reason":"user asked"}`),
+	}, func(c toolsy.Chunk) error {
+		// forward c.Data to your UI or job store; it contains:
+		// {"kind":"approval","action":"delete","reason":"user asked"}
+		return nil
+	})
+	if errors.Is(err, toolsy.ErrSuspend) {
+		// mark the orchestration run as paused/waiting
+	}
 }
 ```
 
-## Example: implementing EscalationHandler
+## Payloads
 
-Implement `ApproveAction` and `ProvideClarification` to bridge to your UI (console, Telegram, React, etc.). Always respect context cancellation:
+`request_approval` yields:
 
-```go
-type myHandler struct{}
-
-func (h *myHandler) ApproveAction(ctx context.Context, action, reason string) (bool, error) {
-	select {
-	case <-ctx.Done():
-		return false, ctx.Err()
-	default:
-	}
-	// Show "action" and "reason" to user, wait for Yes/No, return true/false
-	return userSaidYes(), nil
-}
-
-func (h *myHandler) ProvideClarification(ctx context.Context, question string) (string, error) {
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err()
-	default:
-	}
-	// Show "question" to user, wait for reply, return answer
-	return userReply(), nil
-}
+```json
+{"kind":"approval","action":"...","reason":"..."}
 ```
+
+`ask_human_clarification` yields:
+
+```json
+{"kind":"clarification","question":"..."}
+```
+
+Both payloads are emitted as `Chunk{Event: toolsy.EventSuspend, MimeType: toolsy.MimeTypeJSON}`.

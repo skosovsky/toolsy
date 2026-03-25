@@ -51,6 +51,7 @@ func TestAsTool_RoleAndVariables(t *testing.T) {
 		t,
 		tool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -73,7 +74,12 @@ func TestAsTool_ProviderError(t *testing.T) {
 	p := &mockProvider{err: errors.New("not found")}
 	tool, err := AsTool(p)
 	require.NoError(t, err)
-	err = tool.Execute(context.Background(), []byte(`{"role_id":"x"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{"role_id":"x"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	cause := err
 	for cause != nil {
@@ -99,13 +105,16 @@ func TestAsTool_MaxBytesTruncate(t *testing.T) {
 	tool, err := AsTool(p, WithMaxBytes(20))
 	require.NoError(t, err)
 	var result string
-	require.NoError(t, tool.Execute(context.Background(), []byte(`{"role_id":"r"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(getResult); ok {
-				result = res.Instructions
+	require.NoError(
+		t,
+		tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"role_id":"r"}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if res, ok := c.RawData.(getResult); ok {
+					result = res.Instructions
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
 }

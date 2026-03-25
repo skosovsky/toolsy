@@ -6,10 +6,10 @@ const defaultMaxResponseBytes = 512 * 1024
 
 // Options configures the GraphQL introspector and executor.
 type Options struct {
-	HTTPClient       *http.Client
-	AuthHeader       string
-	Operations       []string // e.g. []string{"query"} or []string{"query","mutation"}
-	MaxResponseBytes int
+	HTTPClient              *http.Client
+	IntrospectionAuthHeader string
+	Operations              []string // e.g. []string{"query"} or []string{"query","mutation"}
+	MaxResponseBytes        int
 }
 
 func (o *Options) httpClient() *http.Client {

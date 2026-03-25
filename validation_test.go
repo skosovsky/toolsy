@@ -44,14 +44,19 @@ func TestValidatable_Implemented(t *testing.T) {
 	require.NoError(t, err)
 	// Valid: low <= high
 	var res struct{ Ok bool }
-	err = tool.Execute(context.Background(), []byte(`{"low":1,"high":10}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"low":1,"high":10}`), func(c Chunk) error {
 		res = c.RawData.(struct{ Ok bool })
 		return nil
 	})
 	require.NoError(t, err)
 	require.True(t, res.Ok)
 	// Invalid: low > high — Validatable.Validate returns error
-	err = tool.Execute(context.Background(), []byte(`{"low":10,"high":5}`), func(Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		[]byte(`{"low":10,"high":5}`),
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 	assert.ErrorIs(t, err, ErrValidation)
@@ -81,14 +86,19 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	require.NoError(t, err)
 	// Valid: min <= max
 	var res struct{ Ok bool }
-	err = tool.Execute(context.Background(), []byte(`{"min":1,"max":10}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"min":1,"max":10}`), func(c Chunk) error {
 		res = c.RawData.(struct{ Ok bool })
 		return nil
 	})
 	require.NoError(t, err)
 	require.True(t, res.Ok)
 	// Invalid: min > max — Validatable.Validate (pointer receiver) returns error
-	err = tool.Execute(context.Background(), []byte(`{"min":10,"max":5}`), func(Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		[]byte(`{"min":10,"max":5}`),
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 	assert.ErrorIs(t, err, ErrValidation)

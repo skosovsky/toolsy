@@ -2,59 +2,66 @@ package human
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/skosovsky/toolsy"
 )
 
-// EscalationHandler is implemented by the orchestrator developer
-// to bridge agent questions to any UI (console, Telegram, React, etc.).
-//
-// Both methods block the agent goroutine until the human responds.
-// Implementations MUST listen to ctx.Done() and return ctx.Err()
-// if the context is cancelled (e.g. session closed, timeout expired).
-// The orchestrator should use [context.WithTimeout] to bound wait time.
-type EscalationHandler interface {
-	ApproveAction(ctx context.Context, action, reason string) (bool, error)
-	ProvideClarification(ctx context.Context, question string) (string, error)
-}
-
-// AsTools returns two tools (request_approval, ask_human_clarification) that
-// delegate to the given EscalationHandler. Options customize names and descriptions.
-func AsTools(handler EscalationHandler, opts ...Option) ([]toolsy.Tool, error) {
+// AsTools returns two suspend-first tools (request_approval, ask_human_clarification).
+// The orchestrator is expected to checkpoint execution when toolsy.ErrSuspend is returned.
+func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	applyDefaults(&o)
 
-	approvalTool, err := toolsy.NewTool[approvalArgs, approvalResult](
+	approvalTool, err := toolsy.NewStreamTool[approvalArgs](
 		o.approvalName,
 		o.approvalDesc,
-		func(ctx context.Context, args approvalArgs) (approvalResult, error) {
-			ok, err := handler.ApproveAction(ctx, args.Action, args.Reason)
-			if err != nil {
-				return approvalResult{}, fmt.Errorf("toolkit/human: approve action: %w", err)
+		func(_ context.Context, args approvalArgs, yield func(toolsy.Chunk) error) error {
+			payload, marshalErr := json.Marshal(map[string]string{
+				"kind":   "approval",
+				"action": args.Action,
+				"reason": args.Reason,
+			})
+			if marshalErr != nil {
+				return fmt.Errorf("toolkit/human: marshal approval payload: %w", marshalErr)
 			}
-			if ok {
-				return approvalResult{Decision: "APPROVED"}, nil
+			if yieldErr := yield(toolsy.Chunk{
+				Event:    toolsy.EventSuspend,
+				Data:     payload,
+				MimeType: toolsy.MimeTypeJSON,
+			}); yieldErr != nil {
+				return yieldErr
 			}
-			return approvalResult{Decision: "REJECTED"}, nil
+			return toolsy.ErrSuspend
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/human: build approval tool: %w", err)
 	}
 
-	clarificationTool, err := toolsy.NewTool[clarificationArgs, clarificationResult](
+	clarificationTool, err := toolsy.NewStreamTool[clarificationArgs](
 		o.clarificationName,
 		o.clarificationDesc,
-		func(ctx context.Context, args clarificationArgs) (clarificationResult, error) {
-			answer, clarErr := handler.ProvideClarification(ctx, args.Question)
-			if clarErr != nil {
-				return clarificationResult{}, fmt.Errorf("toolkit/human: provide clarification: %w", clarErr)
+		func(_ context.Context, args clarificationArgs, yield func(toolsy.Chunk) error) error {
+			payload, marshalErr := json.Marshal(map[string]string{
+				"kind":     "clarification",
+				"question": args.Question,
+			})
+			if marshalErr != nil {
+				return fmt.Errorf("toolkit/human: marshal clarification payload: %w", marshalErr)
 			}
-			return clarificationResult{Answer: answer}, nil
+			if yieldErr := yield(toolsy.Chunk{
+				Event:    toolsy.EventSuspend,
+				Data:     payload,
+				MimeType: toolsy.MimeTypeJSON,
+			}); yieldErr != nil {
+				return yieldErr
+			}
+			return toolsy.ErrSuspend
 		},
 	)
 	if err != nil {
@@ -69,14 +76,6 @@ type approvalArgs struct {
 	Reason string `json:"reason"`
 }
 
-type approvalResult struct {
-	Decision string `json:"decision"`
-}
-
 type clarificationArgs struct {
 	Question string `json:"question"`
-}
-
-type clarificationResult struct {
-	Answer string `json:"answer"`
 }

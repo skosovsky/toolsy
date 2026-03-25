@@ -32,7 +32,7 @@ func applyDefaults(o *options) {
 		o.httpClient = &http.Client{Timeout: defaultHTTPTimeout}
 	}
 	if o.scraper == nil {
-		o.scraper = newDefaultScraper()
+		o.scraper = newHTMLScraper()
 	}
 	if o.searchName == "" {
 		o.searchName = "web_search"

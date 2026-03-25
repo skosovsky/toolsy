@@ -1,16 +1,18 @@
 package toolsy
 
 import (
+	"context"
 	"encoding/json"
-	"maps"
-	"reflect"
 	"slices"
 	"testing"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func testSchemaConfig(strict bool) SchemaConfig {
+	return SchemaConfig{Strict: strict}
+}
 
 // findSchemaObject returns the first map in schemaMap that has "properties" (root or inside $defs).
 // Used by tests to assert on additionalProperties, required, etc.
@@ -31,28 +33,12 @@ func findSchemaObject(schemaMap map[string]any) map[string]any {
 	return nil
 }
 
-// snapshotAndRestoreCustomTypes backs up the global custom type registry and registers t.Cleanup
-// to restore it. Use in tests that call RegisterType so they do not affect other tests.
-// Do not run such tests with t.Parallel().
-func snapshotAndRestoreCustomTypes(t *testing.T) {
-	t.Helper()
-	customTypesMu.Lock()
-	before := make(map[reflect.Type]*jsonschema.Schema)
-	maps.Copy(before, customTypes)
-	customTypesMu.Unlock()
-	t.Cleanup(func() {
-		customTypesMu.Lock()
-		customTypes = before
-		customTypesMu.Unlock()
-	})
-}
-
 func TestGenerateSchema_Simple(t *testing.T) {
 	type Simple struct {
 		Location string `json:"location"       jsonschema:"City name"`
 		Unit     string `json:"unit,omitempty" jsonschema:"Temperature unit"`
 	}
-	m, resolved, err := generateSchema[Simple](false)
+	m, resolved, err := generateSchema[Simple](testSchemaConfig(false))
 	require.NoError(t, err)
 	require.NotNil(t, resolved)
 	require.NotNil(t, m)
@@ -64,12 +50,11 @@ func TestGenerateSchema_Simple(t *testing.T) {
 	assert.Contains(t, props, "unit")
 }
 
-// TestGenerateSchema_StructTagsDescriptionAndEnum verifies enrichSchemaFromStructTags adds description and enum from struct tags.
 func TestGenerateSchema_StructTagsDescriptionAndEnum(t *testing.T) {
 	type WithTags struct {
 		Status string `description:"System status" enum:"ok,fail" json:"status"`
 	}
-	m, _, err := generateSchema[WithTags](false)
+	m, _, err := generateSchema[WithTags](testSchemaConfig(false))
 	require.NoError(t, err)
 	require.NotNil(t, m)
 	obj := findSchemaObject(m)
@@ -92,14 +77,12 @@ func TestGenerateSchema_StrictMode(t *testing.T) {
 		X string `json:"x"`
 		N Nested `json:"n"`
 	}
-	m, _, err := generateSchema[Root](true)
+	m, _, err := generateSchema[Root](testSchemaConfig(true))
 	require.NoError(t, err)
 	require.NotNil(t, m)
 	assertStrictModeAdditionalProperties(t, m)
 }
 
-// assertStrictModeAdditionalProperties walks the schema tree and checks every object with
-// "properties" has additionalProperties: false (strict mode contract).
 func assertStrictModeAdditionalProperties(t *testing.T, root map[string]any) {
 	t.Helper()
 	var check func(map[string]any)
@@ -169,15 +152,13 @@ func TestGenerateSchema_CompiledValidates(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
 	}
-	_, resolved, err := generateSchema[Args](false)
+	_, resolved, err := generateSchema[Args](testSchemaConfig(false))
 	require.NoError(t, err)
 	require.NotNil(t, resolved)
-	// Valid JSON matching schema
 	var parsed any
 	require.NoError(t, json.Unmarshal([]byte(`{"x": 1}`), &parsed))
 	err = resolved.Validate(parsed)
 	assert.NoError(t, err)
-	// Invalid: wrong type
 	var parsedBad any
 	require.NoError(t, json.Unmarshal([]byte(`{"x": "not a number"}`), &parsedBad))
 	err = resolved.Validate(parsedBad)
@@ -188,7 +169,7 @@ func FuzzValidate(f *testing.F) {
 	type Args struct {
 		X int `json:"x"`
 	}
-	_, resolved, err := generateSchema[Args](false)
+	_, resolved, err := generateSchema[Args](testSchemaConfig(false))
 	if err != nil {
 		f.Skip("generateSchema failed")
 	}
@@ -202,14 +183,14 @@ func FuzzValidate(f *testing.F) {
 	})
 }
 
-func TestRegisterType_ValueType(t *testing.T) {
-	snapshotAndRestoreCustomTypes(t)
+func TestSchemaRegistryRegisterType_ValueType(t *testing.T) {
+	registry := NewSchemaRegistry()
 	type MyMoney struct{}
-	RegisterType(MyMoney{}, "number", "decimal")
+	registry.RegisterType(MyMoney{}, "number", "decimal")
 	type Args struct {
 		Amount MyMoney `json:"amount"`
 	}
-	m, _, err := generateSchema[Args](false)
+	m, _, err := generateSchema[Args](SchemaConfig{Registry: registry})
 	require.NoError(t, err)
 	require.NotNil(t, m)
 	props, ok := m["properties"].(map[string]any)
@@ -220,21 +201,20 @@ func TestRegisterType_ValueType(t *testing.T) {
 	assert.Equal(t, "decimal", amount["format"])
 }
 
-func TestRegisterType_PointerFieldUsesValueMapping(t *testing.T) {
-	snapshotAndRestoreCustomTypes(t)
+func TestSchemaRegistryRegisterType_PointerFieldUsesValueMapping(t *testing.T) {
+	registry := NewSchemaRegistry()
 	type MyMoney struct{}
-	RegisterType(MyMoney{}, "number", "decimal")
+	registry.RegisterType(MyMoney{}, "number", "decimal")
 	type Args struct {
 		Amount *MyMoney `json:"amount,omitempty"`
 	}
-	m, _, err := generateSchema[Args](false)
+	m, _, err := generateSchema[Args](SchemaConfig{Registry: registry})
 	require.NoError(t, err)
 	require.NotNil(t, m)
 	props, ok := m["properties"].(map[string]any)
 	require.True(t, ok)
 	amount, ok := props["amount"].(map[string]any)
 	require.True(t, ok)
-	// google/jsonschema-go may output "type": "number", "types": ["null", "number"], or "type": ["null", "number"] for pointer fields
 	hasNumber := false
 	if typ, ok := amount["type"].(string); ok {
 		hasNumber = typ == "number"
@@ -247,7 +227,47 @@ func TestRegisterType_PointerFieldUsesValueMapping(t *testing.T) {
 	assert.Equal(t, "decimal", amount["format"])
 }
 
-// noRefInSchemaTree returns false if any node in schemaMap has a "$ref" key (LLM inline requirement).
+func TestSchemaRegistry_IsolatedByDefault(t *testing.T) {
+	type MyMoney struct{}
+	type Args struct {
+		Amount MyMoney `json:"amount"`
+	}
+	registry := NewSchemaRegistry()
+	registry.RegisterType(MyMoney{}, "number", "decimal")
+
+	toolWithShared, err := NewTool(
+		"shared",
+		"desc",
+		func(_ context.Context, _ Args) (struct{}, error) { return struct{}{}, nil },
+		WithSchemaRegistry(registry),
+	)
+	require.NoError(t, err)
+	toolWithLocal, err := NewTool(
+		"local",
+		"desc",
+		func(_ context.Context, _ Args) (struct{}, error) { return struct{}{}, nil },
+	)
+	require.NoError(t, err)
+
+	sharedProps := toolWithShared.Parameters()["properties"].(map[string]any)
+	localProps := toolWithLocal.Parameters()["properties"].(map[string]any)
+	assert.Equal(t, "decimal", sharedProps["amount"].(map[string]any)["format"])
+	assert.NotEqual(t, "decimal", localProps["amount"].(map[string]any)["format"])
+}
+
+func TestNewExtractorWithConfig_UsesSharedRegistry(t *testing.T) {
+	registry := NewSchemaRegistry()
+	type MyMoney struct{}
+	registry.RegisterType(MyMoney{}, "number", "decimal")
+	type Args struct {
+		Amount MyMoney `json:"amount"`
+	}
+	extractor, err := NewExtractorWithConfig[Args](SchemaConfig{Registry: registry})
+	require.NoError(t, err)
+	props := extractor.Schema()["properties"].(map[string]any)
+	assert.Equal(t, "decimal", props["amount"].(map[string]any)["format"])
+}
+
 func noRefInSchemaTree(schemaMap map[string]any) bool {
 	if schemaMap == nil {
 		return true
@@ -286,7 +306,7 @@ func TestGenerateSchema_NoTopLevelRefOrDefs(t *testing.T) {
 	type Root struct {
 		N Nested `json:"n"`
 	}
-	schemaMap, _, err := generateSchema[Root](false)
+	schemaMap, _, err := generateSchema[Root](testSchemaConfig(false))
 	require.NoError(t, err)
 	require.NotNil(t, schemaMap)
 	assert.Nil(t, schemaMap["$ref"], "root schema must not contain $ref for LLM compatibility")
@@ -294,8 +314,8 @@ func TestGenerateSchema_NoTopLevelRefOrDefs(t *testing.T) {
 	assert.True(t, noRefInSchemaTree(schemaMap), "schema tree must not contain $ref in any node")
 }
 
-func TestRegisterType_InvalidArgs_Panic(t *testing.T) {
-	snapshotAndRestoreCustomTypes(t)
-	assert.Panics(t, func() { RegisterType(nil, "string", "uuid") })
-	assert.Panics(t, func() { RegisterType(struct{}{}, "", "uuid") })
+func TestSchemaRegistryRegisterType_InvalidArgs_Panic(t *testing.T) {
+	registry := NewSchemaRegistry()
+	assert.Panics(t, func() { registry.RegisterType(nil, "string", "uuid") })
+	assert.Panics(t, func() { registry.RegisterType(struct{}{}, "", "uuid") })
 }

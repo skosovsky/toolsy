@@ -92,6 +92,7 @@ func TestExecuteSuccess(t *testing.T) {
 	var result RunResult
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"python","code":"print(1)","env":{"A":"B"},"files":{"main.txt":"hello"}}`),
 		func(c toolsy.Chunk) error {
 			result = c.RawData.(RunResult)
@@ -114,6 +115,7 @@ func TestExecuteEmptyCodeReturnsClientError(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"python","code":"   "}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -129,6 +131,7 @@ func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"bash","code":"echo 1"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -144,7 +147,12 @@ func TestExecuteClampsTimeoutToContextDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
-	err = tool.Execute(ctx, []byte(`{"language":"python","code":"print(1)"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		ctx,
+		toolsy.RunContext{},
+		[]byte(`{"language":"python","code":"print(1)"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	require.Greater(t, sb.lastReq.Timeout, time.Duration(0))
 	require.Less(t, sb.lastReq.Timeout, 5*time.Second)
@@ -158,7 +166,12 @@ func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 
-	err = tool.Execute(ctx, []byte(`{"language":"python","code":"print(1)"}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		ctx,
+		toolsy.RunContext{},
+		[]byte(`{"language":"python","code":"print(1)"}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsSystemError(err))
 	require.ErrorIs(t, err, ErrTimeout)
@@ -178,6 +191,7 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 	start := time.Now()
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"python","code":"print(1)"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -198,6 +212,7 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"python","code":"print(1)"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -235,6 +250,7 @@ func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"language":"python","code":"print(1)"}`),
 		func(toolsy.Chunk) error { return nil },
 	)

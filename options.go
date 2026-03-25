@@ -5,75 +5,99 @@ import (
 	"time"
 )
 
-// toolOptions hold optional tool settings (timeout, strict, tags, etc.).
-type toolOptions struct {
-	strict               bool
-	timeout              time.Duration
-	tags                 []string
-	version              string
-	dangerous            bool
-	readOnly             bool
-	requiresConfirmation bool
-	sensitivity          string
+// ExecutionConfig contains runtime-only settings used when a tool executes.
+type ExecutionConfig struct {
+	Timeout   time.Duration
+	Dangerous bool
+	ReadOnly  bool
 }
 
-// ToolOption configures a tool (e.g. WithStrict, WithTimeout).
-type ToolOption func(*toolOptions)
+// SchemaConfig contains JSON Schema generation settings for typed tools/extractors.
+type SchemaConfig struct {
+	Strict   bool
+	Registry *SchemaRegistry
+}
+
+// ToolManifest contains metadata exposed to orchestrators and discovery layers.
+type ToolManifest struct {
+	Tags                 []string
+	Version              string
+	RequiresConfirmation bool
+	Sensitivity          string
+}
+
+// ToolConfig is the internal split configuration for a tool.
+type ToolConfig struct {
+	Execution ExecutionConfig
+	Schema    SchemaConfig
+	Manifest  ToolManifest
+}
+
+// ToolOption configures a tool (e.g. WithStrict, WithTimeout, WithSchemaRegistry).
+type ToolOption func(*ToolConfig)
 
 // WithStrict sets strict mode for schema: additionalProperties: false for all objects,
 // and all properties become required. Use for OpenAI Structured Outputs compatibility.
 func WithStrict() ToolOption {
-	return func(o *toolOptions) {
-		o.strict = true
+	return func(c *ToolConfig) {
+		c.Schema.Strict = true
 	}
 }
 
-// WithTimeout sets a per-tool timeout (stored in toolOptions for use by middleware or registry).
+// WithSchemaRegistry configures the schema registry used for typed schema generation.
+// When omitted, typed builders and extractors create an isolated registry automatically.
+func WithSchemaRegistry(r *SchemaRegistry) ToolOption {
+	return func(c *ToolConfig) {
+		c.Schema.Registry = r
+	}
+}
+
+// WithTimeout sets a per-tool timeout (used by middleware or registry execution).
 func WithTimeout(d time.Duration) ToolOption {
-	return func(o *toolOptions) {
-		o.timeout = d
+	return func(c *ToolConfig) {
+		c.Execution.Timeout = d
 	}
 }
 
 // WithTags sets tool tags (metadata for discovery/orchestrator).
 func WithTags(tags ...string) ToolOption {
-	return func(o *toolOptions) {
-		o.tags = tags
+	return func(c *ToolConfig) {
+		c.Manifest.Tags = append([]string(nil), tags...)
 	}
 }
 
 // WithVersion sets the tool version.
 func WithVersion(version string) ToolOption {
-	return func(o *toolOptions) {
-		o.version = version
+	return func(c *ToolConfig) {
+		c.Manifest.Version = version
 	}
 }
 
-// WithDangerous marks the tool as dangerous (orchestrator may require confirmation).
+// WithDangerous marks the tool as dangerous.
 func WithDangerous() ToolOption {
-	return func(o *toolOptions) {
-		o.dangerous = true
+	return func(c *ToolConfig) {
+		c.Execution.Dangerous = true
 	}
 }
 
 // WithReadOnly marks the tool as read-only.
 func WithReadOnly() ToolOption {
-	return func(o *toolOptions) {
-		o.readOnly = true
+	return func(c *ToolConfig) {
+		c.Execution.ReadOnly = true
 	}
 }
 
 // WithRequiresConfirmation marks the tool as requiring human confirmation before execution.
 func WithRequiresConfirmation() ToolOption {
-	return func(o *toolOptions) {
-		o.requiresConfirmation = true
+	return func(c *ToolConfig) {
+		c.Manifest.RequiresConfirmation = true
 	}
 }
 
 // WithSensitivity sets the sensitivity level metadata for the tool.
 func WithSensitivity(level string) ToolOption {
-	return func(o *toolOptions) {
-		o.sensitivity = level
+	return func(c *ToolConfig) {
+		c.Manifest.Sensitivity = level
 	}
 }
 
@@ -83,8 +107,6 @@ type RegistryOption func(*registryOptions)
 type registryOptions struct {
 	timeout        time.Duration
 	maxConcurrency int
-	maxSteps       int
-	maxRetries     int
 	recoverPanics  bool
 	validator      Validator
 	onBefore       func(context.Context, ToolCall)
@@ -104,21 +126,6 @@ func WithDefaultTimeout(d time.Duration) RegistryOption {
 func WithMaxConcurrency(n int) RegistryOption {
 	return func(o *registryOptions) {
 		o.maxConcurrency = n
-	}
-}
-
-// WithMaxSteps limits the total number of tool executions within a shared execution-counter context.
-// The limit is enforced only when ctx was wrapped with WithExecutionCounter.
-func WithMaxSteps(n int) RegistryOption {
-	return func(o *registryOptions) {
-		o.maxSteps = n
-	}
-}
-
-// WithMaxRetries limits the number of retries (repeated calls with the same ToolName) within a shared context.
-func WithMaxRetries(n int) RegistryOption {
-	return func(o *registryOptions) {
-		o.maxRetries = n
 	}
 }
 
@@ -155,5 +162,19 @@ func WithOnAfterExecute(fn func(context.Context, ToolCall, ExecutionSummary, tim
 func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 	return func(o *registryOptions) {
 		o.onChunk = fn
+	}
+}
+
+// SessionOption configures a Session.
+type SessionOption func(*sessionOptions)
+
+type sessionOptions struct {
+	maxSteps int
+}
+
+// WithMaxSteps limits the total number of tool executions within a session track.
+func WithMaxSteps(n int) SessionOption {
+	return func(o *sessionOptions) {
+		o.maxSteps = n
 	}
 }

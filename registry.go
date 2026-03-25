@@ -15,18 +15,6 @@ const (
 	defaultRegistrySemaphore = 10
 )
 
-// asyncTrackerCtxKey is the context key for async background job tracking (same package only).
-type asyncTrackerCtxKey struct{}
-
-// asyncTracker is set in context by Registry.Execute so AsAsyncTool can register background work.
-// Track() adds to running and returns done() that must be called when the background job finishes;
-// done() also triggers release of the execution slot (semaphore + running).
-// effectiveTimeout is the registry-level timeout (covers queue wait + execution); AsAsyncTool uses it for background run when set.
-type asyncTracker struct {
-	track            func() func()
-	effectiveTimeout time.Duration
-}
-
 // Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
 type Registry struct {
 	tools       map[string]Tool
@@ -100,34 +88,6 @@ func (r *Registry) GetTool(name string) (Tool, bool) {
 	return t, ok
 }
 
-// applyExecCounterLimits enforces WithMaxSteps / WithMaxRetries when WithExecutionCounter is used.
-func (r *Registry) applyExecCounterLimits(ctx context.Context, call ToolCall, summary *ExecutionSummary) error {
-	c, ok := ctx.Value(execCounterCtxKey{}).(*execCounter)
-	if !ok {
-		return nil
-	}
-	step := c.count.Add(1)
-	if r.opts.maxSteps > 0 && step > int64(r.opts.maxSteps) {
-		summary.Error = ErrMaxStepsExceeded
-		return summary.Error
-	}
-
-	c.mu.Lock()
-	if c.lastTool == call.ToolName {
-		retries := c.retries.Add(1)
-		if r.opts.maxRetries > 0 && retries > int64(r.opts.maxRetries) {
-			c.mu.Unlock()
-			summary.Error = ErrMaxRetriesExceeded
-			return summary.Error
-		}
-	} else {
-		c.lastTool = call.ToolName
-		c.retries.Store(0) // retries count only repeated calls of the same tool
-	}
-	c.mu.Unlock()
-	return nil
-}
-
 // effectiveExecuteTimeout is the minimum of registry default and per-tool [ToolMetadata] timeout when both are set.
 func effectiveExecuteTimeout(tool Tool, registryTimeout time.Duration) time.Duration {
 	timeout := registryTimeout
@@ -156,12 +116,16 @@ func (r *Registry) wrapYieldWithMetadata(
 		if c.ToolName == "" {
 			c.ToolName = call.ToolName
 		}
-		yieldErr := yield(c)
+		normalized, err := normalizeChunk(c)
+		if err != nil {
+			return err
+		}
+		yieldErr := yield(normalized)
 		if yieldErr == nil && !c.IsError {
 			summary.ChunksDelivered++
-			summary.TotalBytes += int64(len(c.Data))
+			summary.TotalBytes += int64(len(normalized.Data))
 			if r.opts.onChunk != nil {
-				r.opts.onChunk(ctx, c)
+				r.opts.onChunk(ctx, normalized)
 			}
 		}
 		return yieldErr
@@ -171,7 +135,15 @@ func (r *Registry) wrapYieldWithMetadata(
 // Execute runs one tool call and streams chunks to yield. Returns on first yield error or tool error.
 // The after-execution hook (WithOnAfterExecute) is always invoked via defer with ExecutionSummary.
 // ChunksDelivered and TotalBytes count only chunks with !IsError.
-func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) (err error) {
+func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
+	return r.execute(ctx, call, yield)
+}
+
+func (r *Registry) execute(
+	ctx context.Context,
+	call ToolCall,
+	yield func(Chunk) error,
+) (err error) {
 	r.mu.Lock()
 	select {
 	case <-r.done:
@@ -204,18 +176,10 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	}
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { r.releaseSemaphore(); r.running.Done() }) }
-	asyncTracked := false
-	tracker := &asyncTracker{
-		track: func() func() {
-			r.running.Add(1)
-			asyncTracked = true
-			return func() { r.running.Done(); release() }
-		},
-		effectiveTimeout: timeout,
-	}
-	ctx = context.WithValue(ctx, asyncTrackerCtxKey{}, tracker)
+	run := call.Run
+	run.async = newAsyncRuntime(r, timeout)
 	defer func() {
-		if !asyncTracked {
+		if run.async == nil || !run.async.backgroundStarted.Load() {
 			release()
 		}
 	}()
@@ -242,15 +206,12 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 	if r.opts.onBefore != nil {
 		r.opts.onBefore(ctx, call)
 	}
-	if err := r.applyExecCounterLimits(ctx, call, &summary); err != nil {
-		return err
-	}
 
 	// Wrap yield: fill CallID/ToolName, count only !IsError chunks, call onChunk for successfully delivered non-error chunks.
 	// Context-safe: do not call yield if context is already cancelled (avoids goroutine leaks).
 	toolYield := r.wrapYieldWithMetadata(ctx, call, &summary, yield)
 
-	r.runToolWithValidationAndExecute(ctx, call, tool, toolYield, &summary)
+	r.runToolWithValidationAndExecute(ctx, call, run, tool, toolYield, &summary)
 	return summary.Error
 }
 
@@ -258,6 +219,7 @@ func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk)
 func (r *Registry) runToolWithValidationAndExecute(
 	ctx context.Context,
 	call ToolCall,
+	run RunContext,
 	tool Tool,
 	toolYield func(Chunk) error,
 	summary *ExecutionSummary,
@@ -272,7 +234,7 @@ func (r *Registry) runToolWithValidationAndExecute(
 			return
 		}
 	}
-	summary.Error = tool.Execute(ctx, call.Args, toolYield)
+	summary.Error = tool.Execute(ctx, run, call.Args, toolYield)
 	if errors.Is(summary.Error, context.DeadlineExceeded) {
 		summary.Error = ErrTimeout
 	}
@@ -288,7 +250,7 @@ func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chu
 		defer cancel()
 		var consumerStopped bool
 
-		err := r.Execute(ctxChild, call, func(c Chunk) error {
+		err := r.execute(ctxChild, call, func(c Chunk) error {
 			if consumerStopped {
 				return context.Canceled
 			}
@@ -333,6 +295,8 @@ func (r *Registry) releaseSemaphore() {
 // tagged with CallID and ToolName. Tool errors are sent as Chunk with IsError: true; the method
 // returns error only for critical failures (context cancelled, shutdown). The library serializes
 // calls to yield with a mutex so the caller's callback need not be thread-safe.
+//
+//nolint:gocognit
 func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yield func(Chunk) error) error {
 	if len(calls) == 0 {
 		return nil
@@ -345,6 +309,8 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 	}
 
 	var wg sync.WaitGroup
+	var suspendErr error
+	var suspendMu sync.Mutex
 	for _, call := range calls {
 		wg.Go(func() {
 			toolYield := func(c Chunk) error {
@@ -357,12 +323,21 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 				return safeYield(c)
 			}
 			if err := r.Execute(ctx, call, toolYield); err != nil {
+				if errors.Is(err, ErrSuspend) {
+					suspendMu.Lock()
+					if suspendErr == nil {
+						suspendErr = err
+					}
+					suspendMu.Unlock()
+					return
+				}
 				// Send tool error as chunk; do not return it from ExecuteBatchStream.
 				_ = safeYield(Chunk{
 					CallID:   call.ID,
 					ToolName: call.ToolName,
 					Event:    EventResult,
 					Data:     []byte(err.Error()),
+					MimeType: MimeTypeText,
 					IsError:  true,
 				})
 			}
@@ -372,6 +347,9 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 	// Return only critical failures to avoid goroutine leaks and to let callers see all chunks.
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if suspendErr != nil {
+		return suspendErr
 	}
 	return nil
 }

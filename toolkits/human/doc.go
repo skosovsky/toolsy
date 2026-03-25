@@ -1,4 +1,4 @@
-// Package human provides a human-in-the-loop (HITL) escalation toolkit: tools
-// for requesting approval and asking clarification from a human, bridged via
-// an EscalationHandler implemented by the orchestrator.
+// Package human provides suspend-first human-in-the-loop (HITL) tools.
+// Each execution yields one JSON suspend payload and then returns toolsy.ErrSuspend,
+// leaving checkpointing and resume mechanics to the orchestrator.
 package human

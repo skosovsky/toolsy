@@ -20,7 +20,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 		"Stream N chunks",
 		func(_ context.Context, a Args, yield func(Chunk) error) error {
 			for i := range a.N {
-				if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
+				if err := yield(Chunk{Data: []byte{byte('0' + i)}, MimeType: MimeTypeText}); err != nil {
 					return err
 				}
 			}
@@ -29,7 +29,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var chunks [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"n": 3}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"n": 3}`), func(c Chunk) error {
 		chunks = append(chunks, append([]byte(nil), c.Data...))
 		return nil
 	})
@@ -49,13 +49,13 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 		"abort",
 		"Abort on yield",
 		func(_ context.Context, _ Args, yield func(Chunk) error) error {
-			_ = yield(Chunk{Data: []byte("first")})
-			return yield(Chunk{Data: []byte("second")}) // will return yieldErr from caller
+			_ = yield(Chunk{Data: []byte("first"), MimeType: MimeTypeText})
+			return yield(Chunk{Data: []byte("second"), MimeType: MimeTypeText}) // will return yieldErr from caller
 		},
 	)
 	require.NoError(t, err)
 	var received [][]byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 1}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(c Chunk) error {
 		received = append(received, append([]byte(nil), c.Data...))
 		if string(c.Data) == "first" {
 			return nil
@@ -76,7 +76,7 @@ func TestNewStreamTool_ZeroChunks(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var count int
-	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error {
 		count++
 		return nil
 	})
@@ -97,7 +97,7 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	require.NoError(t, err)
 	var callCount int
 	var out R
-	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 5}`), func(c Chunk) error {
 		callCount++
 		out = c.RawData.(R)
 		return nil
@@ -115,7 +115,7 @@ func TestNewTool_YieldErrorReturnsErrStreamAborted(t *testing.T) {
 	})
 	require.NoError(t, err)
 	yieldErr := errors.New("connection closed")
-	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error {
 		return yieldErr
 	})
 	require.Error(t, err)

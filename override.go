@@ -154,7 +154,7 @@ func (t *overriddenTool) Parameters() map[string]any {
 	return t.next.Parameters()
 }
 
-func (t *overriddenTool) Execute(ctx context.Context, argsJSON []byte, yield func(Chunk) error) error {
+func (t *overriddenTool) Execute(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error {
 	if t.opts.name != nil {
 		alias := *t.opts.name
 		origYield := yield
@@ -163,5 +163,5 @@ func (t *overriddenTool) Execute(ctx context.Context, argsJSON []byte, yield fun
 			return origYield(c)
 		}
 	}
-	return t.next.Execute(ctx, argsJSON, yield)
+	return t.next.Execute(ctx, run, argsJSON, yield)
 }

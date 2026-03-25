@@ -136,7 +136,7 @@ func TestRegistry_Execute_PanicInYield(t *testing.T) {
 		"Yields twice",
 		func(_ context.Context, a A, yield func(Chunk) error) error {
 			for i := range a.N {
-				if err := yield(Chunk{Data: []byte{byte('0' + i)}}); err != nil {
+				if err := yield(Chunk{Data: []byte{byte('0' + i)}, MimeType: MimeTypeText}); err != nil {
 					return err
 				}
 			}
@@ -191,7 +191,11 @@ func TestContextSafeYield(t *testing.T) {
 					return err
 				}
 				atomic.StoreInt32(&yieldsBeforeCancel, int32(i+1))
-				if err := yield(Chunk{Event: EventResult, Data: []byte{byte('0' + i)}}); err != nil {
+				if err := yield(Chunk{
+					Event:    EventResult,
+					Data:     []byte{byte('0' + i)},
+					MimeType: MimeTypeText,
+				}); err != nil {
 					return err
 				}
 				time.Sleep(30 * time.Millisecond)
@@ -233,7 +237,11 @@ func TestExecuteIter_BreakCancelsContext(t *testing.T) {
 					return ctx.Err()
 				}
 				atomic.StoreInt32(&yieldCount, int32(i+1))
-				if err := yield(Chunk{Event: EventResult, Data: []byte{byte('0' + i)}}); err != nil {
+				if err := yield(Chunk{
+					Event:    EventResult,
+					Data:     []byte{byte('0' + i)},
+					MimeType: MimeTypeText,
+				}); err != nil {
 					return err
 				}
 			}
@@ -285,7 +293,10 @@ func TestExecuteIter_FullPass(t *testing.T) {
 		chunks = append(chunks, chunk)
 	}
 	require.Len(t, chunks, 1)
-	assert.Nil(t, chunks[0].Data)
+	assert.JSONEq(t, `{"y":42}`, string(chunks[0].Data))
+	if chunks[0].MimeType != MimeTypeJSON {
+		t.Fatalf("unexpected mime type: %s", chunks[0].MimeType)
+	}
 	assert.Equal(t, 42, chunks[0].RawData.(R).Y)
 	assert.NoError(t, finalErr)
 }
@@ -300,7 +311,7 @@ func TestRegistry_OnChunk_OnlySuccessfulChunks(t *testing.T) {
 	tool, err := NewStreamTool("stream", "Stream N", func(_ context.Context, a A, yield func(Chunk) error) error {
 		for i := range a.N {
 			b := []byte{byte('0' + i)}
-			if err := yield(Chunk{Data: b}); err != nil {
+			if err := yield(Chunk{Data: b, MimeType: MimeTypeText}); err != nil {
 				return err
 			}
 		}
@@ -594,8 +605,7 @@ func TestRegistry_ObservabilityHooks(t *testing.T) {
 	assert.Equal(t, "add_one", lastCall.ToolName)
 	assert.Equal(t, "h1", lastSummary.CallID)
 	assert.Equal(t, 1, lastSummary.ChunksDelivered)
-	// Typed result: Data is nil, so TotalBytes is 0
-	assert.Equal(t, int64(0), lastSummary.TotalBytes)
+	assert.Equal(t, int64(len(`{"y":11}`)), lastSummary.TotalBytes)
 	assert.GreaterOrEqual(t, lastDuration, time.Duration(0))
 }
 
@@ -646,12 +656,12 @@ type asyncYieldTool struct {
 func (t *asyncYieldTool) Name() string               { return t.base.Name() }
 func (t *asyncYieldTool) Description() string        { return t.base.Description() }
 func (t *asyncYieldTool) Parameters() map[string]any { return t.base.Parameters() }
-func (t *asyncYieldTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
+func (t *asyncYieldTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
 	_ = yield(Chunk{Event: EventProgress, RawData: "chunk1"})
 	_ = yield(Chunk{Event: EventProgress, RawData: "chunk2"})
 	_ = yield(Chunk{Event: EventResult, RawData: "chunk3"})
 	close(t.done)
-	return t.base.Execute(ctx, args, yield)
+	return t.base.Execute(ctx, run, args, yield)
 }
 
 // TestRegistry_ExecuteBatchStream_ErrorIsolation verifies that when one tool fails and another succeeds,
@@ -947,176 +957,4 @@ func TestRegistry_Validator_NilByDefault(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.Equal(t, 7, out.N)
-}
-
-// TestRegistry_Validator_IncrementsExecutionCount ensures counters are incremented before validator runs,
-// so a validator failure still consumes one step/retry (governance order: counters -> validator -> execution).
-func TestRegistry_Validator_IncrementsExecutionCount(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	var executed bool
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		executed = true
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(WithValidator(&testValidator{validateFn: func(_ context.Context, _, _ string) error {
-		return errors.New("always reject")
-	}}))
-	reg.Register(tool)
-	ctx := WithExecutionCounter(context.Background())
-	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.Error(t, err)
-	require.False(t, executed)
-	assert.Equal(t, int64(1), ExecutionCount(ctx), "execution count must increment even when validator fails")
-}
-
-// TestRegistry_Validator_MaxRetries_StopsLoop ensures that when validator always fails, the loop
-// is terminated by ErrMaxRetriesExceeded after N+1 attempts (EDoS protection).
-// Contract: WithMaxRetries(N) = 1 primary call + N retries; hard-stop (ErrMaxRetriesExceeded) on the (N+2)-th call of the same tool.
-func TestRegistry_Validator_MaxRetries_StopsLoop(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	var executed bool
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		executed = true
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(
-		WithMaxRetries(2),
-		WithValidator(&testValidator{validateFn: func(_ context.Context, _, _ string) error {
-			return errors.New("reject")
-		}}),
-	)
-	reg.Register(tool)
-	ctx := WithExecutionCounter(context.Background())
-	for i := 1; i <= 3; i++ {
-		err = reg.Execute(
-			ctx,
-			ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)},
-			func(Chunk) error { return nil },
-		)
-		require.Error(t, err)
-		require.True(t, IsClientError(err))
-		require.ErrorIs(t, err, ErrValidation)
-	}
-	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
-	require.False(t, executed)
-}
-
-func TestRegistry_MaxSteps_ExceedsLimit(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(WithMaxSteps(3))
-	reg.Register(tool)
-	ctx := WithExecutionCounter(context.Background())
-	for i := 1; i <= 3; i++ {
-		err = reg.Execute(
-			ctx,
-			ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)},
-			func(Chunk) error { return nil },
-		)
-		require.NoError(t, err)
-	}
-	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.ErrorIs(t, err, ErrMaxStepsExceeded)
-	assert.Equal(t, int64(4), ExecutionCount(ctx))
-}
-
-func TestRegistry_MaxSteps_NoCounterInCtx(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(WithMaxSteps(1))
-	reg.Register(tool)
-	for range 3 {
-		err = reg.Execute(
-			context.Background(),
-			ToolCall{ID: "n", ToolName: "noop", Args: raw(`{}`)},
-			func(Chunk) error { return nil },
-		)
-		require.NoError(t, err)
-	}
-}
-
-func TestRegistry_MaxSteps_Zero(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(WithMaxSteps(0))
-	reg.Register(tool)
-	ctx := WithExecutionCounter(context.Background())
-	for range 3 {
-		err = reg.Execute(ctx, ToolCall{ID: "z", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
-		require.NoError(t, err)
-	}
-	assert.Equal(t, int64(3), ExecutionCount(ctx), "counter tracks executions even when max-steps limit is disabled")
-}
-
-// TestRegistry_MaxRetries_ExceedsLimit verifies MaxRetries contract: WithMaxRetries(N) allows 1 primary + N retries
-// (N+1 executions total); the (N+2)-th call returns ErrMaxRetriesExceeded.
-func TestRegistry_MaxRetries_ExceedsLimit(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry(WithMaxRetries(2))
-	reg.Register(tool)
-	ctx := WithExecutionCounter(context.Background())
-	for i := 1; i <= 3; i++ {
-		err = reg.Execute(
-			ctx,
-			ToolCall{ID: string(rune('0' + i)), ToolName: "noop", Args: raw(`{}`)},
-			func(Chunk) error { return nil },
-		)
-		require.NoError(t, err)
-	}
-	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
-	assert.Equal(t, int64(3), RetriesCount(ctx)) // 1 initial + 2 retries allowed; 4th call increments to 3 and exceeds
-}
-
-func TestRegistry_MaxRetries_ResetOnDifferentTool(t *testing.T) {
-	type A struct{}
-	type R struct{}
-	tool1, err := NewTool("noop1", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-	tool2, err := NewTool("noop2", "Noop", func(_ context.Context, _ A) (R, error) {
-		return R{}, nil
-	})
-	require.NoError(t, err)
-
-	reg := NewRegistry(WithMaxRetries(2))
-	reg.Register(tool1)
-	reg.Register(tool2)
-
-	ctx := WithExecutionCounter(context.Background())
-	err = reg.Execute(ctx, ToolCall{ID: "1", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.NoError(t, err)
-	err = reg.Execute(ctx, ToolCall{ID: "2", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.NoError(t, err)
-	err = reg.Execute(ctx, ToolCall{ID: "3", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.NoError(t, err)
-	err = reg.Execute(ctx, ToolCall{ID: "4", ToolName: "noop1", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.ErrorIs(t, err, ErrMaxRetriesExceeded)
-
-	err = reg.Execute(ctx, ToolCall{ID: "5", ToolName: "noop2", Args: raw(`{}`)}, func(Chunk) error { return nil })
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), RetriesCount(ctx)) // reset to 0 for the new tool (no retries yet)
 }

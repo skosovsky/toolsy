@@ -8,7 +8,6 @@ const defaultMaxResponseBytes = 512 * 1024
 type Options struct {
 	HTTPClient       *http.Client
 	BaseURL          string
-	AuthHeader       string
 	AllowedTags      []string
 	AllowedMethods   []string
 	MaxResponseBytes int

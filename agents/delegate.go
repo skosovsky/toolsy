@@ -10,6 +10,12 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const (
+	createTaskAuthToolName  = "agents.create_task"
+	cancelTaskAuthToolName  = "agents.cancel_task"
+	streamStepsAuthToolName = "agents.stream_steps"
+)
+
 // formatStepOutput builds a single Markdown string from step text and artifacts.
 // Artifacts with Data (base64) are rendered as ![FileName](data:MimeType;base64,Data) for multimodal models.
 func formatStepOutput(text string, artifacts []Artifact) string {
@@ -38,8 +44,17 @@ func formatStepOutput(text string, artifacts []Artifact) string {
 	return b.String()
 }
 
+func resolveAuthHeader(ctx context.Context, run toolsy.RunContext, toolName string) (string, error) {
+	if run.Credentials == nil {
+		return "", nil
+	}
+	return run.Credentials.GetAuth(ctx, toolName)
+}
+
 // AsTool creates a toolsy.Tool that delegates to the Agent Protocol: CreateTask, stream steps, yield progress and final result.
 // inputSchema is the JSON Schema the orchestrator must satisfy; args are sent as task input.
+//
+//nolint:gocognit
 func AsTool(name, description string, inputSchema []byte, client *Client) (toolsy.Tool, error) {
 	if client == nil {
 		return nil, errors.New("agents: client is nil")
@@ -47,26 +62,39 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 	if len(inputSchema) == 0 {
 		return nil, errors.New("agents: inputSchema must not be empty")
 	}
-	return toolsy.NewProxyTool(name, description, inputSchema,
-		func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {
-			task, err := client.CreateTask(ctx, args)
+	return toolsy.NewProxyToolWithRun(name, description, inputSchema,
+		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
+			if authErr != nil {
+				return fmt.Errorf("agents: get create task auth: %w", authErr)
+			}
+			task, err := client.CreateTask(ctx, args, createAuth)
 			if err != nil {
 				return fmt.Errorf("agents: create task: %w", err)
 			}
+			streamAuth, authErr := resolveAuthHeader(ctx, run, streamStepsAuthToolName)
+			if authErr != nil {
+				return fmt.Errorf("agents: get stream steps auth: %w", authErr)
+			}
 			defer func() {
 				if ctx.Err() != nil {
-					_ = client.CancelTask(context.Background(), task.TaskID)
+					cancelCtx := context.WithoutCancel(ctx)
+					cancelAuth, cancelErr := resolveAuthHeader(cancelCtx, run, cancelTaskAuthToolName)
+					if cancelErr == nil {
+						_ = client.CancelTask(cancelCtx, task.TaskID, cancelAuth)
+					}
 				}
 			}()
-			for step, streamErr := range client.StreamSteps(ctx, task.TaskID) {
+			for step, streamErr := range client.StreamSteps(ctx, task.TaskID, streamAuth) {
 				if streamErr != nil {
 					return fmt.Errorf("agents: stream error: %w", streamErr)
 				}
 				if step.IsLast {
 					finalData := formatStepOutput(step.Output, step.Artifacts)
 					return yield(toolsy.Chunk{
-						Event: toolsy.EventResult,
-						Data:  []byte(finalData),
+						Event:    toolsy.EventResult,
+						Data:     []byte(finalData),
+						MimeType: toolsy.MimeTypeText,
 					})
 				}
 				if yieldErr := yield(toolsy.Chunk{
@@ -91,14 +119,18 @@ func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.
 	if len(schema) == 0 {
 		return nil, errors.New("agents: schema must not be empty")
 	}
-	return toolsy.NewProxyTool(name, desc, schema,
-		func(ctx context.Context, args []byte, yield func(toolsy.Chunk) error) error {
-			task, err := client.CreateTask(ctx, args)
+	return toolsy.NewProxyToolWithRun(name, desc, schema,
+		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
+			if authErr != nil {
+				return fmt.Errorf("agents: get create task auth: %w", authErr)
+			}
+			task, err := client.CreateTask(ctx, args, createAuth)
 			if err != nil {
 				return fmt.Errorf("agents: create task: %w", err)
 			}
 			out, _ := json.Marshal(map[string]string{"task_id": task.TaskID})
-			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out})
+			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
 		},
 	)
 }

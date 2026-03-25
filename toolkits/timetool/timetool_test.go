@@ -19,14 +19,17 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 	currentTool := tools[0]
 
 	var result currentResult
-	require.NoError(t, currentTool.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(currentResult); ok {
-				result = r
+	require.NoError(
+		t,
+		currentTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(currentResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Regexp(t, rfc3339Re, result.UTC)
 	require.Regexp(t, rfc3339Re, result.Local)
 	require.NotEmpty(t, result.Weekday)
@@ -44,6 +47,7 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -70,6 +74,7 @@ func TestTimeCalculate_InvalidBaseDate_ClientError(t *testing.T) {
 
 	err = calculateTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -85,6 +90,7 @@ func TestTimeCalculate_EmptyBaseDate_ClientError(t *testing.T) {
 
 	err = calculateTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"add_days":0,"add_hours":0}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -108,6 +114,7 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -140,6 +147,7 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {
@@ -176,6 +184,7 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
 			func(c toolsy.Chunk) error {
 				if c.RawData != nil {

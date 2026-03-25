@@ -56,6 +56,7 @@ func TestMailSend_ArgsPassed(t *testing.T) {
 		t,
 		tools[0].Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"to":["a@b.com"],"subject":"Hi","body":"Hello"}`),
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -69,6 +70,7 @@ func TestMailSend_EmptyTo_ClientError(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"to":[],"subject":"x","body":"y"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -89,14 +91,19 @@ func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
 	var result searchResult
 	require.NoError(
 		t,
-		searchTool.Execute(context.Background(), []byte(`{"query":"test","limit":5}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(searchResult); ok {
-					result = r
+		searchTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"query":"test","limit":5}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(searchResult); ok {
+						result = r
+					}
 				}
-			}
-			return nil
-		}),
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Results, "1")
 	require.Contains(t, result.Results, "a@b.com")
@@ -111,6 +118,7 @@ func TestMailSearch_EmptyQuery_ClientError(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"query":"   ","limit":5}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -128,14 +136,22 @@ func TestMailReadMessage_ReturnsBody(t *testing.T) {
 	readTool := tools[1]
 
 	var result readResult
-	require.NoError(t, readTool.Execute(context.Background(), []byte(`{"message_id":"1"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(readResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		readTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"message_id":"1"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(readResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Body, "Body text")
 	require.Contains(t, result.Body, "x@y.com")
 	require.Contains(t, result.Body, "Subj")
@@ -146,7 +162,12 @@ func TestMailRead_EmptyMessageID_ClientError(t *testing.T) {
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
-	err = tools[1].Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err = tools[1].Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		[]byte(`{}`),
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "message_id")
@@ -159,6 +180,7 @@ func TestMailRead_WhitespaceOnlyMessageID_ClientError(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"message_id":"   \t"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -174,14 +196,22 @@ func TestMailRead_PlainTextWithAngleBrackets_NotConverted(t *testing.T) {
 	require.NoError(t, err)
 
 	var result readResult
-	require.NoError(t, tools[1].Execute(context.Background(), []byte(`{"message_id":"1"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(readResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"message_id":"1"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(readResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Body, "x < 5")
 	require.Contains(t, result.Body, "y > 0")
 	require.Contains(t, result.Body, "<-")
@@ -227,6 +257,7 @@ func TestMailSend_HandlerError_Wrapped(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"to":["a@b.com"],"subject":"x","body":"y"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -250,14 +281,22 @@ func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
 	require.NoError(t, err)
 
 	var result readResult
-	require.NoError(t, tools[1].Execute(context.Background(), []byte(`{"message_id":"1"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(readResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"message_id":"1"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(readResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Body, "Hello")
 	require.Contains(t, result.Body, "world")
 	require.NotContains(t, result.Body, "<p>")

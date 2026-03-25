@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 const truncationSuffix = "\n[Truncated]"
@@ -35,23 +36,28 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		opt(&o)
 	}
 	applyDefaults(&o)
+	if hasForbiddenHeaders(o.headers) {
+		return nil, errors.New(
+			"toolkit/httptool: static Authorization headers are not allowed; use toolsy.CredentialsProvider",
+		)
+	}
 
-	getTool, err := toolsy.NewTool[getArgs, httpResult](
+	getTool, err := toolsy.NewToolWithRun[getArgs, httpResult](
 		o.getName,
 		o.getDesc,
-		func(ctx context.Context, args getArgs) (httpResult, error) {
-			return doGET(ctx, &o, args.URL)
+		func(ctx context.Context, run toolsy.RunContext, args getArgs) (httpResult, error) {
+			return doGET(ctx, run, o.getName, &o, args.URL)
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/httptool: build get tool: %w", err)
 	}
 
-	postTool, err := toolsy.NewTool[postArgs, httpResult](
+	postTool, err := toolsy.NewToolWithRun[postArgs, httpResult](
 		o.postName,
 		o.postDesc,
-		func(ctx context.Context, args postArgs) (httpResult, error) {
-			return doPOST(ctx, &o, args.URL, args.JSONBody)
+		func(ctx context.Context, run toolsy.RunContext, args postArgs) (httpResult, error) {
+			return doPOST(ctx, run, o.postName, &o, args.URL, args.JSONBody)
 		},
 	)
 	if err != nil {
@@ -61,7 +67,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	return []toolsy.Tool{getTool, postTool}, nil
 }
 
-func doGET(ctx context.Context, o *options, rawURL string) (httpResult, error) {
+func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *options, rawURL string) (httpResult, error) {
 	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
 		return httpResult{}, err
@@ -73,6 +79,15 @@ func doGET(ctx context.Context, o *options, rawURL string) (httpResult, error) {
 	}
 	for k, v := range o.headers {
 		req.Header.Set(k, v)
+	}
+	if run.Credentials != nil {
+		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
+		if authErr != nil {
+			return httpResult{}, fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr)
+		}
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
+		}
 	}
 
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
@@ -89,7 +104,14 @@ func doGET(ctx context.Context, o *options, rawURL string) (httpResult, error) {
 	return httpResult{Status: resp.StatusCode, Body: body}, nil
 }
 
-func doPOST(ctx context.Context, o *options, rawURL string, jsonBody map[string]any) (httpResult, error) {
+func doPOST(
+	ctx context.Context,
+	run toolsy.RunContext,
+	toolName string,
+	o *options,
+	rawURL string,
+	jsonBody map[string]any,
+) (httpResult, error) {
 	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
 		return httpResult{}, err
@@ -114,6 +136,15 @@ func doPOST(ctx context.Context, o *options, rawURL string, jsonBody map[string]
 	for k, v := range o.headers {
 		req.Header.Set(k, v)
 	}
+	if run.Credentials != nil {
+		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
+		if authErr != nil {
+			return httpResult{}, fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr)
+		}
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
+		}
+	}
 
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
 	resp, err := o.httpClient.Do(req) // #nosec G704
@@ -132,15 +163,9 @@ func doPOST(ctx context.Context, o *options, rawURL string, jsonBody map[string]
 // readAndTruncate reads up to maxBytes from r. If more than maxBytes are available, returns
 // UTF-8 safe truncation plus truncationSuffix. Caller must drain r after return (e.g. via defer).
 func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
-	limited := io.LimitReader(r, int64(maxBytes)+1)
-	b, err := io.ReadAll(limited)
+	text, err := textutil.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
 	if err != nil {
 		return "", fmt.Errorf("toolkit/httptool: read body: %w", err)
 	}
-	if len(b) > maxBytes {
-		trunc := b[:maxBytes]
-		trunc = []byte(strings.ToValidUTF8(string(trunc), ""))
-		return string(trunc) + truncationSuffix, nil
-	}
-	return strings.ToValidUTF8(string(b), ""), nil
+	return text, nil
 }

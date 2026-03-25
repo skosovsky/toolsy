@@ -1064,7 +1064,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\t\tif err != nil {\n")
 		buf.WriteString("\t\t\t\tif havePending {\n")
 		buf.WriteString(
-			"\t\t\t\t\tif err := yield(toolsy.Chunk{Event: toolsy.EventProgress, Data: []byte(pending)}); err != nil {\n",
+			"\t\t\t\t\tif err := yield(toolsy.Chunk{Event: toolsy.EventProgress, Data: []byte(pending), MimeType: toolsy.MimeTypeText}); err != nil {\n",
 		)
 		buf.WriteString("\t\t\t\t\t\treturn err\n")
 		buf.WriteString("\t\t\t\t\t}\n")
@@ -1073,7 +1073,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\t\t}\n")
 		buf.WriteString("\t\t\tif havePending {\n")
 		buf.WriteString(
-			"\t\t\t\tif err := yield(toolsy.Chunk{Event: toolsy.EventProgress, Data: []byte(pending)}); err != nil {\n",
+			"\t\t\t\tif err := yield(toolsy.Chunk{Event: toolsy.EventProgress, Data: []byte(pending), MimeType: toolsy.MimeTypeText}); err != nil {\n",
 		)
 		buf.WriteString("\t\t\t\t\treturn err\n")
 		buf.WriteString("\t\t\t\t}\n")
@@ -1084,13 +1084,21 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\tif !havePending {\n")
 		buf.WriteString("\t\t\treturn yield(toolsy.Chunk{Event: toolsy.EventResult})\n")
 		buf.WriteString("\t\t}\n")
-		buf.WriteString("\t\treturn yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(pending)})\n")
+		buf.WriteString("\t\treturn yield(toolsy.Chunk{\n")
+		buf.WriteString("\t\t\tEvent:    toolsy.EventResult,\n")
+		buf.WriteString("\t\t\tData:     []byte(pending),\n")
+		buf.WriteString("\t\t\tMimeType: toolsy.MimeTypeText,\n")
+		buf.WriteString("\t\t})\n")
 	} else {
 		buf.WriteString("\t\tresult, err := handler.Execute(ctx, input)\n")
 		buf.WriteString("\t\tif err != nil {\n")
 		buf.WriteString("\t\t\treturn err\n")
 		buf.WriteString("\t\t}\n")
-		buf.WriteString("\t\treturn yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(result)})\n")
+		buf.WriteString("\t\treturn yield(toolsy.Chunk{\n")
+		buf.WriteString("\t\t\tEvent:    toolsy.EventResult,\n")
+		buf.WriteString("\t\t\tData:     []byte(result),\n")
+		buf.WriteString("\t\t\tMimeType: toolsy.MimeTypeText,\n")
+		buf.WriteString("\t\t})\n")
 	}
 	buf.WriteString("\t})\n")
 	buf.WriteString("}\n")

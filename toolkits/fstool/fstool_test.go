@@ -22,14 +22,17 @@ func TestFSListDir_Success(t *testing.T) {
 	listTool := tools[0]
 
 	var result listResult
-	require.NoError(t, listTool.Execute(context.Background(), []byte(`{"path":""}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(listResult); ok {
-				result = r
+	require.NoError(
+		t,
+		listTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"path":""}`), func(c toolsy.Chunk) error {
+			if c.RawData != nil {
+				if r, ok := c.RawData.(listResult); ok {
+					result = r
+				}
 			}
-		}
-		return nil
-	}))
+			return nil
+		}),
+	)
 	require.Len(t, result.Entries, 2)
 	names := make([]string, len(result.Entries))
 	for i, e := range result.Entries {
@@ -49,14 +52,22 @@ func TestFSReadFile_Success(t *testing.T) {
 	readTool := tools[1]
 
 	var result readResult
-	require.NoError(t, readTool.Execute(context.Background(), []byte(`{"path":"f.txt"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(readResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		readTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"path":"f.txt"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(readResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Equal(t, content, result.Content)
 }
 
@@ -73,14 +84,22 @@ func TestFSReadFile_Truncation(t *testing.T) {
 	readTool := tools[1]
 
 	var result readResult
-	require.NoError(t, readTool.Execute(context.Background(), []byte(`{"path":"big.txt"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if r, ok := c.RawData.(readResult); ok {
-				result = r
-			}
-		}
-		return nil
-	}))
+	require.NoError(
+		t,
+		readTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			[]byte(`{"path":"big.txt"}`),
+			func(c toolsy.Chunk) error {
+				if c.RawData != nil {
+					if r, ok := c.RawData.(readResult); ok {
+						result = r
+					}
+				}
+				return nil
+			},
+		),
+	)
 	require.Contains(t, result.Content, "[Truncated]")
 	require.LessOrEqual(t, len(result.Content), 20+len(truncationSuffix)+5)
 }
@@ -95,6 +114,7 @@ func TestFSWriteFile_Success(t *testing.T) {
 		t,
 		writeTool.Execute(
 			context.Background(),
+			toolsy.RunContext{},
 			[]byte(`{"path":"a/b/f.txt","content":"written"}`),
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -119,6 +139,7 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"path":"uploads/link/evil.txt","content":"x"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -142,6 +163,7 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"path":"report.txt","content":"x"}`),
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -167,6 +189,7 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 
 	err = listTool.Execute(
 		context.Background(),
+		toolsy.RunContext{},
 		[]byte(`{"path":"../../etc"}`),
 		func(toolsy.Chunk) error { return nil },
 	)

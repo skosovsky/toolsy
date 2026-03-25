@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
@@ -19,6 +20,8 @@ const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 // execute runs the HTTP request for one operation: path params in path, query params in query string, body params in body only.
 func execute(
 	ctx context.Context,
+	run toolsy.RunContext,
+	toolName string,
 	method, pathTemplate string,
 	pathParamNames, queryParamNames []string,
 	bodyParamNames []string,
@@ -64,8 +67,14 @@ func execute(
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if opts.AuthHeader != "" {
-		req.Header.Set("Authorization", opts.AuthHeader)
+	if run.Credentials != nil {
+		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
+		if authErr != nil {
+			return fmt.Errorf("openapi: credentials for %s: %w", toolName, authErr)
+		}
+		if authHeader != "" {
+			req.Header.Set("Authorization", authHeader)
+		}
 	}
 
 	resp, err := client.Do(req) // #nosec G704 -- URL from Options/spec, not user input
@@ -74,20 +83,12 @@ func execute(
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	data, err := io.ReadAll(resp.Body)
+	text, err := textutil.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("openapi: read response: %w", err)
 	}
 
-	maxBytes := opts.maxResponseBytes()
-	if maxBytes > 0 && len(data) > maxBytes {
-		truncated := make([]byte, maxBytes, maxBytes+len(truncationSuffix))
-		copy(truncated, data[:maxBytes])
-		truncated = append(truncated, truncationSuffix...)
-		data = truncated
-	}
-
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data})
+	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(text), MimeType: toolsy.MimeTypeText})
 }
 
 func parseArgsJSON(argsJSON []byte) (map[string]any, error) {

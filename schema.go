@@ -11,21 +11,26 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// Package-wide registry for custom type→JSON Schema mappings (see RegisterType).
-//
-//nolint:gochecknoglobals // Process-wide map protected by mutex; RegisterType is at init/runtime.
-var (
-	customTypesMu sync.RWMutex
-	customTypes   = make(map[reflect.Type]*jsonschema.Schema)
-)
+// SchemaRegistry stores custom type to JSON Schema mappings for typed builders/extractors.
+type SchemaRegistry struct {
+	mu    sync.RWMutex
+	types map[reflect.Type]*jsonschema.Schema
+}
+
+// NewSchemaRegistry creates an empty schema registry.
+func NewSchemaRegistry() *SchemaRegistry {
+	return &SchemaRegistry{
+		mu:    sync.RWMutex{},
+		types: make(map[reflect.Type]*jsonschema.Schema),
+	}
+}
 
 // RegisterType registers a custom Go type to be mapped to a JSON Schema type/format in generated schemas.
 // emptyInstance is a value of the type to register (e.g. uuid.UUID{}, or MyMoney{}); it must not be nil.
 // jsonType is the JSON Schema type (e.g. "string", "number"); it must not be empty.
 // format is optional (e.g. "uuid", "decimal"). Registration is by [reflect.TypeOf](emptyInstance).
 // Pointer fields (*T) use the same mapping as T; call RegisterType once for the value type.
-// Call RegisterType at application startup before the first NewTool or NewExtractor.
-func RegisterType(emptyInstance any, jsonType, format string) {
+func (r *SchemaRegistry) RegisterType(emptyInstance any, jsonType, format string) {
 	if emptyInstance == nil {
 		panic("toolsy: RegisterType emptyInstance must not be nil")
 	}
@@ -34,21 +39,29 @@ func RegisterType(emptyInstance any, jsonType, format string) {
 	}
 	t := reflect.TypeOf(emptyInstance)
 	s := &jsonschema.Schema{Type: jsonType, Format: format}
-	customTypesMu.Lock()
-	defer customTypesMu.Unlock()
-	if customTypes == nil {
-		customTypes = make(map[reflect.Type]*jsonschema.Schema)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.types == nil {
+		r.types = make(map[reflect.Type]*jsonschema.Schema)
 	}
-	customTypes[t] = s
+	r.types[t] = s
 }
 
-// buildTypeSchemas returns a copy of registered type schemas for use in ForOptions.
-// Caller holds no lock; safe for concurrent use with RegisterType.
-func buildTypeSchemas() map[reflect.Type]*jsonschema.Schema {
-	customTypesMu.RLock()
-	defer customTypesMu.RUnlock()
-	out := make(map[reflect.Type]*jsonschema.Schema, len(customTypes))
-	for t, s := range customTypes {
+func ensureSchemaConfig(cfg SchemaConfig) SchemaConfig {
+	if cfg.Registry == nil {
+		cfg.Registry = NewSchemaRegistry()
+	}
+	return cfg
+}
+
+func (r *SchemaRegistry) buildTypeSchemas() map[reflect.Type]*jsonschema.Schema {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[reflect.Type]*jsonschema.Schema, len(r.types))
+	for t, s := range r.types {
 		if s != nil {
 			out[t] = s.CloneSchemas()
 		}
@@ -57,10 +70,11 @@ func buildTypeSchemas() map[reflect.Type]*jsonschema.Schema {
 }
 
 // generateSchema produces a JSON Schema map and a resolved validator for type T.
-// It is called once when building a Tool. strict sets additionalProperties: false
-// for all objects (OpenAI Structured Outputs).
-func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Resolved, error) {
-	opts := &jsonschema.ForOptions{TypeSchemas: buildTypeSchemas()}
+// It is called once when building a Tool. cfg.Strict sets additionalProperties: false
+// for all objects (OpenAI Structured Outputs). cfg.Registry controls custom type mappings.
+func generateSchema[T any](cfg SchemaConfig) (map[string]any, *jsonschema.Resolved, error) {
+	cfg = ensureSchemaConfig(cfg)
+	opts := &jsonschema.ForOptions{TypeSchemas: cfg.Registry.buildTypeSchemas()}
 	schema, err := jsonschema.For[T](opts)
 	if err != nil {
 		return nil, nil, err
@@ -77,7 +91,7 @@ func generateSchema[T any](strict bool) (map[string]any, *jsonschema.Resolved, e
 		return nil, nil, unmarshalErr
 	}
 	enrichSchemaFromStructTags(schemaMap, reflect.TypeOf(*new(T)))
-	if strict {
+	if cfg.Strict {
 		applyStrictMode(schemaMap)
 	}
 	stripSchemaIDs(schemaMap)
@@ -104,7 +118,6 @@ func enrichSchemaFromStructTags(schemaMap map[string]any, typ reflect.Type) {
 	if !ok || len(props) == 0 {
 		return
 	}
-	// Build json name -> field for root struct
 	jsonToField := make(map[string]reflect.StructField)
 	for field := range typ.Fields() {
 		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]

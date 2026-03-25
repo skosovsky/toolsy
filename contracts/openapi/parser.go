@@ -40,7 +40,7 @@ func ParseURL(ctx context.Context, specURL string, opts Options) ([]toolsy.Tool,
 		return nil, fmt.Errorf("openapi: parse spec: %w", err)
 	}
 
-	return docToTools(ctx, doc, &opts)
+	return docToTools(doc, &opts)
 }
 
 // serverURLWithDefaults returns server URL with {variable} placeholders replaced by Server.Variables[].Default when set.
@@ -60,7 +60,7 @@ func serverURLWithDefaults(s openapi3.Server) string {
 	return u
 }
 
-func docToTools(_ context.Context, doc *openapi3.T, opts *Options) ([]toolsy.Tool, error) {
+func docToTools(doc *openapi3.T, opts *Options) ([]toolsy.Tool, error) {
 	workingOpts := *opts
 	if workingOpts.BaseURL == "" && len(doc.Servers) > 0 {
 		if url := serverURLWithDefaults(*doc.Servers[0]); url != "" {
@@ -113,13 +113,15 @@ func toolsForPath(
 		pathTemplate := path
 		methodCopy := method
 		optsCopy := *opts
-		tool, err := toolsy.NewProxyTool(
+		tool, err := toolsy.NewProxyToolWithRun(
 			name,
 			desc,
 			schemaBytes,
-			func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+			func(ctx context.Context, run toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 				return execute(
 					ctx,
+					run,
+					name,
 					methodCopy,
 					pathTemplate,
 					pathNames,

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -87,22 +88,19 @@ func runBatchStream(reg *toolsy.Registry) error {
 			log.Printf("tool error [%s]: %s", c.ToolName, c.Data)
 			return nil
 		}
-		if c.RawData == nil {
-			return nil
-		}
 		switch c.ToolName {
 		case "add":
-			out, ok := c.RawData.(AddOut)
-			if !ok {
-				log.Printf("unexpected RawData type for add: %T", c.RawData)
-				break
+			var out AddOut
+			if err := json.Unmarshal(c.Data, &out); err != nil {
+				log.Printf("decode add result: %v", err)
+				return nil
 			}
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", idx, out.Sum)
 		case "mul":
-			out, ok := c.RawData.(MulOut)
-			if !ok {
-				log.Printf("unexpected RawData type for mul: %T", c.RawData)
-				break
+			var out MulOut
+			if err := json.Unmarshal(c.Data, &out); err != nil {
+				log.Printf("decode mul result: %v", err)
+				return nil
 			}
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] mul: product=%d\n", idx, out.Product)
 		}

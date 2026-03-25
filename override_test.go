@@ -43,13 +43,13 @@ func TestOverrideTool_PartialOverride(t *testing.T) {
 func TestOverrideTool_ExecutesBase(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "echo",
-		ExecuteFn: func(_ context.Context, args []byte, yield func(toolsy.Chunk) error) error {
-			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: args})
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: args, MimeType: toolsy.MimeTypeJSON})
 		},
 	}
 	wrapped := toolsy.OverrideTool(base, toolsy.WithNewName("wrapped_echo"))
 	var got []byte
-	err := wrapped.Execute(context.Background(), []byte(`{"a":1}`), func(c toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"a":1}`), func(c toolsy.Chunk) error {
 		got = c.Data
 		return nil
 	})
@@ -60,7 +60,7 @@ func TestOverrideTool_ExecutesBase(t *testing.T) {
 func TestOverrideTool_ThreadSafety(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "base",
-		ExecuteFn: func(_ context.Context, _ []byte, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ []byte, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult})
 		},
 	}
@@ -72,8 +72,18 @@ func TestOverrideTool_ThreadSafety(t *testing.T) {
 			w2 := toolsy.OverrideTool(base, toolsy.WithNewDescription("desc2"))
 			_ = w1.Name()
 			_ = w2.Description()
-			_ = w1.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
-			_ = w2.Execute(context.Background(), []byte(`{}`), func(toolsy.Chunk) error { return nil })
+			_ = w1.Execute(
+				context.Background(),
+				toolsy.RunContext{},
+				[]byte(`{}`),
+				func(toolsy.Chunk) error { return nil },
+			)
+			_ = w2.Execute(
+				context.Background(),
+				toolsy.RunContext{},
+				[]byte(`{}`),
+				func(toolsy.Chunk) error { return nil },
+			)
 		})
 	}
 	wg.Wait()
@@ -176,14 +186,14 @@ func TestOverrideTool_Parameters_StringSliceAndStringMapCopied(t *testing.T) {
 func TestOverrideTool_Execute_ChunkToolNameUsesAlias(t *testing.T) {
 	base := &testutil.MockTool{
 		NameVal: "internal_tool",
-		ExecuteFn: func(_ context.Context, _ []byte, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ []byte, yield func(toolsy.Chunk) error) error {
 			// Base tool sets ToolName to its own name; wrapper should override to alias.
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, ToolName: "internal_tool", RawData: "ok"})
 		},
 	}
 	wrapped := toolsy.OverrideTool(base, toolsy.WithNewName("public_alias"))
 	var gotChunk toolsy.Chunk
-	err := wrapped.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
 		gotChunk = c
 		return nil
 	})

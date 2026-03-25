@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
@@ -144,7 +145,7 @@ func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes 
 	}
 	body := args.Body
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = body[:maxBodyBytes] + "\n[Truncated]"
+		body = textutil.TruncateStringUTF8(body, maxBodyBytes, "\n[Truncated]")
 	}
 	err := sender.Send(ctx, OutgoingMessage{To: args.To, Subject: args.Subject, Body: body})
 	if err != nil {
@@ -204,7 +205,7 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes 
 	}
 	body := normalizeBody(msg.Body)
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = body[:maxBodyBytes] + "\n[Truncated]"
+		body = textutil.TruncateStringUTF8(body, maxBodyBytes, "\n[Truncated]")
 	}
 	var b strings.Builder
 	b.WriteString("From: ")

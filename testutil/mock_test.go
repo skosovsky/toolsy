@@ -21,15 +21,15 @@ func TestMockTool(t *testing.T) {
 		NameVal:   "test_tool",
 		DescVal:   "For tests",
 		ParamsVal: map[string]any{"type": "object"},
-		ExecuteFn: func(_ context.Context, _ []byte, yield func(toolsy.Chunk) error) error {
-			return yield(toolsy.Chunk{Data: []byte(`{"done":true}`)})
+		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ []byte, yield func(toolsy.Chunk) error) error {
+			return yield(toolsy.Chunk{Data: []byte(`{"done":true}`), MimeType: toolsy.MimeTypeJSON})
 		},
 	}
 	assert.Equal(t, "test_tool", m.Name())
 	assert.Equal(t, "For tests", m.Description())
 	assert.Equal(t, map[string]any{"type": "object"}, m.Parameters())
 	var out []byte
-	err := m.Execute(context.Background(), []byte(`{}`), func(c toolsy.Chunk) error {
+	err := m.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
 		out = c.Data
 		return nil
 	})
@@ -42,9 +42,17 @@ func TestMockTool(t *testing.T) {
 }
 
 func TestNewTestRegistry(t *testing.T) {
-	m := &MockTool{NameVal: "m", ExecuteFn: func(_ context.Context, _ []byte, yield func(toolsy.Chunk) error) error {
-		return yield(toolsy.Chunk{Data: []byte(`{}`)})
-	}}
+	m := &MockTool{
+		NameVal: "m",
+		ExecuteFn: func(
+			_ context.Context,
+			_ toolsy.RunContext,
+			_ []byte,
+			yield func(toolsy.Chunk) error,
+		) error {
+			return yield(toolsy.Chunk{Data: []byte(`{}`), MimeType: toolsy.MimeTypeJSON})
+		},
+	}
 	reg := NewTestRegistry(m)
 	require.NotNil(t, reg)
 	all := reg.GetAllTools()

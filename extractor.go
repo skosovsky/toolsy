@@ -19,7 +19,15 @@ type Extractor[T any] struct {
 // NewExtractor creates an Extractor for type T. When strict is true, the generated schema
 // has additionalProperties: false for all objects and all properties required (OpenAI Structured Outputs).
 func NewExtractor[T any](strict bool) (*Extractor[T], error) {
-	schemaMap, resolved, err := generateSchema[T](strict)
+	return NewExtractorWithConfig[T](SchemaConfig{
+		Strict:   strict,
+		Registry: nil,
+	})
+}
+
+// NewExtractorWithConfig creates an Extractor for type T using the provided schema configuration.
+func NewExtractorWithConfig[T any](cfg SchemaConfig) (*Extractor[T], error) {
+	schemaMap, resolved, err := generateSchema[T](cfg)
 	if err != nil {
 		return nil, err
 	}

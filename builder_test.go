@@ -39,8 +39,11 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var out Result
-	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
-		assert.Nil(t, c.Data, "Data must be nil for typed result (zero-cost)")
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 5}`), func(c Chunk) error {
+		assert.JSONEq(t, `{"y":6}`, string(c.Data))
+		if c.MimeType != MimeTypeJSON {
+			t.Fatalf("unexpected mime type: %s", c.MimeType)
+		}
 		out = c.RawData.(Result)
 		return nil
 	})
@@ -48,7 +51,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	assert.Equal(t, 6, out.Y)
 }
 
-// TestNewTool_RawData_ZeroCost verifies that NewTool yields RawData only, Data is nil (no [json.Marshal] in core).
+// TestNewTool_RawData_Compatibility verifies that typed builders preserve RawData while also emitting JSON bytes.
 func TestNewTool_RawData_ZeroCost(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
@@ -61,12 +64,15 @@ func TestNewTool_RawData_ZeroCost(t *testing.T) {
 	})
 	require.NoError(t, err)
 	var chunk Chunk
-	err = tool.Execute(context.Background(), []byte(`{"x": 5}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 5}`), func(c Chunk) error {
 		chunk = c
 		return nil
 	})
 	require.NoError(t, err)
-	assert.Nil(t, chunk.Data)
+	assert.JSONEq(t, `{"y":6}`, string(chunk.Data))
+	if chunk.MimeType != MimeTypeJSON {
+		t.Fatalf("unexpected mime type: %s", chunk.MimeType)
+	}
 	require.NotNil(t, chunk.RawData)
 	out := chunk.RawData.(MyOut)
 	assert.Equal(t, 6, out.Y)
@@ -81,7 +87,7 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	err = tool.Execute(context.Background(), []byte(`{invalid`), func(Chunk) error { return nil })
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{invalid`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -96,7 +102,12 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	// Wrong type for count (string instead of int) yields schema validation error
-	err = tool.Execute(context.Background(), []byte(`{"count": "not a number"}`), func(Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		[]byte(`{"count": "not a number"}`),
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -196,7 +207,7 @@ func BenchmarkExecute(b *testing.B) {
 	yield := func(Chunk) error { return nil }
 	b.ResetTimer()
 	for range b.N {
-		_ = tool.Execute(ctx, argsJSON, yield)
+		_ = tool.Execute(ctx, RunContext{}, argsJSON, yield)
 	}
 }
 
@@ -207,7 +218,7 @@ func TestNewProxyTool(t *testing.T) {
 		"Echo args as result",
 		rawSchema,
 		func(_ context.Context, rawArgs []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Event: EventResult, Data: rawArgs})
+			return yield(Chunk{Event: EventResult, Data: rawArgs, MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
@@ -218,7 +229,7 @@ func TestNewProxyTool(t *testing.T) {
 	require.NotNil(t, params)
 	// Valid args
 	var res []byte
-	err = tool.Execute(context.Background(), []byte(`{"x": 42}`), func(c Chunk) error {
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 42}`), func(c Chunk) error {
 		res = c.Data
 		return nil
 	})
@@ -228,7 +239,7 @@ func TestNewProxyTool(t *testing.T) {
 	require.NoError(t, json.Unmarshal(res, &out))
 	assert.InDelta(t, 42.0, out["x"].(float64), 1e-9)
 	// Invalid: missing required
-	err = tool.Execute(context.Background(), []byte(`{}`), func(Chunk) error { return nil })
+	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }

@@ -19,20 +19,22 @@ Register each tool with your registry: `for _, t := range tools { reg.Register(t
 ## openapi/
 
 - **Requires:** `github.com/getkin/kin-openapi`
-- **Options:** `HTTPClient`, `BaseURL`, `AuthHeader`, `AllowedTags`, `AllowedMethods`, `MaxResponseBytes`
+- **Options:** `HTTPClient`, `BaseURL`, `AllowedTags`, `AllowedMethods`, `MaxResponseBytes`
 - **BaseURL:** If empty, the first server from the spec (`doc.Servers[0].URL`) is used. URL placeholders `{variable}` are replaced with `Server.Variables[variable].Default` when defined in the spec. If the spec has no servers and `BaseURL` is empty, **tool execution** returns an error: `openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)`.
 - **Naming:** Prefers `operationId` (sanitized); fallback is method + path (e.g. `get_users_id`).
 - **Path / query / body:** At execution, path parameters go only into the URL path, query parameters only into the query string, and only keys from the operation’s `requestBody` schema are sent in the request body for POST/PUT/PATCH. This avoids 400 from strict APIs (e.g. Spring, ASP.NET) that reject extra body fields.
 - **Spec loading:** The spec is loaded from the fetched bytes; external `$ref` (e.g. to other files) may not resolve. In-document refs (`#/components/...`) are resolved by kin-openapi. Body schema keys for the above split use the resolved `Schema.Value`.
+- **Runtime auth:** Execution-time `Authorization` headers come from `toolsy.ToolCall.Run.Credentials`; no provider means no auth header.
 
 ## graphql/
 
 - **Requires:** only stdlib (`net/http`, `encoding/json`)
-- **Options:** `HTTPClient`, `AuthHeader`, `Operations` (e.g. `["query"]` or `["query","mutation"]`), `MaxResponseBytes`
+- **Options:** `HTTPClient`, `IntrospectionAuthHeader`, `Operations` (e.g. `["query"]` or `["query","mutation"]`), `MaxResponseBytes`
 - **Safety:** Query text is generated once at introspect time with variables; at runtime only `variables` is filled from LLM args (no GraphQL injection).
 - **Introspection errors:** If the introspection response contains GraphQL `errors` or the HTTP status is not 2xx, `Introspect` returns an explicit error (e.g. `graphql: introspection errors: <message>` or `graphql: introspection HTTP 401: ...`), so you get a clear cause instead of an empty tool list.
 - **Selection set:** Each generated query uses a minimal selection set `{ __typename }`; the response is minimal. Building a deeper field graph for the response is a separate feature request.
 - **Type depth:** Argument types use a recursive `graphQLTypeRef` (name, kind, ofType); the introspection query requests full type depth via the `TypeRef` fragment, so nested wrappers like `[String!]` are resolved correctly.
+- **Runtime auth:** Execution-time `Authorization` headers come from `toolsy.ToolCall.Run.Credentials`. `IntrospectionAuthHeader` is used only for the initial schema discovery request.
 
 ## grpc/
 

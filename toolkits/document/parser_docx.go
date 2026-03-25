@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 const wordDocXML = "word/document.xml"
@@ -61,10 +63,10 @@ func extractTextFromWordXML(raw []byte, maxBytes int) (string, error) {
 		}
 		appendWordMLFromStartElement(t, dec, &b)
 		if b.Len() > maxBytes {
-			return truncateUTF8(b.String(), maxBytes), nil
+			return textutil.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
 		}
 	}
-	return truncateUTF8(b.String(), maxBytes), nil
+	return textutil.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
 }
 
 func appendWordMLFromStartElement(t xml.StartElement, dec *xml.Decoder, b *strings.Builder) {

@@ -24,7 +24,10 @@ func main() {
 		func(_ context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
 			for i := 1; i <= q.Limit; i++ {
 				chunk, _ := json.Marshal(map[string]int{"n": i})
-				if err := yield(toolsy.Chunk{Data: chunk}); err != nil {
+				if err := yield(toolsy.Chunk{
+					Data:     chunk,
+					MimeType: toolsy.MimeTypeJSON,
+				}); err != nil {
 					return err // e.g. ErrStreamAborted if client closed
 				}
 			}

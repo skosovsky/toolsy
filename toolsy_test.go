@@ -2,6 +2,7 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,10 +19,13 @@ func TestToolCall_Chunk(t *testing.T) {
 	assert.Equal(t, "weather", call.ToolName)
 	assert.JSONEq(t, `{"location":"Moscow"}`, string(call.Args))
 
-	chunk := Chunk{CallID: call.ID, ToolName: call.ToolName, Data: []byte(`{"temp":22.5}`)}
+	chunk := Chunk{CallID: call.ID, ToolName: call.ToolName, Data: []byte(`{"temp":22.5}`), MimeType: MimeTypeJSON}
 	assert.Equal(t, "call_1", chunk.CallID)
 	assert.Equal(t, "weather", chunk.ToolName)
 	assert.Equal(t, []byte(`{"temp":22.5}`), chunk.Data)
+	if chunk.MimeType != MimeTypeJSON {
+		t.Fatalf("unexpected mime type: %s", chunk.MimeType)
+	}
 }
 
 // TestChunk_EventIsErrorMetadata verifies Chunk has Event, IsError, Metadata and constants EventProgress, EventResult.
@@ -36,24 +40,27 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	assert.Equal(t, EventResult, c.Event)
 	assert.False(t, c.IsError)
 	assert.Equal(t, 50, c.Metadata["percent"])
-	cErr := Chunk{Data: []byte("fail"), IsError: true}
+	cErr := Chunk{Data: []byte("fail"), MimeType: MimeTypeText, IsError: true}
 	assert.True(t, cErr.IsError)
 	assert.Equal(t, []byte("fail"), cErr.Data)
+	if cErr.MimeType != MimeTypeText {
+		t.Fatalf("unexpected mime type: %s", cErr.MimeType)
+	}
 }
 
 // Ensure Tool interface is satisfied by a minimal impl (used in tests later).
 type minTool struct {
 	name, desc string
 	params     map[string]any
-	execute    func(context.Context, []byte, func(Chunk) error) error
+	execute    func(context.Context, RunContext, []byte, func(Chunk) error) error
 }
 
 func (m minTool) Name() string               { return m.name }
 func (m minTool) Description() string        { return m.desc }
 func (m minTool) Parameters() map[string]any { return m.params }
-func (m minTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
+func (m minTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
 	if m.execute != nil {
-		return m.execute(ctx, args, yield)
+		return m.execute(ctx, run, args, yield)
 	}
 	return nil
 }
@@ -100,8 +107,7 @@ func ExampleRegistry_Execute() {
 	err = reg.Execute(context.Background(), ToolCall{
 		ID: "1", ToolName: "add_one", Args: []byte(`{"x": 5}`),
 	}, func(c Chunk) error {
-		out = c.RawData.(Out)
-		return nil
+		return json.Unmarshal(c.Data, &out)
 	})
 	if err != nil {
 		panic(err)

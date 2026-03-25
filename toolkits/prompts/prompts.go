@@ -3,9 +3,9 @@ package prompts
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 // Provider is the interface the toolkit expects. Implement it with any backend
@@ -38,9 +38,7 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 			return getResult{}, fmt.Errorf("toolkit/prompts: get failed: %w", err)
 		}
 		if o.maxBytes > 0 && len(text) > o.maxBytes {
-			trunc := text[:o.maxBytes]
-			trunc = strings.ToValidUTF8(trunc, "")
-			text = trunc + "\n[Truncated]"
+			text = textutil.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
 		}
 		return getResult{Instructions: text}, nil
 	}

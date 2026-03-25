@@ -91,7 +91,7 @@ type middlewareTool struct {
 	logger *slog.Logger
 }
 
-func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
+func (m *middlewareTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
 	m.logger.InfoContext(ctx, "tool start", "tool", m.next.Name())
 	start := time.Now()
 	var chunks, totalBytes int64
@@ -123,19 +123,19 @@ func (m *middlewareTool) Execute(ctx context.Context, args []byte, yield func(Ch
 			m.logger.Info("tool end", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes)
 		}
 	}()
-	err = m.next.Execute(ctx, args, yieldWrapped)
+	err = m.next.Execute(ctx, run, args, yieldWrapped)
 	return err
 }
 
 type recoveryTool struct{ toolBase }
 
-func (r *recoveryTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) (err error) {
+func (r *recoveryTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = &SystemError{Err: &panicError{p: p}}
 		}
 	}()
-	return r.next.Execute(ctx, args, yield)
+	return r.next.Execute(ctx, run, args, yield)
 }
 
 type timeoutTool struct {
@@ -151,13 +151,13 @@ func (t *timeoutTool) Timeout() time.Duration {
 	return t.toolBase.Timeout()
 }
 
-func (t *timeoutTool) Execute(ctx context.Context, args []byte, yield func(Chunk) error) error {
+func (t *timeoutTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
 	if t.timeout <= 0 {
-		return t.next.Execute(ctx, args, yield)
+		return t.next.Execute(ctx, run, args, yield)
 	}
 	ctx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	return t.next.Execute(ctx, args, yield)
+	return t.next.Execute(ctx, run, args, yield)
 }
 
 // Use stores the given middlewares and reapplies them from scratch to all registered tools (onion order:

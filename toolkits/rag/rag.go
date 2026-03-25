@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/textutil"
 )
 
 // Retriever is the interface the toolkit expects. Implement it with any backend
@@ -48,9 +49,7 @@ func AsSearchTool(r Retriever, opts ...Option) (toolsy.Tool, error) {
 		}
 		text := strings.TrimSuffix(b.String(), "\n")
 		if o.maxBytes > 0 && len(text) > o.maxBytes {
-			trunc := text[:o.maxBytes]
-			trunc = strings.ToValidUTF8(trunc, "")
-			text = trunc + "\n[Truncated]"
+			text = textutil.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
 		}
 		return searchResult{Results: text}, nil
 	}

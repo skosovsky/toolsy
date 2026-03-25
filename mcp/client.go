@@ -13,7 +13,10 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-const progressChunkBufferSize = 8
+const (
+	progressChunkBufferSize = 8
+	cancelNotifyTimeout     = 5 * time.Second
+)
 
 // ClientOption configures the MCP client.
 type ClientOption func(*ClientOptions)
@@ -179,7 +182,7 @@ func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 				yield(nil, err)
 				return
 			}
-			t, toolErr := c.toolToProxy(ctx, &mcpTool)
+			t, toolErr := c.toolToProxy(&mcpTool)
 			if toolErr != nil {
 				yield(nil, toolErr)
 				return
@@ -219,7 +222,7 @@ func defaultToolInputSchemaJSON() []byte {
 	return []byte(`{"type":"object","properties":{}}`)
 }
 
-func (c *Client) toolToProxy(_ context.Context, m *MCPTool) (toolsy.Tool, error) {
+func (c *Client) toolToProxy(m *MCPTool) (toolsy.Tool, error) {
 	name := m.Name
 	description := toolDescription(m)
 	schema := m.InputSchema
@@ -238,12 +241,14 @@ type callResultWithErr struct {
 	err       error
 }
 
-func (c *Client) notifyCancelledRequest(requestID string) {
+func (c *Client) notifyCancelledRequest(parentCtx context.Context, requestID string) {
 	if requestID == "" {
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parentCtx), cancelNotifyTimeout)
+	defer cancel()
 	_ = c.transport.Notify(
-		context.Background(),
+		ctx,
 		MethodCancelled,
 		CancelledParams{RequestID: json.RawMessage(`"` + requestID + `"`)},
 	)
@@ -325,16 +330,16 @@ func (c *Client) runMCPToolCall(
 	for {
 		select {
 		case <-ctx.Done():
-			c.notifyCancelledRequest(readRequestIDIfReady(resultCh))
+			c.notifyCancelledRequest(ctx, readRequestIDIfReady(resultCh))
 			return toolsy.ErrStreamAborted
 		case r := <-resultCh:
-			return c.handleToolCallResult(r, yield)
+			return c.handleToolCallResult(ctx, r, yield)
 		case ch, ok := <-progressCh:
 			if !ok {
 				return nil
 			}
 			if err := yield(ch); err != nil {
-				c.notifyCancelledRequest(readRequestIDIfReady(resultCh))
+				c.notifyCancelledRequest(ctx, readRequestIDIfReady(resultCh))
 				return toolsy.ErrStreamAborted
 			}
 		}
@@ -342,6 +347,7 @@ func (c *Client) runMCPToolCall(
 }
 
 func (c *Client) handleToolCallResult(
+	ctx context.Context,
 	r callResultWithErr,
 	yield func(toolsy.Chunk) error,
 ) error {
@@ -356,9 +362,9 @@ func (c *Client) handleToolCallResult(
 		chunkIsError = mapped.IsError
 	}
 	if err := yield(
-		toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, IsError: chunkIsError},
+		toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, MimeType: toolsy.MimeTypeText, IsError: chunkIsError},
 	); err != nil {
-		c.notifyCancelledRequest(r.requestID)
+		c.notifyCancelledRequest(ctx, r.requestID)
 		return toolsy.ErrStreamAborted
 	}
 	return nil
@@ -394,7 +400,12 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 			chunkData = mapped.Data
 			chunkIsError = mapped.IsError
 		}
-		return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, IsError: chunkIsError})
+		return yield(toolsy.Chunk{
+			Event:    toolsy.EventResult,
+			Data:     chunkData,
+			MimeType: toolsy.MimeTypeText,
+			IsError:  chunkIsError,
+		})
 	}
 	return toolsy.NewProxyTool("read_mcp_resource", "Reads a resource by URI from the MCP server", schema, handler)
 }
