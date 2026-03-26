@@ -60,7 +60,7 @@ func TestWithTimeout(t *testing.T) {
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c Chunk) error {
 			assert.Equal(t, EventResult, c.Event)
-			assert.JSONEq(t, MimeTypeJSON, c.MimeType)
+			assertChunkJSONMime(t, c.MimeType)
 			return nil
 		},
 	)

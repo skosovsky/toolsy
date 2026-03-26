@@ -13,6 +13,13 @@ func TestMain(m *testing.M) {
 	goleak.VerifyTestMain(m)
 }
 
+// assertChunkJSONMime checks Chunk MIME for JSON payloads. Do not use JSONEq:
+// "application/json" is a media-type string, not a JSON document.
+func assertChunkJSONMime(tb testing.TB, got string) {
+	tb.Helper()
+	assert.JSONEq(tb, MimeTypeJSON, got)
+}
+
 func TestToolCall_Chunk(t *testing.T) {
 	call := ToolCall{
 		ID:       "call_1",
@@ -34,7 +41,7 @@ func TestToolCall_Chunk(t *testing.T) {
 	assert.Equal(t, "weather", chunk.ToolName)
 	assert.Equal(t, EventResult, chunk.Event)
 	assert.Equal(t, []byte(`{"temp":22.5}`), chunk.Data)
-	assert.JSONEq(t, MimeTypeJSON, chunk.MimeType)
+	assertChunkJSONMime(t, chunk.MimeType)
 }
 
 func TestChunk_EventIsErrorMetadata(t *testing.T) {

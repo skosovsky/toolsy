@@ -212,23 +212,23 @@ func TestExtractor_ParseAndValidate_ValidatableNotCalledTwice(t *testing.T) {
 	assert.Equal(t, int32(1), layer2ValidateCallCount.Load(), "Validate() must be called exactly once")
 }
 
-// TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic ensures ParseAndValidate with T=any
-// and JSON "null" does not panic (runLayer2Validation guards [reflect.TypeOf](nil)).
-func TestExtractor_ParseAndValidate_InterfaceT_Null_NoPanic(t *testing.T) {
-	ext, err := NewExtractor[any](false)
-	if err != nil {
-		t.Skip("NewExtractor[any] not supported by schema generator")
-	}
-	// Must not panic; result may be nil or schema may reject null
-	_, _ = ext.ParseAndValidate([]byte("null"))
+// TestExtractor_ParseAndValidate_MapStringAny_Null_NoPanic ensures ParseAndValidate with
+// map[string]any and JSON "null" does not panic (runLayer2Validation guards nil map).
+func TestExtractor_ParseAndValidate_MapStringAny_Null_NoPanic(t *testing.T) {
+	ext, err := NewExtractor[map[string]any](false)
+	require.NoError(t, err)
+	require.NotPanics(t, func() {
+		_, _ = ext.ParseAndValidate([]byte("null"))
+	})
 }
 
-// TestExtractor_ParseAndValidate_InterfaceT_Object_NoPanic ensures ParseAndValidate with T=any
-// and JSON object does not panic.
-func TestExtractor_ParseAndValidate_InterfaceT_Object_NoPanic(t *testing.T) {
-	ext, err := NewExtractor[any](false)
-	if err != nil {
-		t.Skip("NewExtractor[any] not supported by schema generator")
-	}
-	_, _ = ext.ParseAndValidate([]byte(`{}`))
+// TestExtractor_ParseAndValidate_MapStringAny_Object_NoPanic ensures ParseAndValidate with
+// map[string]any and an empty JSON object does not panic.
+func TestExtractor_ParseAndValidate_MapStringAny_Object_NoPanic(t *testing.T) {
+	ext, err := NewExtractor[map[string]any](false)
+	require.NoError(t, err)
+	require.NotPanics(t, func() {
+		_, err := ext.ParseAndValidate([]byte(`{}`))
+		require.NoError(t, err)
+	})
 }

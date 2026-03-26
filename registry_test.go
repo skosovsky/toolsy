@@ -197,7 +197,7 @@ func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
 			require.Equal(t, MimeTypeText, c.MimeType)
 		} else {
 			okCount++
-			require.JSONEq(t, MimeTypeJSON, c.MimeType)
+			assertChunkJSONMime(t, c.MimeType)
 		}
 	}
 	require.Equal(t, 1, errCount)

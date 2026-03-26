@@ -244,7 +244,9 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
+	require.True(t, toolsy.IsClientError(err))
 	require.Contains(t, err.Error(), "run.State is required")
+	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
 func TestScratchpad_Concurrent(t *testing.T) {

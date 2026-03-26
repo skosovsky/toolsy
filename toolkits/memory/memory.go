@@ -3,10 +3,10 @@ package memory
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/skosovsky/toolsy"
 )
@@ -15,6 +15,7 @@ const factsStateKey = "toolsy.memory.facts"
 
 // Scratchpad configures memory tools behavior. Session state is stored in run.State.
 type Scratchpad struct {
+	mu       sync.Mutex // serializes load/modify/save of facts blob (concurrent pin/unpin)
 	maxFacts int
 }
 
@@ -24,7 +25,10 @@ func NewScratchpad(opts ...Option) *Scratchpad {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return &Scratchpad{maxFacts: o.maxFacts}
+	return &Scratchpad{
+		mu:       sync.Mutex{},
+		maxFacts: o.maxFacts,
+	}
 }
 
 // AsTools returns the three memory tools (pin, read all, unpin).
@@ -54,6 +58,8 @@ type statusResult struct {
 }
 
 func (s *Scratchpad) pinHandler(ctx context.Context, run toolsy.RunContext, args pinArgs) (statusResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
 	if err != nil {
 		return statusResult{}, err
@@ -79,6 +85,8 @@ type readResult struct {
 }
 
 func (s *Scratchpad) readHandler(ctx context.Context, run toolsy.RunContext, _ struct{}) (readResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
 	if err != nil {
 		return readResult{}, err
@@ -106,6 +114,8 @@ type unpinArgs struct {
 }
 
 func (s *Scratchpad) unpinHandler(ctx context.Context, run toolsy.RunContext, args unpinArgs) (statusResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
 	if err != nil {
 		return statusResult{}, err
@@ -122,7 +132,11 @@ func (s *Scratchpad) unpinHandler(ctx context.Context, run toolsy.RunContext, ar
 
 func loadFacts(ctx context.Context, run toolsy.RunContext) (map[string]string, error) {
 	if run.State == nil {
-		return nil, fmt.Errorf("toolkit/memory: %w", errMissingStateStore)
+		return nil, &toolsy.ClientError{
+			Reason:    "run.State is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	raw, err := run.State.Load(ctx, factsStateKey)
 	if err != nil {
@@ -140,7 +154,11 @@ func loadFacts(ctx context.Context, run toolsy.RunContext) (map[string]string, e
 
 func saveFacts(ctx context.Context, run toolsy.RunContext, facts map[string]string) error {
 	if run.State == nil {
-		return fmt.Errorf("toolkit/memory: %w", errMissingStateStore)
+		return &toolsy.ClientError{
+			Reason:    "run.State is required",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {
@@ -151,5 +169,3 @@ func saveFacts(ctx context.Context, run toolsy.RunContext, facts map[string]stri
 	}
 	return nil
 }
-
-var errMissingStateStore = errors.New("run.State is required")

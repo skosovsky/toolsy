@@ -49,7 +49,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 		func(c Chunk) error {
 			assert.JSONEq(t, `{"y":6}`, string(c.Data))
-			assert.JSONEq(t, MimeTypeJSON, c.MimeType)
+			assertChunkJSONMime(t, c.MimeType)
 			return json.Unmarshal(c.Data, &out)
 		},
 	)

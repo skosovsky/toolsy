@@ -34,7 +34,7 @@ func buildAttachmentsProbeTool(t *testing.T) Tool {
 func decodeAttachmentsOut(t *testing.T, c Chunk) attachmentsOut {
 	t.Helper()
 	require.Equal(t, EventResult, c.Event)
-	require.JSONEq(t, MimeTypeJSON, c.MimeType)
+	assertChunkJSONMime(t, c.MimeType)
 	var out attachmentsOut
 	require.NoError(t, json.Unmarshal(c.Data, &out))
 	return out
