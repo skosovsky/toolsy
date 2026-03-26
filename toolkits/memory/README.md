@@ -1,6 +1,6 @@
 # Toolsy: Memory Toolkit (session scratchpad)
 
-**Description:** Lets the agent keep short-lived key-value facts in session memory (a scratchpad) without a database.
+**Description:** Lets the agent keep short-lived key-value facts in a session scratchpad backed by `run.State`.
 
 ## Installation
 
@@ -21,7 +21,7 @@ go get github.com/skosovsky/toolsy/toolkits/memory
 ## Configuration and security
 
 - **MaxFacts:** Optional limit on how many facts can be stored. Use `WithMaxFacts(n)` when creating the scratchpad. When the limit is reached, `memory_pin_fact` returns a client error so the LLM can adjust.
-- Data is stored only in memory and is lost when the process exits. No disk or network access.
+- The toolkit does not keep in-process mutable memory. Persistence and lifetime are defined by the `toolsy.StateStore` passed in `RunContext.State` at execution time.
 
 ## Quick start
 
@@ -34,7 +34,7 @@ import (
 )
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	sessionMemory := memory.NewScratchpad(memory.WithMaxFacts(100))
 	tools, err := sessionMemory.AsTools()
@@ -42,7 +42,10 @@ func main() {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
+
+	// Important: execute calls with RunContext{State: yourStateStore}.
+	// Without StateStore, memory tools return a validation error.
 }
 ```

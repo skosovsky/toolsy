@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -38,7 +39,7 @@ func WithOnComplete(cb AsyncCallback) AsyncOption {
 // AsAsyncTool wraps a tool so that Execute returns immediately with AsyncAccepted;
 // the base tool runs in a goroutine. If the client's yield returns an error (e.g. stream closed),
 // the goroutine is not started (yield-guard).
-// When executed via Registry, the registry injects an async tracker via context; the background
+// When executed via Registry, the registry injects an async tracker via RunContext; the background
 // job is then tracked so Shutdown waits for it and the concurrency slot is held until the job completes.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 	var o asyncOptions
@@ -86,7 +87,7 @@ func (r *asyncRuntime) trackBackground() func() {
 	}
 }
 
-func (t *asyncTool) Execute(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error {
+func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -94,19 +95,22 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, argsJSON []byte
 	if err != nil {
 		return err
 	}
-	chunk := Chunk{
-		Event:   EventResult,
-		RawData: AsyncAccepted{Status: "accepted", TaskID: taskID},
+	accepted, err := json.Marshal(AsyncAccepted{Status: "accepted", TaskID: taskID})
+	if err != nil {
+		return &SystemError{Err: fmt.Errorf("async: marshal accepted payload: %w", err)}
 	}
-	// Re-check ctx immediately before yield so "cancelled before accepted => no accepted, no background".
+	chunk := Chunk{
+		Event:    EventResult,
+		Data:     accepted,
+		MimeType: MimeTypeJSON,
+	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	normalized, err := normalizeChunk(chunk)
-	if err != nil {
+	if err := validateChunk(chunk); err != nil {
 		return err
 	}
-	if err := yield(normalized); err != nil {
+	if err := yield(chunk); err != nil {
 		return wrapYieldError(err)
 	}
 	var bgDone func()
@@ -116,7 +120,7 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, argsJSON []byte
 		bgTimeout = run.async.effectiveTimeout
 	}
 	if bgTimeout == 0 {
-		bgTimeout = t.Timeout()
+		bgTimeout = t.Manifest().Timeout
 	}
 	go func(parentCtx context.Context) {
 		if bgDone != nil {
@@ -151,7 +155,7 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, argsJSON []byte
 			}
 		}()
 
-		executionErr = t.next.Execute(bgCtx, bgRun, argsJSON, collectYield)
+		executionErr = t.next.Execute(bgCtx, bgRun, input, collectYield)
 	}(ctx)
 	return nil
 }

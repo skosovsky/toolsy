@@ -15,20 +15,15 @@ const (
 	defaultRegistrySemaphore = 10
 )
 
-// Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
-type Registry struct {
-	tools       map[string]Tool
-	rawTools    map[string]Tool
-	sem         chan struct{}
-	opts        registryOptions
-	done        chan struct{}
-	running     sync.WaitGroup
-	mu          sync.Mutex
+// RegistryBuilder is mutable setup API that produces an immutable Registry for runtime use.
+type RegistryBuilder struct {
+	tools       []Tool
 	middlewares []Middleware
+	opts        registryOptions
 }
 
-// NewRegistry creates a Registry with the given options.
-func NewRegistry(opts ...RegistryOption) *Registry {
+// NewRegistryBuilder creates a mutable registry builder with defaults and applies options.
+func NewRegistryBuilder(opts ...RegistryOption) *RegistryBuilder {
 	var o registryOptions
 	o.timeout = defaultRegistryTimeout
 	o.maxConcurrency = defaultRegistrySemaphore
@@ -36,38 +31,85 @@ func NewRegistry(opts ...RegistryOption) *Registry {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	return &RegistryBuilder{
+		tools:       nil,
+		middlewares: nil,
+		opts:        o,
+	}
+}
+
+// Add appends tools to the builder.
+func (b *RegistryBuilder) Add(tools ...Tool) *RegistryBuilder {
+	b.tools = append(b.tools, tools...)
+	return b
+}
+
+// Use appends middlewares. The first middleware is outermost.
+func (b *RegistryBuilder) Use(middlewares ...Middleware) *RegistryBuilder {
+	b.middlewares = append(b.middlewares, middlewares...)
+	return b
+}
+
+// WithOptions applies registry options to the builder.
+func (b *RegistryBuilder) WithOptions(opts ...RegistryOption) *RegistryBuilder {
+	for _, opt := range opts {
+		opt(&b.opts)
+	}
+	return b
+}
+
+// Build creates an immutable runtime registry.
+func (b *RegistryBuilder) Build() (*Registry, error) {
+	tools := make(map[string]Tool, len(b.tools))
+	for _, raw := range b.tools {
+		if raw == nil {
+			return nil, errors.New("toolsy: nil tool in registry builder")
+		}
+		t := raw
+		for i := len(b.middlewares) - 1; i >= 0; i-- {
+			t = b.middlewares[i](t)
+		}
+		name := t.Manifest().Name
+		if name == "" {
+			return nil, errors.New("toolsy: tool manifest name is required")
+		}
+		if _, exists := tools[name]; exists {
+			return nil, fmt.Errorf("toolsy: duplicate tool name %q", name)
+		}
+		tools[name] = t
+	}
 	var sem chan struct{}
-	if o.maxConcurrency > 0 {
-		sem = make(chan struct{}, o.maxConcurrency)
+	if b.opts.maxConcurrency > 0 {
+		sem = make(chan struct{}, b.opts.maxConcurrency)
 	}
 	return &Registry{
-		tools:       make(map[string]Tool),
-		rawTools:    make(map[string]Tool),
-		sem:         sem,
-		opts:        o,
-		done:        make(chan struct{}),
-		running:     sync.WaitGroup{},
-		mu:          sync.Mutex{},
-		middlewares: nil,
-	}
+		tools:    tools,
+		sem:      sem,
+		opts:     b.opts,
+		done:     make(chan struct{}),
+		running:  sync.WaitGroup{},
+		closeMux: sync.Once{},
+	}, nil
 }
 
-// Register adds a tool. Stored middlewares (see Use) are applied to the tool before registration.
-func (r *Registry) Register(t Tool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	name := t.Name()
-	r.rawTools[name] = t
-	for i := len(r.middlewares) - 1; i >= 0; i-- {
-		t = r.middlewares[i](t)
-	}
-	r.tools[name] = t
+// Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
+type Registry struct {
+	tools   map[string]Tool
+	sem     chan struct{}
+	opts    registryOptions
+	done    chan struct{}
+	running sync.WaitGroup
+
+	closeMux sync.Once
 }
 
-// GetAllTools returns all registered tools, sorted by name.
+// NewRegistry creates an immutable registry from tools with default options.
+func NewRegistry(tools ...Tool) (*Registry, error) {
+	return NewRegistryBuilder().Add(tools...).Build()
+}
+
+// GetAllTools returns all registered tools, sorted by manifest name.
 func (r *Registry) GetAllTools() []Tool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	names := make([]string, 0, len(r.tools))
 	for name := range r.tools {
 		names = append(names, name)
@@ -82,24 +124,21 @@ func (r *Registry) GetAllTools() []Tool {
 
 // GetTool returns the tool with the given name, or (nil, false) if not found.
 func (r *Registry) GetTool(name string) (Tool, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	t, ok := r.tools[name]
 	return t, ok
 }
 
-// effectiveExecuteTimeout is the minimum of registry default and per-tool [ToolMetadata] timeout when both are set.
+// effectiveExecuteTimeout is the minimum of registry default and per-tool manifest timeout when both are set.
 func effectiveExecuteTimeout(tool Tool, registryTimeout time.Duration) time.Duration {
 	timeout := registryTimeout
-	if tm, ok := tool.(ToolMetadata); ok && tm.Timeout() > 0 {
-		if registryTimeout <= 0 || tm.Timeout() < registryTimeout {
-			timeout = tm.Timeout()
-		}
+	toolTimeout := tool.Manifest().Timeout
+	if toolTimeout > 0 && (registryTimeout <= 0 || toolTimeout < registryTimeout) {
+		timeout = toolTimeout
 	}
 	return timeout
 }
 
-// wrapYieldWithMetadata fills CallID/ToolName, counts successful chunks, and invokes onChunk.
+// wrapYieldWithMetadata fills CallID/ToolName, validates chunks, counts successful chunks, and invokes onChunk.
 func (r *Registry) wrapYieldWithMetadata(
 	ctx context.Context,
 	call ToolCall,
@@ -116,16 +155,15 @@ func (r *Registry) wrapYieldWithMetadata(
 		if c.ToolName == "" {
 			c.ToolName = call.ToolName
 		}
-		normalized, err := normalizeChunk(c)
-		if err != nil {
+		if err := validateChunk(c); err != nil {
 			return err
 		}
-		yieldErr := yield(normalized)
+		yieldErr := yield(c)
 		if yieldErr == nil && !c.IsError {
 			summary.ChunksDelivered++
-			summary.TotalBytes += int64(len(normalized.Data))
+			summary.TotalBytes += int64(len(c.Data))
 			if r.opts.onChunk != nil {
-				r.opts.onChunk(ctx, normalized)
+				r.opts.onChunk(ctx, c)
 			}
 		}
 		return yieldErr
@@ -144,20 +182,16 @@ func (r *Registry) execute(
 	call ToolCall,
 	yield func(Chunk) error,
 ) (err error) {
-	r.mu.Lock()
 	select {
 	case <-r.done:
-		r.mu.Unlock()
 		return ErrShutdown
 	default:
 	}
 	tool, ok := r.tools[call.ToolName]
 	if !ok {
-		r.mu.Unlock()
 		return ErrToolNotFound
 	}
 	r.running.Add(1)
-	r.mu.Unlock()
 
 	// Apply effective timeout before acquireSemaphore so queue wait is within the timeout budget.
 	timeout := effectiveExecuteTimeout(tool, r.opts.timeout)
@@ -177,6 +211,7 @@ func (r *Registry) execute(
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { r.releaseSemaphore(); r.running.Done() }) }
 	run := call.Run
+	run.attachments = cloneAttachments(call.Input.Attachments)
 	run.async = newAsyncRuntime(r, timeout)
 	defer func() {
 		if run.async == nil || !run.async.backgroundStarted.Load() {
@@ -207,10 +242,7 @@ func (r *Registry) execute(
 		r.opts.onBefore(ctx, call)
 	}
 
-	// Wrap yield: fill CallID/ToolName, count only !IsError chunks, call onChunk for successfully delivered non-error chunks.
-	// Context-safe: do not call yield if context is already cancelled (avoids goroutine leaks).
 	toolYield := r.wrapYieldWithMetadata(ctx, call, &summary, yield)
-
 	r.runToolWithValidationAndExecute(ctx, call, run, tool, toolYield, &summary)
 	return summary.Error
 }
@@ -225,7 +257,7 @@ func (r *Registry) runToolWithValidationAndExecute(
 	summary *ExecutionSummary,
 ) {
 	if r.opts.validator != nil {
-		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Args)); vErr != nil {
+		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Input.ArgsJSON)); vErr != nil {
 			summary.Error = &ClientError{
 				Reason:    "tool execution failed: security validation failed: " + vErr.Error() + ". Please fix the arguments and try again.",
 				Retryable: false,
@@ -234,7 +266,7 @@ func (r *Registry) runToolWithValidationAndExecute(
 			return
 		}
 	}
-	summary.Error = tool.Execute(ctx, run, call.Args, toolYield)
+	summary.Error = tool.Execute(ctx, run, call.Input, toolYield)
 	if errors.Is(summary.Error, context.DeadlineExceeded) {
 		summary.Error = ErrTimeout
 	}
@@ -331,7 +363,6 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 					suspendMu.Unlock()
 					return
 				}
-				// Send tool error as chunk; do not return it from ExecuteBatchStream.
 				_ = safeYield(Chunk{
 					CallID:   call.ID,
 					ToolName: call.ToolName,
@@ -344,7 +375,6 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 		})
 	}
 	wg.Wait()
-	// Return only critical failures to avoid goroutine leaks and to let callers see all chunks.
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -358,15 +388,7 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 // Both synchronous executions and background jobs started by AsAsyncTool (when run via Registry) are tracked;
 // Shutdown blocks until all of them finish or ctx is cancelled.
 func (r *Registry) Shutdown(ctx context.Context) error {
-	r.mu.Lock()
-	select {
-	case <-r.done:
-		r.mu.Unlock()
-		return nil
-	default:
-		close(r.done)
-	}
-	r.mu.Unlock()
+	r.closeMux.Do(func() { close(r.done) })
 	done := make(chan struct{})
 	go func() {
 		r.running.Wait()

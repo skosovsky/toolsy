@@ -2,6 +2,7 @@ package fstool
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,14 @@ import (
 
 	"github.com/skosovsky/toolsy"
 )
+
+func decodeJSONChunk[T any](t *testing.T, c toolsy.Chunk) T {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out T
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
 
 func TestFSListDir_Success(t *testing.T) {
 	base := t.TempDir()
@@ -24,14 +33,15 @@ func TestFSListDir_Success(t *testing.T) {
 	var result listResult
 	require.NoError(
 		t,
-		listTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"path":""}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(listResult); ok {
-					result = r
-				}
-			}
-			return nil
-		}),
+		listTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{"path":""}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeJSONChunk[listResult](t, c)
+				return nil
+			},
+		),
 	)
 	require.Len(t, result.Entries, 2)
 	names := make([]string, len(result.Entries))
@@ -57,13 +67,9 @@ func TestFSReadFile_Success(t *testing.T) {
 		readTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"path":"f.txt"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"f.txt"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(readResult); ok {
-						result = r
-					}
-				}
+				result = decodeJSONChunk[readResult](t, c)
 				return nil
 			},
 		),
@@ -89,13 +95,9 @@ func TestFSReadFile_Truncation(t *testing.T) {
 		readTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"path":"big.txt"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"big.txt"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(readResult); ok {
-						result = r
-					}
-				}
+				result = decodeJSONChunk[readResult](t, c)
 				return nil
 			},
 		),
@@ -115,7 +117,7 @@ func TestFSWriteFile_Success(t *testing.T) {
 		writeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"path":"a/b/f.txt","content":"written"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"a/b/f.txt","content":"written"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
 	)
@@ -140,7 +142,7 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 	err = writeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"path":"uploads/link/evil.txt","content":"x"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"uploads/link/evil.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -164,7 +166,7 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 	err = writeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"path":"report.txt","content":"x"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"report.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -190,7 +192,7 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 	err = listTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"path":"../../etc"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"../../etc"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -207,9 +209,9 @@ func TestAsTools_ToolCount(t *testing.T) {
 	tools, err := AsTools(t.TempDir())
 	require.NoError(t, err)
 	require.Len(t, tools, 3)
-	require.Equal(t, "fs_list_dir", tools[0].Name())
-	require.Equal(t, "fs_read_file", tools[1].Name())
-	require.Equal(t, "fs_write_file", tools[2].Name())
+	require.Equal(t, "fs_list_dir", tools[0].Manifest().Name)
+	require.Equal(t, "fs_read_file", tools[1].Manifest().Name)
+	require.Equal(t, "fs_write_file", tools[2].Manifest().Name)
 }
 
 func TestAsTools_ToolCountReadOnly(t *testing.T) {

@@ -2,16 +2,16 @@ package toolsy
 
 import (
 	"context"
-	"encoding/json"
-	"time"
 )
 
-// Event type constants for Chunk. EventProgress is for intermediate UI status;
-// EventResult is for final data or a stream chunk; EventSuspend signals orchestrator-managed pause.
+// EventType enumerates chunk event kinds for Chunk: EventProgress for intermediate UI status,
+// EventResult for final data or a stream chunk; EventSuspend signals orchestrator-managed pause.
+type EventType string
+
 const (
-	EventProgress = "progress"
-	EventResult   = "result"
-	EventSuspend  = "suspend"
+	EventProgress EventType = "progress"
+	EventResult   EventType = "result"
+	EventSuspend  EventType = "suspend"
 )
 
 // MIME type constants for Chunk payloads.
@@ -26,28 +26,12 @@ const (
 // Tool is the contract for an LLM-callable instrument.
 // It is provider-agnostic (no knowledge of OpenAI, Anthropic, etc.).
 type Tool interface {
-	Name() string
-	Description() string
-	// Parameters returns a valid JSON Schema as map (compatible with LLM tool definitions).
-	Parameters() map[string]any
+	// Manifest returns tool definition for orchestrators and LLM adapters.
+	Manifest() ToolManifest
 	// Execute runs the tool and streams chunks via yield. The tool may call yield
 	// once (simple response) or multiple times (streaming). If yield returns an error,
 	// execution must stop and that error is returned (wrapped as ErrStreamAborted).
-	Execute(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error
-}
-
-// ToolMetadata is implemented by tools created with NewTool and exposes optional runtime and
-// orchestration metadata. Registry uses Timeout() to override the default execution timeout when
-// set. The remaining methods expose discovery labels and execution policy hints such as tags,
-// version, dangerous/read-only flags, confirmation requirements, and sensitivity.
-type ToolMetadata interface {
-	Timeout() time.Duration
-	Tags() []string
-	Version() string
-	IsDangerous() bool
-	IsReadOnly() bool
-	RequiresConfirmation() bool
-	Sensitivity() string
+	Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error
 }
 
 // Validator checks JSON arguments before tool execution (e.g. guardrails).
@@ -63,34 +47,75 @@ type CredentialsProvider interface {
 	GetAuth(ctx context.Context, toolName string) (string, error)
 }
 
+// StateStore stores tool execution state outside the tool process.
+type StateStore interface {
+	Save(ctx context.Context, key string, data []byte) error
+	Load(ctx context.Context, key string) ([]byte, error)
+}
+
+// ServiceProvider resolves runtime service dependencies by key.
+type ServiceProvider interface {
+	Get(key string) (any, bool)
+}
+
+// Attachment is binary input passed together with JSON args.
+type Attachment struct {
+	MimeType string
+	Data     []byte
+}
+
+func cloneAttachments(in []Attachment) []Attachment {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]Attachment, len(in))
+	for i := range in {
+		out[i].MimeType = in[i].MimeType
+		if len(in[i].Data) > 0 {
+			out[i].Data = make([]byte, len(in[i].Data))
+			copy(out[i].Data, in[i].Data)
+		}
+	}
+	return out
+}
+
+// ToolInput is the runtime input envelope for tool execution.
+type ToolInput struct {
+	ArgsJSON    []byte
+	Attachments []Attachment
+}
+
 // RunContext carries runtime-only dependencies that should not be hidden in context values.
 type RunContext struct {
 	Credentials CredentialsProvider
+	State       StateStore
+	Services    ServiceProvider
+
+	attachments []Attachment
 	async       *asyncRuntime
+}
+
+// Attachments returns runtime attachments for the current call.
+func (r RunContext) Attachments() []Attachment {
+	return cloneAttachments(r.attachments)
 }
 
 // ToolCall is a single execution request (as produced by the LLM).
 type ToolCall struct {
 	ID       string
 	ToolName string
-	Args     json.RawMessage // JSON payload of arguments
+	Input    ToolInput
 	Run      RunContext
 }
 
-// Chunk is a single stream event from a tool execution. Registry (and ExecuteBatchStream) set
-// CallID and ToolName when forwarding; tools may set Data, RawData, and optionally Event, IsError, Metadata.
-//
-// Data plus MimeType are the primary payload contract. For typed results (NewTool, NewStreamTool),
-// the core serializes RawData to Data as JSON and sets MimeType to application/json. RawData remains
-// as a compatibility field for callers that still prefer zero-copy typed access during this major version.
+// Chunk is a single stream event from a tool execution.
 type Chunk struct {
 	CallID   string
 	ToolName string
-	Event    string         // EventProgress, EventResult, or EventSuspend
-	Data     []byte         // primary payload bytes
-	MimeType string         // MIME type for Data, e.g. application/json or text/plain; charset=utf-8
-	RawData  any            // deprecated compatibility field; primary payload is Data + MimeType
-	IsError  bool           // true if Data contains error message text
+	Event    EventType
+	Data     []byte
+	MimeType string
+	IsError  bool
 	Metadata map[string]any // optional: progress 0-100, etc.
 }
 

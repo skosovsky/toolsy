@@ -2,6 +2,7 @@ package exectool
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestNewBuildsDynamicSchema(t *testing.T) {
 	tool, err := New(sb, WithTimeout(5*time.Second))
 	require.NoError(t, err)
 
-	params := tool.Parameters()
+	params := tool.Manifest().Parameters
 	props := params["properties"].(map[string]any)
 	language := props["language"].(map[string]any)
 	require.Equal(t, []any{"bash", "python"}, language["enum"])
@@ -52,7 +53,7 @@ func TestNewAllowedLanguagesIntersection(t *testing.T) {
 	tool, err := New(sb, WithTimeout(5*time.Second), WithAllowedLanguages("python", "bash"))
 	require.NoError(t, err)
 
-	params := tool.Parameters()
+	params := tool.Manifest().Parameters
 	props := params["properties"].(map[string]any)
 	language := props["language"].(map[string]any)
 	require.Equal(t, []any{"bash", "python"}, language["enum"])
@@ -93,10 +94,11 @@ func TestExecuteSuccess(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)","env":{"A":"B"},"files":{"main.txt":"hello"}}`),
+		toolsy.ToolInput{
+			ArgsJSON: []byte(`{"language":"python","code":"print(1)","env":{"A":"B"},"files":{"main.txt":"hello"}}`),
+		},
 		func(c toolsy.Chunk) error {
-			result = c.RawData.(RunResult)
-			return nil
+			return json.Unmarshal(c.Data, &result)
 		},
 	)
 	require.NoError(t, err)
@@ -116,7 +118,7 @@ func TestExecuteEmptyCodeReturnsClientError(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"   "}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"   "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -132,7 +134,7 @@ func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"bash","code":"echo 1"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"bash","code":"echo 1"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -150,7 +152,7 @@ func TestExecuteClampsTimeoutToContextDeadline(t *testing.T) {
 	err = tool.Execute(
 		ctx,
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)
@@ -169,7 +171,7 @@ func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 	err = tool.Execute(
 		ctx,
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -192,7 +194,7 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -213,7 +215,7 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -226,14 +228,13 @@ func TestExecutePropagatesToolOptionMetadata(t *testing.T) {
 	tool, err := New(
 		sb,
 		WithTimeout(time.Second),
-		WithToolOptions(toolsy.WithDangerous(), toolsy.WithRequiresConfirmation()),
+		WithToolOptions(toolsy.WithDangerous(), toolsy.WithMetadata(map[string]any{"requires_confirmation": true})),
 	)
 	require.NoError(t, err)
 
-	meta, ok := tool.(toolsy.ToolMetadata)
-	require.True(t, ok)
-	require.True(t, meta.IsDangerous())
-	require.True(t, meta.RequiresConfirmation())
+	meta := tool.Manifest().Metadata
+	require.Equal(t, true, meta["dangerous"])
+	require.Equal(t, true, meta["requires_confirmation"])
 }
 
 func TestNewRejectsEmptyLanguageNames(t *testing.T) {
@@ -251,7 +252,7 @@ func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"language":"python","code":"print(1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)

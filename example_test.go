@@ -9,22 +9,23 @@ import (
 	"time"
 )
 
-// ExampleRegistry_Register shows building a tool with options and registering it.
-func ExampleRegistry_Register() {
+func ExampleRegistryBuilder_Add() {
 	type Args struct {
 		X int `json:"x"`
 	}
 	type Out struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("with_opts", "Tool with options", func(_ context.Context, a Args) (Out, error) {
+	tool, err := NewTool("with_opts", "Tool with options", func(_ context.Context, _ RunContext, a Args) (Out, error) {
 		return Out{Y: a.X * 2}, nil
 	}, WithTimeout(2*time.Second), WithStrict())
 	if err != nil {
 		return
 	}
-	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
-	reg.Register(tool)
+	reg, err := NewRegistryBuilder(WithDefaultTimeout(5 * time.Second)).Add(tool).Build()
+	if err != nil {
+		return
+	}
 	_, ok := reg.GetTool("with_opts")
 	if ok {
 		fmt.Println("registered")
@@ -33,7 +34,6 @@ func ExampleRegistry_Register() {
 	// registered
 }
 
-// ExampleExtractor_ParseAndValidate shows schema + validation without Execute; parses JSON into a typed struct.
 func ExampleExtractor_ParseAndValidate() {
 	type WeatherInput struct {
 		City string `json:"city" jsonschema:"City name"`
@@ -51,7 +51,6 @@ func ExampleExtractor_ParseAndValidate() {
 	// London
 }
 
-// ExampleExtractor_Schema shows that Extractor produces a JSON Schema (e.g. type "object") for the struct.
 func ExampleExtractor_Schema() {
 	type Params struct {
 		Q string `json:"q" jsonschema:"Query"`
@@ -66,32 +65,34 @@ func ExampleExtractor_Schema() {
 	// object
 }
 
-// ExampleRegistry_Use shows a chain of two middlewares (logging + timeout) applied via Use.
-func ExampleRegistry_Use() {
+func ExampleRegistryBuilder_Use() {
 	type Args struct {
 		N int `json:"n"`
 	}
 	type Out struct {
 		Double int `json:"double"`
 	}
-	tool, err := NewTool("double", "Double the number", func(_ context.Context, a Args) (Out, error) {
+	tool, err := NewTool("double", "Double the number", func(_ context.Context, _ RunContext, a Args) (Out, error) {
 		return Out{Double: a.N * 2}, nil
 	})
 	if err != nil {
 		return
 	}
-	reg := NewRegistry(WithDefaultTimeout(5 * time.Second))
-	reg.Use(
+	reg, err := NewRegistryBuilder(WithDefaultTimeout(5*time.Second)).Use(
 		WithLogging(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))),
 		WithTimeoutMiddleware(2*time.Second),
-	)
-	reg.Register(tool)
+	).Add(tool).Build()
+	if err != nil {
+		return
+	}
+
 	var out Out
 	_ = reg.Execute(context.Background(), ToolCall{
-		ID: "1", ToolName: "double", Args: []byte(`{"n": 21}`),
+		ID:       "1",
+		ToolName: "double",
+		Input:    ToolInput{ArgsJSON: []byte(`{"n": 21}`)},
 	}, func(c Chunk) error {
-		out = c.RawData.(Out)
-		return nil
+		return json.Unmarshal(c.Data, &out)
 	})
 	b, _ := json.Marshal(out)
 	fmt.Printf("result: %s", b)

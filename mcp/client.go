@@ -46,18 +46,16 @@ type Client struct {
 	transport Transport
 	opts      ClientOptions
 
-	initMu      sync.Mutex
-	initialized bool
-	initErr     error
-	serverCaps  *InitializeResult
+	serverCaps *InitializeResult
 
 	// progressToken -> callback for notifications/progress (one-shot per tools/call).
 	progressCallbacks sync.Map
 	progressCounter   atomic.Uint64
 }
 
-// NewClient creates an MCP client. Call Initialize before using GetTools, GetResourceTool, or GetPrompts.
-func NewClient(transport Transport, opts ...ClientOption) *Client {
+// Connect starts transport and performs MCP initialize handshake.
+// Returned client is ready for GetTools/GetResourceTool/GetPrompts/GetPrompt.
+func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*Client, error) {
 	o := ClientOptions{
 		Roots:  nil,
 		Logger: nil,
@@ -68,15 +66,59 @@ func NewClient(transport Transport, opts ...ClientOption) *Client {
 	c := &Client{
 		transport:         transport,
 		opts:              o,
-		initMu:            sync.Mutex{},
-		initialized:       false,
-		initErr:           nil,
 		serverCaps:        nil,
 		progressCallbacks: sync.Map{},
 		progressCounter:   atomic.Uint64{},
 	}
 	transport.OnNotification(MethodProgress, c.handleProgress)
-	return c
+	if err := c.connect(ctx); err != nil {
+		_ = transport.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
+func (c *Client) connect(ctx context.Context) error {
+	if err := c.transport.Start(ctx); err != nil {
+		return err
+	}
+	roots := c.opts.Roots
+	var rootsCap *RootsCapability
+	if len(roots) > 0 {
+		rootsCap = &RootsCapability{ListChanged: true}
+	}
+	params := InitializeParams{
+		ProtocolVersion: "2024-11-05",
+		Capabilities: ClientCapabilities{
+			Roots: rootsCap,
+		},
+		ClientInfo: ClientInfo{
+			Name:    "toolsy-mcp-client",
+			Version: "0.1.0",
+		},
+	}
+	paramsBytes, _ := json.Marshal(params)
+	var paramsWithRoots struct {
+		InitializeParams
+
+		Roots []string `json:"roots,omitempty"`
+	}
+	_ = json.Unmarshal(paramsBytes, &paramsWithRoots)
+	paramsWithRoots.Roots = roots
+	resultBytes, _, err := c.transport.Call(ctx, MethodInitialize, paramsWithRoots)
+	if err != nil {
+		return err
+	}
+	var result InitializeResult
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		return fmt.Errorf("mcp: parse initialize result: %w", err)
+	}
+	c.serverCaps = &result
+	if err := c.transport.Notify(ctx, MethodInitialized, struct{}{}); err != nil {
+		c.clientLogger().WarnContext(ctx, "mcp: failed to send notifications/initialized", "err", err)
+		return fmt.Errorf("mcp: send notifications/initialized: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) clientLogger() *slog.Logger {
@@ -100,71 +142,9 @@ func (c *Client) handleProgress(params []byte) {
 	}
 }
 
-// Initialize performs the MCP handshake: starts the transport, sends Initialize with client capabilities (roots),
-// and stores server capabilities. Must be called once before GetTools, GetResourceTool, or GetPrompts.
-func (c *Client) Initialize(ctx context.Context) error {
-	c.initMu.Lock()
-	defer c.initMu.Unlock()
-	if c.initialized {
-		if c.initErr != nil {
-			return c.initErr
-		}
-		return nil
-	}
-	if err := c.transport.Start(ctx); err != nil {
-		c.initErr = err
-		return err
-	}
-	roots := c.opts.Roots
-	var rootsCap *RootsCapability
-	if len(roots) > 0 {
-		rootsCap = &RootsCapability{ListChanged: true}
-	}
-	params := InitializeParams{
-		ProtocolVersion: "2024-11-05",
-		Capabilities: ClientCapabilities{
-			Roots: rootsCap,
-		},
-		ClientInfo: ClientInfo{
-			Name:    "toolsy-mcp-client",
-			Version: "0.1.0",
-		},
-	}
-	// MCP allows roots in params; some servers expect it at top level.
-	paramsBytes, _ := json.Marshal(params)
-	var paramsWithRoots struct {
-		InitializeParams
-
-		Roots []string `json:"roots,omitempty"`
-	}
-	_ = json.Unmarshal(paramsBytes, &paramsWithRoots)
-	paramsWithRoots.Roots = roots
-	resultBytes, _, err := c.transport.Call(ctx, MethodInitialize, paramsWithRoots)
-	if err != nil {
-		c.initErr = err
-		return err
-	}
-	var result InitializeResult
-	if err := json.Unmarshal(resultBytes, &result); err != nil {
-		c.initErr = fmt.Errorf("mcp: parse initialize result: %w", err)
-		return c.initErr
-	}
-	c.serverCaps = &result
-	c.initialized = true
-	// MCP spec requires sending notifications/initialized after successful Initialize;
-	// without it the server may stay in "waiting" state and not respond to further requests.
-	if err := c.transport.Notify(ctx, MethodInitialized, struct{}{}); err != nil {
-		c.clientLogger().WarnContext(ctx, "mcp: failed to send notifications/initialized", "err", err)
-	}
-	return nil
-}
-
 // GetTools returns an iterator over all tools from the server (handles pagination via cursor).
 func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 	fetch := func(ctx context.Context, cursor string) ([]MCPTool, string, error) {
-		if err := c.ensureInitialized(ctx); err != nil {
-			return nil, "", err
-		}
 		params := ToolsListParams{Cursor: cursor}
 		res, _, err := c.transport.Call(ctx, MethodToolsList, params)
 		if err != nil {
@@ -194,20 +174,6 @@ func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 	}
 }
 
-func (c *Client) ensureInitialized(ctx context.Context) error {
-	c.initMu.Lock()
-	ok := c.initialized
-	err := c.initErr
-	c.initMu.Unlock()
-	if !ok || err != nil {
-		if err != nil {
-			return err
-		}
-		return c.Initialize(ctx)
-	}
-	return nil
-}
-
 func toolDescription(m *MCPTool) string {
 	if m.Description != "" {
 		return m.Description
@@ -229,7 +195,7 @@ func (c *Client) toolToProxy(m *MCPTool) (toolsy.Tool, error) {
 	if len(schema) == 0 {
 		schema = defaultToolInputSchemaJSON()
 	}
-	handler := func(ctx context.Context, rawArgs []byte, yield func(toolsy.Chunk) error) error {
+	handler := func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {
 		return c.runMCPToolCall(ctx, name, rawArgs, yield)
 	}
 	return toolsy.NewProxyTool(name, description, schema, handler)
@@ -379,10 +345,7 @@ func (c *Client) nextProgressToken() string {
 func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 	schema := []byte(`{"type":"object","properties":{"uri":{"type":"string"}},"required":["uri"]}`)
 	transport := c.transport
-	handler := func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-		if err := c.ensureInitialized(ctx); err != nil {
-			return err
-		}
+	handler := func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 		var args struct {
 			URI string `json:"uri"`
 		}
@@ -413,9 +376,6 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 // GetPrompts returns an iterator over prompt templates from the server (with cursor pagination).
 func (c *Client) GetPrompts(ctx context.Context) iter.Seq2[Prompt, error] {
 	fetch := func(ctx context.Context, cursor string) ([]Prompt, string, error) {
-		if err := c.ensureInitialized(ctx); err != nil {
-			return nil, "", err
-		}
 		params := PromptsListParams{Cursor: cursor}
 		res, _, err := c.transport.Call(ctx, MethodPromptsList, params)
 		if err != nil {
@@ -432,9 +392,6 @@ func (c *Client) GetPrompts(ctx context.Context) iter.Seq2[Prompt, error] {
 
 // GetPrompt requests a specific prompt with the given arguments and returns the result (Description + Messages).
 func (c *Client) GetPrompt(ctx context.Context, name string, args map[string]string) (*PromptMessageResult, error) {
-	if err := c.ensureInitialized(ctx); err != nil {
-		return nil, err
-	}
 	params := PromptsGetParams{Name: name, Arguments: args}
 	resultBytes, _, err := c.transport.Call(ctx, MethodPromptsGet, params)
 	if err != nil {

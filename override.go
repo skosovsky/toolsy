@@ -14,23 +14,21 @@ type overrideOptions struct {
 // OverrideOption configures OverrideTool.
 type OverrideOption func(*overrideOptions)
 
-// WithNewName overrides the tool name.
+// WithNewName overrides the tool manifest name.
 func WithNewName(name string) OverrideOption {
 	return func(o *overrideOptions) {
 		o.name = &name
 	}
 }
 
-// WithNewDescription overrides the tool description.
+// WithNewDescription overrides the tool manifest description.
 func WithNewDescription(desc string) OverrideOption {
 	return func(o *overrideOptions) {
 		o.description = &desc
 	}
 }
 
-// WithNewParameters overrides the JSON Schema (Parameters). Pass nil to keep the base tool's schema.
-// The map is stored as a defensive deep copy so that later mutations of the caller's map (including nested
-// properties/required) do not affect the wrapper. Parameters() still returns a shallow copy of the stored schema.
+// WithNewParameters overrides the JSON Schema parameters map. Pass nil to keep the base schema.
 func WithNewParameters(params map[string]any) OverrideOption {
 	return func(o *overrideOptions) {
 		if params != nil {
@@ -41,7 +39,7 @@ func WithNewParameters(params map[string]any) OverrideOption {
 	}
 }
 
-// deepCopySchema returns a deep copy of a JSON Schema–shaped map (nested maps and slices of primitives/maps).
+// deepCopySchema returns a deep copy of a JSON Schema shaped map.
 func deepCopySchema(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
@@ -113,8 +111,7 @@ func deepCopySchemaSlice(s []any) []any {
 	return out
 }
 
-// OverrideTool returns a tool that delegates to base but overrides Name, Description, and/or Parameters.
-// The base tool is not mutated; Execute and ToolMetadata are delegated via embedded toolBase.
+// OverrideTool returns a tool that delegates to base but overrides manifest fields.
 func OverrideTool(base Tool, opts ...OverrideOption) Tool {
 	var o overrideOptions
 	for _, opt := range opts {
@@ -132,29 +129,21 @@ type overriddenTool struct {
 	opts *overrideOptions
 }
 
-func (t *overriddenTool) Name() string {
+func (t *overriddenTool) Manifest() ToolManifest {
+	manifest := t.next.Manifest()
 	if t.opts.name != nil {
-		return *t.opts.name
+		manifest.Name = *t.opts.name
 	}
-	return t.next.Name()
-}
-
-func (t *overriddenTool) Description() string {
 	if t.opts.description != nil {
-		return *t.opts.description
+		manifest.Description = *t.opts.description
 	}
-	return t.next.Description()
-}
-
-// Parameters returns a shallow copy of the override schema when set; otherwise delegates to base (which follows the same contract).
-func (t *overriddenTool) Parameters() map[string]any {
 	if t.opts.parameters != nil {
-		return maps.Clone(t.opts.parameters)
+		manifest.Parameters = maps.Clone(t.opts.parameters)
 	}
-	return t.next.Parameters()
+	return manifest
 }
 
-func (t *overriddenTool) Execute(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error {
+func (t *overriddenTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
 	if t.opts.name != nil {
 		alias := *t.opts.name
 		origYield := yield
@@ -163,5 +152,5 @@ func (t *overriddenTool) Execute(ctx context.Context, run RunContext, argsJSON [
 			return origYield(c)
 		}
 	}
-	return t.next.Execute(ctx, run, argsJSON, yield)
+	return t.next.Execute(ctx, run, input, yield)
 }

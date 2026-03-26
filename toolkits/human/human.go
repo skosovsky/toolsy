@@ -20,7 +20,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	approvalTool, err := toolsy.NewStreamTool[approvalArgs](
 		o.approvalName,
 		o.approvalDesc,
-		func(_ context.Context, args approvalArgs, yield func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ toolsy.RunContext, args approvalArgs, yield func(toolsy.Chunk) error) error {
 			payload, marshalErr := json.Marshal(map[string]string{
 				"kind":   "approval",
 				"action": args.Action,
@@ -46,7 +46,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	clarificationTool, err := toolsy.NewStreamTool[clarificationArgs](
 		o.clarificationName,
 		o.clarificationDesc,
-		func(_ context.Context, args clarificationArgs, yield func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ toolsy.RunContext, args clarificationArgs, yield func(toolsy.Chunk) error) error {
 			payload, marshalErr := json.Marshal(map[string]string{
 				"kind":     "clarification",
 				"question": args.Question,

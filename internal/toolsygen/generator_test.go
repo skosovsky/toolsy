@@ -467,7 +467,11 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 	}
 
 	var got string
-	err = tool.Execute(context.Background(), toolsy.RunContext{}, []byte("{\"doctor_id\":\"d1\",\"slot_time\":\"2026-03-18T09:00:00Z\"}"), func(c toolsy.Chunk) error {
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"d1\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
+		func(c toolsy.Chunk) error {
 		got = string(c.Data)
 		return nil
 	})
@@ -478,12 +482,22 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 		t.Fatalf("result = %q", got)
 	}
 
-	err = tool.Execute(context.Background(), toolsy.RunContext{}, []byte("{}"), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{}")},
+		func(toolsy.Chunk) error { return nil },
+	)
 	if err == nil || !toolsy.IsClientError(err) {
 		t.Fatalf("missing required field error = %v, want client error", err)
 	}
 
-	err = tool.Execute(context.Background(), toolsy.RunContext{}, []byte("{\"doctor_id\":\"\",\"slot_time\":\"2026-03-18T09:00:00Z\"}"), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
+		func(toolsy.Chunk) error { return nil },
+	)
 	if err == nil || !toolsy.IsClientError(err) {
 		t.Fatalf("empty doctor_id error = %v, want client error", err)
 	}
@@ -549,7 +563,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	}
 
 	type chunkInfo struct {
-		Event string
+		Event toolsy.EventType
 		Data  string
 	}
 	tests := []struct {
@@ -593,7 +607,11 @@ func TestGeneratedStreamTool(t *testing.T) {
 
 	for _, tt := range tests {
 		var got []chunkInfo
-		err := tool.Execute(context.Background(), toolsy.RunContext{}, []byte(tt.args), func(c toolsy.Chunk) error {
+		err := tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(tt.args)},
+			func(c toolsy.Chunk) error {
 			got = append(got, chunkInfo{Event: c.Event, Data: string(c.Data)})
 			return nil
 		})

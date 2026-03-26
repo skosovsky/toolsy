@@ -20,7 +20,7 @@ func TestRequestApproval_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) {
 	err = approvalTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"action":"delete","reason":"user asked"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c
 			return nil
@@ -45,7 +45,7 @@ func TestAskClarification_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) 
 	err = clarificationTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"question":"Which button?"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"question":"Which button?"}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c
 			return nil
@@ -70,7 +70,7 @@ func TestRequestApproval_YieldErrorShortCircuitsBeforeErrSuspend(t *testing.T) {
 	err = approvalTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"action":"delete","reason":"user asked"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
 		func(toolsy.Chunk) error { return yieldErr },
 	)
 	require.ErrorIs(t, err, toolsy.ErrStreamAborted)
@@ -86,7 +86,7 @@ func TestRequestApproval_PayloadShape(t *testing.T) {
 	err = approvalTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"action":"send_email","reason":"user requested"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"send_email","reason":"user requested"}`)},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &payload)
 		},
@@ -112,7 +112,7 @@ func TestAskClarification_PayloadShape(t *testing.T) {
 	err = clarificationTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"question":"What is the deadline?"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"question":"What is the deadline?"}`)},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &payload)
 		},
@@ -138,6 +138,6 @@ func TestAsTools_CustomNames(t *testing.T) {
 	tools, err := AsTools(WithApprovalName("approve"), WithClarificationName("clarify"))
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
-	require.Equal(t, "approve", tools[0].Name())
-	require.Equal(t, "clarify", tools[1].Name())
+	require.Equal(t, "approve", tools[0].Manifest().Name)
+	require.Equal(t, "clarify", tools[1].Manifest().Name)
 }

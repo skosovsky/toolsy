@@ -32,7 +32,7 @@ func AsSearchTool(r Retriever, opts ...Option) (toolsy.Tool, error) {
 	}
 	o.applyDefaults()
 
-	handler := func(ctx context.Context, args searchArgs) (searchResult, error) {
+	handler := func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
 		results, err := r.Retrieve(ctx, args.Query)
 		if err != nil {
 			return searchResult{}, fmt.Errorf("toolkit/rag: retrieve failed: %w", err)

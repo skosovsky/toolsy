@@ -98,7 +98,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		t, err := toolsy.NewTool[sendArgs, sendResult](
 			o.sendName,
 			o.sendDesc,
-			func(ctx context.Context, args sendArgs) (sendResult, error) {
+			func(ctx context.Context, _ toolsy.RunContext, args sendArgs) (sendResult, error) {
 				return doSend(ctx, sender, args, o.maxBodyBytes)
 			},
 		)
@@ -111,7 +111,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		searchTool, err := toolsy.NewTool[searchArgs, searchResult](
 			o.searchName,
 			o.searchDesc,
-			func(ctx context.Context, args searchArgs) (searchResult, error) {
+			func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
 				return doSearch(ctx, reader, args, o.maxBodyBytes)
 			},
 		)
@@ -123,7 +123,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		readTool, err := toolsy.NewTool[readArgs, readResult](
 			o.readName,
 			o.readDesc,
-			func(ctx context.Context, args readArgs) (readResult, error) {
+			func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
 				return doRead(ctx, reader, args, o.maxBodyBytes)
 			},
 		)

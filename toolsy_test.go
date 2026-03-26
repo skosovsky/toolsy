@@ -14,24 +14,33 @@ func TestMain(m *testing.M) {
 }
 
 func TestToolCall_Chunk(t *testing.T) {
-	call := ToolCall{ID: "call_1", ToolName: "weather", Args: []byte(`{"location":"Moscow"}`)}
+	call := ToolCall{
+		ID:       "call_1",
+		ToolName: "weather",
+		Input:    ToolInput{ArgsJSON: []byte(`{"location":"Moscow"}`)},
+	}
 	assert.Equal(t, "call_1", call.ID)
 	assert.Equal(t, "weather", call.ToolName)
-	assert.JSONEq(t, `{"location":"Moscow"}`, string(call.Args))
+	assert.JSONEq(t, `{"location":"Moscow"}`, string(call.Input.ArgsJSON))
 
-	chunk := Chunk{CallID: call.ID, ToolName: call.ToolName, Data: []byte(`{"temp":22.5}`), MimeType: MimeTypeJSON}
+	chunk := Chunk{
+		CallID:   call.ID,
+		ToolName: call.ToolName,
+		Event:    EventResult,
+		Data:     []byte(`{"temp":22.5}`),
+		MimeType: MimeTypeJSON,
+	}
 	assert.Equal(t, "call_1", chunk.CallID)
 	assert.Equal(t, "weather", chunk.ToolName)
+	assert.Equal(t, EventResult, chunk.Event)
 	assert.Equal(t, []byte(`{"temp":22.5}`), chunk.Data)
-	if chunk.MimeType != MimeTypeJSON {
-		t.Fatalf("unexpected mime type: %s", chunk.MimeType)
-	}
+	assert.JSONEq(t, MimeTypeJSON, chunk.MimeType)
 }
 
-// TestChunk_EventIsErrorMetadata verifies Chunk has Event, IsError, Metadata and constants EventProgress, EventResult.
 func TestChunk_EventIsErrorMetadata(t *testing.T) {
-	assert.Equal(t, "progress", EventProgress)
-	assert.Equal(t, "result", EventResult)
+	assert.Equal(t, EventProgress, EventType("progress"))
+	assert.Equal(t, EventResult, EventType("result"))
+
 	c := Chunk{
 		Event:    EventResult,
 		IsError:  false,
@@ -40,27 +49,24 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	assert.Equal(t, EventResult, c.Event)
 	assert.False(t, c.IsError)
 	assert.Equal(t, 50, c.Metadata["percent"])
-	cErr := Chunk{Data: []byte("fail"), MimeType: MimeTypeText, IsError: true}
+
+	cErr := Chunk{Event: EventResult, Data: []byte("fail"), MimeType: MimeTypeText, IsError: true}
+	assert.Equal(t, EventResult, cErr.Event)
 	assert.True(t, cErr.IsError)
 	assert.Equal(t, []byte("fail"), cErr.Data)
-	if cErr.MimeType != MimeTypeText {
-		t.Fatalf("unexpected mime type: %s", cErr.MimeType)
-	}
+	assert.Equal(t, MimeTypeText, cErr.MimeType)
 }
 
-// Ensure Tool interface is satisfied by a minimal impl (used in tests later).
 type minTool struct {
-	name, desc string
-	params     map[string]any
-	execute    func(context.Context, RunContext, []byte, func(Chunk) error) error
+	manifest ToolManifest
+	execute  func(context.Context, RunContext, ToolInput, func(Chunk) error) error
 }
 
-func (m minTool) Name() string               { return m.name }
-func (m minTool) Description() string        { return m.desc }
-func (m minTool) Parameters() map[string]any { return m.params }
-func (m minTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
+func (m minTool) Manifest() ToolManifest { return m.manifest }
+
+func (m minTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
 	if m.execute != nil {
-		return m.execute(ctx, run, args, yield)
+		return m.execute(ctx, run, input, yield)
 	}
 	return nil
 }
@@ -76,15 +82,20 @@ func ExampleNewTool() {
 	type Out struct {
 		Temp float64 `json:"temp"`
 	}
-	tool, err := NewTool("weather", "Get temperature for a city", func(_ context.Context, _ Args) (Out, error) {
-		return Out{Temp: 22.5}, nil
-	})
+	tool, err := NewTool(
+		"weather",
+		"Get temperature for a city",
+		func(_ context.Context, _ RunContext, _ Args) (Out, error) {
+			return Out{Temp: 22.5}, nil
+		},
+	)
 	if err != nil {
 		return
 	}
-	_ = tool.Name()
-	_ = tool.Description()
-	_ = tool.Parameters()
+	m := tool.Manifest()
+	_ = m.Name
+	_ = m.Description
+	_ = m.Parameters
 	// Output:
 }
 
@@ -95,24 +106,29 @@ func ExampleRegistry_Execute() {
 	type Out struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, a Args) (Out, error) {
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Out, error) {
 		return Out{Y: a.X + 1}, nil
 	})
 	if err != nil {
 		return
 	}
-	reg := NewRegistry()
-	reg.Register(tool)
+	reg, err := NewRegistryBuilder().Add(tool).Build()
+	if err != nil {
+		return
+	}
+
 	var out Out
 	err = reg.Execute(context.Background(), ToolCall{
-		ID: "1", ToolName: "add_one", Args: []byte(`{"x": 5}`),
+		ID:       "1",
+		ToolName: "add_one",
+		Input:    ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 	}, func(c Chunk) error {
 		return json.Unmarshal(c.Data, &out)
 	})
 	if err != nil {
 		panic(err)
 	}
-	_ = out // out.Y == 6
+	_ = out
 	// Output:
 }
 
@@ -124,22 +140,21 @@ func ExampleRegistry_ExecuteBatchStream() {
 	type Out struct {
 		Sum int `json:"sum"`
 	}
-	tool, err := NewTool("add", "Add two numbers", func(_ context.Context, a Args) (Out, error) {
+	tool, err := NewTool("add", "Add two numbers", func(_ context.Context, _ RunContext, a Args) (Out, error) {
 		return Out{Sum: a.A + a.B}, nil
 	})
 	if err != nil {
 		return
 	}
-	reg := NewRegistry()
-	reg.Register(tool)
-	calls := []ToolCall{
-		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
-		{ID: "2", ToolName: "add", Args: []byte(`{"a": 10, "b": 20}`)},
+	reg, err := NewRegistryBuilder().Add(tool).Build()
+	if err != nil {
+		return
 	}
-	err = reg.ExecuteBatchStream(context.Background(), calls, func(_ Chunk) error {
-		// handle each chunk (CallID, ToolName, Data)
-		return nil
-	})
+	calls := []ToolCall{
+		{ID: "1", ToolName: "add", Input: ToolInput{ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
+		{ID: "2", ToolName: "add", Input: ToolInput{ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
+	}
+	err = reg.ExecuteBatchStream(context.Background(), calls, func(_ Chunk) error { return nil })
 	if err != nil {
 		panic(err)
 	}

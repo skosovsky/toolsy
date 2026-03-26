@@ -56,7 +56,7 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 	searchTool, err := toolsy.NewTool[searchArgs, searchResult](
 		o.searchName,
 		o.searchDesc,
-		func(ctx context.Context, args searchArgs) (searchResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
 			return doSearch(ctx, provider, args.Query)
 		},
 	)
@@ -67,7 +67,7 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 	scrapeTool, err := toolsy.NewTool[scrapeArgs, scrapeResult](
 		o.scrapeName,
 		o.scrapeDesc,
-		func(ctx context.Context, args scrapeArgs) (scrapeResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args scrapeArgs) (scrapeResult, error) {
 			return doScrape(ctx, &o, args.URL)
 		},
 	)

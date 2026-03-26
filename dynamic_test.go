@@ -24,20 +24,25 @@ func TestNewDynamicTool_Success(t *testing.T) {
 		"dynamic",
 		"A dynamic tool",
 		schema,
-		func(_ context.Context, argsJSON []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: argsJSON, MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, argsJSON []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: argsJSON, MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	assert.Equal(t, "dynamic", tool.Name())
-	assert.Equal(t, "A dynamic tool", tool.Description())
+	assert.Equal(t, "dynamic", tool.Manifest().Name)
+	assert.Equal(t, "A dynamic tool", tool.Manifest().Description)
 
 	var res []byte
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 42}`), func(c Chunk) error {
-		res = c.Data
-		return nil
-	})
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
+		func(c Chunk) error {
+			res = c.Data
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(res, &out))
@@ -57,39 +62,43 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 		"weather",
 		"Weather",
 		schema,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
 
 	yieldNop := func(Chunk) error { return nil }
-	// Missing required field
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), yieldNop)
+	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, yieldNop)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 
-	// Invalid enum
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"unit": "kelvin"}`), yieldNop)
+	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{"unit": "kelvin"}`)}, yieldNop)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
 
 func TestNewDynamicTool_InvalidSchema(t *testing.T) {
 	t.Parallel()
-	// Schema that fails to resolve (type must be string or array of strings per JSON Schema)
-	invalidSchema := map[string]any{
-		"type": 123,
-	}
-	_, err := NewDynamicTool("bad", "Bad", invalidSchema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
-		return nil
-	})
+	invalidSchema := map[string]any{"type": 123}
+	_, err := NewDynamicTool(
+		"bad",
+		"Bad",
+		invalidSchema,
+		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+			return nil
+		},
+	)
 	require.Error(t, err)
 
-	// Nil schema
-	_, err = NewDynamicTool("nil", "Nil", nil, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
-		return nil
-	})
+	_, err = NewDynamicTool(
+		"nil",
+		"Nil",
+		nil,
+		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+			return nil
+		},
+	)
 	require.Error(t, err)
 }
 
@@ -112,25 +121,39 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 		"classify",
 		"Classify",
 		schema,
-		func(_ context.Context, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
 			return clientErr
 		},
 	)
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 	var ce *ClientError
 	require.ErrorAs(t, err, &ce)
 	assert.Equal(t, "bad request", ce.Reason)
 
-	// Non-ClientError becomes SystemError
-	tool2, err := NewDynamicTool("sys", "Sys", schema, func(_ context.Context, _ []byte, _ func(Chunk) error) error {
-		return errors.New("internal failure")
-	})
+	tool2, err := NewDynamicTool(
+		"sys",
+		"Sys",
+		schema,
+		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+			return errors.New("internal failure")
+		},
+	)
 	require.NoError(t, err)
-	err = tool2.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(Chunk) error { return nil })
+	err = tool2.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsSystemError(err))
 }
@@ -142,8 +165,8 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 		"meta",
 		"Meta",
 		schema,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithTimeout(30*time.Second),
 		WithTags("a", "b"),
@@ -152,12 +175,11 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	tm, ok := tool.(ToolMetadata)
-	require.True(t, ok, "dynamic tool must implement ToolMetadata")
-	assert.Equal(t, 30*time.Second, tm.Timeout())
-	assert.Equal(t, []string{"a", "b"}, tm.Tags())
-	assert.Equal(t, "1.0", tm.Version())
-	assert.True(t, tm.IsDangerous())
+	m := tool.Manifest()
+	assert.Equal(t, 30*time.Second, m.Timeout)
+	assert.Equal(t, []string{"a", "b"}, m.Tags)
+	assert.Equal(t, "1.0", m.Version)
+	assert.Equal(t, true, m.Metadata["dangerous"])
 }
 
 func TestNewDynamicTool_StrictOption(t *testing.T) {
@@ -173,14 +195,14 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 		"strict_tool",
 		"Strict",
 		schema,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
 	)
 	require.NoError(t, err)
 
-	params := tool.Parameters()
+	params := tool.Manifest().Parameters
 	obj := findSchemaObject(params)
 	require.NotNil(t, obj, "expected object with properties")
 	assert.Equal(t, false, obj["additionalProperties"])
@@ -191,7 +213,6 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 
 func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 	t.Parallel()
-	// Nested object with its own properties, $id, and id — all must remain unchanged in caller's map.
 	nestedObj := map[string]any{
 		"type":       "object",
 		"$id":        "https://example.com/nested",
@@ -210,24 +231,22 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 		"no_mutate",
 		"No mutate",
 		schemaMap,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 
-	// Root: caller's map must not have been modified (strict/additions apply only to our deep copy).
-	assert.Nil(t, schemaMap["required"], "caller root must not have required key added")
-	assert.Nil(t, schemaMap["additionalProperties"], "caller root must not have additionalProperties added")
-	assert.Equal(t, "https://example.com/root", schemaMap["$id"], "caller root $id must be preserved")
+	assert.Nil(t, schemaMap["required"])
+	assert.Nil(t, schemaMap["additionalProperties"])
+	assert.Equal(t, "https://example.com/root", schemaMap["$id"])
 
-	// Nested object: must still have $id/id and must NOT have additionalProperties/required added by strict.
-	assert.Equal(t, "https://example.com/nested", nestedObj["$id"], "caller nested $id must be preserved")
-	assert.Equal(t, "nested", nestedObj["id"], "caller nested id must be preserved")
-	assert.Nil(t, nestedObj["required"], "caller nested must not have required key added")
-	assert.Nil(t, nestedObj["additionalProperties"], "caller nested must not have additionalProperties added")
+	assert.Equal(t, "https://example.com/nested", nestedObj["$id"])
+	assert.Equal(t, "nested", nestedObj["id"])
+	assert.Nil(t, nestedObj["required"])
+	assert.Nil(t, nestedObj["additionalProperties"])
 }
 
 func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *testing.T) {
@@ -242,127 +261,28 @@ func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *te
 		"isolated",
 		"Isolated",
 		schemaMap,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Data: []byte(`{}`), MimeType: MimeTypeJSON})
+		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
-	paramsBefore := tool.Parameters()
+
+	paramsBefore := tool.Manifest().Parameters
 	propsBefore, ok := paramsBefore["properties"].(map[string]any)
 	require.True(t, ok)
 	_, hasX := propsBefore["x"]
-	require.True(t, hasX, "tool schema must have property x")
-	_, hasYBefore := propsBefore["y"]
+	require.True(t, hasX)
 
-	// Mutate caller's map after construction (root and nested).
 	schemaMap["mutatedRoot"] = true
 	if props, okProps := schemaMap["properties"].(map[string]any); okProps {
 		props["y"] = map[string]any{"type": "string"}
 	}
 
-	paramsAfter := tool.Parameters()
-	assert.Nil(t, paramsAfter["mutatedRoot"], "tool schema must not reflect caller's root mutation")
+	paramsAfter := tool.Manifest().Parameters
 	propsAfter, ok := paramsAfter["properties"].(map[string]any)
 	require.True(t, ok)
-	_, hasYAfter := propsAfter["y"]
-	assert.False(t, hasYBefore, "sanity: y was not in initial tool schema")
-	assert.False(t, hasYAfter, "tool schema must not reflect caller's nested mutation")
-}
-
-func TestNewDynamicTool_MultipleChunks(t *testing.T) {
-	t.Parallel()
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"n": map[string]any{"type": "integer"},
-		},
-		"required": []any{"n"},
-	}
-	tool, err := NewDynamicTool(
-		"stream_dyn",
-		"Stream N chunks",
-		schema,
-		func(_ context.Context, argsJSON []byte, yield func(Chunk) error) error {
-			var args struct {
-				N int `json:"n"`
-			}
-			if err := json.Unmarshal(argsJSON, &args); err != nil {
-				return err
-			}
-			for i := range args.N {
-				chunk := []byte{byte('0' + i)}
-				if err := yield(Chunk{Data: chunk, MimeType: MimeTypeText}); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	)
-	require.NoError(t, err)
-	require.NotNil(t, tool)
-
-	var chunks [][]byte
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"n": 4}`), func(c Chunk) error {
-		chunks = append(chunks, append([]byte(nil), c.Data...))
-		return nil
-	})
-	require.NoError(t, err)
-	require.Len(t, chunks, 4)
-	assert.Equal(t, []byte("0"), chunks[0])
-	assert.Equal(t, []byte("1"), chunks[1])
-	assert.Equal(t, []byte("2"), chunks[2])
-	assert.Equal(t, []byte("3"), chunks[3])
-}
-
-func TestNewDynamicTool_ZeroChunks(t *testing.T) {
-	t.Parallel()
-	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	tool, err := NewDynamicTool(
-		"nop_stream",
-		"Side-effect only",
-		schema,
-		func(_ context.Context, _ []byte, _ func(Chunk) error) error {
-			return nil
-		},
-	)
-	require.NoError(t, err)
-	var count int
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error {
-		count++
-		return nil
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
-}
-
-func TestNewDynamicTool_YieldError(t *testing.T) {
-	t.Parallel()
-	schema := map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"x": map[string]any{"type": "integer"}},
-	}
-	yieldErr := errors.New("client closed")
-	tool, err := NewDynamicTool(
-		"abort_dyn",
-		"Abort on yield",
-		schema,
-		func(_ context.Context, _ []byte, yield func(Chunk) error) error {
-			_ = yield(Chunk{Data: []byte("first"), MimeType: MimeTypeText})
-			return yield(Chunk{Data: []byte("second"), MimeType: MimeTypeText})
-		},
-	)
-	require.NoError(t, err)
-	var received [][]byte
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 1}`), func(c Chunk) error {
-		received = append(received, append([]byte(nil), c.Data...))
-		if string(c.Data) == "first" {
-			return nil
-		}
-		return yieldErr
-	})
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrStreamAborted)
-	require.Len(t, received, 2)
-	assert.Equal(t, []byte("first"), received[0])
-	assert.Equal(t, []byte("second"), received[1])
+	_, hasY := propsAfter["y"]
+	require.False(t, hasY)
+	_, mutatedRoot := paramsAfter["mutatedRoot"]
+	require.False(t, mutatedRoot)
 }

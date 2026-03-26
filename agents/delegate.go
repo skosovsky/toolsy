@@ -62,7 +62,7 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 	if len(inputSchema) == 0 {
 		return nil, errors.New("agents: inputSchema must not be empty")
 	}
-	return toolsy.NewProxyToolWithRun(name, description, inputSchema,
+	return toolsy.NewProxyTool(name, description, inputSchema,
 		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
 			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
 			if authErr != nil {
@@ -119,7 +119,7 @@ func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.
 	if len(schema) == 0 {
 		return nil, errors.New("agents: schema must not be empty")
 	}
-	return toolsy.NewProxyToolWithRun(name, desc, schema,
+	return toolsy.NewProxyTool(name, desc, schema,
 		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
 			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
 			if authErr != nil {

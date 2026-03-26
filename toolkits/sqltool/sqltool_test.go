@@ -3,6 +3,7 @@ package sqltool
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -21,6 +22,14 @@ func openSQLite(t *testing.T) *sql.DB {
 	return db
 }
 
+func decodeSQLChunk[T any](t *testing.T, c toolsy.Chunk) T {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out T
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
+
 func TestInspectSchema_Success(t *testing.T) {
 	db := openSQLite(t)
 	_, err := db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
@@ -33,14 +42,15 @@ func TestInspectSchema_Success(t *testing.T) {
 	var result inspectResult
 	require.NoError(
 		t,
-		inspectTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(inspectResult); ok {
-					result = r
-				}
-			}
-			return nil
-		}),
+		inspectTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeSQLChunk[inspectResult](t, c)
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Schema, "users")
 	require.Contains(t, result.Schema, "id")
@@ -61,14 +71,15 @@ func TestInspectSchema_AllowedTables(t *testing.T) {
 	var result inspectResult
 	require.NoError(
 		t,
-		inspectTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(inspectResult); ok {
-					result = r
-				}
-			}
-			return nil
-		}),
+		inspectTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeSQLChunk[inspectResult](t, c)
+				return nil
+			},
+		),
 	)
 	require.Contains(t, result.Schema, "## Table: a")
 	require.NotContains(t, result.Schema, "## Table: b")
@@ -89,13 +100,9 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 		inspectTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"table_names":["users","nonexistent_table_xyz"]}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["users","nonexistent_table_xyz"]}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(inspectResult); ok {
-						result = r
-					}
-				}
+				result = decodeSQLChunk[inspectResult](t, c)
 				return nil
 			},
 		),
@@ -122,13 +129,9 @@ func TestExecuteRead_Success(t *testing.T) {
 		executeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"query":"SELECT id, name FROM t"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(executeResult); ok {
-						result = r
-					}
-				}
+				result = decodeSQLChunk[executeResult](t, c)
 				return nil
 			},
 		),
@@ -156,13 +159,9 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 		executeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"query":"SELECT id FROM t"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(executeResult); ok {
-						result = r
-					}
-				}
+				result = decodeSQLChunk[executeResult](t, c)
 				return nil
 			},
 		),
@@ -180,7 +179,7 @@ func TestExecuteRead_BlocksWrite(t *testing.T) {
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"INSERT INTO t VALUES (1)"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"INSERT INTO t VALUES (1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -196,7 +195,7 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"SELECT 1; DELETE FROM t"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT 1; DELETE FROM t"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -214,7 +213,7 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -238,13 +237,9 @@ func TestExecuteRead_KeywordInStringAllowed(t *testing.T) {
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`)},
 		func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(executeResult); ok {
-					result = r
-				}
-			}
+			result = decodeSQLChunk[executeResult](t, c)
 			return nil
 		},
 	)
@@ -264,13 +259,9 @@ func TestExecuteRead_KeywordInCommentAllowed(t *testing.T) {
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"SELECT 1 AS x -- INSERT here"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT 1 AS x -- INSERT here"}`)},
 		func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(executeResult); ok {
-					result = r
-				}
-			}
+			result = decodeSQLChunk[executeResult](t, c)
 			return nil
 		},
 	)
@@ -295,13 +286,9 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 		executeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"query":"SELECT id, name FROM t"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(executeResult); ok {
-						result = r
-					}
-				}
+				result = decodeSQLChunk[executeResult](t, c)
 				return nil
 			},
 		),
@@ -320,8 +307,8 @@ func TestAsTools_ToolCount(t *testing.T) {
 	tools, err := AsTools(openSQLite(t), "sqlite")
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
-	require.Equal(t, "sql_inspect_schema", tools[0].Name())
-	require.Equal(t, "sql_execute_read", tools[1].Name())
+	require.Equal(t, "sql_inspect_schema", tools[0].Manifest().Name)
+	require.Equal(t, "sql_execute_read", tools[1].Manifest().Name)
 }
 
 func TestAsTools_UnknownDialect(t *testing.T) {
@@ -347,13 +334,9 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 		executeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"query":"SELECT id, long_text FROM t"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, long_text FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(executeResult); ok {
-						result = r
-					}
-				}
+				result = decodeSQLChunk[executeResult](t, c)
 				return nil
 			},
 		),

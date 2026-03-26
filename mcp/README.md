@@ -5,7 +5,7 @@ This module bridges MCP servers to [toolsy](https://github.com/skosovsky/toolsy)
 ## Features
 
 - **Transports**: `StdioTransport` (child process via stdin/stdout) and `SSETransport` (HTTP Server-Sent Events with dynamic POST endpoint).
-- **Client**: `Initialize` handshake (sends `notifications/initialized` per MCP spec after success), `GetTools` (iterator with cursor pagination), `GetResourceTool` (single tool for `resources/read`), `GetPrompts` / `GetPrompt`. `GetPrompt` returns `*PromptMessageResult` (description and list of prompt messages; compatible with MCP `prompts/get` result).
+- **Client**: eager lifecycle via `Connect(ctx, transport, opts...)`. Handshake is executed during connect and returned client is ready for `GetTools`, `GetResourceTool`, `GetPrompts`, `GetPrompt`.
 - **Thread-safe**: Safe for concurrent use (e.g. `Registry.ExecuteBatchStream`). Request IDs are generated with `atomic.Uint64`; pending responses are correlated via `sync.Map`.
 - **Resilience**: Context cancellation and yield errors trigger `notifications/cancelled` and return `toolsy.ErrStreamAborted`. Process crash (stdio) unblocks all pending `Call`s with an error.
 
@@ -22,32 +22,40 @@ import (
 
 func main() {
 	ctx := context.Background()
-	reg := toolsy.NewRegistry()
+	reg, err := toolsy.NewRegistryBuilder().Build()
+	if err != nil {
+		panic(err)
+	}
 
 	// 1. Initialize transport (e.g. Postgres MCP)
 	transport := mcp.NewStdioTransport("npx", []string{"-y", "@modelcontextprotocol/server-postgres", "postgres://localhost/db"})
 
-	// 2. Create client with Roots (local folders the agent allows the MCP server to access)
-	client := mcp.NewClient(transport, mcp.WithClientRoots([]string{"/my/workspace"}))
-	defer client.Close()
-
-	if err := client.Initialize(ctx); err != nil {
+	// 2. Connect client with Roots (local folders the agent allows the MCP server to access)
+	client, err := mcp.Connect(ctx, transport, mcp.WithClientRoots([]string{"/my/workspace"}))
+	if err != nil {
 		panic(err)
 	}
+	defer client.Close()
 
 	// 3. Register all tools from the server into the toolsy registry
+	builder := toolsy.NewRegistryBuilder()
 	for tool, err := range client.GetTools(ctx) {
 		if err != nil {
 			panic(err)
 		}
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 
 	// 4. Add the system tool for reading resources from this server
 	resTool, _ := client.GetResourceTool()
-	reg.Register(resTool)
+	builder.Add(resTool)
+	reg, err = builder.Build()
+	if err != nil {
+		panic(err)
+	}
 
 	// reg is ready for the LLM: it will generate JSON Schema, handle validation, streaming, progress, and timeouts.
+	_ = reg
 }
 ```
 

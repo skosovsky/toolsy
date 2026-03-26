@@ -23,9 +23,13 @@ func main() {
 		Sum int `json:"sum"`
 	}
 
-	add, err := toolsy.NewTool("add", "Add two numbers", func(_ context.Context, args CalcArgs) (CalcResult, error) {
-		return CalcResult{Sum: args.A + args.B}, nil
-	})
+	add, err := toolsy.NewTool(
+		"add",
+		"Add two numbers",
+		func(_ context.Context, _ toolsy.RunContext, args CalcArgs) (CalcResult, error) {
+			return CalcResult{Sum: args.A + args.B}, nil
+		},
+	)
 	if err != nil {
 		log.Fatalf("NewTool: %v", err)
 	}
@@ -33,23 +37,32 @@ func main() {
 	type SubResult struct {
 		Diff int `json:"diff"`
 	}
-	sub, err := toolsy.NewTool("sub", "Subtract b from a", func(_ context.Context, args CalcArgs) (SubResult, error) {
-		return SubResult{Diff: args.A - args.B}, nil
-	})
+	sub, err := toolsy.NewTool(
+		"sub",
+		"Subtract b from a",
+		func(_ context.Context, _ toolsy.RunContext, args CalcArgs) (SubResult, error) {
+			return SubResult{Diff: args.A - args.B}, nil
+		},
+	)
 	if err != nil {
 		log.Fatalf("NewTool sub: %v", err)
 	}
 
-	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(exampleRegistryTimeout))
-	reg.Register(add)
-	reg.Register(sub)
-	// Schema for LLM: pass add.Parameters() or sub.Parameters() to your provider (do not mutate)
-	_ = add.Parameters()
+	reg, err := toolsy.NewRegistryBuilder(
+		toolsy.WithDefaultTimeout(exampleRegistryTimeout),
+	).Add(add, sub).Build()
+	if err != nil {
+		log.Fatalf("registry build: %v", err)
+	}
+	// Schema for LLM: pass add.Manifest().Parameters or sub.Manifest().Parameters to your provider (do not mutate)
+	_ = add.Manifest().Parameters
 
 	call := toolsy.ToolCall{
 		ID:       "1",
 		ToolName: "add",
-		Args:     []byte(`{"a": 3, "b": 5}`),
+		Input: toolsy.ToolInput{
+			ArgsJSON: []byte(`{"a": 3, "b": 5}`),
+		},
 	}
 	var result []byte
 	if err := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {

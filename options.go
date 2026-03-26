@@ -2,15 +2,9 @@ package toolsy
 
 import (
 	"context"
+	"maps"
 	"time"
 )
-
-// ExecutionConfig contains runtime-only settings used when a tool executes.
-type ExecutionConfig struct {
-	Timeout   time.Duration
-	Dangerous bool
-	ReadOnly  bool
-}
 
 // SchemaConfig contains JSON Schema generation settings for typed tools/extractors.
 type SchemaConfig struct {
@@ -20,17 +14,19 @@ type SchemaConfig struct {
 
 // ToolManifest contains metadata exposed to orchestrators and discovery layers.
 type ToolManifest struct {
-	Tags                 []string
-	Version              string
-	RequiresConfirmation bool
-	Sensitivity          string
+	Name        string
+	Description string
+	Parameters  map[string]any
+	Timeout     time.Duration
+	Tags        []string
+	Version     string
+	Metadata    map[string]any
 }
 
 // ToolConfig is the internal split configuration for a tool.
 type ToolConfig struct {
-	Execution ExecutionConfig
-	Schema    SchemaConfig
-	Manifest  ToolManifest
+	Schema   SchemaConfig
+	Manifest ToolManifest
 }
 
 // ToolOption configures a tool (e.g. WithStrict, WithTimeout, WithSchemaRegistry).
@@ -55,7 +51,7 @@ func WithSchemaRegistry(r *SchemaRegistry) ToolOption {
 // WithTimeout sets a per-tool timeout (used by middleware or registry execution).
 func WithTimeout(d time.Duration) ToolOption {
 	return func(c *ToolConfig) {
-		c.Execution.Timeout = d
+		c.Manifest.Timeout = d
 	}
 }
 
@@ -76,28 +72,33 @@ func WithVersion(version string) ToolOption {
 // WithDangerous marks the tool as dangerous.
 func WithDangerous() ToolOption {
 	return func(c *ToolConfig) {
-		c.Execution.Dangerous = true
+		ensureManifestMetadata(&c.Manifest)
+		c.Manifest.Metadata["dangerous"] = true
 	}
 }
 
 // WithReadOnly marks the tool as read-only.
 func WithReadOnly() ToolOption {
 	return func(c *ToolConfig) {
-		c.Execution.ReadOnly = true
+		ensureManifestMetadata(&c.Manifest)
+		c.Manifest.Metadata["read_only"] = true
 	}
 }
 
-// WithRequiresConfirmation marks the tool as requiring human confirmation before execution.
-func WithRequiresConfirmation() ToolOption {
+// WithMetadata merges custom metadata into the tool manifest metadata.
+func WithMetadata(metadata map[string]any) ToolOption {
 	return func(c *ToolConfig) {
-		c.Manifest.RequiresConfirmation = true
+		if len(metadata) == 0 {
+			return
+		}
+		ensureManifestMetadata(&c.Manifest)
+		maps.Copy(c.Manifest.Metadata, metadata)
 	}
 }
 
-// WithSensitivity sets the sensitivity level metadata for the tool.
-func WithSensitivity(level string) ToolOption {
-	return func(c *ToolConfig) {
-		c.Manifest.Sensitivity = level
+func ensureManifestMetadata(m *ToolManifest) {
+	if m.Metadata == nil {
+		m.Metadata = make(map[string]any)
 	}
 }
 

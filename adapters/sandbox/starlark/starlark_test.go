@@ -119,7 +119,7 @@ func TestExecToolSchemaExposesOnlyStarlark(t *testing.T) {
 	tool, err := exectool.New(sb, exectool.WithTimeout(time.Second))
 	require.NoError(t, err)
 
-	params := tool.Parameters()
+	params := tool.Manifest().Parameters
 	props := params["properties"].(map[string]any)
 	language := props["language"].(map[string]any)
 	require.Equal(t, []any{"starlark"}, language["enum"])

@@ -38,7 +38,7 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 	tool, err := toolsy.NewTool[extractArgs, extractResult](
 		o.toolName,
 		o.toolDesc,
-		func(ctx context.Context, args extractArgs) (extractResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args extractArgs) (extractResult, error) {
 			return doExtract(ctx, &o, args.FilePath, args.URL)
 		},
 	)

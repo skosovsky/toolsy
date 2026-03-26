@@ -21,10 +21,11 @@ func main() {
 	tool, err := toolsy.NewStreamTool(
 		"stream_numbers",
 		"Stream numbers 1..N",
-		func(_ context.Context, q QueryArgs, yield func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ toolsy.RunContext, q QueryArgs, yield func(toolsy.Chunk) error) error {
 			for i := 1; i <= q.Limit; i++ {
 				chunk, _ := json.Marshal(map[string]int{"n": i})
 				if err := yield(toolsy.Chunk{
+					Event:    toolsy.EventResult,
 					Data:     chunk,
 					MimeType: toolsy.MimeTypeJSON,
 				}); err != nil {
@@ -38,10 +39,18 @@ func main() {
 		log.Fatalf("NewStreamTool: %v", err)
 	}
 
-	reg := toolsy.NewRegistry(toolsy.WithDefaultTimeout(exampleRegistryTimeout))
-	reg.Register(tool)
+	reg, err := toolsy.NewRegistryBuilder(
+		toolsy.WithDefaultTimeout(exampleRegistryTimeout),
+	).Add(tool).Build()
+	if err != nil {
+		log.Fatalf("build registry: %v", err)
+	}
 
-	call := toolsy.ToolCall{ID: "1", ToolName: "stream_numbers", Args: []byte(`{"limit": 3}`)}
+	call := toolsy.ToolCall{
+		ID:       "1",
+		ToolName: "stream_numbers",
+		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"limit": 3}`)},
+	}
 	var count int
 	err = reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
 		count++

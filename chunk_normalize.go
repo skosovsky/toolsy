@@ -1,44 +1,39 @@
 package toolsy
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"unicode/utf8"
 )
 
-func normalizeChunk(c Chunk) (Chunk, error) {
+func validateChunk(c Chunk) error {
 	if c.Event == "" {
-		c.Event = EventResult
+		return &SystemError{Err: errors.New("toolsy: chunk event is required")}
+	}
+	if c.Event != EventProgress && c.Event != EventResult && c.Event != EventSuspend {
+		return &SystemError{Err: fmt.Errorf("toolsy: unsupported chunk event %q", c.Event)}
 	}
 	if c.IsError {
-		if c.Data == nil && c.RawData != nil {
-			return Chunk{}, &SystemError{
-				Err: errors.New("toolsy: error chunks must set Data as UTF-8 text; RawData is unsupported"),
+		if len(c.Data) == 0 {
+			return &SystemError{
+				Err: errors.New("toolsy: error chunks must include UTF-8 text in Data"),
 			}
 		}
-		if c.Data != nil && c.MimeType == "" {
-			c.MimeType = MimeTypeText
+		if c.MimeType != MimeTypeText {
+			return &SystemError{Err: fmt.Errorf("toolsy: error chunks require mime type %q", MimeTypeText)}
 		}
-		if c.Data != nil && c.MimeType != MimeTypeText {
-			return Chunk{}, &SystemError{Err: fmt.Errorf("toolsy: error chunks require mime type %q", MimeTypeText)}
-		}
-		if c.Data != nil && !utf8.Valid(c.Data) {
-			return Chunk{}, &SystemError{
+		if !utf8.Valid(c.Data) {
+			return &SystemError{
 				Err: errors.New("toolsy: error chunks must contain valid UTF-8 text"),
 			}
 		}
+		return nil
 	}
-	if c.RawData != nil && c.Data == nil {
-		data, err := json.Marshal(c.RawData)
-		if err != nil {
-			return Chunk{}, &SystemError{Err: fmt.Errorf("toolsy: marshal chunk raw data: %w", err)}
-		}
-		c.Data = data
-		c.MimeType = MimeTypeJSON
+	if len(c.Data) > 0 && c.MimeType == "" {
+		return &SystemError{Err: fmt.Errorf("toolsy: chunk data requires mime type for event %q", c.Event)}
 	}
-	if c.Data != nil && c.MimeType == "" {
-		return Chunk{}, &SystemError{Err: fmt.Errorf("toolsy: chunk data requires mime type for event %q", c.Event)}
+	if len(c.Data) == 0 && c.MimeType != "" {
+		return &SystemError{Err: errors.New("toolsy: chunk mime type without data is invalid")}
 	}
-	return c, nil
+	return nil
 }

@@ -113,7 +113,7 @@ func toolsForPath(
 		pathTemplate := path
 		methodCopy := method
 		optsCopy := *opts
-		tool, err := toolsy.NewProxyToolWithRun(
+		tool, err := toolsy.NewProxyTool(
 			name,
 			desc,
 			schemaBytes,

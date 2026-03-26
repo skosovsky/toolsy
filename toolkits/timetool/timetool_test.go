@@ -2,6 +2,7 @@ package timetool
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"testing"
 	"time"
@@ -13,6 +14,14 @@ import (
 
 var rfc3339Re = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`)
 
+func decodeTimeChunk[T any](t *testing.T, c toolsy.Chunk) T {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out T
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
+
 func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
@@ -21,14 +30,15 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 	var result currentResult
 	require.NoError(
 		t,
-		currentTool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if r, ok := c.RawData.(currentResult); ok {
-					result = r
-				}
-			}
-			return nil
-		}),
+		currentTool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeTimeChunk[currentResult](t, c)
+				return nil
+			},
+		),
 	)
 	require.Regexp(t, rfc3339Re, result.UTC)
 	require.Regexp(t, rfc3339Re, result.Local)
@@ -48,13 +58,9 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 		calculateTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(calculateResult); ok {
-						result = r
-					}
-				}
+				result = decodeTimeChunk[calculateResult](t, c)
 				return nil
 			},
 		),
@@ -75,7 +81,7 @@ func TestTimeCalculate_InvalidBaseDate_ClientError(t *testing.T) {
 	err = calculateTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -91,7 +97,7 @@ func TestTimeCalculate_EmptyBaseDate_ClientError(t *testing.T) {
 	err = calculateTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"add_days":0,"add_hours":0}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"add_days":0,"add_hours":0}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -115,13 +121,9 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 		calculateTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(calculateResult); ok {
-						result = r
-					}
-				}
+				result = decodeTimeChunk[calculateResult](t, c)
 				return nil
 			},
 		),
@@ -148,13 +150,9 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 		calculateTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(calculateResult); ok {
-						result = r
-					}
-				}
+				result = decodeTimeChunk[calculateResult](t, c)
 				return nil
 			},
 		),
@@ -185,13 +183,9 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 		calculateTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"base_date":"`+base+`","add_days":1,"add_hours":0}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(calculateResult); ok {
-						result = r
-					}
-				}
+				result = decodeTimeChunk[calculateResult](t, c)
 				return nil
 			},
 		),
@@ -210,13 +204,13 @@ func TestAsTools_ToolCountAndNames(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
-	require.Equal(t, "time_current", tools[0].Name())
-	require.Equal(t, "time_calculate", tools[1].Name())
+	require.Equal(t, "time_current", tools[0].Manifest().Name)
+	require.Equal(t, "time_calculate", tools[1].Manifest().Name)
 }
 
 func TestAsTools_CustomNames(t *testing.T) {
 	tools, err := AsTools(WithCurrentName("now"), WithCalculateName("add_time"))
 	require.NoError(t, err)
-	require.Equal(t, "now", tools[0].Name())
-	require.Equal(t, "add_time", tools[1].Name())
+	require.Equal(t, "now", tools[0].Manifest().Name)
+	require.Equal(t, "add_time", tools[1].Manifest().Name)
 }

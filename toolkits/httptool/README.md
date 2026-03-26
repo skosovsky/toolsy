@@ -46,7 +46,7 @@ import (
 )
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tools, err := httptool.AsTools(
 		httptool.WithAllowedDomains([]string{"api.example.com", ".slack.com"}),
@@ -56,7 +56,7 @@ func main() {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```

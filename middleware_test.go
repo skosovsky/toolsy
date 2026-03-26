@@ -13,21 +13,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newMiddlewareMinTool(
+	name string,
+	execute func(context.Context, RunContext, ToolInput, func(Chunk) error) error,
+) *minTool {
+	return &minTool{
+		manifest: ToolManifest{Name: name, Parameters: map[string]any{"type": "object"}},
+		execute:  execute,
+	}
+}
+
 func TestWithLogging(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	inner := &minTool{name: "log_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
-		return yield(Chunk{Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
-	}
+
+	inner := newMiddlewareMinTool(
+		"log_me",
+		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{Event: EventResult, Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
+		},
+	)
 	wrapped := WithLogging(logger)(inner)
+
 	var out []byte
-	err := wrapped.Execute(context.Background(), RunContext{}, []byte(`{}`), func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		out = c.Data
 		return nil
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []byte(`{"ok":true}`), out)
+
 	logStr := buf.String()
 	assert.Contains(t, logStr, "tool start")
 	assert.Contains(t, logStr, "tool end")
@@ -35,112 +50,85 @@ func TestWithLogging(t *testing.T) {
 }
 
 func TestWithRecovery(t *testing.T) {
-	inner := &minTool{name: "panic_me", desc: "desc", params: map[string]any{}}
-	inner.execute = func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
-		panic("test panic")
-	}
+	inner := newMiddlewareMinTool(
+		"panic_me",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			panic("test panic")
+		},
+	)
 	wrapped := WithRecovery()(inner)
-	err := wrapped.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
+
+	err := wrapped.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	var sysErr *SystemError
 	require.ErrorAs(t, err, &sysErr)
-	// SystemError hides message; unwrapped error contains "panic"
 	assert.Contains(t, sysErr.Err.Error(), "panic")
 }
 
 func TestWithTimeoutMiddleware(t *testing.T) {
-	inner := &minTool{name: "slow", desc: "desc", params: map[string]any{}}
-	inner.execute = func(ctx context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
-		<-ctx.Done()
-		return ctx.Err()
-	}
+	inner := newMiddlewareMinTool(
+		"slow",
+		func(ctx context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	)
 	wrapped := WithTimeoutMiddleware(5 * time.Millisecond)(inner)
-	ctx := context.Background()
-	err := wrapped.Execute(ctx, RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
+
+	err := wrapped.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
-func TestRegistry_Use(t *testing.T) {
+func TestRegistryBuilderUse(t *testing.T) {
 	type A struct {
 		X int `json:"x"`
 	}
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("wrap_me", "desc", func(_ context.Context, a A) (R, error) {
+
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	tool, err := NewTool("wrap_me", "desc", func(_ context.Context, _ RunContext, a A) (R, error) {
 		return R{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
-	reg := NewRegistry()
-	reg.Register(tool)
-	reg.Use(WithRecovery(), WithLogging(slog.Default()))
+
+	reg, err := NewRegistryBuilder().Use(WithRecovery(), WithLogging(logger)).Add(tool).Build()
+	require.NoError(t, err)
+
 	args, _ := json.Marshal(A{X: 2})
 	var r R
 	err = reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "wrap_me", Args: json.RawMessage(args)},
-		func(c Chunk) error {
-			r = c.RawData.(R)
-			return nil
-		},
+		ToolCall{ID: "1", ToolName: "wrap_me", Input: ToolInput{ArgsJSON: args}},
+		func(c Chunk) error { return json.Unmarshal(c.Data, &r) },
 	)
 	require.NoError(t, err)
 	assert.Equal(t, 3, r.Y)
+	assert.Equal(t, 1, strings.Count(buf.String(), "tool start"))
 }
 
-// TestRegistry_Use_NoDoubleWrap verifies that calling Use() twice rewraps from raw tools,
-// so middlewares are not applied twice.
-func TestRegistry_Use_NoDoubleWrap(t *testing.T) {
-	var buf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	type A struct {
-		X int `json:"x"`
-	}
-	type R struct {
-		Y int `json:"y"`
-	}
-	tool, err := NewTool("double", "desc", func(_ context.Context, a A) (R, error) {
-		return R{Y: a.X * 2}, nil
-	})
-	require.NoError(t, err)
-	reg := NewRegistry()
-	reg.Register(tool)
-	reg.Use(WithRecovery())
-	reg.Use(WithLogging(logger))
-	var r R
-	err = reg.Execute(
-		context.Background(),
-		ToolCall{ID: "1", ToolName: "double", Args: []byte(`{"x":3}`)},
-		func(c Chunk) error {
-			r = c.RawData.(R)
+func TestTimeoutMiddlewareManifestOverride(t *testing.T) {
+	inner := newMiddlewareMinTool(
+		"meta",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
 			return nil
 		},
 	)
-	require.NoError(t, err)
-	logStr := buf.String()
-	// With double-wrap we would see "tool start" twice (Logging(Logging(tool))). With rewrap-from-raw we see once.
-	require.Equal(t, 1, strings.Count(logStr, "tool start"))
-	assert.Equal(t, 6, r.Y)
-}
+	inner.manifest.Timeout = 100 * time.Millisecond
 
-type localMetaTool struct{ minTool }
-
-func (m *localMetaTool) Timeout() time.Duration     { return time.Second }
-func (m *localMetaTool) Tags() []string             { return []string{"x"} }
-func (m *localMetaTool) Version() string            { return "1.0.0" }
-func (m *localMetaTool) IsDangerous() bool          { return true }
-func (m *localMetaTool) IsReadOnly() bool           { return true }
-func (m *localMetaTool) RequiresConfirmation() bool { return true }
-func (m *localMetaTool) Sensitivity() string        { return "critical" }
-
-func TestToolBase_SecurityDelegation(t *testing.T) {
-	wrapped := &toolBase{next: &localMetaTool{minTool{name: "meta", params: map[string]any{}}}}
-	assert.True(t, wrapped.IsReadOnly())
-	assert.True(t, wrapped.RequiresConfirmation())
-	assert.Equal(t, "critical", wrapped.Sensitivity())
-	assert.True(t, wrapped.IsDangerous())
-	assert.Equal(t, time.Second, wrapped.Timeout())
-	assert.Equal(t, []string{"x"}, wrapped.Tags())
-	assert.Equal(t, "1.0.0", wrapped.Version())
+	wrapped := WithTimeoutMiddleware(2 * time.Second)(inner)
+	assert.Equal(t, 2*time.Second, wrapped.Manifest().Timeout)
 }

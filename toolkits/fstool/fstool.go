@@ -68,7 +68,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 	listTool, err := toolsy.NewTool[listArgs, listResult](
 		o.listDirName,
 		o.listDirDesc,
-		func(ctx context.Context, args listArgs) (listResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args listArgs) (listResult, error) {
 			return doListDir(ctx, baseDir, &o, args.Path)
 		},
 	)
@@ -79,7 +79,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 	readTool, err := toolsy.NewTool[readArgs, readResult](
 		o.readFileName,
 		o.readFileDesc,
-		func(ctx context.Context, args readArgs) (readResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
 			return doReadFile(ctx, baseDir, &o, args.Path)
 		},
 	)
@@ -93,7 +93,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		writeTool, err := toolsy.NewTool[writeArgs, statusResult](
 			o.writeFileName,
 			o.writeFileDesc,
-			func(ctx context.Context, args writeArgs) (statusResult, error) {
+			func(ctx context.Context, _ toolsy.RunContext, args writeArgs) (statusResult, error) {
 				return doWriteFile(ctx, baseDir, args.Path, args.Content)
 			},
 		)

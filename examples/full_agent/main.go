@@ -23,13 +23,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("build tools: %v", err)
 	}
-	reg := toolsy.NewRegistry(
+	reg, err := toolsy.NewRegistryBuilder(
 		toolsy.WithDefaultTimeout(exampleDefaultTimeout),
 		toolsy.WithMaxConcurrency(exampleMaxConcurrency),
-	)
-	reg.Use(toolsy.WithLogging(slog.Default())) // middleware: log every tool start/end
-	reg.Register(add)
-	reg.Register(mul)
+	).Use(toolsy.WithLogging(slog.Default())).Add(add, mul).Build()
+	if err != nil {
+		log.Fatalf("build registry: %v", err)
+	}
 
 	if err := runBatchStream(reg); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "batch error: %v\n", err)
@@ -47,9 +47,13 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 	type AddOut struct {
 		Sum int `json:"sum"`
 	}
-	add, err := toolsy.NewTool("add", "Add two integers", func(_ context.Context, in AddIn) (AddOut, error) {
-		return AddOut{Sum: in.A + in.B}, nil
-	})
+	add, err := toolsy.NewTool(
+		"add",
+		"Add two integers",
+		func(_ context.Context, _ toolsy.RunContext, in AddIn) (AddOut, error) {
+			return AddOut{Sum: in.A + in.B}, nil
+		},
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -61,9 +65,13 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 	type MulOut struct {
 		Product int `json:"product"`
 	}
-	mul, err := toolsy.NewTool("mul", "Multiply two integers", func(_ context.Context, in MulIn) (MulOut, error) {
-		return MulOut{Product: in.A * in.B}, nil
-	})
+	mul, err := toolsy.NewTool(
+		"mul",
+		"Multiply two integers",
+		func(_ context.Context, _ toolsy.RunContext, in MulIn) (MulOut, error) {
+			return MulOut{Product: in.A * in.B}, nil
+		},
+	)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -78,9 +86,9 @@ func runBatchStream(reg *toolsy.Registry) error {
 		Product int `json:"product"`
 	}
 	calls := []toolsy.ToolCall{
-		{ID: "1", ToolName: "add", Args: []byte(`{"a": 1, "b": 2}`)},
-		{ID: "2", ToolName: "mul", Args: []byte(`{"a": 3, "b": 4}`)},
-		{ID: "3", ToolName: "add", Args: []byte(`{"a": 10, "b": 20}`)},
+		{ID: "1", ToolName: "add", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
+		{ID: "2", ToolName: "mul", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 3, "b": 4}`)}},
+		{ID: "3", ToolName: "add", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
 	}
 	var idx int
 	return reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {

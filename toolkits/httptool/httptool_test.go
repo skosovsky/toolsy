@@ -2,6 +2,7 @@ package httptool
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,14 @@ import (
 
 	"github.com/skosovsky/toolsy"
 )
+
+func decodeHTTPResult(t *testing.T, c toolsy.Chunk) httpResult {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out httpResult
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
 
 func TestHTTPGet_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -32,13 +41,9 @@ func TestHTTPGet_Success(t *testing.T) {
 		getTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(httpResult); ok {
-						result = r
-					}
-				}
+				result = decodeHTTPResult(t, c)
 				return nil
 			},
 		),
@@ -55,7 +60,7 @@ func TestHTTPGet_DomainBlocked(t *testing.T) {
 	err = getTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"https://evil.com/path"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"https://evil.com/path"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -87,13 +92,9 @@ func TestHTTPGet_Truncation(t *testing.T) {
 		getTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(httpResult); ok {
-						result = r
-					}
-				}
+				result = decodeHTTPResult(t, c)
 				return nil
 			},
 		),
@@ -127,13 +128,9 @@ func TestHTTPPost_Success(t *testing.T) {
 		postTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`","json_body":{"key":"value"}}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"key":"value"}}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(httpResult); ok {
-						result = r
-					}
-				}
+				result = decodeHTTPResult(t, c)
 				return nil
 			},
 		),
@@ -165,7 +162,7 @@ func TestHTTPPost_ContentTypeSet(t *testing.T) {
 		postTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`","json_body":{"a":1}}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"a":1}}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
 	)
@@ -197,7 +194,7 @@ func TestHTTPPost_EmptyBody(t *testing.T) {
 		postTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
 	)
@@ -226,7 +223,7 @@ func TestHTTPGet_HeadersApplied(t *testing.T) {
 		getTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
 	)
@@ -253,13 +250,9 @@ func TestHTTPGet_ServerError(t *testing.T) {
 		getTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+srv.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(httpResult); ok {
-						result = r
-					}
-				}
+				result = decodeHTTPResult(t, c)
 				return nil
 			},
 		),
@@ -272,8 +265,8 @@ func TestAsTools_ToolCount(t *testing.T) {
 	tools, err := AsTools(WithAllowedDomains([]string{"example.com"}))
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
-	require.Equal(t, "http_get", tools[0].Name())
-	require.Equal(t, "http_post", tools[1].Name())
+	require.Equal(t, "http_get", tools[0].Manifest().Name)
+	require.Equal(t, "http_post", tools[1].Manifest().Name)
 }
 
 func TestAsTools_CustomToolNames(t *testing.T) {
@@ -284,6 +277,6 @@ func TestAsTools_CustomToolNames(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
-	require.Equal(t, "fetch", tools[0].Name())
-	require.Equal(t, "push", tools[1].Name())
+	require.Equal(t, "fetch", tools[0].Manifest().Name)
+	require.Equal(t, "push", tools[1].Manifest().Name)
 }

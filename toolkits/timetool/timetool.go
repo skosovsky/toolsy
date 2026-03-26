@@ -39,7 +39,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	currentTool, err := toolsy.NewTool[currentArgs, currentResult](
 		o.currentName,
 		o.currentDesc,
-		func(_ context.Context, _ currentArgs) (currentResult, error) {
+		func(_ context.Context, _ toolsy.RunContext, _ currentArgs) (currentResult, error) {
 			return doCurrent(&o)
 		},
 	)
@@ -50,7 +50,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	calculateTool, err := toolsy.NewTool[calculateArgs, calculateResult](
 		o.calculateName,
 		o.calculateDesc,
-		func(_ context.Context, args calculateArgs) (calculateResult, error) {
+		func(_ context.Context, _ toolsy.RunContext, args calculateArgs) (calculateResult, error) {
 			return doCalculate(&o, args)
 		},
 	)

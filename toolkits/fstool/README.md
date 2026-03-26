@@ -47,14 +47,14 @@ import (
 )
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tools, err := fstool.AsTools("/tmp/agent_workspace", fstool.WithReadOnly(true))
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```

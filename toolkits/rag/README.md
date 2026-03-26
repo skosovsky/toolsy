@@ -47,11 +47,11 @@ func (m *myRetriever) Retrieve(ctx context.Context, query string) ([]string, err
 }
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 	searchTool, err := rag.AsSearchTool(&myRetriever{}, rag.WithMaxBytes(256*1024))
 	if err != nil {
 		panic(err)
 	}
-	reg.Register(searchTool)
+	builder.Add(searchTool)
 }
 ```

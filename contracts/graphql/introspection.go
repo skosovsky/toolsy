@@ -189,7 +189,7 @@ func appendToolsForOperationKind(
 		queryText := buildStaticQuery(kind, f.Name, f.Args)
 		endpointCopy := endpoint
 		optsCopy := opts
-		tool, err := toolsy.NewProxyToolWithRun(
+		tool, err := toolsy.NewProxyTool(
 			name,
 			descPrefix+f.Name,
 			schemaBytes,

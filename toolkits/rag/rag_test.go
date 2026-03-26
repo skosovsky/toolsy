@@ -2,6 +2,7 @@ package rag
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -26,6 +27,14 @@ func (m *mockRetriever) Retrieve(ctx context.Context, query string) ([]string, e
 	return m.results, nil
 }
 
+func decodeSearchResult(t *testing.T, c toolsy.Chunk) searchResult {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out searchResult
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
+
 func TestAsSearchTool_FormatsMarkdown(t *testing.T) {
 	r := &mockRetriever{results: []string{"a", "b", "c"}}
 	tool, err := AsSearchTool(r)
@@ -33,14 +42,15 @@ func TestAsSearchTool_FormatsMarkdown(t *testing.T) {
 	var result string
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"query":"x"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if res, ok := c.RawData.(searchResult); ok {
-					result = res.Results
-				}
-			}
-			return nil
-		}),
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeSearchResult(t, c).Results
+				return nil
+			},
+		),
 	)
 	require.Equal(t, "1. a\n2. b\n3. c", result)
 }
@@ -50,14 +60,15 @@ func TestAsSearchTool_MaxResults(t *testing.T) {
 	tool, err := AsSearchTool(r, WithMaxResults(2))
 	require.NoError(t, err)
 	var result string
-	_ = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"query":"x"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(searchResult); ok {
-				result = res.Results
-			}
-		}
-		return nil
-	})
+	_ = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(c toolsy.Chunk) error {
+			result = decodeSearchResult(t, c).Results
+			return nil
+		},
+	)
 	require.Equal(t, "1. a\n2. b", result)
 }
 
@@ -66,14 +77,15 @@ func TestAsSearchTool_MaxBytesTruncate(t *testing.T) {
 	tool, err := AsSearchTool(r, WithMaxBytes(20))
 	require.NoError(t, err)
 	var result string
-	_ = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"query":"x"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(searchResult); ok {
-				result = res.Results
-			}
-		}
-		return nil
-	})
+	_ = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(c toolsy.Chunk) error {
+			result = decodeSearchResult(t, c).Results
+			return nil
+		},
+	)
 	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
 }
 
@@ -83,14 +95,15 @@ func TestAsSearchTool_MaxBytesUTF8Safe(t *testing.T) {
 	tool, err := AsSearchTool(r, WithMaxBytes(17))
 	require.NoError(t, err)
 	var result string
-	_ = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"query":"x"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(searchResult); ok {
-				result = res.Results
-			}
-		}
-		return nil
-	})
+	_ = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(c toolsy.Chunk) error {
+			result = decodeSearchResult(t, c).Results
+			return nil
+		},
+	)
 	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
 	require.True(t, utf8.ValidString(result), "expected valid UTF-8, got %q", result)
 	require.Contains(t, result, "1. п")
@@ -103,7 +116,7 @@ func TestAsSearchTool_RetrieverError(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"x"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -123,13 +136,14 @@ func TestAsSearchTool_EmptyResult(t *testing.T) {
 	tool, err := AsSearchTool(r)
 	require.NoError(t, err)
 	var result string
-	_ = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"query":"x"}`), func(c toolsy.Chunk) error {
-		if c.RawData != nil {
-			if res, ok := c.RawData.(searchResult); ok {
-				result = res.Results
-			}
-		}
-		return nil
-	})
+	_ = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(c toolsy.Chunk) error {
+			result = decodeSearchResult(t, c).Results
+			return nil
+		},
+	)
 	require.Equal(t, "No results found.", result)
 }

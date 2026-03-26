@@ -16,15 +16,17 @@ func TestNewTool_Simple(t *testing.T) {
 	type Result struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, a Args) (Result, error) {
+
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	assert.Equal(t, "add_one", tool.Name())
-	assert.Equal(t, "Add one", tool.Description())
-	params := tool.Parameters()
-	require.NotNil(t, params)
+
+	m := tool.Manifest()
+	assert.Equal(t, "add_one", m.Name)
+	assert.Equal(t, "Add one", m.Description)
+	require.NotNil(t, m.Parameters)
 }
 
 func TestNewTool_Execute_Success(t *testing.T) {
@@ -34,47 +36,24 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	type Result struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, a Args) (Result, error) {
+
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
-	var out Result
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 5}`), func(c Chunk) error {
-		assert.JSONEq(t, `{"y":6}`, string(c.Data))
-		if c.MimeType != MimeTypeJSON {
-			t.Fatalf("unexpected mime type: %s", c.MimeType)
-		}
-		out = c.RawData.(Result)
-		return nil
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 6, out.Y)
-}
 
-// TestNewTool_RawData_Compatibility verifies that typed builders preserve RawData while also emitting JSON bytes.
-func TestNewTool_RawData_ZeroCost(t *testing.T) {
-	type Args struct {
-		X int `json:"x"`
-	}
-	type MyOut struct {
-		Y int `json:"y"`
-	}
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, a Args) (MyOut, error) {
-		return MyOut{Y: a.X + 1}, nil
-	})
+	var out Result
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
+		func(c Chunk) error {
+			assert.JSONEq(t, `{"y":6}`, string(c.Data))
+			assert.JSONEq(t, MimeTypeJSON, c.MimeType)
+			return json.Unmarshal(c.Data, &out)
+		},
+	)
 	require.NoError(t, err)
-	var chunk Chunk
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 5}`), func(c Chunk) error {
-		chunk = c
-		return nil
-	})
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"y":6}`, string(chunk.Data))
-	if chunk.MimeType != MimeTypeJSON {
-		t.Fatalf("unexpected mime type: %s", chunk.MimeType)
-	}
-	require.NotNil(t, chunk.RawData)
-	out := chunk.RawData.(MyOut)
 	assert.Equal(t, 6, out.Y)
 }
 
@@ -83,11 +62,18 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 		X int `json:"x"`
 	}
 	type Result struct{}
-	tool, err := NewTool("id", "desc", func(_ context.Context, _ Args) (Result, error) {
+
+	tool, err := NewTool("id", "desc", func(_ context.Context, _ RunContext, _ Args) (Result, error) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{invalid`), func(Chunk) error { return nil })
+
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{invalid`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }
@@ -97,15 +83,16 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 		Count int `json:"count"`
 	}
 	type Result struct{}
-	tool, err := NewTool("id", "desc", func(_ context.Context, _ Args) (Result, error) {
+
+	tool, err := NewTool("id", "desc", func(_ context.Context, _ RunContext, _ Args) (Result, error) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
-	// Wrong type for count (string instead of int) yields schema validation error
+
 	err = tool.Execute(
 		context.Background(),
 		RunContext{},
-		[]byte(`{"count": "not a number"}`),
+		ToolInput{ArgsJSON: []byte(`{"count":"not a number"}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -119,71 +106,75 @@ func TestNewTool_ImplementsTool(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool[A, R]("t", "d", func(_ context.Context, _ A) (R, error) {
+
+	tool, err := NewTool[A, R]("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
-	//nolint:staticcheck // interface satisfaction check
-	var _ Tool = tool
+	var _ = tool
 }
 
-func TestTool_Tags_ReturnsCopy(t *testing.T) {
+func TestTool_ManifestTags_ReturnsCopy(t *testing.T) {
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool("t", "d", func(_ context.Context, _ A) (R, error) {
+
+	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
 		return R{}, nil
 	}, WithTags("a", "b"))
 	require.NoError(t, err)
-	meta, ok := tool.(ToolMetadata)
-	require.True(t, ok)
-	tags := meta.Tags()
-	require.Equal(t, []string{"a", "b"}, tags)
-	tags[0] = "mutated"
-	tags2 := meta.Tags()
-	require.Equal(t, []string{"a", "b"}, tags2)
+
+	m1 := tool.Manifest()
+	require.Equal(t, []string{"a", "b"}, m1.Tags)
+	m1.Tags[0] = "mutated"
+
+	m2 := tool.Manifest()
+	require.Equal(t, []string{"a", "b"}, m2.Tags)
 }
 
-func TestTool_Parameters_ReturnsCopy(t *testing.T) {
+func TestTool_ManifestParameters_ReturnsCopy(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
 	}
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("t", "d", func(_ context.Context, a Args) (R, error) {
+
+	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, a Args) (R, error) {
 		return R{Y: a.X}, nil
 	})
 	require.NoError(t, err)
-	params := tool.Parameters()
-	require.NotNil(t, params)
-	params["mutated"] = true
-	params2 := tool.Parameters()
-	_, ok := params2["mutated"]
+
+	m1 := tool.Manifest()
+	require.NotNil(t, m1.Parameters)
+	m1.Parameters["mutated"] = true
+
+	m2 := tool.Manifest()
+	_, ok := m2.Parameters["mutated"]
 	require.False(t, ok)
 }
 
-// TestTool_Parameters_ShallowCopyNested documents that Parameters() is a shallow copy: nested maps are shared.
-func TestTool_Parameters_ShallowCopyNested(t *testing.T) {
+func TestTool_ManifestParameters_ShallowCopyNested(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
 	}
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("t", "d", func(_ context.Context, a Args) (R, error) {
+
+	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, a Args) (R, error) {
 		return R{Y: a.X}, nil
 	})
 	require.NoError(t, err)
-	params := tool.Parameters()
-	require.NotNil(t, params)
-	obj := findSchemaObject(params)
+
+	m1 := tool.Manifest()
+	obj := findSchemaObject(m1.Parameters)
 	require.NotNil(t, obj, "expected properties in schema")
 	props, ok := obj["properties"].(map[string]any)
 	require.True(t, ok)
-	// Mutating nested map affects the tool's internal schema (shallow copy).
 	props["x"] = "mutated_nested"
-	params2 := tool.Parameters()
-	obj2 := findSchemaObject(params2)
+
+	m2 := tool.Manifest()
+	obj2 := findSchemaObject(m2.Parameters)
 	require.NotNil(t, obj2)
 	props2 := obj2["properties"].(map[string]any)
 	assert.Equal(t, "mutated_nested", props2["x"], "nested maps are shared")
@@ -196,18 +187,21 @@ func BenchmarkExecute(b *testing.B) {
 	type Result struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("bench", "desc", func(_ context.Context, a Args) (Result, error) {
+
+	tool, err := NewTool("bench", "desc", func(_ context.Context, _ RunContext, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	ctx := context.Background()
-	argsJSON := []byte(`{"x": 42}`)
+	input := ToolInput{ArgsJSON: []byte(`{"x": 42}`)}
 	yield := func(Chunk) error { return nil }
+
 	b.ResetTimer()
 	for range b.N {
-		_ = tool.Execute(ctx, RunContext{}, argsJSON, yield)
+		_ = tool.Execute(ctx, RunContext{}, input, yield)
 	}
 }
 
@@ -217,29 +211,41 @@ func TestNewProxyTool(t *testing.T) {
 		"proxy_echo",
 		"Echo args as result",
 		rawSchema,
-		func(_ context.Context, rawArgs []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ RunContext, rawArgs []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: rawArgs, MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	assert.Equal(t, "proxy_echo", tool.Name())
-	assert.Equal(t, "Echo args as result", tool.Description())
-	params := tool.Parameters()
-	require.NotNil(t, params)
-	// Valid args
+
+	m := tool.Manifest()
+	assert.Equal(t, "proxy_echo", m.Name)
+	assert.Equal(t, "Echo args as result", m.Description)
+	require.NotNil(t, m.Parameters)
+
 	var res []byte
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"x": 42}`), func(c Chunk) error {
-		res = c.Data
-		return nil
-	})
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
+		func(c Chunk) error {
+			res = c.Data
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	require.NotNil(t, res)
+
 	var out map[string]any
 	require.NoError(t, json.Unmarshal(res, &out))
 	assert.InDelta(t, 42.0, out["x"].(float64), 1e-9)
-	// Invalid: missing required
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{}`), func(Chunk) error { return nil })
+
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
 }

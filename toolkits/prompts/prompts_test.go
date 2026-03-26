@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -42,6 +43,14 @@ func (v *verifyingProvider) Get(ctx context.Context, roleID string, variables ma
 	return v.text, nil
 }
 
+func decodePromptResult(t *testing.T, c toolsy.Chunk) getResult {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out getResult
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
+
 func TestAsTool_RoleAndVariables(t *testing.T) {
 	p := &verifyingProvider{text: "You are a doctor for Ivan."}
 	tool, err := AsTool(p)
@@ -52,13 +61,9 @@ func TestAsTool_RoleAndVariables(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if res, ok := c.RawData.(getResult); ok {
-						result = res.Instructions
-					}
-				}
+				result = decodePromptResult(t, c).Instructions
 				return nil
 			},
 		),
@@ -77,7 +82,7 @@ func TestAsTool_ProviderError(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"role_id":"x"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -95,8 +100,8 @@ func TestAsTool_WithNameAndDescription(t *testing.T) {
 	p := &mockProvider{text: "Hi"}
 	tool, err := AsTool(p, WithName("get_role"), WithDescription("Fetch role instructions"))
 	require.NoError(t, err)
-	require.Equal(t, "get_role", tool.Name())
-	require.Equal(t, "Fetch role instructions", tool.Description())
+	require.Equal(t, "get_role", tool.Manifest().Name)
+	require.Equal(t, "Fetch role instructions", tool.Manifest().Description)
 }
 
 func TestAsTool_MaxBytesTruncate(t *testing.T) {
@@ -107,14 +112,15 @@ func TestAsTool_MaxBytesTruncate(t *testing.T) {
 	var result string
 	require.NoError(
 		t,
-		tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{"role_id":"r"}`), func(c toolsy.Chunk) error {
-			if c.RawData != nil {
-				if res, ok := c.RawData.(getResult); ok {
-					result = res.Instructions
-				}
-			}
-			return nil
-		}),
+		tool.Execute(
+			context.Background(),
+			toolsy.RunContext{},
+			toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"r"}`)},
+			func(c toolsy.Chunk) error {
+				result = decodePromptResult(t, c).Instructions
+				return nil
+			},
+		),
 	)
 	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
 }

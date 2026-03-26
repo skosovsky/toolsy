@@ -35,12 +35,12 @@ import (
 )
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tool, err := document.AsTool(document.WithMaxBytes(1024 * 1024))
 	if err != nil {
 		panic(err)
 	}
-	reg.Register(tool)
+	builder.Add(tool)
 }
 ```

@@ -47,13 +47,13 @@ func (inMemorySearch) Search(ctx context.Context, query string) ([]web.SearchRes
 }
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 	tools, err := web.AsTools(inMemorySearch{})
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```

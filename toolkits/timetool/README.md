@@ -35,14 +35,14 @@ import (
 )
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tools, err := timetool.AsTools()
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```

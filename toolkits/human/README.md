@@ -37,18 +37,26 @@ import (
 
 func main() {
 	ctx := context.Background()
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tools, err := human.AsTools()
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
+	}
+	reg, err := builder.Build()
+	if err != nil {
+		panic(err)
 	}
 
 	err = reg.Execute(ctx, toolsy.ToolCall{
-		ID: "1", ToolName: "request_approval", Args: []byte(`{"action":"delete","reason":"user asked"}`),
+		ID:       "1",
+		ToolName: "request_approval",
+		Input: toolsy.ToolInput{
+			ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`),
+		},
 	}, func(c toolsy.Chunk) error {
 		// forward c.Data to your UI or job store; it contains:
 		// {"kind":"approval","action":"delete","reason":"user asked"}

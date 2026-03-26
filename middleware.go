@@ -35,55 +35,10 @@ func WithTimeoutMiddleware(d time.Duration) Middleware {
 	}
 }
 
-// toolBase delegates Tool and ToolMetadata to the wrapped Tool; used by middleware wrappers.
+// toolBase delegates Tool to the wrapped Tool; used by middleware wrappers.
 type toolBase struct{ next Tool }
 
-func (b *toolBase) Name() string               { return b.next.Name() }
-func (b *toolBase) Description() string        { return b.next.Description() }
-func (b *toolBase) Parameters() map[string]any { return b.next.Parameters() }
-
-func (b *toolBase) Timeout() time.Duration {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.Timeout()
-	}
-	return 0
-}
-func (b *toolBase) Tags() []string {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.Tags()
-	}
-	return nil
-}
-func (b *toolBase) Version() string {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.Version()
-	}
-	return ""
-}
-func (b *toolBase) IsDangerous() bool {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.IsDangerous()
-	}
-	return false
-}
-func (b *toolBase) IsReadOnly() bool {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.IsReadOnly()
-	}
-	return false
-}
-func (b *toolBase) RequiresConfirmation() bool {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.RequiresConfirmation()
-	}
-	return false
-}
-func (b *toolBase) Sensitivity() string {
-	if tm, ok := b.next.(ToolMetadata); ok {
-		return tm.Sensitivity()
-	}
-	return ""
-}
+func (b *toolBase) Manifest() ToolManifest { return b.next.Manifest() }
 
 type middlewareTool struct {
 	toolBase
@@ -91,8 +46,9 @@ type middlewareTool struct {
 	logger *slog.Logger
 }
 
-func (m *middlewareTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
-	m.logger.InfoContext(ctx, "tool start", "tool", m.next.Name())
+func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+	toolName := m.next.Manifest().Name
+	m.logger.InfoContext(ctx, "tool start", "tool", toolName)
 	start := time.Now()
 	var chunks, totalBytes int64
 	yieldWrapped := func(c Chunk) error {
@@ -109,7 +65,7 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, args []byt
 			m.logger.Error(
 				"tool error",
 				"tool",
-				m.next.Name(),
+				toolName,
 				"duration",
 				dur,
 				"chunks",
@@ -120,22 +76,27 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, args []byt
 				err,
 			)
 		} else {
-			m.logger.Info("tool end", "tool", m.next.Name(), "duration", dur, "chunks", chunks, "bytes", totalBytes)
+			m.logger.Info("tool end", "tool", toolName, "duration", dur, "chunks", chunks, "bytes", totalBytes)
 		}
 	}()
-	err = m.next.Execute(ctx, run, args, yieldWrapped)
+	err = m.next.Execute(ctx, run, input, yieldWrapped)
 	return err
 }
 
 type recoveryTool struct{ toolBase }
 
-func (r *recoveryTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) (err error) {
+func (r *recoveryTool) Execute(
+	ctx context.Context,
+	run RunContext,
+	input ToolInput,
+	yield func(Chunk) error,
+) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
 			err = &SystemError{Err: &panicError{p: p}}
 		}
 	}()
-	return r.next.Execute(ctx, run, args, yield)
+	return r.next.Execute(ctx, run, input, yield)
 }
 
 type timeoutTool struct {
@@ -144,33 +105,19 @@ type timeoutTool struct {
 	timeout time.Duration
 }
 
-func (t *timeoutTool) Timeout() time.Duration {
+func (t *timeoutTool) Manifest() ToolManifest {
+	manifest := t.toolBase.Manifest()
 	if t.timeout > 0 {
-		return t.timeout
+		manifest.Timeout = t.timeout
 	}
-	return t.toolBase.Timeout()
+	return manifest
 }
 
-func (t *timeoutTool) Execute(ctx context.Context, run RunContext, args []byte, yield func(Chunk) error) error {
+func (t *timeoutTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
 	if t.timeout <= 0 {
-		return t.next.Execute(ctx, run, args, yield)
+		return t.next.Execute(ctx, run, input, yield)
 	}
 	ctx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
-	return t.next.Execute(ctx, run, args, yield)
-}
-
-// Use stores the given middlewares and reapplies them from scratch to all registered tools (onion order:
-// first middleware is outermost). Tools registered after Use will also get these middlewares applied.
-// Calling Use multiple times replaces the middleware chain and rewraps from raw tools, avoiding double-wrapping.
-func (r *Registry) Use(middlewares ...Middleware) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.middlewares = middlewares
-	for name, raw := range r.rawTools {
-		for i := len(middlewares) - 1; i >= 0; i-- {
-			raw = middlewares[i](raw)
-		}
-		r.tools[name] = raw
-	}
+	return t.next.Execute(ctx, run, input, yield)
 }

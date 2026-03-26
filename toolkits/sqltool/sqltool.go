@@ -53,7 +53,7 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 	inspectTool, err := toolsy.NewTool[inspectArgs, inspectResult](
 		o.inspectName,
 		o.inspectDesc,
-		func(ctx context.Context, args inspectArgs) (inspectResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args inspectArgs) (inspectResult, error) {
 			return doInspectSchema(ctx, db, driverName, d, &o, args.TableNames)
 		},
 	)
@@ -64,7 +64,7 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 	executeTool, err := toolsy.NewTool[executeArgs, executeResult](
 		o.executeName,
 		o.executeDesc,
-		func(ctx context.Context, args executeArgs) (executeResult, error) {
+		func(ctx context.Context, _ toolsy.RunContext, args executeArgs) (executeResult, error) {
 			return doExecuteRead(ctx, db, &o, args.Query)
 		},
 	)

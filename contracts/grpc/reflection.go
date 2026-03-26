@@ -107,7 +107,7 @@ func buildToolsFromRegistry(
 				name,
 				descStr,
 				schemaBytes,
-				func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+				func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 					return invokeRPC(ctx, ccCopy, mCopy, argsJSON, &optsCopy, yield)
 				},
 			)

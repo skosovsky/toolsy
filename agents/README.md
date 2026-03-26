@@ -32,7 +32,7 @@ func (staticCredentials) GetAuth(context.Context, string) (string, error) {
 }
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	client := agents.NewClient("https://api.example.com/agent")
 
@@ -51,12 +51,15 @@ func main() {
 		schema,
 		client,
 	)
-	reg.Register(tool)
+	builder.Add(tool)
+	reg, _ := builder.Build()
 
 	_ = reg.Execute(context.Background(), toolsy.ToolCall{
 		ID:       "1",
 		ToolName: "delegate_to_coder",
-		Args:     []byte(`{"repository":"https://example.com/repo","bug_description":"fix the failing test"}`),
+		Input: toolsy.ToolInput{
+			ArgsJSON: []byte(`{"repository":"https://example.com/repo","bug_description":"fix the failing test"}`),
+		},
 		Run:      toolsy.RunContext{Credentials: staticCredentials{}},
 	}, func(toolsy.Chunk) error { return nil })
 }

@@ -3,6 +3,7 @@ package document
 import (
 	"archive/zip"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,14 @@ import (
 
 	"github.com/skosovsky/toolsy"
 )
+
+func decodeExtractResult(t *testing.T, c toolsy.Chunk) extractResult {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out extractResult
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
 
 func TestExtractCSV_Success(t *testing.T) {
 	dir := t.TempDir()
@@ -28,13 +37,9 @@ func TestExtractCSV_Success(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"file_path":"`+csvPath+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(extractResult); ok {
-						result = r
-					}
-				}
+				result = decodeExtractResult(t, c)
 				return nil
 			},
 		),
@@ -60,13 +65,9 @@ func TestExtractCSV_MultilineCellNormalized(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"file_path":"`+csvPath+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(extractResult); ok {
-						result = r
-					}
-				}
+				result = decodeExtractResult(t, c)
 				return nil
 			},
 		),
@@ -88,7 +89,7 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"file_path":"`+path+`"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -103,7 +104,7 @@ func TestExtract_URLDisabled(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"https://example.com/file.pdf"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"https://example.com/file.pdf"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -115,7 +116,12 @@ func TestExtract_EmptyArgs(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	err = tool.Execute(context.Background(), toolsy.RunContext{}, []byte(`{}`), func(toolsy.Chunk) error { return nil })
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
 }
@@ -124,7 +130,7 @@ func TestAsTool_ReturnsOneTool(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 	require.NotNil(t, tool)
-	require.Equal(t, "document_extract_text", tool.Name())
+	require.Equal(t, "document_extract_text", tool.Manifest().Name)
 }
 
 func TestExtract_FileTooLarge(t *testing.T) {
@@ -143,7 +149,7 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"file_path":"`+csvPath+`"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -184,13 +190,9 @@ func TestExtract_DOCX_Success(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"file_path":"`+docxPath+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + docxPath + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(extractResult); ok {
-						result = r
-					}
-				}
+				result = decodeExtractResult(t, c)
 				return nil
 			},
 		),
@@ -205,7 +207,7 @@ func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"http://127.0.0.1:9999/file.pdf"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://127.0.0.1:9999/file.pdf"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -229,13 +231,9 @@ func TestExtract_Remote_Success(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+server.URL+`/data.csv"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/data.csv"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(extractResult); ok {
-						result = r
-					}
-				}
+				result = decodeExtractResult(t, c)
 				return nil
 			},
 		),
@@ -261,13 +259,9 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 		tool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+server.URL+`/file.csv?sig=abc"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/file.csv?sig=abc"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(extractResult); ok {
-						result = r
-					}
-				}
+				result = decodeExtractResult(t, c)
 				return nil
 			},
 		),
@@ -290,7 +284,7 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 	err = tool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"`+server.URL+`/doc.csv"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/doc.csv"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)

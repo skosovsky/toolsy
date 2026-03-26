@@ -14,7 +14,7 @@ Common behavior:
 - **Response truncation**: if the response body exceeds `MaxResponseBytes` (default 512 KiB), it is truncated and a short message is appended.
 - **Context**: all network calls use the given `context`; cancellation aborts the request.
 
-Register each tool with your registry: `for _, t := range tools { reg.Register(t) }`.
+Add each tool to setup builder: `builder.Add(tools...)` and then `reg, err := builder.Build()`.
 
 ## openapi/
 

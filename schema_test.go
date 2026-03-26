@@ -238,19 +238,19 @@ func TestSchemaRegistry_IsolatedByDefault(t *testing.T) {
 	toolWithShared, err := NewTool(
 		"shared",
 		"desc",
-		func(_ context.Context, _ Args) (struct{}, error) { return struct{}{}, nil },
+		func(_ context.Context, _ RunContext, _ Args) (struct{}, error) { return struct{}{}, nil },
 		WithSchemaRegistry(registry),
 	)
 	require.NoError(t, err)
 	toolWithLocal, err := NewTool(
 		"local",
 		"desc",
-		func(_ context.Context, _ Args) (struct{}, error) { return struct{}{}, nil },
+		func(_ context.Context, _ RunContext, _ Args) (struct{}, error) { return struct{}{}, nil },
 	)
 	require.NoError(t, err)
 
-	sharedProps := toolWithShared.Parameters()["properties"].(map[string]any)
-	localProps := toolWithLocal.Parameters()["properties"].(map[string]any)
+	sharedProps := toolWithShared.Manifest().Parameters["properties"].(map[string]any)
+	localProps := toolWithLocal.Manifest().Parameters["properties"].(map[string]any)
 	assert.Equal(t, "decimal", sharedProps["amount"].(map[string]any)["format"])
 	assert.NotEqual(t, "decimal", localProps["amount"].(map[string]any)["format"])
 }

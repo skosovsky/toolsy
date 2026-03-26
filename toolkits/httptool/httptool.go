@@ -42,7 +42,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		)
 	}
 
-	getTool, err := toolsy.NewToolWithRun[getArgs, httpResult](
+	getTool, err := toolsy.NewTool[getArgs, httpResult](
 		o.getName,
 		o.getDesc,
 		func(ctx context.Context, run toolsy.RunContext, args getArgs) (httpResult, error) {
@@ -53,7 +53,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		return nil, fmt.Errorf("toolkit/httptool: build get tool: %w", err)
 	}
 
-	postTool, err := toolsy.NewToolWithRun[postArgs, httpResult](
+	postTool, err := toolsy.NewTool[postArgs, httpResult](
 		o.postName,
 		o.postDesc,
 		func(ctx context.Context, run toolsy.RunContext, args postArgs) (httpResult, error) {

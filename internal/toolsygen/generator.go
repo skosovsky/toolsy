@@ -324,7 +324,7 @@ func (g *generator) loadManifest(path string) (*manifest, error) {
 		name,
 		description,
 		[]byte(schemaJSON),
-		func(_ context.Context, _ []byte, _ func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
 			return nil
 		},
 	); proxyErr != nil {
@@ -1042,7 +1042,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 	fmt.Fprintf(&buf, "\tconst rawSchema = %s\n\n", strconvQuote(m.RawSchemaJSON))
 	fmt.Fprintf(
 		&buf,
-		"\treturn toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
+		"\treturn toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
 		strconvQuote(m.Name),
 		strconvQuote(m.Description),
 	)

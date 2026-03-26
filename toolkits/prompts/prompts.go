@@ -32,7 +32,7 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 	}
 	o.applyDefaults()
 
-	handler := func(ctx context.Context, args getArgs) (getResult, error) {
+	handler := func(ctx context.Context, _ toolsy.RunContext, args getArgs) (getResult, error) {
 		text, err := p.Get(ctx, args.RoleID, args.Variables)
 		if err != nil {
 			return getResult{}, fmt.Errorf("toolkit/prompts: get failed: %w", err)

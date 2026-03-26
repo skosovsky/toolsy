@@ -84,8 +84,8 @@ func newExecHandler(
 	sandbox Sandbox,
 	supported []string,
 	o options,
-) func(context.Context, []byte, func(toolsy.Chunk) error) error {
-	return func(ctx context.Context, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+) func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
+	return func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 		var args execArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
 			return &toolsy.ClientError{
@@ -127,7 +127,11 @@ func newExecHandler(
 			}
 			return fmt.Errorf("exectool: sandbox run: %w", err)
 		}
-		return yield(toolsy.Chunk{Event: toolsy.EventResult, RawData: res})
+		out, err := json.Marshal(res)
+		if err != nil {
+			return fmt.Errorf("exectool: marshal result: %w", err)
+		}
+		return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
 	}
 }
 

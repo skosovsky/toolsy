@@ -46,11 +46,11 @@ func (m *myProvider) Get(ctx context.Context, roleID string, variables map[strin
 }
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 	promptsTool, err := prompts.AsTool(&myProvider{})
 	if err != nil {
 		panic(err)
 	}
-	reg.Register(promptsTool)
+	builder.Add(promptsTool)
 }
 ```

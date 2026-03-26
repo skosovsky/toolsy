@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,6 +27,14 @@ func (m *mockSearchProvider) Search(ctx context.Context, query string) ([]Search
 	return m.results, nil
 }
 
+func decodeWebChunk[T any](t *testing.T, c toolsy.Chunk) T {
+	t.Helper()
+	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
+	var out T
+	require.NoError(t, json.Unmarshal(c.Data, &out))
+	return out
+}
+
 func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 	provider := &mockSearchProvider{results: []SearchResult{
 		{Title: "Example", URL: "https://example.com", Snippet: "An example site."},
@@ -40,13 +49,9 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 		searchTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"query":"test"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"test"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(searchResult); ok {
-						result = r
-					}
-				}
+				result = decodeWebChunk[searchResult](t, c)
 				return nil
 			},
 		),
@@ -62,7 +67,7 @@ func TestWebSearch_EmptyQuery_ClientError(t *testing.T) {
 	err = tools[0].Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"query":"  "}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"  "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -87,13 +92,9 @@ func TestWebScrape_Success(t *testing.T) {
 		scrapeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+server.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(scrapeResult); ok {
-						result = r
-					}
-				}
+				result = decodeWebChunk[scrapeResult](t, c)
 				return nil
 			},
 		),
@@ -120,13 +121,9 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 		scrapeTool.Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+server.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(scrapeResult); ok {
-						result = r
-					}
-				}
+				result = decodeWebChunk[scrapeResult](t, c)
 				return nil
 			},
 		),
@@ -144,7 +141,7 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 	err = tools[1].Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"http://127.0.0.1:9999/"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://127.0.0.1:9999/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -160,7 +157,7 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 	err = tools[1].Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"http://0.0.0.0:80/"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://0.0.0.0:80/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -193,7 +190,7 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 	err = tools[1].Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"`+server.URL+`"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -221,13 +218,9 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 		tools[1].Execute(
 			context.Background(),
 			toolsy.RunContext{},
-			[]byte(`{"url":"`+server.URL+`"}`),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
-				if c.RawData != nil {
-					if r, ok := c.RawData.(scrapeResult); ok {
-						result = r
-					}
-				}
+				result = decodeWebChunk[scrapeResult](t, c)
 				return nil
 			},
 		),
@@ -273,7 +266,7 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 	err = tools[1].Execute(
 		context.Background(),
 		toolsy.RunContext{},
-		[]byte(`{"url":"`+server.URL+`"}`),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)

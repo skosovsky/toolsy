@@ -50,13 +50,13 @@ func (noopReader) Search(context.Context, string, int) ([]mail.MessageSummary, e
 func (noopReader) Read(context.Context, string) (mail.MessageBody, error) { return mail.MessageBody{}, nil }
 
 func main() {
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 	tools, err := mail.AsTools(noopSender{}, noopReader{})
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```

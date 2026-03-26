@@ -2,6 +2,7 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -37,24 +38,30 @@ func TestValidatable_Implemented(t *testing.T) {
 	tool, err := NewTool(
 		"validatable_tool",
 		"desc",
-		func(_ context.Context, _ validatableArgs) (struct{ Ok bool }, error) {
+		func(_ context.Context, _ RunContext, _ validatableArgs) (struct{ Ok bool }, error) {
 			return struct{ Ok bool }{Ok: true}, nil
 		},
 	)
 	require.NoError(t, err)
 	// Valid: low <= high
-	var res struct{ Ok bool }
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"low":1,"high":10}`), func(c Chunk) error {
-		res = c.RawData.(struct{ Ok bool })
-		return nil
-	})
+	var res struct {
+		Ok bool `json:"Ok"`
+	}
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"low":1,"high":10}`)},
+		func(c Chunk) error {
+			return json.Unmarshal(c.Data, &res)
+		},
+	)
 	require.NoError(t, err)
 	require.True(t, res.Ok)
 	// Invalid: low > high — Validatable.Validate returns error
 	err = tool.Execute(
 		context.Background(),
 		RunContext{},
-		[]byte(`{"low":10,"high":5}`),
+		ToolInput{ArgsJSON: []byte(`{"low":10,"high":5}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -79,24 +86,30 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	tool, err := NewTool(
 		"ptr_validatable",
 		"desc",
-		func(_ context.Context, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
+		func(_ context.Context, _ RunContext, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
 			return struct{ Ok bool }{Ok: true}, nil
 		},
 	)
 	require.NoError(t, err)
 	// Valid: min <= max
-	var res struct{ Ok bool }
-	err = tool.Execute(context.Background(), RunContext{}, []byte(`{"min":1,"max":10}`), func(c Chunk) error {
-		res = c.RawData.(struct{ Ok bool })
-		return nil
-	})
+	var res struct {
+		Ok bool `json:"Ok"`
+	}
+	err = tool.Execute(
+		context.Background(),
+		RunContext{},
+		ToolInput{ArgsJSON: []byte(`{"min":1,"max":10}`)},
+		func(c Chunk) error {
+			return json.Unmarshal(c.Data, &res)
+		},
+	)
 	require.NoError(t, err)
 	require.True(t, res.Ok)
 	// Invalid: min > max — Validatable.Validate (pointer receiver) returns error
 	err = tool.Execute(
 		context.Background(),
 		RunContext{},
-		[]byte(`{"min":10,"max":5}`),
+		ToolInput{ArgsJSON: []byte(`{"min":10,"max":5}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)

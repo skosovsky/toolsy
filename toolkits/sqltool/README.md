@@ -46,14 +46,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	reg := toolsy.NewRegistry()
+	builder := toolsy.NewRegistryBuilder()
 
 	tools, err := sqltool.AsTools(db, "postgres", sqltool.WithMaxRows(50))
 	if err != nil {
 		panic(err)
 	}
 	for _, tool := range tools {
-		reg.Register(tool)
+		builder.Add(tool)
 	}
 }
 ```
