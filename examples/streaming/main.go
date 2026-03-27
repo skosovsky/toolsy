@@ -47,9 +47,8 @@ func main() {
 	}
 
 	call := toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "stream_numbers",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"limit": 3}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"limit": 3}`)},
 	}
 	var count int
 	err = reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {

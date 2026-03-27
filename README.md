@@ -46,9 +46,9 @@ func main() {
 	}
 
 	call := toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "weather",
 		Input: toolsy.ToolInput{
+			CallID:   "1",
 			ArgsJSON: []byte(`{"city":"Moscow"}`),
 		},
 	}
@@ -69,7 +69,7 @@ func main() {
 
 - `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, run, input, yield)`.
 - `ToolCall` carries `Input toolsy.ToolInput`; old `ToolCall.Args` is removed.
-- `ToolInput` contains `ArgsJSON` and optional `Attachments`.
+- `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
 - `Chunk` is MIME-aware payload envelope: `Event`, `Data`, `MimeType`, `IsError`, `Metadata`.
 - `Chunk.Event` is strongly typed: `EventProgress`, `EventResult`, `EventSuspend`.
 - `Chunk.RawData` is removed.
@@ -137,6 +137,65 @@ _ = meta
 
 `ToolInput.Attachments` are exposed to handlers as `run.Attachments()`.
 
+`ToolInput.CallID` is the orchestrator/LLM tool call identifier used for metadata tagging in `Registry`/`Session` execution paths and observability middleware.
+Direct low-level `Tool.Execute(...)` does not auto-fill `Chunk.CallID`.
+
+## Policy middleware recipe
+
+Use middleware to stop execution before tool handler code runs:
+
+```go
+var ErrRateLimit = errors.New("rate limit exceeded")
+
+type rateLimitTool struct {
+	next  toolsy.Tool
+	allow func(context.Context) bool
+}
+
+func (t *rateLimitTool) Manifest() toolsy.ToolManifest { return t.next.Manifest() }
+
+func (t *rateLimitTool) Execute(
+	ctx context.Context,
+	run toolsy.RunContext,
+	input toolsy.ToolInput,
+	yield func(toolsy.Chunk) error,
+) error {
+	if !t.allow(ctx) {
+		return ErrRateLimit
+	}
+	return t.next.Execute(ctx, run, input, yield)
+}
+
+func WithRateLimit(allow func(context.Context) bool) toolsy.Middleware {
+	return func(next toolsy.Tool) toolsy.Tool {
+		return &rateLimitTool{next: next, allow: allow}
+	}
+}
+```
+
+Error propagation differs by execution path:
+
+- `Registry.Execute(...)` returns middleware/tool error directly.
+- `Registry.ExecuteIter(...)` emits the error as iterator error.
+- `Registry.ExecuteBatchStream(...)` converts non-suspend errors to `Chunk{IsError: true, MimeType: MimeTypeText}`.
+
+## ServiceProvider recipe
+
+```go
+if run.Services == nil {
+	return Result{}, fmt.Errorf("service provider is not configured")
+}
+dbAny, ok := run.Services.Get("database")
+if !ok {
+	return Result{}, fmt.Errorf("database service not found")
+}
+db, ok := dbAny.(*sql.DB)
+if !ok {
+	return Result{}, fmt.Errorf("database service has unexpected type")
+}
+_ = db
+```
+
 ## Streaming and iteration
 
 - `Execute(ctx, call, yield)` for callback streaming.
@@ -168,6 +227,7 @@ defer client.Close()
 ## Migration notes (v1 -> v2)
 
 - Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
+- Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
 - Replace runtime `reg.Register(...)` / `reg.Use(...)` with `RegistryBuilder`.
 - Replace `ToolMetadata`-based logic with `tool.Manifest()`.
 - Replace `NewClient + Initialize` in `mcp` with `Connect`.

@@ -11,7 +11,7 @@
 //   - Tool interface:
 //     Manifest() ToolManifest
 //     Execute(ctx, run, input, yield)
-//   - ToolCall carries Input ToolInput (ArgsJSON + Attachments).
+//   - ToolCall carries Input ToolInput (CallID + ArgsJSON + Attachments).
 //   - Chunk payload is MIME-aware: Event, Data, MimeType, IsError, Metadata.
 //   - Event is strongly typed via EventType (EventProgress/EventResult/EventSuspend).
 //   - RunContext carries runtime dependencies (Credentials, State, Services).
@@ -29,8 +29,8 @@
 //	})
 //	reg, _ := toolsy.NewRegistryBuilder().Add(tool).Build()
 //	call := toolsy.ToolCall{
-//		ID: "1", ToolName: "weather",
-//		Input: toolsy.ToolInput{ArgsJSON: []byte(`{"city":"Moscow"}`)},
+//		ToolName: "weather",
+//		Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"city":"Moscow"}`)},
 //	}
 //	var out Out
 //	_ = reg.Execute(ctx, call, func(c toolsy.Chunk) error { return json.Unmarshal(c.Data, &out) })

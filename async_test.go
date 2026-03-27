@@ -276,7 +276,7 @@ func TestAsAsyncTool_RegistryHoldsSlotUntilBackgroundDone(t *testing.T) {
 
 	err = reg.Execute(
 		context.Background(),
-		toolsy.ToolCall{ID: "1", ToolName: "slow_async", Input: toolsy.ToolInput{ArgsJSON: []byte(`{}`)}},
+		toolsy.ToolCall{ToolName: "slow_async", Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestAsAsyncTool_RegistryHoldsSlotUntilBackgroundDone(t *testing.T) {
 	defer cancel()
 	err = reg.Execute(
 		ctx,
-		toolsy.ToolCall{ID: "2", ToolName: "slow_async", Input: toolsy.ToolInput{ArgsJSON: []byte(`{}`)}},
+		toolsy.ToolCall{ToolName: "slow_async", Input: toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, toolsy.ErrTimeout)
@@ -311,7 +311,7 @@ func TestAsAsyncTool_RegistryShutdownWaitsForBackground(t *testing.T) {
 
 	err = reg.Execute(
 		context.Background(),
-		toolsy.ToolCall{ID: "1", ToolName: "worker", Input: toolsy.ToolInput{ArgsJSON: []byte(`{}`)}},
+		toolsy.ToolCall{ToolName: "worker", Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)

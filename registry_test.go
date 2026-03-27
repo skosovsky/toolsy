@@ -39,9 +39,8 @@ func TestRegistryBuilder_BuildAndExecute(t *testing.T) {
 
 	var out R
 	err = reg.Execute(context.Background(), ToolCall{
-		ID:       "1",
 		ToolName: "double",
-		Input:    ToolInput{ArgsJSON: []byte(`{"x": 7}`)},
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{"x": 7}`)},
 	}, func(c Chunk) error {
 		return json.Unmarshal(c.Data, &out)
 	})
@@ -66,7 +65,7 @@ func TestRegistry_Execute_ToolNotFound(t *testing.T) {
 	reg := mustBuildRegistry(t, nil)
 	err := reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "missing", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "missing", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -95,7 +94,7 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 
 	err = reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "panic", Input: ToolInput{ArgsJSON: []byte(`{"x": 1}`)}},
+		ToolCall{ToolName: "panic", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{"x": 1}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -118,7 +117,7 @@ func TestRegistry_Execute_Timeout(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{tool}, WithDefaultTimeout(20*time.Millisecond))
 	err = reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "slow", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrTimeout)
@@ -147,9 +146,8 @@ func TestRegistry_ExecuteIter(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{tool})
 	var seen int
 	for chunk, iterErr := range reg.ExecuteIter(context.Background(), ToolCall{
-		ID:       "iter1",
 		ToolName: "iter_stream",
-		Input:    ToolInput{ArgsJSON: []byte(`{"n": 5}`)},
+		Input:    ToolInput{CallID: "iter1", ArgsJSON: []byte(`{"n": 5}`)},
 	}) {
 		require.NoError(t, iterErr)
 		require.Equal(t, EventProgress, chunk.Event)
@@ -175,9 +173,9 @@ func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{tool})
 
 	calls := []ToolCall{
-		{ID: "1", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 1}`)}},
-		{ID: "2", ToolName: "missing", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
-		{ID: "3", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 3}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{"x": 1}`)}},
+		{ToolName: "missing", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "3", ArgsJSON: []byte(`{"x": 3}`)}},
 	}
 	var chunks []Chunk
 	err = reg.ExecuteBatchStream(context.Background(), calls, func(c Chunk) error {
@@ -204,6 +202,47 @@ func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
 	require.Equal(t, 2, okCount)
 }
 
+func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
+	type A struct{}
+	type R struct {
+		OK bool `json:"ok"`
+	}
+	tool, err := NewTool("guarded", "Guarded", func(_ context.Context, _ RunContext, _ A) (R, error) {
+		return R{OK: true}, nil
+	})
+	require.NoError(t, err)
+
+	errRateLimit := errors.New("rate limit exceeded")
+	middleware := func(next Tool) Tool {
+		return newMiddlewareMinTool(
+			next.Manifest().Name,
+			func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+				return errRateLimit
+			},
+		)
+	}
+
+	reg, err := NewRegistryBuilder().Use(middleware).Add(tool).Build()
+	require.NoError(t, err)
+
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "guarded", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	assert.Equal(t, "c1", chunks[0].CallID)
+	assert.Equal(t, "guarded", chunks[0].ToolName)
+	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
+	assert.Contains(t, string(chunks[0].Data), errRateLimit.Error())
+}
+
 func TestRegistry_ValidatorFailClosed(t *testing.T) {
 	type A struct {
 		Query string `json:"query"`
@@ -228,9 +267,8 @@ func TestRegistry_ValidatorFailClosed(t *testing.T) {
 	err = reg.Execute(
 		context.Background(),
 		ToolCall{
-			ID:       "v1",
 			ToolName: "sql",
-			Input:    ToolInput{ArgsJSON: []byte(`{"query":"drop table users"}`)},
+			Input:    ToolInput{CallID: "v1", ArgsJSON: []byte(`{"query":"drop table users"}`)},
 		},
 		func(Chunk) error { return nil },
 	)
@@ -244,7 +282,7 @@ func TestRegistry_ShutdownRejectsNewCalls(t *testing.T) {
 	require.NoError(t, reg.Shutdown(context.Background()))
 	err := reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrShutdown)
@@ -268,7 +306,7 @@ func TestRegistry_MaxConcurrencyTimeout(t *testing.T) {
 	go func() {
 		firstDone <- reg.Execute(
 			context.Background(),
-			ToolCall{ID: "1", ToolName: "blocker", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+			ToolCall{ToolName: "blocker", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 			func(Chunk) error { return nil },
 		)
 	}()
@@ -278,7 +316,7 @@ func TestRegistry_MaxConcurrencyTimeout(t *testing.T) {
 	defer cancel()
 	err = reg.Execute(
 		ctx,
-		ToolCall{ID: "2", ToolName: "blocker", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "blocker", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrTimeout)
@@ -309,7 +347,7 @@ func TestRegistry_OnChunkCountsOnlySuccess(t *testing.T) {
 	)
 	err = reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "stream", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "stream", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.NoError(t, err)
@@ -344,9 +382,11 @@ func TestRegistry_ExecuteBatchStream_YieldIsSerialized(t *testing.T) {
 	calls := make([]ToolCall, n)
 	for i := range n {
 		calls[i] = ToolCall{
-			ID:       time.Now().Add(time.Duration(i) * time.Nanosecond).Format("150405.000000000"),
 			ToolName: "inc",
-			Input:    ToolInput{ArgsJSON: []byte(`{"x": 0}`)},
+			Input: ToolInput{
+				CallID:   time.Now().Add(time.Duration(i) * time.Nanosecond).Format("150405.000000000"),
+				ArgsJSON: []byte(`{"x": 0}`),
+			},
 		}
 	}
 

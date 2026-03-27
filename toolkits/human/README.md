@@ -52,9 +52,9 @@ func main() {
 	}
 
 	err = reg.Execute(ctx, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "request_approval",
 		Input: toolsy.ToolInput{
+			CallID:   "1",
 			ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`),
 		},
 	}, func(c toolsy.Chunk) error {

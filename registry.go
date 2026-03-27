@@ -150,7 +150,7 @@ func (r *Registry) wrapYieldWithMetadata(
 			return ctx.Err()
 		}
 		if c.CallID == "" {
-			c.CallID = call.ID
+			c.CallID = call.Input.CallID
 		}
 		if c.ToolName == "" {
 			c.ToolName = call.ToolName
@@ -220,7 +220,7 @@ func (r *Registry) execute(
 	}()
 
 	var summary ExecutionSummary
-	summary.CallID = call.ID
+	summary.CallID = call.Input.CallID
 	summary.ToolName = call.ToolName
 	start := time.Now()
 	defer func() {
@@ -347,7 +347,7 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 		wg.Go(func() {
 			toolYield := func(c Chunk) error {
 				if c.CallID == "" {
-					c.CallID = call.ID
+					c.CallID = call.Input.CallID
 				}
 				if c.ToolName == "" {
 					c.ToolName = call.ToolName
@@ -364,7 +364,7 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 					return
 				}
 				_ = safeYield(Chunk{
-					CallID:   call.ID,
+					CallID:   call.Input.CallID,
 					ToolName: call.ToolName,
 					Event:    EventResult,
 					Data:     []byte(err.Error()),

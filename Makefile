@@ -1,7 +1,13 @@
 GO      := go
 MODULES := $(shell find . -type d \( -name ".*" -not -name "." -o -name "vendor" \) -prune -o -type f -name "go.mod" -exec dirname {} \;)
 
-.PHONY: lint fix test bench bench-hotpath fuzz cover
+.PHONY: lint fix test bench bench-hotpath fuzz cover verify-root-no-otel
+
+verify-root-no-otel:
+	@if grep -Eq '^[[:space:]]*go\.opentelemetry\.io/' go.mod; then \
+		echo "root go.mod must not depend on go.opentelemetry.io/*"; \
+		exit 1; \
+	fi
 
 lint:
 	@for dir in $(MODULES); do \
@@ -17,7 +23,7 @@ fix:
 		(cd "$$dir" && golangci-lint run --fix ./...) || exit 1; \
 	done
 
-test:
+test: verify-root-no-otel
 	@for dir in $(MODULES); do \
 		echo "test - $$dir"; \
 		(cd "$$dir" && $(GO) test -v -race ./...) || exit 1; \

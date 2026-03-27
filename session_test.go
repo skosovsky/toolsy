@@ -36,7 +36,7 @@ func TestSessionTrackExecutionCount(t *testing.T) {
 	for range 2 {
 		err = session.Execute(
 			context.Background(),
-			ToolCall{ID: "c", ToolName: "noop_count", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+			ToolCall{ToolName: "noop_count", Input: ToolInput{CallID: "c", ArgsJSON: []byte(`{}`)}},
 			func(Chunk) error { return nil },
 		)
 		require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestSessionValidatorFailureConsumesStep(t *testing.T) {
 
 	err = session.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
@@ -89,9 +89,8 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 		err = session.Execute(
 			context.Background(),
 			ToolCall{
-				ID:       string(rune('0' + i)),
 				ToolName: "noop",
-				Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+				Input:    ToolInput{CallID: string(rune('0' + i)), ArgsJSON: []byte(`{}`)},
 			},
 			func(Chunk) error { return nil },
 		)
@@ -100,7 +99,7 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 
 	err = session.Execute(
 		context.Background(),
-		ToolCall{ID: "4", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "4", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrMaxStepsExceeded)
@@ -132,9 +131,8 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 
 	var seen int
 	for chunk, iterErr := range session.ExecuteIter(context.Background(), ToolCall{
-		ID:       "1",
 		ToolName: "count",
-		Input:    ToolInput{ArgsJSON: []byte(`{"n":2}`)},
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{"n":2}`)},
 	}) {
 		require.NoError(t, iterErr)
 		require.Equal(t, EventProgress, chunk.Event)
@@ -166,9 +164,8 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 			errCh <- session.Execute(
 				context.Background(),
 				ToolCall{
-					ID:       string(rune('a' + i)),
 					ToolName: "noop",
-					Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+					Input:    ToolInput{CallID: string(rune('a' + i)), ArgsJSON: []byte(`{}`)},
 				},
 				func(Chunk) error { return nil },
 			)
@@ -189,7 +186,7 @@ func TestSessionToolNotFoundConsumesStep(t *testing.T) {
 
 	err := session.Execute(
 		context.Background(),
-		ToolCall{ID: "missing", ToolName: "missing", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "missing", Input: ToolInput{CallID: "missing", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrToolNotFound)
@@ -203,7 +200,7 @@ func TestSessionShutdownConsumesStep(t *testing.T) {
 
 	err := session.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrShutdown)
@@ -230,7 +227,7 @@ func TestSessionSemaphoreTimeoutConsumesStep(t *testing.T) {
 	go func() {
 		firstDone <- session.Execute(
 			context.Background(),
-			ToolCall{ID: "1", ToolName: "wait", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+			ToolCall{ToolName: "wait", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 			func(Chunk) error { return nil },
 		)
 	}()
@@ -241,7 +238,7 @@ func TestSessionSemaphoreTimeoutConsumesStep(t *testing.T) {
 
 	err = session.Execute(
 		waitCtx,
-		ToolCall{ID: "2", ToolName: "wait", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "wait", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrTimeout)
@@ -280,7 +277,7 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 
 	err = session.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.NoError(t, err)
@@ -291,7 +288,7 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 	executed.Store(false)
 	err = session.Execute(
 		context.Background(),
-		ToolCall{ID: "2", ToolName: "noop", Input: ToolInput{ArgsJSON: []byte(`{}`)}},
+		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrMaxStepsExceeded)

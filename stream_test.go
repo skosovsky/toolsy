@@ -164,8 +164,8 @@ func TestRegistry_ExecuteBatchStream_ChunkTags(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := []ToolCall{
-		{ID: "c1", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 1}`)}},
-		{ID: "c2", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 2}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{"x": 1}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "c2", ArgsJSON: []byte(`{"x": 2}`)}},
 	}
 	var chunks []Chunk
 	err = reg.ExecuteBatchStream(context.Background(), calls, func(c Chunk) error {
@@ -207,9 +207,8 @@ func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
 	calls := make([]ToolCall, n)
 	for i := range n {
 		calls[i] = ToolCall{
-			ID:       fmt.Sprintf("id-%d", i),
 			ToolName: "inc",
-			Input:    ToolInput{ArgsJSON: []byte(`{"x": 0}`)},
+			Input:    ToolInput{CallID: fmt.Sprintf("id-%d", i), ArgsJSON: []byte(`{"x": 0}`)},
 		}
 	}
 	var mu sync.Mutex
@@ -240,8 +239,8 @@ func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 	require.NoError(t, err)
 
 	calls := []ToolCall{
-		{ID: "c1", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 1}`)}},
-		{ID: "c2", ToolName: "double", Input: ToolInput{ArgsJSON: []byte(`{"x": 2}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{"x": 1}`)}},
+		{ToolName: "double", Input: ToolInput{CallID: "c2", ArgsJSON: []byte(`{"x": 2}`)}},
 	}
 	yieldErr := errors.New("client disconnected")
 	var chunks []Chunk

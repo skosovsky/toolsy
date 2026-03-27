@@ -67,14 +67,12 @@ func TestScratchpad_PinRead(t *testing.T) {
 	store := newMemStateStore()
 
 	_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_pin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"allergy","value":"penicillin"}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"allergy","value":"penicillin"}`)},
 	})
 	read := executeAndDecode[readResult](t, reg, store, toolsy.ToolCall{
-		ID:       "2",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)},
 	})
 	require.Contains(t, read.Facts, "allergy=penicillin")
 }
@@ -85,19 +83,16 @@ func TestScratchpad_PinUnpinRead(t *testing.T) {
 	store := newMemStateStore()
 
 	_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_pin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"x","value":"y"}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"x","value":"y"}`)},
 	})
 	_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "2",
 		ToolName: "memory_unpin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"x"}`)},
+		Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"key":"x"}`)},
 	})
 	read := executeAndDecode[readResult](t, reg, store, toolsy.ToolCall{
-		ID:       "3",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{}`)},
 	})
 	require.Equal(t, "No facts stored.", read.Facts)
 }
@@ -108,9 +103,8 @@ func TestScratchpad_UnpinNotFound(t *testing.T) {
 	store := newMemStateStore()
 
 	status := executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_unpin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"nonexistent"}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"nonexistent"}`)},
 	})
 	require.Equal(t, "Ignored: key not found", status.Status)
 }
@@ -121,9 +115,8 @@ func TestScratchpad_ReadEmpty(t *testing.T) {
 	store := newMemStateStore()
 
 	read := executeAndDecode[readResult](t, reg, store, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
 	})
 	require.Equal(t, "No facts stored.", read.Facts)
 }
@@ -134,19 +127,16 @@ func TestScratchpad_PinOverwrite(t *testing.T) {
 	store := newMemStateStore()
 
 	_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_pin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"x","value":"old"}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"x","value":"old"}`)},
 	})
 	_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-		ID:       "2",
 		ToolName: "memory_pin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"x","value":"new"}`)},
+		Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"key":"x","value":"new"}`)},
 	})
 	read := executeAndDecode[readResult](t, reg, store, toolsy.ToolCall{
-		ID:       "3",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{}`)},
 	})
 	require.Contains(t, read.Facts, "x=new")
 	require.NotContains(t, read.Facts, "old")
@@ -162,9 +152,8 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 		reg,
 		store,
 		toolsy.ToolCall{
-			ID:       "1",
 			ToolName: "memory_pin_fact",
-			Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"a","value":"1"}`)},
+			Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"a","value":"1"}`)},
 		},
 	)
 	_ = executeAndDecode[statusResult](
@@ -172,9 +161,8 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 		reg,
 		store,
 		toolsy.ToolCall{
-			ID:       "2",
 			ToolName: "memory_pin_fact",
-			Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"b","value":"2"}`)},
+			Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"key":"b","value":"2"}`)},
 		},
 	)
 	_ = executeAndDecode[statusResult](
@@ -182,9 +170,8 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 		reg,
 		store,
 		toolsy.ToolCall{
-			ID:       "3",
 			ToolName: "memory_pin_fact",
-			Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"a","value":"updated"}`)},
+			Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"key":"a","value":"updated"}`)},
 		},
 	)
 
@@ -192,7 +179,10 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 		t,
 		reg,
 		store,
-		toolsy.ToolCall{ID: "4", ToolName: "memory_read_all", Input: toolsy.ToolInput{ArgsJSON: []byte(`{}`)}},
+		toolsy.ToolCall{
+			ToolName: "memory_read_all",
+			Input:    toolsy.ToolInput{CallID: "4", ArgsJSON: []byte(`{}`)},
+		},
 	)
 	require.Contains(t, read.Facts, "a=updated")
 	require.Contains(t, read.Facts, "b=2")
@@ -208,9 +198,8 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 		reg,
 		store,
 		toolsy.ToolCall{
-			ID:       "1",
 			ToolName: "memory_pin_fact",
-			Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"a","value":"1"}`)},
+			Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"key":"a","value":"1"}`)},
 		},
 	)
 	_ = executeAndDecode[statusResult](
@@ -218,16 +207,14 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 		reg,
 		store,
 		toolsy.ToolCall{
-			ID:       "2",
 			ToolName: "memory_pin_fact",
-			Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"b","value":"2"}`)},
+			Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"key":"b","value":"2"}`)},
 		},
 	)
 
 	err := reg.Execute(context.Background(), toolsy.ToolCall{
-		ID:       "3",
 		ToolName: "memory_pin_fact",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"c","value":"3"}`)},
+		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"key":"c","value":"3"}`)},
 		Run:      toolsy.RunContext{State: store},
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
@@ -239,9 +226,8 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 	reg := mustBuildMemoryRegistry(t, s)
 
 	err := reg.Execute(context.Background(), toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
 	require.True(t, toolsy.IsClientError(err))
@@ -262,18 +248,19 @@ func TestScratchpad_Concurrent(t *testing.T) {
 			defer wg.Done()
 			key := fmt.Sprintf("k%d", n)
 			_ = executeAndDecode[statusResult](t, reg, store, toolsy.ToolCall{
-				ID:       fmt.Sprintf("p-%d", n),
 				ToolName: "memory_pin_fact",
-				Input:    toolsy.ToolInput{ArgsJSON: []byte(`{"key":"` + key + `","value":"v"}`)},
+				Input: toolsy.ToolInput{
+					CallID:   fmt.Sprintf("p-%d", n),
+					ArgsJSON: []byte(`{"key":"` + key + `","value":"v"}`),
+				},
 			})
 		}()
 	}
 	wg.Wait()
 
 	read := executeAndDecode[readResult](t, reg, store, toolsy.ToolCall{
-		ID:       "read",
 		ToolName: "memory_read_all",
-		Input:    toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		Input:    toolsy.ToolInput{CallID: "read", ArgsJSON: []byte(`{}`)},
 	})
 	require.Contains(t, read.Facts, "k0=v")
 }

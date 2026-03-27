@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -112,7 +114,7 @@ func TestRegistryBuilderUse(t *testing.T) {
 	var r R
 	err = reg.Execute(
 		context.Background(),
-		ToolCall{ID: "1", ToolName: "wrap_me", Input: ToolInput{ArgsJSON: args}},
+		ToolCall{ToolName: "wrap_me", Input: ToolInput{CallID: "1", ArgsJSON: args}},
 		func(c Chunk) error { return json.Unmarshal(c.Data, &r) },
 	)
 	require.NoError(t, err)
@@ -131,4 +133,36 @@ func TestTimeoutMiddlewareManifestOverride(t *testing.T) {
 
 	wrapped := WithTimeoutMiddleware(2 * time.Second)(inner)
 	assert.Equal(t, 2*time.Second, wrapped.Manifest().Timeout)
+}
+
+func TestMiddlewareShortCircuitSkipsInnerTool(t *testing.T) {
+	var called atomic.Bool
+	inner := newMiddlewareMinTool(
+		"blocked",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			called.Store(true)
+			return nil
+		},
+	)
+
+	errRateLimit := errors.New("rate limit exceeded")
+	shortCircuit := func(next Tool) Tool {
+		return newMiddlewareMinTool(
+			next.Manifest().Name,
+			func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+				return errRateLimit
+			},
+		)
+	}
+
+	reg, err := NewRegistryBuilder().Use(shortCircuit).Add(inner).Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "blocked", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, errRateLimit)
+	assert.False(t, called.Load())
 }

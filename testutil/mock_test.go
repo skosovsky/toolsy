@@ -75,7 +75,7 @@ func TestNewTestRegistry(t *testing.T) {
 
 	err := reg.Execute(
 		context.Background(),
-		toolsy.ToolCall{ID: "1", ToolName: "m", Input: toolsy.ToolInput{ArgsJSON: []byte(`{}`)}},
+		toolsy.ToolCall{ToolName: "m", Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)

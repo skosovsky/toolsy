@@ -55,9 +55,9 @@ func main() {
 	reg, _ := builder.Build()
 
 	_ = reg.Execute(context.Background(), toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "delegate_to_coder",
 		Input: toolsy.ToolInput{
+			CallID:   "1",
 			ArgsJSON: []byte(`{"repository":"https://example.com/repo","bug_description":"fix the failing test"}`),
 		},
 		Run:      toolsy.RunContext{Credentials: staticCredentials{}},

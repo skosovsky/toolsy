@@ -81,6 +81,10 @@ func cloneAttachments(in []Attachment) []Attachment {
 
 // ToolInput is the runtime input envelope for tool execution.
 type ToolInput struct {
+	// CallID is the orchestrator/LLM identifier for this tool call.
+	// It may be empty for non-LLM callers.
+	CallID string
+
 	ArgsJSON    []byte
 	Attachments []Attachment
 }
@@ -102,7 +106,6 @@ func (r RunContext) Attachments() []Attachment {
 
 // ToolCall is a single execution request (as produced by the LLM).
 type ToolCall struct {
-	ID       string
 	ToolName string
 	Input    ToolInput
 	Run      RunContext

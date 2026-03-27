@@ -88,9 +88,8 @@ func ExampleRegistryBuilder_Use() {
 
 	var out Out
 	_ = reg.Execute(context.Background(), ToolCall{
-		ID:       "1",
 		ToolName: "double",
-		Input:    ToolInput{ArgsJSON: []byte(`{"n": 21}`)},
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{"n": 21}`)},
 	}, func(c Chunk) error {
 		return json.Unmarshal(c.Data, &out)
 	})

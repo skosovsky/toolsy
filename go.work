@@ -11,6 +11,7 @@ use (
 	./contracts/graphql
 	./contracts/grpc
 	./contracts/openapi
+	./ext/toolsyotel
 	./mcp
 	./toolkits/document
 	./toolkits/fstool

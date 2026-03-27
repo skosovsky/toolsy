@@ -22,16 +22,18 @@ func assertChunkJSONMime(tb testing.TB, got string) {
 
 func TestToolCall_Chunk(t *testing.T) {
 	call := ToolCall{
-		ID:       "call_1",
 		ToolName: "weather",
-		Input:    ToolInput{ArgsJSON: []byte(`{"location":"Moscow"}`)},
+		Input: ToolInput{
+			CallID:   "call_1",
+			ArgsJSON: []byte(`{"location":"Moscow"}`),
+		},
 	}
-	assert.Equal(t, "call_1", call.ID)
+	assert.Equal(t, "call_1", call.Input.CallID)
 	assert.Equal(t, "weather", call.ToolName)
 	assert.JSONEq(t, `{"location":"Moscow"}`, string(call.Input.ArgsJSON))
 
 	chunk := Chunk{
-		CallID:   call.ID,
+		CallID:   call.Input.CallID,
 		ToolName: call.ToolName,
 		Event:    EventResult,
 		Data:     []byte(`{"temp":22.5}`),
@@ -126,9 +128,8 @@ func ExampleRegistry_Execute() {
 
 	var out Out
 	err = reg.Execute(context.Background(), ToolCall{
-		ID:       "1",
 		ToolName: "add_one",
-		Input:    ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{"x": 5}`)},
 	}, func(c Chunk) error {
 		return json.Unmarshal(c.Data, &out)
 	})
@@ -158,8 +159,8 @@ func ExampleRegistry_ExecuteBatchStream() {
 		return
 	}
 	calls := []ToolCall{
-		{ID: "1", ToolName: "add", Input: ToolInput{ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
-		{ID: "2", ToolName: "add", Input: ToolInput{ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
+		{ToolName: "add", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
+		{ToolName: "add", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
 	}
 	err = reg.ExecuteBatchStream(context.Background(), calls, func(_ Chunk) error { return nil })
 	if err != nil {

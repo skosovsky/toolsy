@@ -86,9 +86,9 @@ func runBatchStream(reg *toolsy.Registry) error {
 		Product int `json:"product"`
 	}
 	calls := []toolsy.ToolCall{
-		{ID: "1", ToolName: "add", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
-		{ID: "2", ToolName: "mul", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 3, "b": 4}`)}},
-		{ID: "3", ToolName: "add", Input: toolsy.ToolInput{ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
+		{ToolName: "add", Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
+		{ToolName: "mul", Input: toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"a": 3, "b": 4}`)}},
+		{ToolName: "add", Input: toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
 	}
 	var idx int
 	return reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {

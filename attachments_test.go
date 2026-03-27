@@ -66,9 +66,9 @@ func TestRegistryExecute_AttachmentsHydrated(t *testing.T) {
 	require.NoError(t, err)
 
 	call := ToolCall{
-		ID:       "a1",
 		ToolName: "attachments_probe",
 		Input: ToolInput{
+			CallID:   "a1",
 			ArgsJSON: []byte(`{}`),
 			Attachments: []Attachment{
 				{MimeType: MimeTypePNG, Data: []byte{1}},
@@ -130,9 +130,9 @@ func TestRegistryExecute_AttachmentsAreReadOnlyFromRunContext(t *testing.T) {
 	require.NoError(t, err)
 
 	call := ToolCall{
-		ID:       "a2",
 		ToolName: "attachments_mutate_registry",
 		Input: ToolInput{
+			CallID:   "a2",
 			ArgsJSON: []byte(`{}`),
 			Attachments: []Attachment{
 				{MimeType: MimeTypePNG, Data: []byte{7, 8, 9}},

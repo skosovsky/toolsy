@@ -58,9 +58,9 @@ func main() {
 	_ = add.Manifest().Parameters
 
 	call := toolsy.ToolCall{
-		ID:       "1",
 		ToolName: "add",
 		Input: toolsy.ToolInput{
+			CallID:   "1",
 			ArgsJSON: []byte(`{"a": 3, "b": 5}`),
 		},
 	}
