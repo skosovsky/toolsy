@@ -152,7 +152,8 @@ func WithOnBeforeExecute(fn func(context.Context, ToolCall)) RegistryOption {
 }
 
 // WithOnAfterExecute sets a hook called after each tool execution (always invoked via defer,
-// even on partial success or error). Summary reports chunks/bytes delivered and final error.
+// even on partial success or error). Summary reports delivered success chunks/bytes,
+// delivered error chunks (soft errors), and final hard error.
 func WithOnAfterExecute(fn func(context.Context, ToolCall, ExecutionSummary, time.Duration)) RegistryOption {
 	return func(o *registryOptions) {
 		o.onAfter = fn

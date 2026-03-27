@@ -251,7 +251,8 @@ func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 		}
 		return nil
 	})
-	require.NoError(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrStreamAborted)
 	assert.GreaterOrEqual(t, len(chunks), 1)
 	for _, c := range chunks {
 		assert.Equal(t, "double", c.ToolName)

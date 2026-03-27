@@ -31,7 +31,8 @@ func (t *SessionTrack) consumeStep() error {
 	return nil
 }
 
-// ExecutionCount returns the total number of physical tool executions accounted to the track.
+// ExecutionCount returns the number of consumed session steps (outer Session.Execute calls).
+// Internal retry attempts are not counted separately.
 func (t *SessionTrack) ExecutionCount() int64 {
 	if t == nil {
 		return 0

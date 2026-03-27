@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 )
 
 // Middleware wraps a Tool with cross-cutting behavior (logging, recovery, timeout).
@@ -50,8 +51,16 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input Tool
 	toolName := m.next.Manifest().Name
 	m.logger.InfoContext(ctx, "tool start", "tool", toolName)
 	start := time.Now()
-	var chunks, totalBytes int64
+	var chunks, totalBytes, errorChunks int64
+	var lastErrorText string
 	yieldWrapped := func(c Chunk) error {
+		if c.IsError {
+			errorChunks++
+			if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
+				lastErrorText = string(c.Data)
+			}
+			return yield(c)
+		}
 		if !c.IsError {
 			chunks++
 			totalBytes += int64(len(c.Data))
@@ -61,7 +70,7 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input Tool
 	var err error
 	defer func() {
 		dur := time.Since(start)
-		if err != nil {
+		if err != nil || errorChunks > 0 {
 			m.logger.Error(
 				"tool error",
 				"tool",
@@ -72,6 +81,10 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input Tool
 				chunks,
 				"bytes",
 				totalBytes,
+				"error_chunks",
+				errorChunks,
+				"last_error_text",
+				lastErrorText,
 				"error",
 				err,
 			)

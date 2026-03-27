@@ -51,6 +51,35 @@ func TestWithLogging(t *testing.T) {
 	assert.Contains(t, logStr, "log_me")
 }
 
+func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	inner := newMiddlewareMinTool(
+		"log_soft_error",
+		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{
+				Event:    EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: MimeTypeText,
+				IsError:  true,
+			})
+		},
+	)
+	wrapped := WithLogging(logger)(inner)
+
+	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	logStr := buf.String()
+	assert.Contains(t, logStr, "tool start")
+	assert.Contains(t, logStr, "tool error")
+	assert.Contains(t, logStr, "error_chunks=1")
+	assert.Contains(t, logStr, "last_error_text=\"budget exceeded\"")
+}
+
 func TestWithRecovery(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"panic_me",

@@ -167,3 +167,43 @@ func TestWithTracing_StreamAbortedIsNeutral(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, aborted.AsBool())
 }
+
+func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "soft_error_tool"},
+		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			if err := yield(toolsy.Chunk{
+				Event:    toolsy.EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: toolsy.MimeTypeText,
+				IsError:  true,
+			}); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	wrapped := WithTracing(WithTracerProvider(tp))(tool)
+
+	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	spans := rec.Ended()
+	require.Len(t, spans, 1)
+	span := spans[0]
+	assert.Equal(t, codes.Error, span.Status().Code)
+	assert.True(t, hasEvent(span, "tool.soft_error"))
+
+	soft, ok := attrValue(span, "gen_ai.tool.soft_error")
+	require.True(t, ok)
+	assert.True(t, soft.AsBool())
+
+	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
+	require.True(t, ok)
+	assert.Equal(t, "budget exceeded", softText.AsString())
+}

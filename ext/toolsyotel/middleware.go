@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -64,6 +65,8 @@ func (t *tracingTool) Execute(
 	yield func(toolsy.Chunk) error,
 ) error {
 	var execErr error
+	var softError bool
+	var softErrorText string
 	toolName := t.next.Manifest().Name
 	if toolName == "" {
 		toolName = "unknown"
@@ -91,6 +94,13 @@ func (t *tracingTool) Execute(
 		}
 
 		switch {
+		case execErr == nil && softError:
+			span.SetAttributes(attribute.Bool("gen_ai.tool.soft_error", true))
+			if softErrorText != "" {
+				span.SetAttributes(attribute.String("gen_ai.tool.soft_error_text", softErrorText))
+			}
+			span.AddEvent("tool.soft_error")
+			span.SetStatus(codes.Error, "tool returned soft error chunk")
 		case execErr == nil:
 		case errors.Is(execErr, toolsy.ErrSuspend):
 			span.SetAttributes(attribute.Bool("gen_ai.tool.suspended", true))
@@ -105,7 +115,17 @@ func (t *tracingTool) Execute(
 		span.End()
 	}()
 
-	execErr = t.next.Execute(ctx, run, input, yield)
+	yieldWrapped := func(c toolsy.Chunk) error {
+		if c.IsError {
+			softError = true
+			if c.MimeType == toolsy.MimeTypeText && utf8.Valid(c.Data) {
+				softErrorText = string(c.Data)
+			}
+		}
+		return yield(c)
+	}
+
+	execErr = t.next.Execute(ctx, run, input, yieldWrapped)
 	return execErr
 }
 

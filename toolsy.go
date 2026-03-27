@@ -124,11 +124,14 @@ type Chunk struct {
 
 // ExecutionSummary is passed to the after-execution hook (WithOnAfterExecute) when a tool
 // execution finishes (success or error). ChunksDelivered and TotalBytes count only chunks
-// with !IsError (successfully delivered result chunks).
+// with !IsError (successfully delivered result chunks). ErrorChunks and LastErrorText
+// describe delivered soft errors (chunks with IsError=true).
 type ExecutionSummary struct {
 	CallID          string
 	ToolName        string
 	Error           error
 	ChunksDelivered int
 	TotalBytes      int64
+	ErrorChunks     int
+	LastErrorText   string
 }

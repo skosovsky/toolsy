@@ -17,7 +17,8 @@ func TestMain(m *testing.M) {
 // "application/json" is a media-type string, not a JSON document.
 func assertChunkJSONMime(tb testing.TB, got string) {
 	tb.Helper()
-	assert.JSONEq(tb, MimeTypeJSON, got)
+	//nolint:testifylint // MimeTypeJSON is a media-type token, not JSON; JSONEq would parse it as JSON and fail.
+	assert.Equal(tb, MimeTypeJSON, got)
 }
 
 func TestToolCall_Chunk(t *testing.T) {

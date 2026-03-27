@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,10 @@ func mustBuildRegistry(t *testing.T, tools []Tool, opts ...RegistryOption) *Regi
 	require.NoError(t, err)
 	return reg
 }
+
+type invalidUTF8Error struct{}
+
+func (invalidUTF8Error) Error() string { return string([]byte{0xff, 0xfe, 'x'}) }
 
 func TestRegistryBuilder_BuildAndExecute(t *testing.T) {
 	type A struct {
@@ -103,6 +108,134 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 	assert.Equal(t, "1", lastSummary.CallID)
 	assert.Equal(t, "panic", lastSummary.ToolName)
 	require.Error(t, lastSummary.Error)
+}
+
+func TestRegistry_Execute_OnAfterSummaryTracksSoftErrorChunk(t *testing.T) {
+	tool := newMiddlewareMinTool(
+		"soft_summary",
+		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{
+				Event:    EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: MimeTypeText,
+				IsError:  true,
+			})
+		},
+	)
+
+	var lastSummary ExecutionSummary
+	reg := mustBuildRegistry(
+		t,
+		[]Tool{tool},
+		WithOnAfterExecute(func(_ context.Context, _ ToolCall, summary ExecutionSummary, _ time.Duration) {
+			lastSummary = summary
+		}),
+	)
+
+	err := reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "soft_summary", Input: ToolInput{CallID: "s1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	assert.NoError(t, lastSummary.Error)
+	assert.Equal(t, 1, lastSummary.ErrorChunks)
+	assert.Equal(t, "budget exceeded", lastSummary.LastErrorText)
+	assert.Equal(t, 0, lastSummary.ChunksDelivered)
+	assert.Equal(t, int64(0), lastSummary.TotalBytes)
+}
+
+func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *testing.T) {
+	tool := newMiddlewareMinTool(
+		"batch_soft_summary",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			return errors.New("batch tool failed")
+		},
+	)
+
+	var (
+		lastSummary ExecutionSummary
+		afterCalls  atomic.Int32
+	)
+	reg := mustBuildRegistry(
+		t,
+		[]Tool{tool},
+		WithOnAfterExecute(func(_ context.Context, _ ToolCall, summary ExecutionSummary, _ time.Duration) {
+			lastSummary = summary
+			afterCalls.Add(1)
+		}),
+	)
+
+	var chunks []Chunk
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{
+			ToolName: "batch_soft_summary",
+			Input:    ToolInput{CallID: "bs1", ArgsJSON: []byte(`{}`)},
+		}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, int32(1), afterCalls.Load())
+	require.NoError(t, lastSummary.Error)
+	assert.Equal(t, 1, lastSummary.ErrorChunks)
+	assert.Equal(t, "batch tool failed", lastSummary.LastErrorText)
+	assert.Equal(t, 0, lastSummary.ChunksDelivered)
+	assert.Equal(t, int64(0), lastSummary.TotalBytes)
+}
+
+func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksValidatorSoftenedError(t *testing.T) {
+	tool := newMiddlewareMinTool(
+		"validator_soft_summary",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			return nil
+		},
+	)
+
+	var (
+		lastSummary ExecutionSummary
+		afterCalls  atomic.Int32
+	)
+	reg := mustBuildRegistry(
+		t,
+		[]Tool{tool},
+		WithValidator(&testValidator{
+			validateFn: func(_ context.Context, _ string, _ string) error {
+				return errors.New("blocked by policy")
+			},
+		}),
+		WithOnAfterExecute(func(_ context.Context, _ ToolCall, summary ExecutionSummary, _ time.Duration) {
+			lastSummary = summary
+			afterCalls.Add(1)
+		}),
+	)
+
+	var chunks []Chunk
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{
+			ToolName: "validator_soft_summary",
+			Input:    ToolInput{CallID: "vs1", ArgsJSON: []byte(`{}`)},
+		}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, int32(1), afterCalls.Load())
+	require.NoError(t, lastSummary.Error)
+	assert.Equal(t, 1, lastSummary.ErrorChunks)
+	assert.Contains(t, lastSummary.LastErrorText, "blocked by policy")
+	assert.Equal(t, 0, lastSummary.ChunksDelivered)
+	assert.Equal(t, int64(0), lastSummary.TotalBytes)
 }
 
 func TestRegistry_Execute_Timeout(t *testing.T) {
@@ -241,6 +374,192 @@ func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
 	assert.True(t, chunks[0].IsError)
 	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
 	assert.Contains(t, string(chunks[0].Data), errRateLimit.Error())
+}
+
+func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesEmptyErrorText(t *testing.T) {
+	tool := newMiddlewareMinTool(
+		"empty_err",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			return errors.New("")
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var chunks []Chunk
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "empty_err", Input: ToolInput{CallID: "c-empty", ArgsJSON: []byte(`{}`)}}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
+	assert.NotEmpty(t, string(chunks[0].Data))
+	assert.Equal(t, "Error executing tool.", string(chunks[0].Data))
+}
+
+func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesInvalidUTF8(t *testing.T) {
+	tool := newMiddlewareMinTool(
+		"utf8_err",
+		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			return invalidUTF8Error{}
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var chunks []Chunk
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "utf8_err", Input: ToolInput{CallID: "c-utf8", ArgsJSON: []byte(`{}`)}}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
+	assert.True(t, utf8.Valid(chunks[0].Data))
+	assert.Contains(t, string(chunks[0].Data), "x")
+}
+
+func TestRegistry_ExecuteBatchStream_ReturnsErrStreamAbortedOnYieldError(t *testing.T) {
+	type A struct {
+		X int `json:"x"`
+	}
+	type R struct {
+		Y int `json:"y"`
+	}
+	tool, err := NewTool("double_abort", "Double", func(_ context.Context, _ RunContext, a A) (R, error) {
+		return R{Y: a.X * 2}, nil
+	})
+	require.NoError(t, err)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "double_abort", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{"x": 2}`)}}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return errors.New("client closed")
+		},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrStreamAborted)
+	require.Len(t, chunks, 1)
+}
+
+func TestRegistry_ExecuteBatchStream_MissingToolYieldErrorReturnsStreamAborted(t *testing.T) {
+	reg := mustBuildRegistry(t, nil)
+
+	yieldCalls := 0
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "missing", Input: ToolInput{CallID: "m1", ArgsJSON: []byte(`{}`)}}},
+		func(_ Chunk) error {
+			yieldCalls++
+			return errors.New("client closed")
+		},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrStreamAborted)
+	assert.Equal(t, 1, yieldCalls)
+}
+
+func TestRegistry_ExecuteBatchStream_StreamAbortCancelsSiblings(t *testing.T) {
+	startedSecond := make(chan struct{})
+	var secondCanceled atomic.Bool
+
+	tool := newMiddlewareMinTool(
+		"batch_abort",
+		func(ctx context.Context, _ RunContext, input ToolInput, yield func(Chunk) error) error {
+			if input.CallID == "c1" {
+				<-startedSecond
+				if err := yield(Chunk{Event: EventResult, Data: []byte("first"), MimeType: MimeTypeText}); err != nil {
+					return wrapYieldError(err)
+				}
+				return nil
+			}
+			close(startedSecond)
+			<-ctx.Done()
+			secondCanceled.Store(true)
+			return ctx.Err()
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var chunks []Chunk
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{
+			{ToolName: "batch_abort", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+			{ToolName: "batch_abort", Input: ToolInput{CallID: "c2", ArgsJSON: []byte(`{}`)}},
+		},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return errors.New("client closed")
+		},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrStreamAborted)
+	require.Len(t, chunks, 1)
+	assert.True(t, secondCanceled.Load())
+}
+
+func TestRegistry_ExecuteBatchStream_StreamAbortPreventsExtraCallbackOnValidatorFailure(t *testing.T) {
+	firstYieldReturned := make(chan struct{})
+	allowFirstReturn := make(chan struct{})
+	tool := newMiddlewareMinTool(
+		"batch_abort_mix",
+		func(_ context.Context, _ RunContext, input ToolInput, yield func(Chunk) error) error {
+			if input.CallID != "c1" {
+				return nil
+			}
+			if err := yield(Chunk{Event: EventResult, Data: []byte("first"), MimeType: MimeTypeText}); err != nil {
+				close(firstYieldReturned)
+				<-allowFirstReturn
+				return wrapYieldError(err)
+			}
+			return nil
+		},
+	)
+
+	reg := mustBuildRegistry(
+		t,
+		[]Tool{tool},
+		WithValidator(&testValidator{
+			validateFn: func(_ context.Context, toolName, argsJSON string) error {
+				if toolName == "batch_abort_mix" && argsJSON == `{"x":2}` {
+					<-firstYieldReturned
+					close(allowFirstReturn)
+					return errors.New("blocked by policy")
+				}
+				return nil
+			},
+		}),
+	)
+
+	var yieldCalls atomic.Int32
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{
+			{ToolName: "batch_abort_mix", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{"x":1}`)}},
+			{ToolName: "batch_abort_mix", Input: ToolInput{CallID: "c2", ArgsJSON: []byte(`{"x":2}`)}},
+		},
+		func(Chunk) error {
+			yieldCalls.Add(1)
+			return errors.New("client closed")
+		},
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrStreamAborted)
+	assert.Equal(t, int32(1), yieldCalls.Load())
 }
 
 func TestRegistry_ValidatorFailClosed(t *testing.T) {

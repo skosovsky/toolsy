@@ -177,7 +177,30 @@ Error propagation differs by execution path:
 
 - `Registry.Execute(...)` returns middleware/tool error directly.
 - `Registry.ExecuteIter(...)` emits the error as iterator error.
-- `Registry.ExecuteBatchStream(...)` converts non-suspend errors to `Chunk{IsError: true, MimeType: MimeTypeText}`.
+- `Registry.ExecuteBatchStream(...)` converts non-suspend execution failures (including pre-tool failures like missing tool, validator rejection, and shutdown, plus tool/middleware failures) to `Chunk{IsError: true, MimeType: MimeTypeText}`, while `ErrStreamAborted` and context cancellation are returned as errors.
+
+Recommended stack for enterprise policies (outer -> inner):
+
+```go
+reg, err := toolsy.NewRegistryBuilder().
+	Use(
+		toolsy.WithTruncation(8000),
+		toolsy.WithErrorFormatter(),
+		toolsy.WithIdempotentRetry(),
+		toolsy.WithBudget(),
+	).
+	Add(tools...).
+	Build()
+```
+
+Notes:
+
+- `WithTruncation` truncates `text/plain` and `text/markdown` by default; `application/json` truncation is opt-in via `WithTruncationIncludeJSON(true)`.
+- `WithBudget` is inside `WithIdempotentRetry`, so budget checks run before every physical retry attempt.
+- `WithIdempotentRetry` retries only tools with `Metadata["read_only"] == true` and stops retrying after the first successfully delivered chunk.
+- `WithErrorFormatter` may convert terminal errors into `Chunk{IsError: true}` and then return `nil` (soft error).
+- `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxStepsExceeded`, shutdown/validator failures) remain hard errors.
+- If you need to classify step success/failure in an orchestrator using `SessionTrack`, use `Chunk.IsError` as the failure signal; `SessionTrack` counts executions, not outcome status.
 
 ## ServiceProvider recipe
 

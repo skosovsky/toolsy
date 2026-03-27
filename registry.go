@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -138,7 +139,24 @@ func effectiveExecuteTimeout(tool Tool, registryTimeout time.Duration) time.Dura
 	return timeout
 }
 
-// wrapYieldWithMetadata fills CallID/ToolName, validates chunks, counts successful chunks, and invokes onChunk.
+// accountDeliveredChunk updates ExecutionSummary after a chunk was successfully yielded to the consumer.
+func (r *Registry) accountDeliveredChunk(ctx context.Context, c Chunk, summary *ExecutionSummary) {
+	if c.IsError {
+		summary.ErrorChunks++
+		if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
+			summary.LastErrorText = string(c.Data)
+		}
+		return
+	}
+	summary.ChunksDelivered++
+	summary.TotalBytes += int64(len(c.Data))
+	if r.opts.onChunk != nil {
+		r.opts.onChunk(ctx, c)
+	}
+}
+
+// wrapYieldWithMetadata fills CallID/ToolName, validates chunks, updates summary counters,
+// and invokes onChunk for delivered non-error chunks.
 func (r *Registry) wrapYieldWithMetadata(
 	ctx context.Context,
 	call ToolCall,
@@ -159,20 +177,18 @@ func (r *Registry) wrapYieldWithMetadata(
 			return err
 		}
 		yieldErr := yield(c)
-		if yieldErr == nil && !c.IsError {
-			summary.ChunksDelivered++
-			summary.TotalBytes += int64(len(c.Data))
-			if r.opts.onChunk != nil {
-				r.opts.onChunk(ctx, c)
-			}
+		if yieldErr != nil {
+			return yieldErr
 		}
-		return yieldErr
+		r.accountDeliveredChunk(ctx, c, summary)
+		return nil
 	}
 }
 
 // Execute runs one tool call and streams chunks to yield. Returns on first yield error or tool error.
 // The after-execution hook (WithOnAfterExecute) is always invoked via defer with ExecutionSummary.
-// ChunksDelivered and TotalBytes count only chunks with !IsError.
+// ChunksDelivered and TotalBytes count only chunks with !IsError. ErrorChunks/LastErrorText
+// describe delivered soft-error chunks.
 func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
 	return r.execute(ctx, call, yield)
 }
@@ -181,15 +197,30 @@ func (r *Registry) execute(
 	ctx context.Context,
 	call ToolCall,
 	yield func(Chunk) error,
-) (err error) {
+) error {
+	_, _, err := r.executeWithSummary(ctx, call, yield, true)
+	return err
+}
+
+// executeWithSummary runs a single tool call with hooks, semaphore, and optional panic recovery.
+// Named result err is required: after recover() stops a panic, Go does not run the final return
+// statement, so the error must be assigned from a defer (see TestRegistry_Execute_PanicRecovery_OnAfterSummary).
+//
+//nolint:nonamedreturns // panic recovery requires a named error result; plain returns stay nil after recover.
+func (r *Registry) executeWithSummary(
+	ctx context.Context,
+	call ToolCall,
+	yield func(Chunk) error,
+	withAfterHook bool,
+) (summary ExecutionSummary, summaryReady bool, err error) {
 	select {
 	case <-r.done:
-		return ErrShutdown
+		return summary, false, ErrShutdown
 	default:
 	}
 	tool, ok := r.tools[call.ToolName]
 	if !ok {
-		return ErrToolNotFound
+		return summary, false, ErrToolNotFound
 	}
 	r.running.Add(1)
 
@@ -201,12 +232,12 @@ func (r *Registry) execute(
 		defer cancel()
 	}
 
-	if err = r.acquireSemaphore(ctx); err != nil {
+	if semErr := r.acquireSemaphore(ctx); semErr != nil {
 		r.running.Done()
-		if errors.Is(err, context.DeadlineExceeded) {
-			return ErrTimeout
+		if errors.Is(semErr, context.DeadlineExceeded) {
+			return summary, false, ErrTimeout
 		}
-		return err
+		return summary, false, semErr
 	}
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { r.releaseSemaphore(); r.running.Done() }) }
@@ -219,16 +250,18 @@ func (r *Registry) execute(
 		}
 	}()
 
-	var summary ExecutionSummary
 	summary.CallID = call.Input.CallID
 	summary.ToolName = call.ToolName
+	summaryReady = true
 	start := time.Now()
-	defer func() {
-		dur := time.Since(start)
-		if r.opts.onAfter != nil {
-			r.opts.onAfter(ctx, call, summary, dur)
-		}
-	}()
+	if withAfterHook {
+		defer func() {
+			dur := time.Since(start)
+			if r.opts.onAfter != nil {
+				r.opts.onAfter(ctx, call, summary, dur)
+			}
+		}()
+	}
 	if r.opts.recoverPanics {
 		defer func() {
 			if p := recover(); p != nil {
@@ -244,7 +277,8 @@ func (r *Registry) execute(
 
 	toolYield := r.wrapYieldWithMetadata(ctx, call, &summary, yield)
 	r.runToolWithValidationAndExecute(ctx, call, run, tool, toolYield, &summary)
-	return summary.Error
+	err = summary.Error
+	return summary, summaryReady, err
 }
 
 // runToolWithValidationAndExecute runs optional validator then tool.Execute; maps DeadlineExceeded to ErrTimeout.
@@ -323,60 +357,171 @@ func (r *Registry) releaseSemaphore() {
 	}
 }
 
+// batchYieldGate serializes batch stream delivery to the user yield under abort/cancel rules.
+type batchYieldGate struct {
+	yieldMu     sync.Mutex
+	batchCtx    context.Context
+	yield       func(Chunk) error
+	getAbortErr func() error
+	recordAbort func(error)
+}
+
+func (g *batchYieldGate) abortOrBatchDone() error {
+	if abortErr := g.getAbortErr(); abortErr != nil {
+		return abortErr
+	}
+	if err := g.batchCtx.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *batchYieldGate) safeYield(c Chunk) error {
+	if err := g.abortOrBatchDone(); err != nil {
+		return err
+	}
+	g.yieldMu.Lock()
+	defer g.yieldMu.Unlock()
+	if err := g.abortOrBatchDone(); err != nil {
+		return err
+	}
+	if yieldErr := g.yield(c); yieldErr != nil {
+		abortErr := wrapYieldError(yieldErr)
+		g.recordAbort(abortErr)
+		return abortErr
+	}
+	return nil
+}
+
+func (r *Registry) handleBatchToolError(
+	call ToolCall,
+	execErr error,
+	summary *ExecutionSummary,
+	summaryReady bool,
+	safeYield func(Chunk) error,
+	recordStreamAbort func(error),
+	suspendErr *error,
+	suspendMu *sync.Mutex,
+) {
+	if execErr == nil {
+		return
+	}
+	switch {
+	case errors.Is(execErr, ErrSuspend):
+		suspendMu.Lock()
+		if *suspendErr == nil {
+			*suspendErr = execErr
+		}
+		suspendMu.Unlock()
+	case errors.Is(execErr, ErrStreamAborted):
+		recordStreamAbort(execErr)
+	case errors.Is(execErr, context.Canceled):
+	default:
+		errChunk := newErrorChunk(execErr.Error())
+		errChunk.CallID = call.Input.CallID
+		errChunk.ToolName = call.ToolName
+		yieldErr := safeYield(errChunk)
+		if yieldErr == nil {
+			if summaryReady {
+				summary.Error = nil
+				summary.ErrorChunks++
+				if utf8.Valid(errChunk.Data) {
+					summary.LastErrorText = string(errChunk.Data)
+				}
+			}
+			return
+		}
+		if errors.Is(yieldErr, ErrStreamAborted) {
+			recordStreamAbort(yieldErr)
+		}
+	}
+}
+
+func (r *Registry) runBatchStreamWorker(
+	batchCtx context.Context,
+	call ToolCall,
+	gate *batchYieldGate,
+	recordStreamAbort func(error),
+	suspendErr *error,
+	suspendMu *sync.Mutex,
+) {
+	start := time.Now()
+	var summary ExecutionSummary
+	var summaryReady bool
+	defer func() {
+		if !summaryReady || r.opts.onAfter == nil {
+			return
+		}
+		r.opts.onAfter(batchCtx, call, summary, time.Since(start))
+	}()
+	toolYield := func(c Chunk) error {
+		if c.CallID == "" {
+			c.CallID = call.Input.CallID
+		}
+		if c.ToolName == "" {
+			c.ToolName = call.ToolName
+		}
+		return gate.safeYield(c)
+	}
+	execSummary, ready, err := r.executeWithSummary(batchCtx, call, toolYield, false)
+	summary = execSummary
+	summaryReady = ready
+	r.handleBatchToolError(call, err, &summary, summaryReady, gate.safeYield, recordStreamAbort, suspendErr, suspendMu)
+}
+
 // ExecuteBatchStream runs all calls in parallel and streams chunks via yield. Each chunk is
-// tagged with CallID and ToolName. Tool errors are sent as Chunk with IsError: true; the method
-// returns error only for critical failures (context cancelled, shutdown). The library serializes
-// calls to yield with a mutex so the caller's callback need not be thread-safe.
-//
-//nolint:gocognit
+// tagged with CallID and ToolName. Non-suspend execution failures (including pre-tool dispatch
+// errors and tool/middleware failures) are sent as Chunk with IsError: true; the method returns
+// error only for critical failures (context canceled, stream aborted, suspend). The library
+// serializes calls to yield with a mutex so the caller's callback need not be thread-safe.
 func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yield func(Chunk) error) error {
 	if len(calls) == 0 {
 		return nil
 	}
-	var yieldMu sync.Mutex
-	safeYield := func(c Chunk) error {
-		yieldMu.Lock()
-		defer yieldMu.Unlock()
-		return yield(c)
-	}
+	batchCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	var wg sync.WaitGroup
 	var suspendErr error
 	var suspendMu sync.Mutex
+	var streamAbortErr error
+	var streamAbortOnce sync.Once
+	var streamAbortMu sync.RWMutex
+	getStreamAbortErr := func() error {
+		streamAbortMu.RLock()
+		defer streamAbortMu.RUnlock()
+		return streamAbortErr
+	}
+	recordStreamAbort := func(err error) {
+		if err == nil {
+			return
+		}
+		streamAbortOnce.Do(func() {
+			streamAbortMu.Lock()
+			streamAbortErr = err
+			streamAbortMu.Unlock()
+			cancel()
+		})
+	}
+	gate := &batchYieldGate{
+		yieldMu:     sync.Mutex{},
+		batchCtx:    batchCtx,
+		yield:       yield,
+		getAbortErr: getStreamAbortErr,
+		recordAbort: recordStreamAbort,
+	}
 	for _, call := range calls {
+		c := call
 		wg.Go(func() {
-			toolYield := func(c Chunk) error {
-				if c.CallID == "" {
-					c.CallID = call.Input.CallID
-				}
-				if c.ToolName == "" {
-					c.ToolName = call.ToolName
-				}
-				return safeYield(c)
-			}
-			if err := r.Execute(ctx, call, toolYield); err != nil {
-				if errors.Is(err, ErrSuspend) {
-					suspendMu.Lock()
-					if suspendErr == nil {
-						suspendErr = err
-					}
-					suspendMu.Unlock()
-					return
-				}
-				_ = safeYield(Chunk{
-					CallID:   call.Input.CallID,
-					ToolName: call.ToolName,
-					Event:    EventResult,
-					Data:     []byte(err.Error()),
-					MimeType: MimeTypeText,
-					IsError:  true,
-				})
-			}
+			r.runBatchStreamWorker(batchCtx, c, gate, recordStreamAbort, &suspendErr, &suspendMu)
 		})
 	}
 	wg.Wait()
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if streamAbortErr := getStreamAbortErr(); streamAbortErr != nil {
+		return streamAbortErr
 	}
 	if suspendErr != nil {
 		return suspendErr
