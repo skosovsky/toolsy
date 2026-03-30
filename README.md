@@ -140,6 +140,42 @@ _ = meta
 `ToolInput.CallID` is the orchestrator/LLM tool call identifier used for metadata tagging in `Registry`/`Session` execution paths and observability middleware.
 Direct low-level `Tool.Execute(...)` does not auto-fill `Chunk.CallID`.
 
+## Semantic history truncation (BYOT)
+
+`toolsy` core does not store chat history and does not provide a built-in agent runtime.
+For orchestrators, use `github.com/skosovsky/toolsy/history`:
+
+- `history.ApplySemanticTruncation[T]` for dependency-free semantic compression.
+- BYOT contracts: `TokenCounter[T]`, `ContextSummarizer[T]`, `MessageInspector[T]`.
+- `history.SemanticTruncationReport` for observability handoff.
+
+Minimal flow:
+
+```go
+out, report, err := history.ApplySemanticTruncation(
+	ctx,
+	historySlice,
+	maxTokens,
+	myCounter,
+	mySummarizer,
+	myInspector,
+	history.WithMinRecentMessages[MyMessage](2),
+)
+if err != nil {
+	return err
+}
+_ = out
+_ = report
+```
+
+When output changes, `ApplySemanticTruncation` builds a new result slice with a new backing array.
+If no changes are required, it may return the original slice.
+
+OTel recipe for `SemanticTruncationReport` lives in extension docs:
+`ext/toolsyotel/README.md`.
+
+See runnable core example: `examples/semantic_truncation/main.go`.
+
 ## Policy middleware recipe
 
 Use middleware to stop execution before tool handler code runs:
