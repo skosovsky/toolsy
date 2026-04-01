@@ -17,7 +17,6 @@ type ToolManifest struct {
 	Name        string
 	Description string
 	Parameters  map[string]any
-	Timeout     time.Duration
 	Tags        []string
 	Version     string
 	Metadata    map[string]any
@@ -29,7 +28,7 @@ type ToolConfig struct {
 	Manifest ToolManifest
 }
 
-// ToolOption configures a tool (e.g. WithStrict, WithTimeout, WithSchemaRegistry).
+// ToolOption configures a tool (e.g. WithStrict, WithSchemaRegistry).
 type ToolOption func(*ToolConfig)
 
 // WithStrict sets strict mode for schema: additionalProperties: false for all objects,
@@ -45,13 +44,6 @@ func WithStrict() ToolOption {
 func WithSchemaRegistry(r *SchemaRegistry) ToolOption {
 	return func(c *ToolConfig) {
 		c.Schema.Registry = r
-	}
-}
-
-// WithTimeout sets a per-tool timeout (used by middleware or registry execution).
-func WithTimeout(d time.Duration) ToolOption {
-	return func(c *ToolConfig) {
-		c.Manifest.Timeout = d
 	}
 }
 
@@ -106,28 +98,11 @@ func ensureManifestMetadata(m *ToolManifest) {
 type RegistryOption func(*registryOptions)
 
 type registryOptions struct {
-	timeout        time.Duration
-	maxConcurrency int
-	recoverPanics  bool
-	validator      Validator
-	onBefore       func(context.Context, ToolCall)
-	onAfter        func(context.Context, ToolCall, ExecutionSummary, time.Duration)
-	onChunk        func(context.Context, Chunk)
-}
-
-// WithDefaultTimeout sets the default execution timeout for tools.
-func WithDefaultTimeout(d time.Duration) RegistryOption {
-	return func(o *registryOptions) {
-		o.timeout = d
-	}
-}
-
-// WithMaxConcurrency limits concurrent tool executions (semaphore).
-// Pass 0 or negative to disable the semaphore (unlimited concurrency).
-func WithMaxConcurrency(n int) RegistryOption {
-	return func(o *registryOptions) {
-		o.maxConcurrency = n
-	}
+	recoverPanics bool
+	validator     Validator
+	onBefore      func(context.Context, ToolCall)
+	onAfter       func(context.Context, ToolCall, ExecutionSummary, time.Duration)
+	onChunk       func(context.Context, Chunk)
 }
 
 // WithRecoverPanics enables panic recovery in Execute (returns SystemError).

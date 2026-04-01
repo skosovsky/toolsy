@@ -255,7 +255,6 @@ func buildToolManifest(name, description string, schema map[string]any, cfg Tool
 		Name:        name,
 		Description: description,
 		Parameters:  maps.Clone(schema),
-		Timeout:     cfg.Timeout,
 		Tags:        tags,
 		Version:     cfg.Version,
 		Metadata:    metadata,

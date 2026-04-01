@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -57,6 +58,8 @@ type SemanticTruncationReport struct {
 // The function is pure at slice-structure level:
 //   - if no changes are needed, it may return the original history slice;
 //   - if changes are applied, it allocates a new backing array for the returned slice.
+//
+//nolint:funlen // Linear orchestration of validation, summary attempt, and mechanical fallback.
 func ApplySemanticTruncation[T any](
 	ctx context.Context,
 	history []T,
@@ -69,16 +72,16 @@ func ApplySemanticTruncation[T any](
 	var report SemanticTruncationReport
 
 	if maxTokens <= 0 {
-		return nil, report, fmt.Errorf("toolsy/history: maxTokens must be > 0")
+		return nil, report, errors.New("toolsy/history: maxTokens must be > 0")
 	}
 	if counter == nil {
-		return nil, report, fmt.Errorf("toolsy/history: token counter is nil")
+		return nil, report, errors.New("toolsy/history: token counter is nil")
 	}
 	if summarizer == nil {
-		return nil, report, fmt.Errorf("toolsy/history: context summarizer is nil")
+		return nil, report, errors.New("toolsy/history: context summarizer is nil")
 	}
 	if inspector == nil {
-		return nil, report, fmt.Errorf("toolsy/history: message inspector is nil")
+		return nil, report, errors.New("toolsy/history: message inspector is nil")
 	}
 
 	cfg := semanticTruncationConfig[T]{minRecentMessages: 1}
@@ -108,7 +111,7 @@ func ApplySemanticTruncation[T any](
 		return nil, report, fmt.Errorf("toolsy/history: count protected prefix tokens: %w", err)
 	}
 	if protectedTokens > maxTokens {
-		return nil, report, fmt.Errorf("toolsy/history: protected system prefix exceeds maxTokens")
+		return nil, report, errors.New("toolsy/history: protected system prefix exceeds maxTokens")
 	}
 
 	safeBoundaries := computeSafeBoundaries(history, protectedEnd, inspector)
@@ -132,56 +135,24 @@ func ApplySemanticTruncation[T any](
 	)
 
 	if summaryBoundary > protectedEnd {
-		compressPart := cloneSlice(history[protectedEnd:summaryBoundary])
-		summary, sumErr := summarizer.Summarize(ctx, compressPart)
-		if sumErr == nil && isValidSummary(summary, inspector) {
-			suffix := history[summaryBoundary:]
-			summaryOut := joinSegments(protectedPrefix, summary, suffix)
-
-			summaryTokens, countErr := counter.Count(ctx, summaryOut)
-			if countErr != nil {
-				return nil, report, fmt.Errorf("toolsy/history: count summary output tokens: %w", countErr)
-			}
-
-			if summaryTokens <= maxTokens {
-				report.Applied = !sameSliceData(history, summaryOut)
-				report.SummarizationApplied = len(summary) > 0
-				report.TokensAfter = summaryTokens
-				report.MessagesCompressedCount = compressedCount(len(history), len(summaryOut))
-				return summaryOut, report, nil
-			}
-
-			// Double-overflow: force a boundary-safe mechanical pass over the summary output.
-			postSafe := computeSafeBoundaries(summaryOut, protectedEnd, inspector)
-			postBoundary, postTokensAfter, postErr := findMechanicalBoundary(
-				ctx,
-				summaryOut,
-				protectedPrefix,
-				postSafe,
-				maxTokens,
-				counter,
-			)
-			if postErr != nil {
-				return nil, report, postErr
-			}
-
-			postSuffix := summaryOut[postBoundary:]
-			finalOut := joinSegments(protectedPrefix, nil, postSuffix)
-
-			summaryStart := protectedEnd
-			summaryEnd := protectedEnd + len(summary)
-			keptSummary := len(summary) > 0 && postBoundary < summaryEnd && len(finalOut) > summaryStart
-
-			report.Applied = !sameSliceData(history, finalOut)
-			report.SummarizationApplied = keptSummary
-			report.MechanicalTruncationUsed = true
-			report.TokensAfter = postTokensAfter
-			report.MessagesCompressedCount = compressedCount(len(history), len(finalOut))
-			return finalOut, report, nil
+		summaryOut, done, sumErr := trySummaryTruncation(
+			ctx,
+			history,
+			protectedPrefix,
+			protectedEnd,
+			summaryBoundary,
+			maxTokens,
+			counter,
+			summarizer,
+			inspector,
+			&report,
+		)
+		if sumErr != nil {
+			return nil, report, sumErr
 		}
-
-		report.SummarizerFailed = true
-		report.FallbackUsed = true
+		if done {
+			return summaryOut, report, nil
+		}
 	}
 
 	// Fallback: boundary-safe mechanical truncation on original history.
@@ -196,12 +167,108 @@ func ApplySemanticTruncation[T any](
 	return out, report, nil
 }
 
+// trySummaryTruncation attempts semantic compression; on invalid summarizer output it sets
+// report flags and returns done=false. err is non-nil only for counter / mechanical errors.
+func trySummaryTruncation[T any](
+	ctx context.Context,
+	history []T,
+	protectedPrefix []T,
+	protectedEnd int,
+	summaryBoundary int,
+	maxTokens int,
+	counter TokenCounter[T],
+	summarizer ContextSummarizer[T],
+	inspector MessageInspector[T],
+	report *SemanticTruncationReport,
+) ([]T, bool, error) {
+	compressPart := cloneSlice(history[protectedEnd:summaryBoundary])
+	summary, sumErr := summarizer.Summarize(ctx, compressPart)
+	if sumErr != nil {
+		report.SummarizerFailed = true
+		report.FallbackUsed = true
+		return nil, false, nil //nolint:nilerr // summarizer errors fall through to mechanical truncation
+	}
+	if !isValidSummary(summary, inspector) {
+		report.SummarizerFailed = true
+		report.FallbackUsed = true
+		return nil, false, nil
+	}
+
+	suffix := history[summaryBoundary:]
+	summaryJoined := joinSegments(protectedPrefix, summary, suffix)
+
+	summaryTokens, countErr := counter.Count(ctx, summaryJoined)
+	if countErr != nil {
+		return nil, false, fmt.Errorf("toolsy/history: count summary output tokens: %w", countErr)
+	}
+
+	if summaryTokens <= maxTokens {
+		report.Applied = !sameSliceData(history, summaryJoined)
+		report.SummarizationApplied = len(summary) > 0
+		report.TokensAfter = summaryTokens
+		report.MessagesCompressedCount = compressedCount(len(history), len(summaryJoined))
+		return summaryJoined, true, nil
+	}
+
+	postSafe := computeSafeBoundaries(summaryJoined, protectedEnd, inspector)
+	postBoundary, postTokensAfter, postErr := findMechanicalBoundary(
+		ctx,
+		summaryJoined,
+		protectedPrefix,
+		postSafe,
+		maxTokens,
+		counter,
+	)
+	if postErr != nil {
+		return nil, false, postErr
+	}
+
+	postSuffix := summaryJoined[postBoundary:]
+	finalOut := joinSegments(protectedPrefix, nil, postSuffix)
+
+	summaryEnd := protectedEnd + len(summary)
+	keptSummary := len(summary) > 0 && postBoundary < summaryEnd && len(finalOut) > protectedEnd
+
+	report.Applied = !sameSliceData(history, finalOut)
+	report.SummarizationApplied = keptSummary
+	report.MechanicalTruncationUsed = true
+	report.TokensAfter = postTokensAfter
+	report.MessagesCompressedCount = compressedCount(len(history), len(finalOut))
+	return finalOut, true, nil
+}
+
 func leadingSystemPrefixLen[T any](history []T, inspector MessageInspector[T]) int {
 	i := 0
 	for i < len(history) && inspector.IsSystem(history[i]) {
 		i++
 	}
 	return i
+}
+
+func registerOpenToolCallIDs(idsOpen map[string]int, ids []string) {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		idsOpen[id]++
+	}
+}
+
+func consumeOpenToolCallIDs(idsOpen map[string]int, ids []string) {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		n, ok := idsOpen[id]
+		if !ok {
+			continue
+		}
+		if n <= 1 {
+			delete(idsOpen, id)
+			continue
+		}
+		idsOpen[id] = n - 1
+	}
 }
 
 func computeSafeBoundaries[T any](history []T, protectedEnd int, inspector MessageInspector[T]) []int {
@@ -220,26 +287,10 @@ func computeSafeBoundaries[T any](history []T, protectedEnd int, inspector Messa
 		msg := history[i]
 		ids := inspector.GetToolCallIDs(msg)
 		if inspector.IsToolCall(msg) {
-			for _, id := range ids {
-				if id == "" {
-					continue
-				}
-				idsOpen[id]++
-			}
+			registerOpenToolCallIDs(idsOpen, ids)
 		}
 		if inspector.IsToolResult(msg) {
-			for _, id := range ids {
-				if id == "" {
-					continue
-				}
-				if n, ok := idsOpen[id]; ok {
-					if n <= 1 {
-						delete(idsOpen, id)
-					} else {
-						idsOpen[id] = n - 1
-					}
-				}
-			}
+			consumeOpenToolCallIDs(idsOpen, ids)
 		}
 		if len(idsOpen) == 0 {
 			boundaries = append(boundaries, i+1)
@@ -259,7 +310,7 @@ func findMechanicalBoundary[T any](
 	safeBoundaries []int,
 	maxTokens int,
 	counter TokenCounter[T],
-) (boundary int, tokensAfter int, err error) {
+) (int, int, error) {
 	for _, b := range safeBoundaries {
 		suffix := history[b:]
 		candidate := joinSegments(protectedPrefix, nil, suffix)
@@ -271,7 +322,7 @@ func findMechanicalBoundary[T any](
 			return b, toks, nil
 		}
 	}
-	return 0, 0, fmt.Errorf("toolsy/history: no boundary-safe truncation candidate fits maxTokens")
+	return 0, 0, errors.New("toolsy/history: no boundary-safe truncation candidate fits maxTokens")
 }
 
 func chooseSummaryBoundary(
@@ -282,10 +333,7 @@ func chooseSummaryBoundary(
 		return protectedEnd
 	}
 
-	targetMax := totalLen - minRecent
-	if targetMax < protectedEnd+1 {
-		targetMax = protectedEnd + 1
-	}
+	targetMax := max(totalLen-minRecent, protectedEnd+1)
 
 	best := protectedEnd
 	for _, b := range safeBoundaries {

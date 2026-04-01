@@ -207,45 +207,28 @@ func TestSessionShutdownConsumesStep(t *testing.T) {
 	assert.Equal(t, int64(1), session.Track().ExecutionCount())
 }
 
-func TestSessionSemaphoreTimeoutConsumesStep(t *testing.T) {
+func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	blocked := make(chan struct{})
-	release := make(chan struct{})
-	tool, err := NewTool("wait", "Wait", func(_ context.Context, _ RunContext, _ A) (R, error) {
-		close(blocked)
-		<-release
-		return R{}, nil
+	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ RunContext, _ A) (R, error) {
+		<-ctx.Done()
+		return R{}, ctx.Err()
 	})
 	require.NoError(t, err)
 
-	reg := newSessionRegistry(t, []Tool{tool}, WithMaxConcurrency(1))
+	reg := newSessionRegistry(t, []Tool{tool})
 	session := NewSession(reg, WithMaxSteps(0))
 
-	firstDone := make(chan error, 1)
-	go func() {
-		firstDone <- session.Execute(
-			context.Background(),
-			ToolCall{ToolName: "wait", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
-			func(Chunk) error { return nil },
-		)
-	}()
-	<-blocked
-
-	waitCtx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-
 	err = session.Execute(
-		waitCtx,
-		ToolCall{ToolName: "wait", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
+		ctx,
+		ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
 	require.ErrorIs(t, err, ErrTimeout)
-	assert.Equal(t, int64(2), session.Track().ExecutionCount())
-
-	close(release)
-	require.NoError(t, <-firstDone)
+	assert.Equal(t, int64(1), session.Track().ExecutionCount())
 }
 
 func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {

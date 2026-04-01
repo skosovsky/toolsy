@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,30 +40,6 @@ func TestWithStrict(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.True(t, IsClientError(err))
-}
-
-func TestWithTimeout(t *testing.T) {
-	type A struct{}
-	type R struct{}
-
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
-		return R{}, nil
-	}, WithTimeout(time.Second))
-	require.NoError(t, err)
-
-	assert.Equal(t, time.Second, tool.Manifest().Timeout)
-
-	err = tool.Execute(
-		context.Background(),
-		RunContext{},
-		ToolInput{ArgsJSON: []byte(`{}`)},
-		func(c Chunk) error {
-			assert.Equal(t, EventResult, c.Event)
-			assertChunkJSONMime(t, c.MimeType)
-			return nil
-		},
-	)
-	require.NoError(t, err)
 }
 
 func TestWithTags(t *testing.T) {
@@ -142,7 +117,7 @@ func TestToolOptions_Combined(t *testing.T) {
 
 	tool, err := NewTool("combined", "desc", func(_ context.Context, _ RunContext, a A) (R, error) {
 		return R{Double: a.N * 2}, nil
-	}, WithStrict(), WithTimeout(time.Millisecond), WithVersion("0.1"))
+	}, WithStrict(), WithVersion("0.1"))
 	require.NoError(t, err)
 
 	var res R

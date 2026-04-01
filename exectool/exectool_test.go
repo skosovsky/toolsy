@@ -37,7 +37,7 @@ func (m *mockSandbox) Run(ctx context.Context, req RunRequest) (RunResult, error
 
 func TestNewBuildsDynamicSchema(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python", "bash", "python"}}
-	tool, err := New(sb, WithTimeout(5*time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	params := tool.Manifest().Parameters
@@ -50,7 +50,7 @@ func TestNewBuildsDynamicSchema(t *testing.T) {
 
 func TestNewAllowedLanguagesIntersection(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python", "bash", "node"}}
-	tool, err := New(sb, WithTimeout(5*time.Second), WithAllowedLanguages("python", "bash"))
+	tool, err := New(sb, WithAllowedLanguages("python", "bash"))
 	require.NoError(t, err)
 
 	params := tool.Manifest().Parameters
@@ -61,20 +61,25 @@ func TestNewAllowedLanguagesIntersection(t *testing.T) {
 
 func TestNewAllowedLanguagesMustIntersect(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	_, err := New(sb, WithTimeout(5*time.Second), WithAllowedLanguages("bash"))
+	_, err := New(sb, WithAllowedLanguages("bash"))
 	require.Error(t, err)
 }
 
-func TestNewRequiresTimeout(t *testing.T) {
+func TestNewSucceeds(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	_, err := New(sb)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "execution timeout is required for safety")
-	require.Contains(t, err.Error(), "exectool.WithTimeout")
+	tool, err := New(sb)
+	require.NoError(t, err)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"x"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
 }
 
 func TestNewRejectsNilSandbox(t *testing.T) {
-	_, err := New(nil, WithTimeout(5*time.Second))
+	_, err := New(nil)
 	require.Error(t, err)
 }
 
@@ -87,7 +92,7 @@ func TestExecuteSuccess(t *testing.T) {
 			ExitCode: 0,
 		},
 	}
-	tool, err := New(sb, WithTimeout(2*time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	var result RunResult
@@ -107,12 +112,11 @@ func TestExecuteSuccess(t *testing.T) {
 	require.Equal(t, "print(1)", sb.lastReq.Code)
 	require.Equal(t, "B", sb.lastReq.Env["A"])
 	require.Equal(t, []byte("hello"), sb.lastReq.Files["main.txt"])
-	require.Equal(t, 2*time.Second, sb.lastReq.Timeout)
 }
 
 func TestExecuteEmptyCodeReturnsClientError(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	tool, err := New(sb, WithTimeout(5*time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -128,7 +132,7 @@ func TestExecuteEmptyCodeReturnsClientError(t *testing.T) {
 
 func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	tool, err := New(sb, WithTimeout(5*time.Second), WithAllowedLanguages("python"))
+	tool, err := New(sb, WithAllowedLanguages("python"))
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -141,9 +145,9 @@ func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 	require.True(t, toolsy.IsClientError(err))
 }
 
-func TestExecuteClampsTimeoutToContextDeadline(t *testing.T) {
+func TestExecuteSucceedsWithinShortContextDeadline(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	tool, err := New(sb, WithTimeout(5*time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
@@ -156,13 +160,11 @@ func TestExecuteClampsTimeoutToContextDeadline(t *testing.T) {
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)
-	require.Greater(t, sb.lastReq.Timeout, time.Duration(0))
-	require.Less(t, sb.lastReq.Timeout, 5*time.Second)
 }
 
 func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
-	tool, err := New(sb, WithTimeout(time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
@@ -187,12 +189,14 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 			return RunResult{}, ctx.Err()
 		},
 	}
-	tool, err := New(sb, WithTimeout(20*time.Millisecond))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
 	start := time.Now()
 	err = tool.Execute(
-		context.Background(),
+		ctx,
 		toolsy.RunContext{},
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
@@ -200,7 +204,6 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, toolsy.IsSystemError(err))
 	require.ErrorIs(t, err, ErrTimeout)
-	require.Equal(t, 20*time.Millisecond, sb.lastReq.Timeout)
 	require.Less(t, time.Since(start), 200*time.Millisecond)
 }
 
@@ -209,7 +212,7 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 		languages: []string{"python"},
 		err:       ErrTimeout,
 	}
-	tool, err := New(sb, WithTimeout(5*time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -227,7 +230,6 @@ func TestExecutePropagatesToolOptionMetadata(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
 	tool, err := New(
 		sb,
-		WithTimeout(time.Second),
 		WithToolOptions(toolsy.WithDangerous(), toolsy.WithMetadata(map[string]any{"requires_confirmation": true})),
 	)
 	require.NoError(t, err)
@@ -239,14 +241,14 @@ func TestExecutePropagatesToolOptionMetadata(t *testing.T) {
 
 func TestNewRejectsEmptyLanguageNames(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python", ""}}
-	_, err := New(sb, WithTimeout(time.Second))
+	_, err := New(sb)
 	require.Error(t, err)
 }
 
 func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 	rootErr := fmt.Errorf("boom: %w", ErrSandboxFailure)
 	sb := &mockSandbox{languages: []string{"python"}, err: rootErr}
-	tool, err := New(sb, WithTimeout(time.Second))
+	tool, err := New(sb)
 	require.NoError(t, err)
 
 	err = tool.Execute(

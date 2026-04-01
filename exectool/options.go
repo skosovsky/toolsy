@@ -1,8 +1,6 @@
 package exectool
 
 import (
-	"time"
-
 	"github.com/skosovsky/toolsy"
 )
 
@@ -12,7 +10,6 @@ type Option func(*options)
 type options struct {
 	name             string
 	description      string
-	timeout          time.Duration
 	allowedLanguages []string
 	toolOptions      []toolsy.ToolOption
 }
@@ -37,13 +34,6 @@ func WithName(name string) Option {
 func WithDescription(description string) Option {
 	return func(o *options) {
 		o.description = description
-	}
-}
-
-// WithTimeout sets the infrastructure-enforced execution timeout.
-func WithTimeout(timeout time.Duration) Option {
-	return func(o *options) {
-		o.timeout = timeout
 	}
 }
 

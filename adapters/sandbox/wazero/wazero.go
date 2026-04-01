@@ -83,13 +83,6 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	runCtx := ctx
-	cancel := func() {}
-	if req.Timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
-
 	workspaceDir, err := os.MkdirTemp("", "toolsy-wazero-*")
 	if err != nil {
 		return exectool.RunResult{}, fmt.Errorf("%w: create workspace: %w", exectool.ErrSandboxFailure, err)
@@ -112,14 +105,14 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	duration, err := s.engine.Run(runCtx, s.module, workspaceDir, req.Env, &stdout, &stderr)
+	duration, err := s.engine.Run(ctx, s.module, workspaceDir, req.Env, &stdout, &stderr)
 
 	if err != nil {
-		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return exectool.RunResult{}, exectool.ErrTimeout
 		}
-		if errors.Is(runCtx.Err(), context.Canceled) {
-			return exectool.RunResult{}, runCtx.Err()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return exectool.RunResult{}, ctx.Err()
 		}
 
 		var exitErr *wazerosys.ExitError

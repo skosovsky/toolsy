@@ -9,7 +9,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/skosovsky/toolsy"
 )
@@ -32,16 +31,13 @@ func New(sandbox Sandbox, opts ...Option) (toolsy.Tool, error) {
 		opt(&o)
 	}
 	applyDefaults(&o)
-	if err := validateExecOptions(&o); err != nil {
-		return nil, err
-	}
 
 	supported, err := resolveSupportedLanguages(sandbox, &o)
 	if err != nil {
 		return nil, err
 	}
 
-	handler := newExecHandler(sandbox, supported, o)
+	handler := newExecHandler(sandbox, supported)
 	return toolsy.NewDynamicTool(
 		o.name,
 		o.description,
@@ -49,16 +45,6 @@ func New(sandbox Sandbox, opts ...Option) (toolsy.Tool, error) {
 		handler,
 		o.toolOptions...,
 	)
-}
-
-func validateExecOptions(o *options) error {
-	if o.timeout <= 0 {
-		return errors.New(
-			"exectool: execution timeout is required for safety (LLM-generated code). " +
-				"Pass exectool.WithTimeout, e.g. exectool.WithTimeout(10 * time.Second)",
-		)
-	}
-	return nil
 }
 
 func resolveSupportedLanguages(sandbox Sandbox, o *options) ([]string, error) {
@@ -83,7 +69,6 @@ func resolveSupportedLanguages(sandbox Sandbox, o *options) ([]string, error) {
 func newExecHandler(
 	sandbox Sandbox,
 	supported []string,
-	o options,
 ) func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
 	return func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 		var args execArgs
@@ -104,8 +89,10 @@ func newExecHandler(
 			return fmt.Errorf("%w: %s", ErrUnsupportedLanguage, language)
 		}
 
-		timeout, err := effectiveTimeout(ctx, o.timeout)
-		if err != nil {
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("exectool: sandbox run: %w", ErrTimeout)
+			}
 			return err
 		}
 
@@ -114,15 +101,11 @@ func newExecHandler(
 			Code:     args.Code,
 			Env:      cloneEnv(args.Env),
 			Files:    encodeFiles(args.Files),
-			Timeout:  timeout,
 		}
 
-		runCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		res, err := sandbox.Run(runCtx, req)
+		res, err := sandbox.Run(ctx, req)
 		if err != nil {
-			if runCtx.Err() == context.DeadlineExceeded || errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, context.DeadlineExceeded) {
 				return fmt.Errorf("exectool: sandbox run: %w", ErrTimeout)
 			}
 			return fmt.Errorf("exectool: sandbox run: %w", err)
@@ -211,23 +194,6 @@ func intersectLanguages(supported, allowed []string) []string {
 
 func containsLanguage(languages []string, target string) bool {
 	return slices.Contains(languages, target)
-}
-
-func effectiveTimeout(ctx context.Context, configured time.Duration) (time.Duration, error) {
-	timeout := configured
-	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return 0, ErrTimeout
-		}
-		if timeout <= 0 || remaining < timeout {
-			timeout = remaining
-		}
-	}
-	if timeout <= 0 {
-		return 0, ErrTimeout
-	}
-	return timeout, nil
 }
 
 func cloneEnv(env map[string]string) map[string]string {

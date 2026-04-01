@@ -110,6 +110,33 @@ func doSearch(ctx context.Context, provider SearchProvider, query string) (searc
 	return searchResult{Results: strings.TrimSuffix(b.String(), "\n")}, nil
 }
 
+// parseScrapeResponse reads resp.Body; the caller must defer resp.Body.Close() (or equivalent) after a successful Do.
+func parseScrapeResponse(resp *http.Response, o *options) (scrapeResult, error) {
+	if resp.StatusCode != http.StatusOK {
+		return scrapeResult{}, &toolsy.ClientError{
+			Reason:    "fetch failed: " + resp.Status,
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
+	}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, int64(o.maxPageBytes)+1))
+	if readErr != nil {
+		return scrapeResult{}, fmt.Errorf("toolkit/web: read body: %w", readErr)
+	}
+	if len(body) > o.maxPageBytes {
+		return scrapeResult{}, &toolsy.ClientError{
+			Reason:    "page too large",
+			Retryable: false,
+			Err:       toolsy.ErrValidation,
+		}
+	}
+	markdown, convErr := o.scraper.HTMLToMarkdown(string(body), o.maxPageBytes)
+	if convErr != nil {
+		return scrapeResult{}, fmt.Errorf("toolkit/web: convert: %w", convErr)
+	}
+	return scrapeResult{Markdown: markdown}, nil
+}
+
 func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
@@ -127,7 +154,28 @@ func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, err
 	if err != nil {
 		return scrapeResult{}, fmt.Errorf("toolkit/web: new request: %w", err)
 	}
-	client := *o.httpClient
+	hc := o.httpClient
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	std, isConcreteClient := hc.(*http.Client)
+	if !isConcreteClient {
+		if !o.allowPrivateIPs {
+			return scrapeResult{}, errors.New(
+				"toolkit/web: default SSRF protection requires *http.Client; pass WithHTTPClient(&http.Client{...}) or use WithAllowPrivateIPs(true) for tests only",
+			)
+		}
+		resp, doErr := hc.Do(req) // #nosec G704
+		if doErr != nil {
+			if toolsy.IsClientError(doErr) {
+				return scrapeResult{}, doErr
+			}
+			return scrapeResult{}, fmt.Errorf("toolkit/web: fetch: %w", doErr)
+		}
+		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+		return parseScrapeResponse(resp, o)
+	}
+	client := *std
 	client.CheckRedirect = checkRedirect(o.allowPrivateIPs, o.blockedDomains)
 	if !o.allowPrivateIPs {
 		// Pin to resolved IP per request to prevent DNS rebinding
@@ -142,37 +190,15 @@ func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, err
 		}
 	}
 	// URL validated by validateScrapeURL; redirects validated by CheckRedirect with same blockedDomains
-	resp, err := client.Do(req) // #nosec G704
-	if err != nil {
-		if toolsy.IsClientError(err) {
-			return scrapeResult{}, err
+	resp, doErr := client.Do(req) // #nosec G704
+	if doErr != nil {
+		if toolsy.IsClientError(doErr) {
+			return scrapeResult{}, doErr
 		}
-		return scrapeResult{}, fmt.Errorf("toolkit/web: fetch: %w", err)
+		return scrapeResult{}, fmt.Errorf("toolkit/web: fetch: %w", doErr)
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return scrapeResult{}, &toolsy.ClientError{
-			Reason:    "fetch failed: " + resp.Status,
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(o.maxPageBytes)+1))
-	if err != nil {
-		return scrapeResult{}, fmt.Errorf("toolkit/web: read body: %w", err)
-	}
-	if len(body) > o.maxPageBytes {
-		return scrapeResult{}, &toolsy.ClientError{
-			Reason:    "page too large",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
-	}
-	markdown, err := o.scraper.HTMLToMarkdown(string(body), o.maxPageBytes)
-	if err != nil {
-		return scrapeResult{}, fmt.Errorf("toolkit/web: convert: %w", err)
-	}
-	return scrapeResult{Markdown: markdown}, nil
+	return parseScrapeResponse(resp, o)
 }
 
 func escapeMarkdown(s string) string {

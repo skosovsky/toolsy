@@ -36,13 +36,6 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	runCtx := ctx
-	cancel := func() {}
-	if req.Timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
-
 	var stdout strings.Builder
 	thread := new(toolstarlark.Thread)
 	thread.Name = "toolsy-starlark"
@@ -55,8 +48,8 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	defer close(done)
 	go func() {
 		select {
-		case <-runCtx.Done():
-			thread.Cancel(runCtx.Err().Error())
+		case <-ctx.Done():
+			thread.Cancel(ctx.Err().Error())
 		case <-done:
 		}
 	}()
@@ -72,11 +65,11 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	duration := time.Since(start)
 
 	if err != nil {
-		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return exectool.RunResult{}, exectool.ErrTimeout
 		}
-		if errors.Is(runCtx.Err(), context.Canceled) {
-			return exectool.RunResult{}, runCtx.Err()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return exectool.RunResult{}, ctx.Err()
 		}
 
 		return exectool.RunResult{

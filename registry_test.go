@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -238,7 +239,7 @@ func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksValidatorSoftenedError(
 	assert.Equal(t, int64(0), lastSummary.TotalBytes)
 }
 
-func TestRegistry_Execute_Timeout(t *testing.T) {
+func TestRegistry_Execute_ContextDeadlineMapsToErrTimeout(t *testing.T) {
 	type A struct{}
 	type R struct{}
 	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ RunContext, _ A) (R, error) {
@@ -247,9 +248,11 @@ func TestRegistry_Execute_Timeout(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	reg := mustBuildRegistry(t, []Tool{tool}, WithDefaultTimeout(20*time.Millisecond))
+	reg := mustBuildRegistry(t, []Tool{tool})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
 	err = reg.Execute(
-		context.Background(),
+		ctx,
 		ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
@@ -607,41 +610,31 @@ func TestRegistry_ShutdownRejectsNewCalls(t *testing.T) {
 	require.ErrorIs(t, err, ErrShutdown)
 }
 
-func TestRegistry_MaxConcurrencyTimeout(t *testing.T) {
+func TestRegistry_ConcurrentExecute_BothSucceed(t *testing.T) {
 	type A struct{}
-	type R struct{}
-	blocked := make(chan struct{})
-	release := make(chan struct{})
-	tool, err := NewTool("blocker", "Blocks", func(_ context.Context, _ RunContext, _ A) (R, error) {
-		close(blocked)
-		<-release
-		return R{}, nil
+	type R struct {
+		OK bool `json:"ok"`
+	}
+	tool, err := NewTool("quick", "Quick", func(_ context.Context, _ RunContext, _ A) (R, error) {
+		return R{OK: true}, nil
 	})
 	require.NoError(t, err)
 
-	reg := mustBuildRegistry(t, []Tool{tool}, WithMaxConcurrency(1))
+	reg := mustBuildRegistry(t, []Tool{tool})
 
-	firstDone := make(chan error, 1)
-	go func() {
-		firstDone <- reg.Execute(
-			context.Background(),
-			ToolCall{ToolName: "blocker", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
-			func(Chunk) error { return nil },
-		)
-	}()
-	<-blocked
-
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	err = reg.Execute(
-		ctx,
-		ToolCall{ToolName: "blocker", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
-		func(Chunk) error { return nil },
-	)
-	require.ErrorIs(t, err, ErrTimeout)
-
-	close(release)
-	require.NoError(t, <-firstDone)
+	errCh := make(chan error, 2)
+	for i := range 2 {
+		go func(id int) {
+			errCh <- reg.Execute(
+				context.Background(),
+				ToolCall{ToolName: "quick", Input: ToolInput{CallID: fmt.Sprintf("c%d", id), ArgsJSON: []byte(`{}`)}},
+				func(Chunk) error { return nil },
+			)
+		}(i)
+	}
+	for range 2 {
+		require.NoError(t, <-errCh)
+	}
 }
 
 func TestRegistry_OnChunkCountsOnlySuccess(t *testing.T) {

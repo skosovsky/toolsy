@@ -98,7 +98,6 @@ func TestRunSuccess(t *testing.T) {
 		Code:     "print(1)",
 		Env:      map[string]string{"MODE": "ci"},
 		Files:    map[string][]byte{"data.txt": []byte("payload")},
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -118,7 +117,6 @@ func TestRunReturnsNonZeroExitAsResult(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "bash",
 		Code:     "exit 4",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 4, res.ExitCode)
@@ -132,7 +130,6 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "ruby",
 		Code:     "puts 1",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
@@ -261,7 +258,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 				Language: "python",
 				Code:     "print(1)",
 				Files:    map[string][]byte{name: []byte("collision")},
-				Timeout:  time.Second,
 			})
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -275,10 +271,11 @@ func TestRunReturnsTimeoutAndKillsSession(t *testing.T) {
 	sb, err := New(&fakeClient{session: session})
 	require.NoError(t, err)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
-		Timeout:  20 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -293,7 +290,6 @@ func TestRunWrapsClientFailures(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -305,10 +301,11 @@ func TestRunReturnsTimeoutWhenKillBlocks(t *testing.T) {
 	require.NoError(t, err)
 
 	start := time.Now()
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
-		Timeout:  10 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -331,7 +328,6 @@ func TestRunReturnsTimeoutWhenFileUploadTimesOut(t *testing.T) {
 		Language: "python",
 		Code:     "print(1)",
 		Files:    map[string][]byte{"data.txt": []byte("payload")},
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -350,7 +346,6 @@ func TestRunReturnsTimeoutWhenScriptUploadTimesOut(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -374,7 +369,6 @@ func TestRunDurationExcludesProvisioningAndUpload(t *testing.T) {
 		Language: "python",
 		Code:     "print(1)",
 		Files:    map[string][]byte{"data.txt": []byte("payload")},
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Greater(t, res.Duration, 20*time.Millisecond)

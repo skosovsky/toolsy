@@ -137,13 +137,6 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	runCtx := ctx
-	cancel := func() {}
-	if req.Timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
-
 	workspace, archive, err := s.materializeWorkspace(req, runtime)
 	if err != nil {
 		return exectool.RunResult{}, err
@@ -158,9 +151,9 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	cfg.WorkingDir = containerWorkspace
 	cfg.Env = encodeEnv(req.Env)
 
-	created, err := s.client.ContainerCreate(runCtx, &cfg, hostConfig(s.networkDisabled, s.memoryLimit), nil, nil, "")
+	created, err := s.client.ContainerCreate(ctx, &cfg, hostConfig(s.networkDisabled, s.memoryLimit), nil, nil, "")
 	if err != nil {
-		return exectool.RunResult{}, classifySetupError(runCtx, err, "create container")
+		return exectool.RunResult{}, classifySetupError(ctx, err, "create container")
 	}
 
 	defer func() {
@@ -173,20 +166,20 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 
 	var copyOpts container.CopyToContainerOptions
 	if err = s.client.CopyToContainer(
-		runCtx,
+		ctx,
 		created.ID,
 		containerWorkspace,
 		bytes.NewReader(archive),
 		copyOpts,
 	); err != nil {
-		return exectool.RunResult{}, classifySetupError(runCtx, err, "copy workspace")
+		return exectool.RunResult{}, classifySetupError(ctx, err, "copy workspace")
 	}
 	var startOpts container.StartOptions
-	if err = s.client.ContainerStart(runCtx, created.ID, startOpts); err != nil {
-		return exectool.RunResult{}, classifySetupError(runCtx, err, "start container")
+	if err = s.client.ContainerStart(ctx, created.ID, startOpts); err != nil {
+		return exectool.RunResult{}, classifySetupError(ctx, err, "start container")
 	}
 
-	exitCode, duration, err := s.waitForContainer(runCtx, created.ID)
+	exitCode, duration, err := s.waitForContainer(ctx, created.ID)
 	if err != nil {
 		return exectool.RunResult{}, err
 	}

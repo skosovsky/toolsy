@@ -254,7 +254,7 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
-func TestAsAsyncTool_RegistryHoldsSlotUntilBackgroundDone(t *testing.T) {
+func TestAsAsyncTool_MultipleAcceptedCallsDoNotBlockRegistry(t *testing.T) {
 	type A struct{}
 	type R struct{}
 	block := make(chan struct{})
@@ -269,9 +269,7 @@ func TestAsAsyncTool_RegistryHoldsSlotUntilBackgroundDone(t *testing.T) {
 	require.NoError(t, err)
 
 	asyncTool := toolsy.AsAsyncTool(base)
-	reg, err := toolsy.NewRegistryBuilder(
-		toolsy.WithMaxConcurrency(1),
-	).Add(asyncTool).Build()
+	reg, err := toolsy.NewRegistryBuilder().Add(asyncTool).Build()
 	require.NoError(t, err)
 
 	err = reg.Execute(
@@ -281,14 +279,12 @@ func TestAsAsyncTool_RegistryHoldsSlotUntilBackgroundDone(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
 	err = reg.Execute(
-		ctx,
+		context.Background(),
 		toolsy.ToolCall{ToolName: "slow_async", Input: toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(toolsy.Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, toolsy.ErrTimeout)
+	require.NoError(t, err)
 
 	close(block)
 }

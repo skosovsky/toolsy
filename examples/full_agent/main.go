@@ -8,14 +8,8 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/skosovsky/toolsy"
-)
-
-const (
-	exampleDefaultTimeout = 5 * time.Second
-	exampleMaxConcurrency = 4
 )
 
 func main() {
@@ -23,10 +17,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("build tools: %v", err)
 	}
-	reg, err := toolsy.NewRegistryBuilder(
-		toolsy.WithDefaultTimeout(exampleDefaultTimeout),
-		toolsy.WithMaxConcurrency(exampleMaxConcurrency),
-	).Use(toolsy.WithLogging(slog.Default())).Add(add, mul).Build()
+	reg, err := toolsy.NewRegistryBuilder().
+		Use(toolsy.WithLogging(slog.Default())).Add(add, mul).Build()
 	if err != nil {
 		log.Fatalf("build registry: %v", err)
 	}

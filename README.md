@@ -78,12 +78,13 @@ func main() {
 
 ## Registry setup
 
+Timeouts, retries, and concurrency limits are **not** configured on the registry.
+Apply them outside `toolsy` (for example with [`github.com/skosovsky/routery`](https://github.com/skosovsky/routery)) by wrapping tool execution; see `examples/resiliency/main.go`.
+
+The registry recovers panics from tools by default; avoid `WithRecovery()` in `Use()` (it runs before the registry hook and is deprecated for registry stacks).
+
 ```go
-reg, err := toolsy.NewRegistryBuilder(
-	toolsy.WithDefaultTimeout(5*time.Second),
-	toolsy.WithMaxConcurrency(8),
-).Use(
-	toolsy.WithRecovery(),
+reg, err := toolsy.NewRegistryBuilder().Use(
 	toolsy.WithLogging(slog.Default()),
 ).Add(
 	toolA, toolB,
@@ -97,7 +98,7 @@ The built registry is read-only for runtime calls (`Execute`, `ExecuteIter`, `Ex
 `ToolManifest` contains:
 
 - `Name`, `Description`, `Parameters`
-- `Timeout`, `Tags`, `Version`
+- `Tags`, `Version`
 - `Metadata map[string]any`
 
 Use metadata keys for orchestrator policy:
@@ -222,7 +223,6 @@ reg, err := toolsy.NewRegistryBuilder().
 	Use(
 		toolsy.WithTruncation(8000),
 		toolsy.WithErrorFormatter(),
-		toolsy.WithIdempotentRetry(),
 		toolsy.WithBudget(),
 	).
 	Add(tools...).
@@ -232,8 +232,7 @@ reg, err := toolsy.NewRegistryBuilder().
 Notes:
 
 - `WithTruncation` truncates `text/plain` and `text/markdown` by default; `application/json` truncation is opt-in via `WithTruncationIncludeJSON(true)`.
-- `WithBudget` is inside `WithIdempotentRetry`, so budget checks run before every physical retry attempt.
-- `WithIdempotentRetry` retries only tools with `Metadata["read_only"] == true` and stops retrying after the first successfully delivered chunk.
+- Transient retries, timeouts, and bulkheads belong outside `toolsy` (for example `github.com/skosovsky/routery` wrapping tool execution). See `examples/resiliency/main.go`.
 - `WithErrorFormatter` may convert terminal errors into `Chunk{IsError: true}` and then return `nil` (soft error).
 - `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxStepsExceeded`, shutdown/validator failures) remain hard errors.
 - If you need to classify step success/failure in an orchestrator using `SessionTrack`, use `Chunk.IsError` as the failure signal; `SessionTrack` counts executions, not outcome status.
@@ -267,7 +266,17 @@ Yield errors are converted to `ErrStreamAborted`.
 
 Use `AsAsyncTool(base, WithOnComplete(...))` for fire-and-forget execution with immediate accepted result (`AsyncAccepted` JSON payload in first result chunk).
 
-When async tool is executed via `Registry`, background jobs are tracked by registry shutdown and concurrency controls.
+When async tool is executed via `Registry`, background jobs are tracked so `Shutdown` can wait for them to finish.
+
+### Note on resiliency with async tools
+
+Background execution uses `context.WithoutCancel` on the parent context: cancellation and deadlines from the caller (e.g. a short HTTP request from the LLM) do **not** propagate to the background goroutine, while `context.Value` (tracing, loggers) still does.
+
+Implications for external executors such as [`routery.Timeout`](https://github.com/skosovsky/routery):
+
+- `routery.Timeout(toolsy.AsAsyncTool(tool), d)` limits how long the orchestrator waits for the tool to return the **accepted** response (enqueue is usually fast). It does **not** cap how long the **background** work runs.
+- To cap background work, wrap the **base** tool first, then make it async: `toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), ...)`.
+- If you also need a short limit on the accept phase, compose both: e.g. `routery.Timeout(toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), ...), acceptBudget)`.
 
 ## MCP integration
 
@@ -291,6 +300,13 @@ defer client.Close()
 - Replace `ToolMetadata`-based logic with `tool.Manifest()`.
 - Replace `NewClient + Initialize` in `mcp` with `Connect`.
 - Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
+- `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
+
+## Zero-resiliency core (post v2)
+
+The registry no longer applies default execution timeouts, concurrency limits, built-in retry middleware, or per-tool `WithTimeout` manifest deadlines. Removed APIs include `WithDefaultTimeout`, `WithMaxConcurrency`, `WithTimeoutMiddleware`, `WithIdempotentRetry`, `ToolOption` `WithTimeout`, and `ToolManifest.Timeout`. Use `context` deadlines and wrap execution with [`routery`](https://github.com/skosovsky/routery) (or your own middleware) instead; see `examples/resiliency/main.go`. Sandbox adapters honor only the `context` passed to `Run` (no separate `RunRequest` timeout field); limit `exec_code` runtime via the execution `ctx` or wrappers like `routery.Timeout` around the tool.
+
+gRPC reflection helpers take an injected `grpc.ClientConnInterface` (no dial inside `toolsy`). HTTP toolkits default to `http.DefaultClient` without forced timeouts.
 
 ## Contracts modules
 

@@ -104,7 +104,6 @@ func TestRunSuccess(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -125,7 +124,6 @@ func TestRunReturnsNonZeroExitAsResult(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "bash",
 		Code:     "exit 3",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 3, res.ExitCode)
@@ -139,7 +137,6 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "ruby",
 		Code:     "puts 1",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
@@ -164,7 +161,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 				Language: "python",
 				Code:     "print(1)",
 				Files:    map[string][]byte{name: []byte("collision")},
-				Timeout:  time.Second,
 			})
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -179,10 +175,11 @@ func TestRunKillsContainerOnTimeout(t *testing.T) {
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
-		Timeout:  20 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -195,10 +192,11 @@ func TestRunMapsErrChTimeoutToErrTimeout(t *testing.T) {
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
-		Timeout:  20 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -226,10 +224,11 @@ func TestRunReturnsTimeoutDuringSetup(t *testing.T) {
 			sb, err := New(WithClient(client))
 			require.NoError(t, err)
 
-			_, err = sb.Run(context.Background(), exectool.RunRequest{
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+			defer cancel()
+			_, err = sb.Run(ctx, exectool.RunRequest{
 				Language: "python",
 				Code:     "print(1)",
-				Timeout:  20 * time.Millisecond,
 			})
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -254,7 +253,6 @@ func TestRunCreatesCleanupTimeoutAtRemoveTime(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "hello", res.Stdout)
@@ -278,7 +276,6 @@ func TestRunCollectsLogsAfterRunContextExpires(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  20 * time.Millisecond,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -300,7 +297,6 @@ func TestRunDurationExcludesLogCollection(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Greater(t, res.Duration, 20*time.Millisecond)
@@ -323,7 +319,6 @@ func TestNewAppliesImageMappingAndResourceOptions(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "python:3.12-alpine", client.createdConfig.Image)

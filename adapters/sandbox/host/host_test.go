@@ -61,8 +61,7 @@ func TestNewCanonicalizesScriptName(t *testing.T) {
 			"GO_WANT_HELPER_PROCESS": "1",
 			"TOOLSY_ENV":             "present",
 		},
-		Files:   map[string][]byte{"data.txt": []byte("hello")},
-		Timeout: 5 * time.Second,
+		Files: map[string][]byte{"data.txt": []byte("hello")},
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -86,8 +85,7 @@ func TestNewCanonicalizesCommand(t *testing.T) {
 			"GO_WANT_HELPER_PROCESS": "1",
 			"TOOLSY_ENV":             "present",
 		},
-		Files:   map[string][]byte{"data.txt": []byte("hello")},
-		Timeout: 5 * time.Second,
+		Files: map[string][]byte{"data.txt": []byte("hello")},
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -106,8 +104,7 @@ func TestRunSuccessWithEnvAndFiles(t *testing.T) {
 			"GO_WANT_HELPER_PROCESS": "1",
 			"TOOLSY_ENV":             "present",
 		},
-		Files:   map[string][]byte{"data.txt": []byte("hello")},
-		Timeout: 5 * time.Second,
+		Files: map[string][]byte{"data.txt": []byte("hello")},
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -123,7 +120,6 @@ func TestRunReturnsNonZeroExitAsResult(t *testing.T) {
 		Language: "helper",
 		Code:     "fail",
 		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-		Timeout:  5 * time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 7, res.ExitCode)
@@ -140,7 +136,6 @@ func TestRunRejectsPathTraversal(t *testing.T) {
 		Code:     "noop",
 		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
 		Files:    map[string][]byte{"../secret.txt": []byte("x")},
-		Timeout:  5 * time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -164,7 +159,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 				Language: "helper",
 				Code:     "noop",
 				Files:    map[string][]byte{name: []byte("user data")},
-				Timeout:  time.Second,
 			})
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -176,11 +170,12 @@ func TestRunReturnsTimeout(t *testing.T) {
 	sb, err := New(WithRuntime("helper", helperRuntime()))
 	require.NoError(t, err)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "helper",
 		Code:     "sleep",
 		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-		Timeout:  50 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -198,7 +193,6 @@ func TestRunCleansWorkspace(t *testing.T) {
 		Language: "helper",
 		Code:     "noop",
 		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
-		Timeout:  5 * time.Second,
 	})
 	require.NoError(t, err)
 
@@ -214,7 +208,6 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "print(1)",
-		Timeout:  5 * time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)

@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -153,37 +154,8 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 	}
 }
 
-// fetchRemoteToTemp downloads a remote document to a temp file and returns path and detected format.
-func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, string, error) {
-	if err := validateRemoteURL(ctx, rawURL, o.allowPrivateIPs); err != nil {
-		return "", "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return "", "", fmt.Errorf("toolkit/document: request: %w", err)
-	}
-	client := *o.httpClient
-	client.CheckRedirect = func(redirectReq *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return &toolsy.ClientError{
-				Reason:    "too many redirects",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
-		}
-		if verr := validateRemoteURL(redirectReq.Context(), redirectReq.URL.String(), false); verr != nil {
-			return verr
-		}
-		return nil
-	}
-	resp, err := client.Do(req) // #nosec G704 -- URL validated; redirects validated in CheckRedirect
-	if err != nil {
-		if toolsy.IsClientError(err) {
-			return "", "", err
-		}
-		return "", "", fmt.Errorf("toolkit/document: fetch: %w", err)
-	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+// copyRemoteResponseToTemp writes resp.Body to a temp file (caller must defer resp.Body.Close).
+func copyRemoteResponseToTemp(resp *http.Response, rawURL string, o *options) (string, string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", "", &toolsy.ClientError{
 			Reason:    "remote file fetch failed: " + resp.Status,
@@ -195,16 +167,16 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	if format == "" {
 		format = formatFromContentType(resp.Header.Get("Content-Type"))
 	}
-	tmp, err := os.CreateTemp("", "document-*")
-	if err != nil {
-		return "", "", err
+	tmp, createErr := os.CreateTemp("", "document-*")
+	if createErr != nil {
+		return "", "", createErr
 	}
 	tmpPath := tmp.Name()
-	n, err := io.Copy(tmp, io.LimitReader(resp.Body, int64(o.maxBytes)+1))
-	if err != nil {
+	n, copyErr := io.Copy(tmp, io.LimitReader(resp.Body, int64(o.maxBytes)+1))
+	if copyErr != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-		return "", "", err
+		return "", "", copyErr
 	}
 	if n > int64(o.maxBytes) {
 		_ = tmp.Close()
@@ -220,6 +192,62 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 		return "", "", closeErr
 	}
 	return tmpPath, format, nil
+}
+
+// fetchRemoteToTemp downloads a remote document to a temp file and returns path and detected format.
+func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, string, error) {
+	if err := validateRemoteURL(ctx, rawURL, o.allowPrivateIPs); err != nil {
+		return "", "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("toolkit/document: request: %w", err)
+	}
+	hc := o.httpClient
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	checkRedirect := func(redirectReq *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return &toolsy.ClientError{
+				Reason:    "too many redirects",
+				Retryable: false,
+				Err:       toolsy.ErrValidation,
+			}
+		}
+		if verr := validateRemoteURL(redirectReq.Context(), redirectReq.URL.String(), false); verr != nil {
+			return verr
+		}
+		return nil
+	}
+	std, isConcreteClient := hc.(*http.Client)
+	if !isConcreteClient {
+		if !o.allowPrivateIPs {
+			return "", "", errors.New(
+				"toolkit/document: default SSRF protection requires *http.Client for URL fetch; pass WithHTTPClient(&http.Client{...}) or use WithAllowPrivateIPs(true) for tests only",
+			)
+		}
+		resp, doErr := hc.Do(req) // #nosec G704
+		if doErr != nil {
+			if toolsy.IsClientError(doErr) {
+				return "", "", doErr
+			}
+			return "", "", fmt.Errorf("toolkit/document: fetch: %w", doErr)
+		}
+		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+		return copyRemoteResponseToTemp(resp, rawURL, o)
+	}
+	client := *std
+	client.CheckRedirect = checkRedirect
+	resp, doErr := client.Do(req) // #nosec G704 -- URL validated; redirects validated in CheckRedirect
+	if doErr != nil {
+		if toolsy.IsClientError(doErr) {
+			return "", "", doErr
+		}
+		return "", "", fmt.Errorf("toolkit/document: fetch: %w", doErr)
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return copyRemoteResponseToTemp(resp, rawURL, o)
 }
 
 func formatFromURL(u string) string {

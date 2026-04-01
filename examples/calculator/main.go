@@ -7,12 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"github.com/skosovsky/toolsy"
 )
-
-const exampleRegistryTimeout = 5 * time.Second
 
 func main() {
 	type CalcArgs struct {
@@ -48,9 +45,7 @@ func main() {
 		log.Fatalf("NewTool sub: %v", err)
 	}
 
-	reg, err := toolsy.NewRegistryBuilder(
-		toolsy.WithDefaultTimeout(exampleRegistryTimeout),
-	).Add(add, sub).Build()
+	reg, err := toolsy.NewRegistryBuilder().Add(add, sub).Build()
 	if err != nil {
 		log.Fatalf("registry build: %v", err)
 	}

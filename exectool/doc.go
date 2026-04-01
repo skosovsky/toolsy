@@ -3,8 +3,9 @@
 //
 // The generic tool created by New exposes one tool, typically named
 // "exec_code", with a dynamic JSON Schema derived from the sandbox's supported
-// languages. The timeout is infrastructure-controlled and configured by the Go
-// developer; it is never exposed to the LLM-facing schema.
+// languages. Execution time limits come only from the [context.Context] passed to
+// [Sandbox.Run] (e.g. caller deadlines or wrappers such as routery.Timeout).
+// Time limits are never exposed to the LLM-facing schema.
 //
 // Low-level sandbox adapters exchange only strings, bytes, and durations via
 // RunRequest and RunResult.

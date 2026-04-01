@@ -5,11 +5,16 @@ import (
 	"strings"
 )
 
+// HTTPClient is the minimal HTTP surface used by httptool. [*http.Client] and [http.DefaultClient] satisfy it.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // Option configures AsTools (client, allowed domains, headers, limits, names).
 type Option func(*options)
 
 type options struct {
-	httpClient      *http.Client
+	httpClient      HTTPClient
 	allowedDomains  []string
 	headers         map[string]string
 	maxResponseBody int
@@ -44,7 +49,7 @@ func applyDefaults(o *options) {
 }
 
 // WithHTTPClient sets the HTTP client (e.g. for custom DialContext to mitigate DNS rebinding).
-func WithHTTPClient(c *http.Client) Option {
+func WithHTTPClient(c HTTPClient) Option {
 	return func(o *options) {
 		o.httpClient = c
 	}

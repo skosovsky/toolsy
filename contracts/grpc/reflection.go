@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -19,50 +18,29 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-// ConnectAndReflect dials the gRPC server, uses reflection to discover services/methods, and returns one toolsy.Tool per RPC method.
-func ConnectAndReflect(ctx context.Context, target string, opts Options) ([]toolsy.Tool, error) {
-	dialOpts := dialOptsOrDefault(opts)
-	cc, stream, err := openReflectionStream(ctx, target, dialOpts)
+// Reflect uses gRPC server reflection on an existing client connection to discover services/methods
+// and returns one toolsy.Tool per RPC method. The caller must create cc (e.g. grpc.NewClient) and
+// is responsible for closing it. cc must not be nil.
+func Reflect(ctx context.Context, cc grpc.ClientConnInterface, opts Options) ([]toolsy.Tool, error) {
+	if cc == nil {
+		return nil, errors.New("grpc: ClientConn is nil")
+	}
+	refClient := reflectionpb.NewServerReflectionClient(cc)
+	stream, err := refClient.ServerReflectionInfo(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("grpc: reflection stream: %w", err)
 	}
 	svcNames, files, err := listServicesAndBuildFiles(stream)
 	if err != nil {
-		_ = cc.Close()
-		return nil, fmt.Errorf("grpc: list services: %w", err)
+		_ = stream.CloseSend()
+		return nil, err
 	}
 	_ = stream.CloseSend()
 	return buildToolsFromRegistry(cc, svcNames, files, opts)
 }
 
-func dialOptsOrDefault(opts Options) []grpc.DialOption {
-	dialOpts := opts.DialOptions
-	if len(dialOpts) == 0 {
-		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	}
-	return dialOpts
-}
-
-func openReflectionStream(
-	ctx context.Context,
-	target string,
-	dialOpts []grpc.DialOption,
-) (*grpc.ClientConn, reflectionpb.ServerReflection_ServerReflectionInfoClient, error) {
-	cc, err := grpc.NewClient(target, dialOpts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("grpc: dial: %w", err)
-	}
-	refClient := reflectionpb.NewServerReflectionClient(cc)
-	stream, err := refClient.ServerReflectionInfo(ctx)
-	if err != nil {
-		_ = cc.Close()
-		return nil, nil, fmt.Errorf("grpc: reflection stream: %w", err)
-	}
-	return cc, stream, nil
-}
-
 func buildToolsFromRegistry(
-	cc *grpc.ClientConn,
+	cc grpc.ClientConnInterface,
 	svcNames []string,
 	files *protoregistry.Files,
 	opts Options,
@@ -96,7 +74,6 @@ func buildToolsFromRegistry(
 			inputDesc := m.Input()
 			schemaBytes, err := descriptorToJSONSchema(inputDesc)
 			if err != nil {
-				_ = cc.Close()
 				return nil, fmt.Errorf("grpc: schema %s/%s: %w", svcName, m.Name(), err)
 			}
 			descStr := "gRPC " + svcName + "/" + string(m.Name())
@@ -112,14 +89,13 @@ func buildToolsFromRegistry(
 				},
 			)
 			if err != nil {
-				_ = cc.Close()
 				return nil, fmt.Errorf("grpc: tool %s: %w", name, err)
 			}
 			tools = append(tools, tool)
 		}
 	}
 	if len(tools) == 0 {
-		_ = cc.Close()
+		return nil, errors.New("grpc: reflection: no tools generated (check service allowlist and reflection)")
 	}
 	return tools, nil
 }

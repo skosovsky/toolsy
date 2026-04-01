@@ -15,7 +15,6 @@ func TestRunPrintsToStdout(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print("hello")`,
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -28,7 +27,6 @@ func TestRunReadsInMemoryFiles(t *testing.T) {
 		Language: "starlark",
 		Code:     `print(fs.read("data.txt"))`,
 		Files:    map[string][]byte{"data.txt": []byte("world")},
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -41,7 +39,6 @@ func TestRunNormalizesFileLookups(t *testing.T) {
 		Language: "starlark",
 		Code:     `print(fs.read("dir/../data.txt"))`,
 		Files:    map[string][]byte{"data.txt": []byte("world")},
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -54,7 +51,6 @@ func TestRunExposesEnv(t *testing.T) {
 		Language: "starlark",
 		Code:     `print(env["NAME"])`,
 		Env:      map[string]string{"NAME": "toolsy"},
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -66,7 +62,6 @@ func TestRunReturnsScriptErrorsInStderr(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print(fs.read("missing.txt"))`,
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, res.ExitCode)
@@ -75,13 +70,14 @@ func TestRunReturnsScriptErrorsInStderr(t *testing.T) {
 
 func TestRunReturnsTimeout(t *testing.T) {
 	sb := New()
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+	_, err := sb.Run(ctx, exectool.RunRequest{
 		Language: "starlark",
 		Code: `def run():
     for i in range(1000000000):
         pass
 run()`,
-		Timeout: 5 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -93,7 +89,6 @@ func TestRunRejectsInvalidInputFilePaths(t *testing.T) {
 		Language: "starlark",
 		Code:     `print("hello")`,
 		Files:    map[string][]byte{"../secret.txt": []byte("nope")},
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -108,7 +103,6 @@ func TestRunRejectsCollisionsAfterNormalization(t *testing.T) {
 			"data.txt":        []byte("one"),
 			"dir/../data.txt": []byte("two"),
 		},
-		Timeout: time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -116,7 +110,7 @@ func TestRunRejectsCollisionsAfterNormalization(t *testing.T) {
 
 func TestExecToolSchemaExposesOnlyStarlark(t *testing.T) {
 	sb := New()
-	tool, err := exectool.New(sb, exectool.WithTimeout(time.Second))
+	tool, err := exectool.New(sb)
 	require.NoError(t, err)
 
 	params := tool.Manifest().Parameters
@@ -130,7 +124,6 @@ func TestRunRejectsPythonAlias(t *testing.T) {
 	_, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     `print("x")`,
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
@@ -141,7 +134,6 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	_, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "bash",
 		Code:     `print("x")`,
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)

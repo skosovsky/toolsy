@@ -4,16 +4,21 @@ import "net/http"
 
 const defaultMaxResponseBytes = 512 * 1024
 
+// HTTPClient is the minimal HTTP surface used by the OpenAPI executor. [*http.Client] and [http.DefaultClient] satisfy it.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // Options configures the OpenAPI parser and executor.
 type Options struct {
-	HTTPClient       *http.Client
+	HTTPClient       HTTPClient
 	BaseURL          string
 	AllowedTags      []string
 	AllowedMethods   []string
 	MaxResponseBytes int
 }
 
-func (o *Options) httpClient() *http.Client {
+func (o *Options) httpClient() HTTPClient {
 	if o != nil && o.HTTPClient != nil {
 		return o.HTTPClient
 	}

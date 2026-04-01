@@ -406,38 +406,31 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	runCtx := ctx
-	cancel := func() {}
-	if req.Timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
-
 	canonicalFiles, err := sandboxfs.CanonicalizeFiles(req.Files, runtime.ScriptName)
 	if err != nil {
 		return exectool.RunResult{}, fmt.Errorf("%w: validate files: %w", exectool.ErrSandboxFailure, err)
 	}
 
-	session, err := s.client.CreateSandbox(runCtx)
+	session, err := s.client.CreateSandbox(ctx)
 	if err != nil {
-		return exectool.RunResult{}, classifyControlPlaneError(runCtx, err, "create sandbox")
+		return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "create sandbox")
 	}
 	defer cleanupSession(session)
 
 	for name, data := range canonicalFiles {
-		if err = session.WriteFile(runCtx, workspacePrefix+name, data); err != nil {
-			return exectool.RunResult{}, classifyControlPlaneError(runCtx, err, "write file")
+		if err = session.WriteFile(ctx, workspacePrefix+name, data); err != nil {
+			return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "write file")
 		}
 	}
 
-	if err = session.WriteFile(runCtx, workspacePrefix+runtime.ScriptName, []byte(req.Code)); err != nil {
-		return exectool.RunResult{}, classifyControlPlaneError(runCtx, err, "write script")
+	if err = session.WriteFile(ctx, workspacePrefix+runtime.ScriptName, []byte(req.Code)); err != nil {
+		return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "write script")
 	}
 
 	start := time.Now()
-	result, err := session.StartAndWait(runCtx, runtime.Command, req.Env)
+	result, err := session.StartAndWait(ctx, runtime.Command, req.Env)
 	if err != nil {
-		return exectool.RunResult{}, classifyControlPlaneError(runCtx, err, "start process")
+		return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "start process")
 	}
 
 	return exectool.RunResult{

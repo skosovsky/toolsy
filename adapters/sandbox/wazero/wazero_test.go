@@ -34,7 +34,6 @@ func TestRunSuccess(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "jq",
 		Code:     "stdout:hello",
-		Timeout:  15 * time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
@@ -49,7 +48,6 @@ func TestRunMountsFilesAndEnv(t *testing.T) {
 		Language: "jq",
 		Code:     "file:data.txt",
 		Files:    map[string][]byte{"data.txt": []byte("payload")},
-		Timeout:  15 * time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "payload", res.Stdout)
@@ -58,7 +56,6 @@ func TestRunMountsFilesAndEnv(t *testing.T) {
 		Language: "jq",
 		Code:     "env:NAME",
 		Env:      map[string]string{"NAME": "toolsy"},
-		Timeout:  15 * time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "toolsy", res.Stdout)
@@ -79,7 +76,6 @@ func TestRunUsesEngineReportedDuration(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "jq",
 		Code:     "noop",
-		Timeout:  time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, "ok", res.Stdout)
@@ -110,7 +106,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 				Language: "jq",
 				Code:     "stdout:hello",
 				Files:    map[string][]byte{name: []byte("collision")},
-				Timeout:  time.Second,
 			})
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrSandboxFailure)
@@ -126,7 +121,6 @@ func TestRunReturnsNonZeroExitAsResult(t *testing.T) {
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "jq",
 		Code:     "exit:5",
-		Timeout:  15 * time.Second,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 5, res.ExitCode)
@@ -137,10 +131,11 @@ func TestRunReturnsTimeout(t *testing.T) {
 	sb, err := NewInterpreter("jq", interpreterWasm)
 	require.NoError(t, err)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "jq",
 		Code:     "sleep",
-		Timeout:  50 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -173,10 +168,11 @@ func TestRunPropagatesEngineTimeoutPath(t *testing.T) {
 		},
 	)
 
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "jq",
 		Code:     "noop",
-		Timeout:  10 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
@@ -189,7 +185,6 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     "stdout:x",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
@@ -207,7 +202,6 @@ func TestRunWrapsEngineFailures(t *testing.T) {
 	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "jq",
 		Code:     "noop",
-		Timeout:  time.Second,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -101,26 +100,6 @@ func TestWithRecovery(t *testing.T) {
 	assert.Contains(t, sysErr.Err.Error(), "panic")
 }
 
-func TestWithTimeoutMiddleware(t *testing.T) {
-	inner := newMiddlewareMinTool(
-		"slow",
-		func(ctx context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			<-ctx.Done()
-			return ctx.Err()
-		},
-	)
-	wrapped := WithTimeoutMiddleware(5 * time.Millisecond)(inner)
-
-	err := wrapped.Execute(
-		context.Background(),
-		RunContext{},
-		ToolInput{ArgsJSON: []byte(`{}`)},
-		func(Chunk) error { return nil },
-	)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-}
-
 func TestRegistryBuilderUse(t *testing.T) {
 	type A struct {
 		X int `json:"x"`
@@ -136,7 +115,7 @@ func TestRegistryBuilderUse(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	reg, err := NewRegistryBuilder().Use(WithRecovery(), WithLogging(logger)).Add(tool).Build()
+	reg, err := NewRegistryBuilder().Use(WithLogging(logger)).Add(tool).Build()
 	require.NoError(t, err)
 
 	args, _ := json.Marshal(A{X: 2})
@@ -149,19 +128,6 @@ func TestRegistryBuilderUse(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, r.Y)
 	assert.Equal(t, 1, strings.Count(buf.String(), "tool start"))
-}
-
-func TestTimeoutMiddlewareManifestOverride(t *testing.T) {
-	inner := newMiddlewareMinTool(
-		"meta",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			return nil
-		},
-	)
-	inner.manifest.Timeout = 100 * time.Millisecond
-
-	wrapped := WithTimeoutMiddleware(2 * time.Second)(inner)
-	assert.Equal(t, 2*time.Second, wrapped.Manifest().Timeout)
 }
 
 func TestMiddlewareShortCircuitSkipsInnerTool(t *testing.T) {

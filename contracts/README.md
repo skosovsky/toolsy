@@ -6,7 +6,7 @@ Contract-based translators that turn external API specs into [toolsy](..) tools.
 |-------------|---------------------------|--------------------------|---------------------|
 | **openapi/**  | `ParseURL(ctx, specURL, opts)` | OpenAPI 3.x spec URL     | `[]toolsy.Tool` (one per operation) |
 | **graphql/**  | `Introspect(ctx, endpoint, opts)` | GraphQL endpoint URL     | `[]toolsy.Tool` (one per Query/Mutation field) |
-| **grpc/**     | `ConnectAndReflect(ctx, target, opts)` | gRPC server address      | `[]toolsy.Tool` (one per RPC method) |
+| **grpc/**     | `Reflect(ctx, cc, opts)` | Existing `grpc.ClientConnInterface` (you dial) | `[]toolsy.Tool` (one per RPC method) |
 
 Common behavior:
 
@@ -39,7 +39,8 @@ Add each tool to setup builder: `builder.Add(tools...)` and then `reg, err := bu
 ## grpc/
 
 - **Requires:** `google.golang.org/grpc`, `google.golang.org/protobuf` (reflection: `protoreflect`, `protodesc`, `protoregistry`; dynamic messages: `dynamicpb`; JSON: `protojson`). No third-party reflection libraries.
-- **Options:** `DialOptions`, `Services` (allowlist of full service names; empty = all), `MaxResponseBytes`
-- **Reflection:** Uses gRPC Server Reflection (v1alpha) over the official stream API: `ListServices` then `FileContainingSymbol` per service; file descriptors are merged and resolved via `protodesc.NewFiles`. No `.proto` files needed at runtime.
-- **Invocation:** RPC calls use `grpc.ClientConn.Invoke` with `dynamicpb.NewMessage` and `protojson` (request: `UnmarshalOptions{DiscardUnknown: true}` for LLM output; response: `Marshal`).
-- **Connection lifecycle:** The connection is closed on reflection error or when no tools are returned (`len(tools) == 0`). Otherwise it is kept open for the lifetime of the returned tools and released when they are no longer used.
+- **Options:** `Services` (allowlist of full service names; empty = all), `MaxResponseBytes`
+- **Dialing:** Call `grpc.NewClient` (or your stack) yourself; pass the connection to `Reflect`. Retries, timeouts, and TLS live outside this package.
+- **Reflection:** Uses gRPC Server Reflection over the official stream API: `ListServices` then `FileContainingSymbol` per service; file descriptors are merged and resolved via `protodesc.NewFiles`. No `.proto` files needed at runtime.
+- **Invocation:** RPC calls use `ClientConnInterface.Invoke` with `dynamicpb.NewMessage` and `protojson` (request: `UnmarshalOptions{DiscardUnknown: true}` for LLM output; response: `Marshal`).
+- **Connection lifecycle:** The caller owns `cc`; this package does not close it.

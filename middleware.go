@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// Middleware wraps a Tool with cross-cutting behavior (logging, recovery, timeout).
+// Middleware wraps a Tool with cross-cutting behavior (logging, recovery).
 type Middleware func(Tool) Tool
 
 // WithLogging returns a middleware that logs start, end, duration, and errors.
@@ -21,18 +21,14 @@ func WithLogging(logger *slog.Logger) Middleware {
 }
 
 // WithRecovery returns a middleware that recovers panics and returns SystemError.
+//
+// Deprecated: [Registry] is built with panic recovery enabled by default ([NewRegistryBuilder] sets
+// recoverPanics). Using WithRecovery in Use() recovers panics before the registry's recovery and
+// onAfter hooks can observe them. Prefer relying on registry recovery only; this middleware remains
+// for rare direct Tool.Execute paths without a registry.
 func WithRecovery() Middleware {
 	return func(next Tool) Tool {
 		return &recoveryTool{toolBase{next: next}}
-	}
-}
-
-// WithTimeoutMiddleware returns a middleware that enforces a per-tool timeout (overrides registry default for this tool).
-// Named with "Middleware" suffix to avoid collision with ToolOption WithTimeout. When both registry default timeout
-// and this middleware apply, the effective timeout is the minimum of the two (inner context cancels first).
-func WithTimeoutMiddleware(d time.Duration) Middleware {
-	return func(next Tool) Tool {
-		return &timeoutTool{toolBase: toolBase{next: next}, timeout: d}
 	}
 }
 
@@ -110,27 +106,4 @@ func (r *recoveryTool) Execute(
 		}
 	}()
 	return r.next.Execute(ctx, run, input, yield)
-}
-
-type timeoutTool struct {
-	toolBase
-
-	timeout time.Duration
-}
-
-func (t *timeoutTool) Manifest() ToolManifest {
-	manifest := t.toolBase.Manifest()
-	if t.timeout > 0 {
-		manifest.Timeout = t.timeout
-	}
-	return manifest
-}
-
-func (t *timeoutTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
-	if t.timeout <= 0 {
-		return t.next.Execute(ctx, run, input, yield)
-	}
-	ctx, cancel := context.WithTimeout(ctx, t.timeout)
-	defer cancel()
-	return t.next.Execute(ctx, run, input, yield)
 }

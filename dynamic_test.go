@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -168,7 +167,6 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
-		WithTimeout(30*time.Second),
 		WithTags("a", "b"),
 		WithVersion("1.0"),
 		WithDangerous(),
@@ -176,7 +174,6 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 	require.NoError(t, err)
 
 	m := tool.Manifest()
-	assert.Equal(t, 30*time.Second, m.Timeout)
 	assert.Equal(t, []string{"a", "b"}, m.Tags)
 	assert.Equal(t, "1.0", m.Version)
 	assert.Equal(t, true, m.Metadata["dangerous"])

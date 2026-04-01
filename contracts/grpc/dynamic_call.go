@@ -17,7 +17,7 @@ const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 
 func invokeRPC(
 	ctx context.Context,
-	cc *grpc.ClientConn,
+	cc grpc.ClientConnInterface,
 	method protoreflect.MethodDescriptor,
 	argsJSON []byte,
 	opts *Options,

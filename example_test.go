@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"time"
 )
 
 func ExampleRegistryBuilder_Add() {
@@ -18,11 +17,11 @@ func ExampleRegistryBuilder_Add() {
 	}
 	tool, err := NewTool("with_opts", "Tool with options", func(_ context.Context, _ RunContext, a Args) (Out, error) {
 		return Out{Y: a.X * 2}, nil
-	}, WithTimeout(2*time.Second), WithStrict())
+	}, WithStrict())
 	if err != nil {
 		return
 	}
-	reg, err := NewRegistryBuilder(WithDefaultTimeout(5 * time.Second)).Add(tool).Build()
+	reg, err := NewRegistryBuilder().Add(tool).Build()
 	if err != nil {
 		return
 	}
@@ -78,9 +77,8 @@ func ExampleRegistryBuilder_Use() {
 	if err != nil {
 		return
 	}
-	reg, err := NewRegistryBuilder(WithDefaultTimeout(5*time.Second)).Use(
+	reg, err := NewRegistryBuilder().Use(
 		WithLogging(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))),
-		WithTimeoutMiddleware(2*time.Second),
 	).Add(tool).Build()
 	if err != nil {
 		return

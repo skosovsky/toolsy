@@ -4,11 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// quietConnectLogger returns a [ClientOption] that discards client logs during Connect tests.
+func quietConnectLogger() ClientOption {
+	return WithClientLogger(slog.New(slog.DiscardHandler))
+}
 
 func mustInitializeResultJSON(t *testing.T) []byte {
 	t.Helper()
@@ -131,7 +137,10 @@ func TestConnect_EagerHandshakeSuccess(t *testing.T) {
 	}
 	transport := base
 
-	client, err := Connect(context.Background(), transport, WithClientRoots([]string{"/workspace"}))
+	client, err := Connect(context.Background(), transport,
+		quietConnectLogger(),
+		WithClientRoots([]string{"/workspace"}),
+	)
 	require.NoError(t, err)
 	require.NotNil(t, client)
 	require.Equal(t, 1, base.startCalls)
@@ -157,7 +166,7 @@ func TestConnect_StartFailureClosesTransport(t *testing.T) {
 	}
 	transport := base
 
-	client, err := Connect(context.Background(), transport)
+	client, err := Connect(context.Background(), transport, quietConnectLogger())
 	require.Error(t, err)
 	require.Nil(t, client)
 	require.Equal(t, 1, base.closeCalls)
@@ -169,7 +178,7 @@ func TestConnect_InitializeCallFailureClosesTransport(t *testing.T) {
 	}
 	transport := base
 
-	client, err := Connect(context.Background(), transport)
+	client, err := Connect(context.Background(), transport, quietConnectLogger())
 	require.Error(t, err)
 	require.Nil(t, client)
 	require.Equal(t, MethodInitialize, base.calledMethod)
@@ -182,7 +191,7 @@ func TestConnect_InitializeParseFailureClosesTransport(t *testing.T) {
 	}
 	transport := base
 
-	client, err := Connect(context.Background(), transport)
+	client, err := Connect(context.Background(), transport, quietConnectLogger())
 	require.Error(t, err)
 	require.Nil(t, client)
 	require.Contains(t, err.Error(), "parse initialize result")
@@ -196,7 +205,7 @@ func TestConnect_InitializedNotifyFailureReturnsErrorAndClosesTransport(t *testi
 	}
 	transport := base
 
-	client, err := Connect(context.Background(), transport)
+	client, err := Connect(context.Background(), transport, quietConnectLogger())
 	require.Error(t, err)
 	require.Nil(t, client)
 	require.Contains(t, err.Error(), "notifications/initialized")

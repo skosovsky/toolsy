@@ -22,14 +22,15 @@ func TestRunKillsProcessGroupOnTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
-	_, err = sb.Run(context.Background(), exectool.RunRequest{
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "helper",
 		Code:     "spawn-child",
 		Env: map[string]string{
 			"GO_WANT_HELPER_PROCESS": "1",
 			"TOOLSY_CHILD_PID_FILE":  pidFile,
 		},
-		Timeout: 50 * time.Millisecond,
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)

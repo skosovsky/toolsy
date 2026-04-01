@@ -2,15 +2,19 @@ package web
 
 import (
 	"net/http"
-	"time"
 )
+
+// HTTPClient is the minimal HTTP surface used by web scrape. [*http.Client] and [http.DefaultClient] satisfy it.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // Option configures AsTools (page limit, HTTP client, scraper, SSRF options, tool names).
 type Option func(*options)
 
 type options struct {
 	maxPageBytes    int
-	httpClient      *http.Client
+	httpClient      HTTPClient
 	scraper         Scraper
 	allowPrivateIPs bool
 	blockedDomains  []string
@@ -22,14 +26,12 @@ type options struct {
 
 const defaultMaxPageBytes = 2 * 1024 * 1024
 
-const defaultHTTPTimeout = 30 * time.Second
-
 func applyDefaults(o *options) {
 	if o.maxPageBytes <= 0 {
 		o.maxPageBytes = defaultMaxPageBytes
 	}
 	if o.httpClient == nil {
-		o.httpClient = &http.Client{Timeout: defaultHTTPTimeout}
+		o.httpClient = http.DefaultClient
 	}
 	if o.scraper == nil {
 		o.scraper = newHTMLScraper()
@@ -56,7 +58,7 @@ func WithMaxPageBytes(n int) Option {
 }
 
 // WithHTTPClient sets the HTTP client for scraping (e.g. custom timeout or transport).
-func WithHTTPClient(c *http.Client) Option {
+func WithHTTPClient(c HTTPClient) Option {
 	return func(o *options) {
 		o.httpClient = c
 	}

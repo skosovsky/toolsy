@@ -21,7 +21,6 @@ type RunRequest struct {
 	Code     string
 	Env      map[string]string
 	Files    map[string][]byte
-	Timeout  time.Duration
 }
 
 // RunResult contains the observable execution outputs.

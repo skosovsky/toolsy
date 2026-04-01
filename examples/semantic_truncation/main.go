@@ -11,6 +11,8 @@ import (
 	"github.com/skosovsky/toolsy/history"
 )
 
+const demoMaxTokens = 23
+
 type MyMessage struct {
 	Role    string
 	Kind    string
@@ -64,7 +66,7 @@ func main() {
 	out, report, err := history.ApplySemanticTruncation(
 		context.Background(),
 		msgs,
-		23,
+		demoMaxTokens,
 		myCounter{},
 		mySummarizer{},
 		myInspector{},

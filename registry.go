@@ -11,11 +11,6 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	defaultRegistryTimeout   = 5 * time.Second
-	defaultRegistrySemaphore = 10
-)
-
 // RegistryBuilder is mutable setup API that produces an immutable Registry for runtime use.
 type RegistryBuilder struct {
 	tools       []Tool
@@ -26,8 +21,6 @@ type RegistryBuilder struct {
 // NewRegistryBuilder creates a mutable registry builder with defaults and applies options.
 func NewRegistryBuilder(opts ...RegistryOption) *RegistryBuilder {
 	var o registryOptions
-	o.timeout = defaultRegistryTimeout
-	o.maxConcurrency = defaultRegistrySemaphore
 	o.recoverPanics = true
 	for _, opt := range opts {
 		opt(&o)
@@ -79,13 +72,8 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 		}
 		tools[name] = t
 	}
-	var sem chan struct{}
-	if b.opts.maxConcurrency > 0 {
-		sem = make(chan struct{}, b.opts.maxConcurrency)
-	}
 	return &Registry{
 		tools:    tools,
-		sem:      sem,
 		opts:     b.opts,
 		done:     make(chan struct{}),
 		running:  sync.WaitGroup{},
@@ -93,10 +81,9 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 	}, nil
 }
 
-// Registry holds tools and executes them with timeout, semaphore, and optional panic recovery.
+// Registry holds tools and executes them with optional panic recovery.
 type Registry struct {
 	tools   map[string]Tool
-	sem     chan struct{}
 	opts    registryOptions
 	done    chan struct{}
 	running sync.WaitGroup
@@ -127,16 +114,6 @@ func (r *Registry) GetAllTools() []Tool {
 func (r *Registry) GetTool(name string) (Tool, bool) {
 	t, ok := r.tools[name]
 	return t, ok
-}
-
-// effectiveExecuteTimeout is the minimum of registry default and per-tool manifest timeout when both are set.
-func effectiveExecuteTimeout(tool Tool, registryTimeout time.Duration) time.Duration {
-	timeout := registryTimeout
-	toolTimeout := tool.Manifest().Timeout
-	if toolTimeout > 0 && (registryTimeout <= 0 || toolTimeout < registryTimeout) {
-		timeout = toolTimeout
-	}
-	return timeout
 }
 
 // accountDeliveredChunk updates ExecutionSummary after a chunk was successfully yielded to the consumer.
@@ -202,7 +179,7 @@ func (r *Registry) execute(
 	return err
 }
 
-// executeWithSummary runs a single tool call with hooks, semaphore, and optional panic recovery.
+// executeWithSummary runs a single tool call with hooks and optional panic recovery.
 // Named result err is required: after recover() stops a panic, Go does not run the final return
 // statement, so the error must be assigned from a defer (see TestRegistry_Execute_PanicRecovery_OnAfterSummary).
 //
@@ -224,26 +201,11 @@ func (r *Registry) executeWithSummary(
 	}
 	r.running.Add(1)
 
-	// Apply effective timeout before acquireSemaphore so queue wait is within the timeout budget.
-	timeout := effectiveExecuteTimeout(tool, r.opts.timeout)
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
-		defer cancel()
-	}
-
-	if semErr := r.acquireSemaphore(ctx); semErr != nil {
-		r.running.Done()
-		if errors.Is(semErr, context.DeadlineExceeded) {
-			return summary, false, ErrTimeout
-		}
-		return summary, false, semErr
-	}
 	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(func() { r.releaseSemaphore(); r.running.Done() }) }
+	release := func() { releaseOnce.Do(func() { r.running.Done() }) }
 	run := call.Run
 	run.attachments = cloneAttachments(call.Input.Attachments)
-	run.async = newAsyncRuntime(r, timeout)
+	run.async = newAsyncRuntime(r)
 	defer func() {
 		if run.async == nil || !run.async.backgroundStarted.Load() {
 			release()
@@ -331,29 +293,6 @@ func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chu
 		if !consumerStopped && err != nil && !errors.Is(err, context.Canceled) {
 			yield(Chunk{}, err)
 		}
-	}
-}
-
-func (r *Registry) acquireSemaphore(ctx context.Context) error {
-	if r.sem == nil {
-		return nil
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-	select {
-	case r.sem <- struct{}{}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (r *Registry) releaseSemaphore() {
-	if r.sem != nil {
-		<-r.sem
 	}
 }
 

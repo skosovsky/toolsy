@@ -84,13 +84,6 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	runCtx := ctx
-	cancel := func() {}
-	if req.Timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, req.Timeout)
-	}
-	defer cancel()
-
 	workspace, err := os.MkdirTemp(s.tempDirRoot, "toolsy-host-*")
 	if err != nil {
 		return exectool.RunResult{}, fmt.Errorf("%w: create workspace: %w", exectool.ErrSandboxFailure, err)
@@ -113,7 +106,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 
 	args := append(append([]string(nil), runtime.Args...), runtime.ScriptName)
 	// #nosec G204 -- runtime commands are explicit host-sandbox configuration, not LLM-controlled input.
-	cmd := exec.CommandContext(runCtx, runtime.Command, args...)
+	cmd := exec.CommandContext(ctx, runtime.Command, args...)
 	prepareCommand(cmd)
 	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), encodeEnv(req.Env)...)
@@ -128,11 +121,11 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	duration := time.Since(start)
 
 	if err != nil {
-		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return exectool.RunResult{}, exectool.ErrTimeout
 		}
-		if errors.Is(runCtx.Err(), context.Canceled) {
-			return exectool.RunResult{}, runCtx.Err()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return exectool.RunResult{}, ctx.Err()
 		}
 
 		var exitErr *exec.ExitError

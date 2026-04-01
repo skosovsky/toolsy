@@ -151,7 +151,7 @@ func TestWithBudget_AllowErrorReturnsSystemError(t *testing.T) {
 	assert.Contains(t, sysErr.Err.Error(), "budget allow check failed")
 }
 
-func TestMiddlewareStack_BudgetCheckedPerRetryAttemptAndBatchErrorNotDuplicated(t *testing.T) {
+func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicated(t *testing.T) {
 	var attempts atomic.Int64
 	tool := newMiddlewareMinTool(
 		"readonly_network",
@@ -173,10 +173,6 @@ func TestMiddlewareStack_BudgetCheckedPerRetryAttemptAndBatchErrorNotDuplicated(
 		Use(
 			WithTruncation(32, WithTruncationSuffix("...")),
 			WithErrorFormatter(),
-			WithIdempotentRetry(
-				WithRetryMaxAttempts(2),
-				noSleepRetryOption(),
-			),
 			WithBudget(),
 		).
 		Add(tool).
@@ -200,12 +196,12 @@ func TestMiddlewareStack_BudgetCheckedPerRetryAttemptAndBatchErrorNotDuplicated(
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
 	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
-	assert.Equal(t, int64(2), attempts.Load())
-	assert.Equal(t, int64(2), tracker.calls.Load())
+	assert.Equal(t, int64(1), attempts.Load())
+	assert.Equal(t, int64(1), tracker.calls.Load())
 	assert.Contains(t, string(chunks[0].Data), "...")
 }
 
-func TestMiddlewareStack_BudgetDenyDoesNotTriggerRetry(t *testing.T) {
+func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 	var attempts atomic.Int64
 	tool := newMiddlewareMinTool(
 		"readonly_budget",
@@ -226,10 +222,6 @@ func TestMiddlewareStack_BudgetDenyDoesNotTriggerRetry(t *testing.T) {
 	reg, err := NewRegistryBuilder().
 		Use(
 			WithErrorFormatter(),
-			WithIdempotentRetry(
-				WithRetryMaxAttempts(3),
-				noSleepRetryOption(),
-			),
 			WithBudget(),
 		).
 		Add(tool).

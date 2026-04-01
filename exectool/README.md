@@ -10,8 +10,9 @@ The LLM-facing schema includes:
 - optional `env`
 - optional UTF-8 text `files`
 
-Timeouts are infrastructure-controlled and configured only in Go via
-`exectool.WithTimeout(...)`.
+Time limits come only from the [`context.Context`] passed into `Sandbox.Run`
+(e.g. `context.WithTimeout`, or a wrapper like `routery.Timeout` around the
+tool). Sandboxes do not apply a separate duration from `RunRequest`.
 
 ## Example
 
@@ -20,7 +21,6 @@ sb := starlarksandbox.New()
 
 tool, err := exectool.New(
     sb,
-    exectool.WithTimeout(2*time.Second),
     exectool.WithAllowedLanguages("starlark"),
 )
 if err != nil {

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync/atomic"
-	"time"
 )
 
 // AsyncAccepted is the payload returned immediately when an async tool is invoked.
@@ -40,7 +39,7 @@ func WithOnComplete(cb AsyncCallback) AsyncOption {
 // the base tool runs in a goroutine. If the client's yield returns an error (e.g. stream closed),
 // the goroutine is not started (yield-guard).
 // When executed via Registry, the registry injects an async tracker via RunContext; the background
-// job is then tracked so Shutdown waits for it and the concurrency slot is held until the job completes.
+// job is tracked so Shutdown waits for it to finish.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 	var o asyncOptions
 	for _, opt := range opts {
@@ -60,29 +59,27 @@ type asyncTool struct {
 
 type asyncRuntime struct {
 	registry          *Registry
-	effectiveTimeout  time.Duration
 	backgroundStarted atomic.Bool
 }
 
-func newAsyncRuntime(registry *Registry, effectiveTimeout time.Duration) *asyncRuntime {
+func newAsyncRuntime(registry *Registry) *asyncRuntime {
 	return &asyncRuntime{
 		registry:          registry,
-		effectiveTimeout:  effectiveTimeout,
 		backgroundStarted: atomic.Bool{},
 	}
 }
 
 const taskIDRandomBytes = 16
 
+// trackBackground marks the execution as having async follow-up work. The registry already called
+// running.Add(1) in executeWithSummary; that single count is released here when the background
+// goroutine finishes (sync paths release via defer in executeWithSummary instead).
 func (r *asyncRuntime) trackBackground() func() {
 	if r == nil || r.registry == nil {
 		return nil
 	}
 	r.backgroundStarted.Store(true)
-	r.registry.running.Add(1)
 	return func() {
-		r.registry.running.Done()
-		r.registry.releaseSemaphore()
 		r.registry.running.Done()
 	}
 }
@@ -114,13 +111,8 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 		return wrapYieldError(err)
 	}
 	var bgDone func()
-	bgTimeout := time.Duration(0)
 	if run.async != nil {
 		bgDone = run.async.trackBackground()
-		bgTimeout = run.async.effectiveTimeout
-	}
-	if bgTimeout == 0 {
-		bgTimeout = t.Manifest().Timeout
 	}
 	go func(parentCtx context.Context) {
 		if bgDone != nil {
@@ -133,12 +125,6 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 		}
 
 		baseCtx := context.WithoutCancel(parentCtx)
-		bgCtx := baseCtx
-		if bgTimeout > 0 {
-			var cancel context.CancelFunc
-			bgCtx, cancel = context.WithTimeout(bgCtx, bgTimeout)
-			defer cancel()
-		}
 		bgRun := run
 		bgRun.async = nil
 
@@ -155,7 +141,7 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 			}
 		}()
 
-		executionErr = t.next.Execute(bgCtx, bgRun, input, collectYield)
+		executionErr = t.next.Execute(baseCtx, bgRun, input, collectYield)
 	}(ctx)
 	return nil
 }

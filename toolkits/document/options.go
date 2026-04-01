@@ -2,8 +2,12 @@ package document
 
 import (
 	"net/http"
-	"time"
 )
+
+// HTTPClient is the minimal HTTP surface used for remote document fetch. [*http.Client] and [http.DefaultClient] satisfy it.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
 
 // Option configures AsTool (limits, remote fetch, tool name).
 type Option func(*options)
@@ -12,7 +16,7 @@ type options struct {
 	maxBytes        int
 	allowRemote     bool
 	allowPrivateIPs bool // for tests (e.g. httptest on 127.0.0.1); default false for SSRF safety
-	httpClient      *http.Client
+	httpClient      HTTPClient
 	toolName        string
 	toolDesc        string
 }
@@ -23,14 +27,12 @@ const (
 	defaultToolDesc = "Extract text from a document (PDF, CSV, DOCX) by file path or URL"
 )
 
-const defaultHTTPTimeout = 30 * time.Second
-
 func applyDefaults(o *options) {
 	if o.maxBytes <= 0 {
 		o.maxBytes = defaultMaxBytes
 	}
 	if o.httpClient == nil {
-		o.httpClient = &http.Client{Timeout: defaultHTTPTimeout}
+		o.httpClient = http.DefaultClient
 	}
 	if o.toolName == "" {
 		o.toolName = defaultToolName
@@ -63,7 +65,7 @@ func WithAllowPrivateIPs(allow bool) Option {
 }
 
 // WithHTTPClient sets the HTTP client for URL downloads (e.g. for SSRF-safe transport).
-func WithHTTPClient(c *http.Client) Option {
+func WithHTTPClient(c HTTPClient) Option {
 	return func(o *options) {
 		o.httpClient = c
 	}

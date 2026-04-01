@@ -27,7 +27,6 @@ func (m *MockTool) Manifest() toolsy.ToolManifest {
 		Name:        "mock",
 		Description: "",
 		Parameters:  map[string]any{"type": "object"},
-		Timeout:     0,
 		Tags:        nil,
 		Version:     "",
 		Metadata:    nil,

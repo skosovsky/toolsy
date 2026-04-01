@@ -61,7 +61,9 @@ type sseCallResult struct {
 // The server must send an event with type "endpoint" first; the "data" field contains the URL for POST (Call/Notify).
 func NewSSETransport(initialURL string) *SSETransport {
 	impl := &sseTransportImpl{
-		initialURL:     initialURL,
+		initialURL: initialURL,
+		// Timeout 0: no per-request cap on the client; long-lived GET stream and
+		// per-call timeouts are handled at the transport layer (e.g. sseCallResponseTimeout).
 		client:         &http.Client{Timeout: 0},
 		startMu:        sync.Mutex{},
 		started:        false,
