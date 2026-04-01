@@ -3,9 +3,9 @@ module github.com/skosovsky/toolsy/adapters/sandbox/starlark
 go 1.26.1
 
 require (
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.6.0
 	github.com/stretchr/testify v1.11.1
-	go.starlark.net v0.0.0-20251029211736-7849196f18cf
+	go.starlark.net v0.6.0-20251029211736-7849196f18cf
 )
 
 require (
@@ -18,4 +18,3 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/skosovsky/toolsy => ../../..

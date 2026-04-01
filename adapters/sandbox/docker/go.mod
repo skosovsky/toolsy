@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.6.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -44,4 +44,3 @@ require (
 	gotest.tools/v3 v3.5.2 // indirect
 )
 
-replace github.com/skosovsky/toolsy => ../../..
