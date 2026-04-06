@@ -3,7 +3,7 @@ module github.com/skosovsky/toolsy/toolkits/sqltool
 go 1.26.1
 
 require (
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.6.1
 	github.com/stretchr/testify v1.11.1
 	modernc.org/sqlite v1.34.2
 )
@@ -29,5 +29,3 @@ require (
 	modernc.org/strutil v1.2.0 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..

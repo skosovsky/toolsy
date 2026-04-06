@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	github.com/getkin/kin-openapi v0.133.0
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.6.1
 )
 
 require (
@@ -20,5 +20,3 @@ require (
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..
