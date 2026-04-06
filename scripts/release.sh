@@ -4,10 +4,24 @@ set -e # Stop script on any error
 RELEASE_TYPE=$1
 MODULES=$2
 
+if [ ! -f "go.mod" ]; then
+    echo "Error: go.mod not found in the current directory. Run script from the repo root."
+    exit 1
+fi
+
+ROOT_MODULE=$(grep -m 1 '^module' go.mod | awk '{print $2}')
+
 if [[ "$RELEASE_TYPE" != "break" && "$RELEASE_TYPE" != "patch" ]]; then
     echo "Usage: make release-patch OR make release-break"
     exit 1
 fi
+
+if [ -z "$ROOT_MODULE" ]; then
+    echo "Error: Could not determine module path from go.mod"
+    exit 1
+fi
+
+REPO_PREFIX=$(echo "$ROOT_MODULE" | sed 's/\//\\\//g')
 
 if [ -z "$MODULES" ]; then
     echo "Error: MODULES is empty. Make sure Makefile is passing it correctly."
@@ -15,6 +29,7 @@ if [ -z "$MODULES" ]; then
 fi
 
 # Ensure there are no uncommitted changes
+git update-index -q --refresh
 if ! git diff-index --quiet HEAD --; then
     echo "Error: You have uncommitted changes. Please commit or stash them first."
     exit 1
@@ -68,9 +83,9 @@ git checkout --detach HEAD --quiet
 echo "📦 Updating go.mod files..."
 for dir in $MODULES; do
     modfile="$dir/go.mod"
-    echo "  - Updating $modfile"
-    sed -i '' "s/v0.0.0/$NEW_VERSION/g" "$modfile"
-    sed -i '' "/replace github.com\/skosovsky\/toolsy/d" "$modfile"
+    sed -i '' "/$REPO_PREFIX/s/ v0.0.0/ $NEW_VERSION/g" "$modfile"
+    sed -i '' "/$REPO_PREFIX.*=>/d" "$modfile"
+    go mod edit -fmt "$modfile"
 done
 
 # 5. Create the release commit
