@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/toolkits/web
 
-go 1.26.1
+go 1.26.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0

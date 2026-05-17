@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/adapters/sandbox/wazero
 
-go 1.26.1
+go 1.26.3
 
 require (
 	github.com/skosovsky/toolsy v0.0.0

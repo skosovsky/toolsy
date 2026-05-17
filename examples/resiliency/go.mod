@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/examples/resiliency
 
-go 1.26.1
+go 1.26.3
 
 require (
 	github.com/skosovsky/routery v0.1.0

@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/contracts/grpc
 
-go 1.26.1
+go 1.26.3
 
 replace github.com/skosovsky/toolsy => ../..
 

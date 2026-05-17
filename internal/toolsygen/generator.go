@@ -518,8 +518,10 @@ func validateProperty(
 	}
 
 	tag := fmt.Sprintf(`json:"%s"`, jsonName)
-	if !required && strings.HasPrefix(goType, "[]") {
-		tag = fmt.Sprintf(`json:"%s,omitempty"`, jsonName)
+	if !required {
+		if strings.HasPrefix(goType, "[]") || strings.HasPrefix(goType, "*") {
+			tag = fmt.Sprintf(`json:"%s,omitempty"`, jsonName)
+		}
 	}
 
 	return fieldSpec{
@@ -577,14 +579,18 @@ func mapGoTypeString(filePath, schemaPath string, raw map[string]any, required, 
 }
 
 func mapGoTypeInteger(required, topLevel bool) (string, bool, error) {
-	if required || !topLevel {
+	_ = required
+	if !topLevel {
 		return "int64", false, nil
 	}
+	// Top-level integers use pointers so required fields can be validated via nil checks
+	// without conflating a missing JSON key with numeric zero.
 	return "*int64", false, nil
 }
 
 func mapGoTypeBoolean(required, topLevel bool) (string, bool, error) {
-	if required || !topLevel {
+	_ = required
+	if !topLevel {
 		return "bool", false, nil
 	}
 	return "*bool", false, nil
@@ -983,40 +989,36 @@ func renderManifest(m *manifest) ([]byte, error) {
 	fmt.Fprintf(&buf, "// %s is the decoded input for the %q tool.\n", m.InputTypeName, m.Name)
 	fmt.Fprintf(&buf, "type %s struct {\n", m.InputTypeName)
 	for _, field := range m.Fields {
-		tag := field.Tag
-		if field.Required {
-			tag += ` validate:"required"`
-		}
-		fmt.Fprintf(&buf, "\t%s %s `%s`\n", field.GoName, field.GoType, tag)
+		fmt.Fprintf(&buf, "\t%s %s `%s`\n", field.GoName, field.GoType, field.Tag)
 	}
 	buf.WriteString("}\n\n")
 
 	fmt.Fprintf(&buf, "// Validate applies post-schema validation for %s.\n", m.InputTypeName)
 	fmt.Fprintf(&buf, "func (in %s) Validate() error {\n", m.InputTypeName)
-	validationLines := 0
 	for _, field := range m.Fields {
 		if !field.Required {
 			continue
 		}
+		msg := "missing required field: '" + field.JSONName + "'"
 		switch {
 		case field.GoType == "string":
 			fmt.Fprintf(&buf, "\tif in.%s == \"\" {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(field.JSONName+" is required"))
+			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
 			buf.WriteString("\t}\n")
-			validationLines++
+		case field.GoType == "time.Time":
+			fmt.Fprintf(&buf, "\tif in.%s.IsZero() {\n", field.GoName)
+			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
+			buf.WriteString("\t}\n")
 		case strings.HasPrefix(field.GoType, "[]"):
-			fmt.Fprintf(&buf, "\tif in.%s == nil {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(field.JSONName+" is required"))
+			fmt.Fprintf(&buf, "\tif len(in.%s) == 0 {\n", field.GoName)
+			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
 			buf.WriteString("\t}\n")
-			validationLines++
 		case strings.HasPrefix(field.GoType, "*"):
 			fmt.Fprintf(&buf, "\tif in.%s == nil {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(field.JSONName+" is required"))
+			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
 			buf.WriteString("\t}\n")
-			validationLines++
 		}
 	}
-	_ = validationLines
 	buf.WriteString("\treturn nil\n")
 	buf.WriteString("}\n\n")
 
@@ -1042,19 +1044,20 @@ func renderManifest(m *manifest) ([]byte, error) {
 	fmt.Fprintf(&buf, "\tconst rawSchema = %s\n\n", strconvQuote(m.RawSchemaJSON))
 	fmt.Fprintf(
 		&buf,
-		"\treturn toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
+		"\tproxy, err := toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
 		strconvQuote(m.Name),
 		strconvQuote(m.Description),
 	)
 	fmt.Fprintf(&buf, "\t\tvar input %s\n", m.InputTypeName)
 	buf.WriteString("\t\tif err := json.Unmarshal(rawArgs, &input); err != nil {\n")
-	buf.WriteString("\t\t\treturn &toolsy.ClientError{Reason: \"json parse error: \" + err.Error()}\n")
+	buf.WriteString(
+		"\t\t\treturn &toolsy.ClientError{Reason: \"Validation failed: invalid JSON format or type mismatch\", Err: err}\n",
+	)
 	buf.WriteString("\t\t}\n")
 	buf.WriteString("\t\tif err := input.Validate(); err != nil {\n")
-	buf.WriteString("\t\t\tif toolsy.IsClientError(err) {\n")
-	buf.WriteString("\t\t\t\treturn err\n")
-	buf.WriteString("\t\t\t}\n")
-	buf.WriteString("\t\t\treturn &toolsy.ClientError{Reason: err.Error(), Err: toolsy.ErrValidation}\n")
+	buf.WriteString(
+		"\t\t\treturn &toolsy.ClientError{Reason: \"Validation failed: \" + err.Error(), Err: toolsy.ErrValidation}\n",
+	)
 	buf.WriteString("\t\t}\n")
 
 	if m.Stream {
@@ -1101,6 +1104,14 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\t})\n")
 	}
 	buf.WriteString("\t})\n")
+	buf.WriteString("\tif err != nil {\n")
+	buf.WriteString("\t\treturn nil, err\n")
+	buf.WriteString("\t}\n")
+	if m.Stream {
+		buf.WriteString("\treturn toolsy.AsAsyncTool(proxy), nil\n")
+	} else {
+		buf.WriteString("\treturn proxy, nil\n")
+	}
 	buf.WriteString("}\n")
 
 	formatted, err := format.Source(buf.Bytes())

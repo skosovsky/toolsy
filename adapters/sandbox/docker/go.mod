@@ -1,6 +1,6 @@
 module github.com/skosovsky/toolsy/adapters/sandbox/docker
 
-go 1.26.1
+go 1.26.3
 
 require (
 	github.com/docker/docker v28.5.2+incompatible

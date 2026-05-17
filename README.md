@@ -128,6 +128,47 @@ meta := tool.Manifest().Metadata
 _ = meta
 ```
 
+## toolsy-gen: Contract-First Generator
+
+`toolsy-gen` generates typed DTOs, handler interfaces, and `New...Tool` factories from YAML/JSON manifests for internal core tools.
+
+```bash
+go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
+```
+
+**Clean-break rules (generation fails on violation):**
+
+- Every parameter in `parameters.properties` must have a non-empty `description`.
+- Nested objects (`type: object` inside `properties`) are not supported in v1.
+- Unsupported JSON Schema keywords (`$ref`, `oneOf`, `allOf`, `anyOf`, `not`, `patternProperties`) are rejected.
+
+**Supported schema subset:**
+
+- Root `parameters.type` must be `object`.
+- Type mapping:
+  - `string` -> `string`
+  - `string` + `format: date-time` -> `time.Time`
+  - `integer` -> `*int64` (top-level; pointer distinguishes missing key from numeric zero)
+  - `boolean` -> `*bool` (top-level)
+  - `array` -> `[]T` (single level only; no nested arrays)
+
+**Complex payloads (nested objects):**
+
+- Nested `type: object` inside `properties` is rejected.
+- For structured payloads, split into multiple flat tools or model a single `string` field that carries JSON text validated in handler code.
+
+**Generated validation (zero-dependency):**
+
+- Required fields from schema `required` are enforced in generated `Validate()` with explicit Go checks (no `validator/v10`, no `validate` struct tags).
+- Top-level `integer`/`boolean` use pointers so `Validate()` can detect absent keys without rejecting legitimate `0`/`false` values.
+- Parse/validate failures in the factory return `ClientError` with reason prefix `Validation failed:` for LLM self-correction.
+
+**Stream tools (`stream: true`):**
+
+- Handler interface uses `ExecuteStream(...) iter.Seq2[string, error]`.
+- Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
+- Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
+
 ## RunContext dependencies
 
 `RunContext` carries runtime-only dependencies:

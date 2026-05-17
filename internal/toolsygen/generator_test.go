@@ -216,6 +216,102 @@ parameters:
 			wantSubstr: "anyOf",
 		},
 		{
+			name: "unsupported oneOf",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    x:
+      description: "x"
+      oneOf:
+        - type: string
+        - type: integer
+`,
+			wantSubstr: "oneOf",
+		},
+		{
+			name: "unsupported allOf",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    x:
+      description: "x"
+      allOf:
+        - type: string
+`,
+			wantSubstr: "allOf",
+		},
+		{
+			name: "unsupported not",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    x:
+      description: "x"
+      not:
+        type: string
+`,
+			wantSubstr: "not",
+		},
+		{
+			name: "unsupported ref",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    x:
+      description: "x"
+      $ref: "#/definitions/Foo"
+`,
+			wantSubstr: "$ref",
+		},
+		{
+			name: "unsupported patternProperties",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    x:
+      description: "x"
+      type: string
+  patternProperties:
+    "^x":
+      type: string
+`,
+			wantSubstr: "patternProperties",
+		},
+		{
+			name: "nested array",
+			manifest: `
+name: "t"
+description: "desc"
+parameters:
+  type: object
+  properties:
+    tags:
+      type: array
+      description: "tags"
+      items:
+        type: array
+        items:
+          type: string
+          description: "inner"
+`,
+			wantSubstr: "nested arrays are not supported",
+		},
+		{
 			name: "non object root",
 			manifest: `
 name: "book_appointment"
@@ -288,13 +384,110 @@ parameters:
 		"package apptools",
 		"type BookAppointmentStreamHandler interface",
 		"DoctorID string",
-		`validate:"required"`,
-		`return errors.New("doctor_id is required")`,
-		`return &toolsy.ClientError{Reason: err.Error(), Err: toolsy.ErrValidation}`,
+		`errors.New("missing required field: 'doctor_id'")`,
+		`in.SlotTime.IsZero()`,
+		`return &toolsy.ClientError{Reason: "Validation failed: " + err.Error(), Err: toolsy.ErrValidation}`,
+		`return &toolsy.ClientError{Reason: "Validation failed: invalid JSON format or type mismatch"`,
+		"return toolsy.AsAsyncTool(proxy), nil",
 	} {
 		if !strings.Contains(code, want) {
 			t.Fatalf("generated code missing %q:\n%s", want, code)
 		}
+	}
+	if strings.Contains(code, `validate:"required"`) {
+		t.Fatalf("generated code must not use validate struct tags:\n%s", code)
+	}
+	if !strings.Contains(code, "for part, err := range handler.ExecuteStream") {
+		t.Fatalf("stream tool must propagate ExecuteStream errors:\n%s", code)
+	}
+}
+
+func TestRenderManifestRequiredPrimitiveAndArrayChecks(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "types")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "typed.yaml")
+	writeFile(t, path, `
+name: "typed_tool"
+description: "Typed tool"
+parameters:
+  type: object
+  properties:
+    count:
+      type: integer
+      description: "Count"
+    active:
+      type: boolean
+      description: "Active flag"
+    tags:
+      type: array
+      description: "Tags"
+      items:
+        type: string
+        description: "Tag"
+  required: ["count", "active", "tags"]
+`)
+	m, err := testGen().loadManifest(path)
+	if err != nil {
+		t.Fatalf("loadManifest: %v", err)
+	}
+	code, err := renderManifest(m)
+	if err != nil {
+		t.Fatalf("renderManifest: %v", err)
+	}
+	s := string(code)
+	for _, want := range []string{
+		"*int64",
+		"*bool",
+		"[]string",
+		`if in.Count == nil`,
+		`if in.Active == nil`,
+		`if len(in.Tags) == 0`,
+		`missing required field: 'count'`,
+		`missing required field: 'active'`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("generated code missing %q:\n%s", want, s)
+		}
+	}
+}
+
+func TestRenderManifestNonStreamNoAsyncWrapper(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "tools")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "echo.yaml")
+	writeFile(t, path, `
+name: "echo"
+description: "Echo"
+parameters:
+  type: object
+  properties:
+    text:
+      type: string
+      description: "Text"
+  required: ["text"]
+`)
+	m, err := testGen().loadManifest(path)
+	if err != nil {
+		t.Fatalf("loadManifest: %v", err)
+	}
+	code, err := renderManifest(m)
+	if err != nil {
+		t.Fatalf("renderManifest: %v", err)
+	}
+	s := string(code)
+	if strings.Contains(s, "toolsy.AsAsyncTool") {
+		t.Fatalf("non-stream tool must not use AsAsyncTool:\n%s", s)
+	}
+	if !strings.Contains(s, "return proxy, nil") {
+		t.Fatalf("non-stream tool must return proxy directly:\n%s", s)
 	}
 }
 
@@ -416,7 +609,7 @@ func TestToolsyGenEndToEnd(t *testing.T) {
 	writeFile(
 		t,
 		filepath.Join(moduleDir, "go.mod"),
-		"module fixture\n\ngo 1.26.1\n\nrequire github.com/skosovsky/toolsy v0.0.0\n\nreplace github.com/skosovsky/toolsy => "+repoLink+"\n",
+		"module fixture\n\ngo 1.26.3\n\nrequire github.com/skosovsky/toolsy v0.0.0\n\nreplace github.com/skosovsky/toolsy => "+repoLink+"\n",
 	)
 
 	appDir := filepath.Join(moduleDir, "apptools")
@@ -448,6 +641,8 @@ package apptools
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -501,6 +696,46 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 	if err == nil || !toolsy.IsClientError(err) {
 		t.Fatalf("empty doctor_id error = %v, want client error", err)
 	}
+	var ce *toolsy.ClientError
+	if !errors.As(err, &ce) {
+		t.Fatalf("error type = %T, want *toolsy.ClientError", err)
+	}
+	if !strings.Contains(ce.Reason, "Validation failed:") || !strings.Contains(ce.Reason, "missing required field: 'doctor_id'") {
+		t.Fatalf("empty doctor_id reason = %q", ce.Reason)
+	}
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{not-json") },
+		func(toolsy.Chunk) error { return nil },
+	)
+	if err == nil || !toolsy.IsClientError(err) {
+		t.Fatalf("invalid json error = %v, want client error", err)
+	}
+	if !errors.As(err, &ce) {
+		t.Fatalf("invalid json error type = %T", err)
+	}
+	// NewProxyTool validates ArgsJSON before the generated handler; malformed JSON uses wrapJSONParseError.
+	if !strings.HasPrefix(ce.Reason, "json parse error:") {
+		t.Fatalf("invalid json reason = %q, want json parse error prefix", ce.Reason)
+	}
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":1,\"slot_time\":\"2026-03-18T09:00:00Z\"}") },
+		func(toolsy.Chunk) error { return nil },
+	)
+	if err == nil || !toolsy.IsClientError(err) {
+		t.Fatalf("type mismatch error = %v, want client error", err)
+	}
+	if !errors.As(err, &ce) {
+		t.Fatalf("type mismatch error type = %T", err)
+	}
+	if !errors.Is(ce.Err, toolsy.ErrValidation) {
+		t.Fatalf("type mismatch unwrap = %v, want ErrValidation", ce.Err)
+	}
 }
 `)
 
@@ -521,18 +756,32 @@ package streamtools
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"iter"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/skosovsky/toolsy"
+)
+
+var (
+	streamHandlerInvoked atomic.Bool
+	streamObsMu          sync.Mutex
+	streamHandlerErr     error
 )
 
 type streamHandler struct{}
 
 func (streamHandler) ExecuteStream(_ context.Context, input ProgressDemoInput) iter.Seq2[string, error] {
 	return func(yield func(string, error) bool) {
-		switch input.Count {
+		streamHandlerInvoked.Store(true)
+		if input.Count == nil {
+			return
+		}
+		switch *input.Count {
 		case 0:
 			return
 		case 1:
@@ -549,11 +798,27 @@ func (streamHandler) ExecuteStream(_ context.Context, input ProgressDemoInput) i
 			if !yield("step-1", nil) {
 				return
 			}
-			yield("", errors.New("boom"))
+			boom := errors.New("boom")
+			streamObsMu.Lock()
+			streamHandlerErr = boom
+			streamObsMu.Unlock()
+			yield("", boom)
 		default:
 			yield("unexpected", nil)
 		}
 	}
+}
+
+func waitStreamBackground(t *testing.T, pred func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if pred() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("timed out waiting for stream background work")
 }
 
 func TestGeneratedStreamTool(t *testing.T) {
@@ -562,77 +827,73 @@ func TestGeneratedStreamTool(t *testing.T) {
 		t.Fatalf("NewProgressDemoTool: %v", err)
 	}
 
-	type chunkInfo struct {
-		Event toolsy.EventType
-		Data  string
-	}
-	tests := []struct {
-		name       string
-		args       string
-		wantChunks []chunkInfo
-		wantErr    bool
-	}{
-		{
-			name: "zero items yields empty final",
-			args: "{\"count\":0}",
-			wantChunks: []chunkInfo{
-				{Event: toolsy.EventResult, Data: ""},
-			},
-		},
-		{
-			name: "one item yields one final",
-			args: "{\"count\":1}",
-			wantChunks: []chunkInfo{
-				{Event: toolsy.EventResult, Data: "done"},
-			},
-		},
-		{
-			name: "three items yields progress and final",
-			args: "{\"count\":3}",
-			wantChunks: []chunkInfo{
-				{Event: toolsy.EventProgress, Data: "step-1"},
-				{Event: toolsy.EventProgress, Data: "step-2"},
-				{Event: toolsy.EventResult, Data: "done"},
-			},
-		},
-		{
-			name: "error keeps buffered item as progress and no final",
-			args: "{\"count\":-1}",
-			wantChunks: []chunkInfo{
-				{Event: toolsy.EventProgress, Data: "step-1"},
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		var got []chunkInfo
-		err := tool.Execute(
-			context.Background(),
-			toolsy.RunContext{},
-			toolsy.ToolInput{ArgsJSON: []byte(tt.args)},
-			func(c toolsy.Chunk) error {
-			got = append(got, chunkInfo{Event: c.Event, Data: string(c.Data)})
+	var accepted toolsy.AsyncAccepted
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":1}")},
+		func(c toolsy.Chunk) error {
+			if err := json.Unmarshal(c.Data, &accepted); err != nil {
+				return err
+			}
 			return nil
-		})
-		if tt.wantErr {
-			if err == nil || !toolsy.IsSystemError(err) {
-				t.Fatalf("%s: error = %v, want system error", tt.name, err)
-			}
-		} else if err != nil {
-			t.Fatalf("%s: unexpected error %v", tt.name, err)
-		}
+		},
+	)
+	if err != nil {
+		t.Fatalf("Execute async stream tool: %v", err)
+	}
+	if accepted.Status != "accepted" || accepted.TaskID == "" {
+		t.Fatalf("accepted = %#v, want status accepted and non-empty task_id", accepted)
+	}
 
-		if len(got) != len(tt.wantChunks) {
-			t.Fatalf("%s: got %d chunks, want %d (%v)", tt.name, len(got), len(tt.wantChunks), got)
-		}
-		for i := range tt.wantChunks {
-			if got[i] != tt.wantChunks[i] {
-				t.Fatalf("%s: chunk %d = %#v, want %#v", tt.name, i, got[i], tt.wantChunks[i])
-			}
-		}
+	// Background error path: handler yields error after progress; Execute returns nil after accept.
+	streamHandlerInvoked.Store(false)
+	streamObsMu.Lock()
+	streamHandlerErr = nil
+	streamObsMu.Unlock()
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":-1}")},
+		func(c toolsy.Chunk) error {
+			return json.Unmarshal(c.Data, &accepted)
+		},
+	)
+	if err != nil {
+		t.Fatalf("Execute stream tool with handler error: %v", err)
+	}
+	if accepted.Status != "accepted" {
+		t.Fatalf("accepted status = %q, want accepted", accepted.Status)
+	}
+	waitStreamBackground(t, func() bool {
+		return streamHandlerInvoked.Load()
+	})
+	streamObsMu.Lock()
+	gotErr := streamHandlerErr
+	streamObsMu.Unlock()
+	if gotErr == nil || gotErr.Error() != "boom" {
+		t.Fatalf("handler error = %v, want boom", gotErr)
+	}
+
+	// Validation runs in background after accept; handler must not run for invalid payload.
+	streamHandlerInvoked.Store(false)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte("{}")},
+		func(c toolsy.Chunk) error {
+			return json.Unmarshal(c.Data, &accepted)
+		},
+	)
+	if err != nil {
+		t.Fatalf("Execute stream tool missing required: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if streamHandlerInvoked.Load() {
+		t.Fatal("handler invoked for invalid payload, want validation failure before ExecuteStream")
 	}
 }
+
 `)
 
 	runGo(t, repoRoot, goCache, "run", "./cmd/toolsy-gen", moduleDir)
