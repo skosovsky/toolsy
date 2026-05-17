@@ -19,7 +19,8 @@ func RecordSemanticTruncation(
 	execErr error,
 	opts ...Option,
 ) {
-	cfg := config{tracerProvider: otel.GetTracerProvider()}
+	cfg := defaultConfig()
+	cfg.tracerProvider = otel.GetTracerProvider()
 	for _, opt := range opts {
 		opt(&cfg)
 	}

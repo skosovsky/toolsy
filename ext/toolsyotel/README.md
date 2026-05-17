@@ -2,6 +2,22 @@
 
 `toolsyotel` is an extension module for OpenTelemetry instrumentation around `toolsy`.
 
+## Tool execution tracing
+
+Use `WithTracing` middleware on the registry builder to emit one span per tool call. By default only metadata is recorded (`gen_ai.tool.name`, `gen_ai.operation.name`, `langfuse.observation.type`).
+
+Opt-in payload capture for Langfuse / GenAI SemConv (may contain PII):
+
+```go
+toolsyotel.WithTracing(
+    toolsyotel.WithTracerProvider(tp),
+    toolsyotel.WithContentCapture(true),
+    toolsyotel.WithMaxPayloadSize(4096), // bytes per input/output; default 4096
+)
+```
+
+When enabled, spans include `langfuse.observation.input` / `output` and `gen_ai.tool.call.arguments` / `result`, truncated with `... [truncated]` when over the limit.
+
 ## Semantic truncation observability
 
 When you use `history.ApplySemanticTruncation(...)`, forward its report to

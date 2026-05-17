@@ -3,6 +3,7 @@ package toolsyotel
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -47,6 +48,11 @@ func attrValue(span sdktrace.ReadOnlySpan, key string) (attribute.Value, bool) {
 		}
 	}
 	return attribute.Value{}, false
+}
+
+func hasAttrKey(span sdktrace.ReadOnlySpan, key string) bool {
+	_, ok := attrValue(span, key)
+	return ok
 }
 
 func hasEvent(span sdktrace.ReadOnlySpan, name string) bool {
@@ -206,4 +212,231 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
 	require.True(t, ok)
 	assert.Equal(t, "budget exceeded", softText.AsString())
+}
+
+func TestMiddleware_ContentCapture_DisabledDefault_ErrorPath(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "capture_off_err"},
+		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+			return errors.New("sensitive failure")
+		},
+	}
+	wrapped := WithTracing(WithTracerProvider(tp))(tool)
+
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"secret":true}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+
+	span := rec.Ended()[0]
+	assert.False(t, hasAttrKey(span, "langfuse.observation.input"))
+	assert.False(t, hasAttrKey(span, "langfuse.observation.output"))
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.arguments"))
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.result"))
+}
+
+func TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "yield_err"},
+		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			if err := yield(toolsy.Chunk{Data: []byte("delivered"), MimeType: toolsy.MimeTypeText}); err != nil {
+				return err
+			}
+			_ = yield(toolsy.Chunk{Data: []byte("undelivered"), MimeType: toolsy.MimeTypeText})
+			return nil
+		},
+	}
+	wrapped := WithTracing(
+		WithTracerProvider(tp),
+		WithContentCapture(true),
+	)(tool)
+
+	require.NoError(t, wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c toolsy.Chunk) error {
+			if string(c.Data) == "undelivered" {
+				return errors.New("consumer rejected")
+			}
+			return nil
+		},
+	))
+
+	span := rec.Ended()[0]
+	output, ok := attrValue(span, "langfuse.observation.output")
+	require.True(t, ok)
+	assert.Equal(t, "delivered", output.AsString())
+	assert.NotContains(t, output.AsString(), "undelivered")
+}
+
+func TestMiddleware_ContentCapture_DisabledDefault(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{manifest: toolsy.ToolManifest{Name: "capture_off"}}
+	wrapped := WithTracing(WithTracerProvider(tp))(tool)
+
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: []byte(`{"q":"secret"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+
+	span := rec.Ended()[0]
+	assert.False(t, hasAttrKey(span, "langfuse.observation.input"))
+	assert.False(t, hasAttrKey(span, "langfuse.observation.output"))
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.arguments"))
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.result"))
+}
+
+func TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{manifest: toolsy.ToolManifest{Name: "op_attrs"}}
+	wrapped := WithTracing(WithTracerProvider(tp))(tool)
+
+	require.NoError(t, wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{},
+		func(toolsy.Chunk) error { return nil },
+	))
+
+	span := rec.Ended()[0]
+	op, ok := attrValue(span, "gen_ai.operation.name")
+	require.True(t, ok)
+	assert.Equal(t, "execute_tool", op.AsString())
+
+	obsType, ok := attrValue(span, "langfuse.observation.type")
+	require.True(t, ok)
+	assert.Equal(t, "tool", obsType.AsString())
+}
+
+func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	args := []byte(`{"city":"Berlin"}`)
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "capture_on"},
+		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			if err := yield(toolsy.Chunk{Data: []byte("part-1"), MimeType: toolsy.MimeTypeText}); err != nil {
+				return err
+			}
+			return yield(toolsy.Chunk{Data: []byte("part-2"), MimeType: toolsy.MimeTypeText})
+		},
+	}
+	wrapped := WithTracing(
+		WithTracerProvider(tp),
+		WithContentCapture(true),
+	)(tool)
+
+	require.NoError(t, wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: args},
+		func(toolsy.Chunk) error { return nil },
+	))
+
+	span := rec.Ended()[0]
+	input, ok := attrValue(span, "langfuse.observation.input")
+	require.True(t, ok)
+	assert.Equal(t, string(args), input.AsString())
+
+	arguments, ok := attrValue(span, "gen_ai.tool.call.arguments")
+	require.True(t, ok)
+	assert.Equal(t, string(args), arguments.AsString())
+
+	output, ok := attrValue(span, "langfuse.observation.output")
+	require.True(t, ok)
+	assert.Equal(t, "part-1part-2", output.AsString())
+
+	result, ok := attrValue(span, "gen_ai.tool.call.result")
+	require.True(t, ok)
+	assert.Equal(t, "part-1part-2", result.AsString())
+}
+
+func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	hugeArgs := []byte(`{"payload":"` + strings.Repeat("x", 64) + `"}`)
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "capture_trunc"},
+		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			return yield(toolsy.Chunk{Data: []byte(strings.Repeat("y", 64)), MimeType: toolsy.MimeTypeText})
+		},
+	}
+	wrapped := WithTracing(
+		WithTracerProvider(tp),
+		WithContentCapture(true),
+		WithMaxPayloadSize(10),
+	)(tool)
+
+	require.NoError(t, wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{ArgsJSON: hugeArgs},
+		func(toolsy.Chunk) error { return nil },
+	))
+
+	span := rec.Ended()[0]
+	limit := 10
+	suffixLen := len("... [truncated]")
+
+	input, ok := attrValue(span, "langfuse.observation.input")
+	require.True(t, ok)
+	assert.Contains(t, input.AsString(), "... [truncated]")
+	assert.LessOrEqual(t, len(input.AsString()), limit+suffixLen)
+
+	output, ok := attrValue(span, "langfuse.observation.output")
+	require.True(t, ok)
+	assert.Contains(t, output.AsString(), "... [truncated]")
+	assert.LessOrEqual(t, len(output.AsString()), limit+suffixLen)
+}
+
+func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	hugeErr := errors.New(strings.Repeat("e", 64))
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "capture_err"},
+		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+			return hugeErr
+		},
+	}
+	wrapped := WithTracing(
+		WithTracerProvider(tp),
+		WithContentCapture(true),
+		WithMaxPayloadSize(10),
+	)(tool)
+
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.RunContext{},
+		toolsy.ToolInput{},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+
+	span := rec.Ended()[0]
+	output, ok := attrValue(span, "langfuse.observation.output")
+	require.True(t, ok)
+	assert.Contains(t, output.AsString(), "... [truncated]")
+	assert.LessOrEqual(t, len(output.AsString()), 10+len("... [truncated]"))
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.result"))
 }
