@@ -73,22 +73,32 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 		tools[name] = t
 	}
 	return &Registry{
-		tools:    tools,
-		opts:     b.opts,
+		tools: tools,
+		opts:  b.opts,
+		state: newRegistryRuntimeState(),
+	}, nil
+}
+
+// registryRuntimeState is shared by a root registry and all Subset views derived from it.
+type registryRuntimeState struct {
+	done     chan struct{}
+	running  sync.WaitGroup
+	closeMux sync.Once
+}
+
+func newRegistryRuntimeState() *registryRuntimeState {
+	return &registryRuntimeState{
 		done:     make(chan struct{}),
 		running:  sync.WaitGroup{},
 		closeMux: sync.Once{},
-	}, nil
+	}
 }
 
 // Registry holds tools and executes them with optional panic recovery.
 type Registry struct {
-	tools   map[string]Tool
-	opts    registryOptions
-	done    chan struct{}
-	running sync.WaitGroup
-
-	closeMux sync.Once
+	tools map[string]Tool
+	opts  registryOptions
+	state *registryRuntimeState
 }
 
 // NewRegistry creates an immutable registry from tools with default options.
@@ -96,13 +106,33 @@ func NewRegistry(tools ...Tool) (*Registry, error) {
 	return NewRegistryBuilder().Add(tools...).Build()
 }
 
-// GetAllTools returns all registered tools, sorted by manifest name.
-func (r *Registry) GetAllTools() []Tool {
+func (r *Registry) requireRuntimeState() (*registryRuntimeState, error) {
+	if r == nil || r.state == nil {
+		return nil, ErrRegistryState
+	}
+	return r.state, nil
+}
+
+func (r *Registry) sortedToolNames() []string {
+	if r == nil {
+		return nil
+	}
 	names := make([]string, 0, len(r.tools))
 	for name := range r.tools {
 		names = append(names, name)
 	}
 	slices.Sort(names)
+	return names
+}
+
+// GetAllTools returns all registered tools, sorted by manifest name.
+// This is a map-view helper only; it does not check runtime readiness.
+// A nil receiver returns nil (no panic).
+func (r *Registry) GetAllTools() []Tool {
+	if r == nil {
+		return nil
+	}
+	names := r.sortedToolNames()
 	out := make([]Tool, 0, len(names))
 	for _, name := range names {
 		out = append(out, r.tools[name])
@@ -111,9 +141,65 @@ func (r *Registry) GetAllTools() []Tool {
 }
 
 // GetTool returns the tool with the given name, or (nil, false) if not found.
+// A nil receiver returns (nil, false).
 func (r *Registry) GetTool(name string) (Tool, bool) {
+	if r == nil {
+		return nil, false
+	}
 	t, ok := r.tools[name]
 	return t, ok
+}
+
+// Has reports whether a tool with the given name is registered in this view's tool map.
+// It does not check runtime readiness; use [ValidateContract] or [Registry.Execute] for that.
+// A nil receiver returns false.
+func (r *Registry) Has(name string) bool {
+	if r == nil {
+		return false
+	}
+	_, ok := r.tools[name]
+	return ok
+}
+
+// ToolNames returns all registered tool names, sorted lexicographically.
+// Useful for prompt manifests and contract validation.
+// This is a map-view helper only; it does not check runtime readiness.
+// A nil receiver returns nil (no panic).
+func (r *Registry) ToolNames() []string {
+	return r.sortedToolNames()
+}
+
+// Subset returns a new registry containing only the named tools from r.
+// Duplicate names in allowedNames are ignored (silent dedup).
+// Returns an error if any name is not present in r (strict fail-fast).
+// The parent registry is not modified. Registry options (hooks, validator) are inherited.
+// Subset shares runtime state (Shutdown, in-flight tracking) with r and all sibling views.
+// Shutdown on either parent or subset stops the entire tree (see [Registry.Shutdown]).
+//
+// Use Subset for capability scoping (which tools an agent profile may see).
+// Runtime authorization (per-call data access) belongs in middleware, not Subset.
+func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
+	if _, err := r.requireRuntimeState(); err != nil {
+		return nil, fmt.Errorf("toolsy: subset: %w", err)
+	}
+	seen := make(map[string]struct{}, len(allowedNames))
+	tools := make(map[string]Tool, len(allowedNames))
+	for _, name := range allowedNames {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		tool, ok := r.tools[name]
+		if !ok {
+			return nil, fmt.Errorf("toolsy: unknown tool in subset: %q: %w", name, ErrToolNotFound)
+		}
+		tools[name] = tool
+	}
+	return &Registry{
+		tools: tools,
+		opts:  r.opts,
+		state: r.state,
+	}, nil
 }
 
 // accountDeliveredChunk updates ExecutionSummary after a chunk was successfully yielded to the consumer.
@@ -190,8 +276,12 @@ func (r *Registry) executeWithSummary(
 	yield func(Chunk) error,
 	withAfterHook bool,
 ) (summary ExecutionSummary, summaryReady bool, err error) {
+	state, stateErr := r.requireRuntimeState()
+	if stateErr != nil {
+		return summary, false, stateErr
+	}
 	select {
-	case <-r.done:
+	case <-state.done:
 		return summary, false, ErrShutdown
 	default:
 	}
@@ -199,10 +289,10 @@ func (r *Registry) executeWithSummary(
 	if !ok {
 		return summary, false, ErrToolNotFound
 	}
-	r.running.Add(1)
+	state.running.Add(1)
 
 	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(func() { r.running.Done() }) }
+	release := func() { releaseOnce.Do(func() { state.running.Done() }) }
 	run := call.Run
 	run.attachments = cloneAttachments(call.Input.Attachments)
 	run.async = newAsyncRuntime(r)
@@ -471,11 +561,20 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 // Shutdown closes the registry for new calls and waits for in-flight executions or ctx to cancel.
 // Both synchronous executions and background jobs started by AsAsyncTool (when run via Registry) are tracked;
 // Shutdown blocks until all of them finish or ctx is cancelled.
+//
+// Subset views share runtime state with their parent. Calling Shutdown on any view closes the shared
+// lifecycle for the entire registry tree (idempotent via [sync.Once]). Only the application owner of the
+// root registry (for example App or Server on SIGTERM) should call Shutdown; do not call Shutdown on a
+// per-request Subset to "clean up" after an agent run.
 func (r *Registry) Shutdown(ctx context.Context) error {
-	r.closeMux.Do(func() { close(r.done) })
+	state, err := r.requireRuntimeState()
+	if err != nil {
+		return err
+	}
+	state.closeMux.Do(func() { close(state.done) })
 	done := make(chan struct{})
 	go func() {
-		r.running.Wait()
+		state.running.Wait()
 		close(done)
 	}()
 	select {

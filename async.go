@@ -80,7 +80,7 @@ func (r *asyncRuntime) trackBackground() func() {
 	}
 	r.backgroundStarted.Store(true)
 	return func() {
-		r.registry.running.Done()
+		r.registry.state.running.Done()
 	}
 }
 

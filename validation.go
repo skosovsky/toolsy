@@ -1,5 +1,9 @@
 package toolsy
 
+import (
+	"fmt"
+)
+
 // Validatable is implemented by argument structs that need custom business validation.
 // Called after schema validation and unmarshaling.
 type Validatable interface {
@@ -27,4 +31,47 @@ func validateCustom(args any) error {
 		return v.Validate()
 	}
 	return nil
+}
+
+// MissingToolsError is returned by [ValidateContract] when the registry does not
+// contain all tools required by a prompt or agent profile.
+type MissingToolsError struct {
+	Required []string
+	Missing  []string
+}
+
+func (e *MissingToolsError) Error() string {
+	return fmt.Sprintf("toolsy: missing required tools: %v", e.Missing)
+}
+
+// ValidateContract checks that every name in requiredNames exists in reg.
+// Call before starting an agent (fail-fast). Empty requiredNames is a no-op.
+// reg must have a valid runtime state (built via [RegistryBuilder]); otherwise returns [ErrRegistryState].
+func ValidateContract(reg *Registry, requiredNames []string) error {
+	if _, err := reg.requireRuntimeState(); err != nil {
+		return fmt.Errorf("toolsy: validate contract: %w", err)
+	}
+	if len(requiredNames) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(requiredNames))
+	uniqueRequired := make([]string, 0, len(requiredNames))
+	var missing []string
+	for _, name := range requiredNames {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		uniqueRequired = append(uniqueRequired, name)
+		if !reg.Has(name) {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	return &MissingToolsError{
+		Required: uniqueRequired,
+		Missing:  missing,
+	}
 }

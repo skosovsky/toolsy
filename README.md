@@ -93,6 +93,31 @@ reg, err := toolsy.NewRegistryBuilder().Use(
 
 The built registry is read-only for runtime calls (`Execute`, `ExecuteIter`, `ExecuteBatchStream`).
 
+### Contract scoping and validation
+
+Before starting an agent, narrow which tools the LLM can see and verify the prompt contract:
+
+```go
+// Capability: static tool visibility (saves tokens; tools not in subset have no schema in the manifest).
+profileReg, err := reg.Subset("book_appointment", "list_slots")
+if err != nil {
+    return err
+}
+
+// Fail-fast: ensure the prompt's required tools exist in this registry.
+if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list_slots"}); err != nil {
+    return err
+}
+```
+
+- **`Subset`**: creates a capability view with only the named tools. Duplicate names are ignored. Unknown names return an error. Subset shares runtime state (shutdown and in-flight tracking) with the root registry.
+- **`ValidateContract`**: returns `*MissingToolsError` when required tools are missing (use `errors.As`). Duplicate names in `requiredNames` are deduplicated. Requires a valid registry runtime state (`errors.Is(err, ErrRegistryState)` on nil or uninitialized registry).
+- **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
+
+**Capability vs runtime authorization:** use `Subset` for which tools a profile may use at all. Use middleware for per-call checks (tenant, role, payload) that depend on `context` or arguments.
+
+**Shutdown:** call `Shutdown` only on the root registry owner (for example your app on SIGTERM). Subset views share lifecycle: `subset.Shutdown()` stops the entire registry tree, not just one agent request.
+
 ## Tool manifest and metadata
 
 `ToolManifest` contains:

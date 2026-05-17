@@ -67,6 +67,231 @@ func TestRegistryBuilder_DuplicateToolName(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicate tool name")
 }
 
+func mustNamedTool(t *testing.T, name string) Tool {
+	t.Helper()
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool(name, name, func(_ context.Context, _ RunContext, _ A) (R, error) {
+		return R{}, nil
+	})
+	require.NoError(t, err)
+	return tool
+}
+
+func TestRegistry_Has(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "x")})
+	assert.True(t, reg.Has("x"))
+	assert.False(t, reg.Has("y"))
+}
+
+func TestRegistry_ToolNames(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{
+		mustNamedTool(t, "b"),
+		mustNamedTool(t, "a"),
+		mustNamedTool(t, "c"),
+	})
+	assert.Equal(t, []string{"a", "b", "c"}, reg.ToolNames())
+}
+
+func TestRegistry_Subset_ValidTools(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{
+		mustNamedTool(t, "a"),
+		mustNamedTool(t, "b"),
+		mustNamedTool(t, "c"),
+	})
+	sub, err := reg.Subset("b", "a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, sub.ToolNames())
+	assert.Len(t, reg.ToolNames(), 3)
+}
+
+func TestRegistry_Subset_SilentDedup(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{
+		mustNamedTool(t, "a"),
+		mustNamedTool(t, "b"),
+	})
+	sub, err := reg.Subset("a", "b", "a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, sub.ToolNames())
+}
+
+func TestRegistry_Subset_UnknownTool(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "a")})
+	_, err := reg.Subset("a", "missing")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrToolNotFound)
+	assert.Contains(t, err.Error(), "unknown tool in subset")
+}
+
+func TestRegistry_NilReceiverMapHelpers(t *testing.T) {
+	t.Parallel()
+
+	var reg *Registry
+
+	assert.False(t, reg.Has("any"))
+	tool, ok := reg.GetTool("any")
+	assert.Nil(t, tool)
+	assert.False(t, ok)
+	assert.Nil(t, reg.ToolNames())
+	assert.Nil(t, reg.GetAllTools())
+}
+
+func TestRegistry_Subset_ExecuteDeniedForNonMember(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{
+		mustNamedTool(t, "allowed"),
+		mustNamedTool(t, "denied"),
+	})
+	sub, err := reg.Subset("allowed")
+	require.NoError(t, err)
+	err = sub.Execute(
+		context.Background(),
+		ToolCall{ToolName: "denied", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, ErrToolNotFound)
+}
+
+func TestRegistry_Subset_ParentShutdownBlocksSubsetExecute(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "x")})
+	sub, err := reg.Subset("x")
+	require.NoError(t, err)
+	require.NoError(t, reg.Shutdown(context.Background()))
+	err = sub.Execute(
+		context.Background(),
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, ErrShutdown)
+}
+
+func TestRegistry_Subset_ShutdownBlocksParentExecute(t *testing.T) {
+	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "x")})
+	sub, err := reg.Subset("x")
+	require.NoError(t, err)
+	require.NoError(t, sub.Shutdown(context.Background()))
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, ErrShutdown)
+}
+
+func TestRegistry_Subset_InFlightWaitsOnParentShutdown(t *testing.T) {
+	toolStarted := make(chan struct{})
+	shutdownStarted := make(chan struct{})
+	releaseTool := make(chan struct{})
+
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("slow", "slow", func(_ context.Context, _ RunContext, _ A) (R, error) {
+		close(toolStarted)
+		<-releaseTool
+		return R{}, nil
+	})
+	require.NoError(t, err)
+
+	reg := mustBuildRegistry(t, []Tool{tool})
+	sub, err := reg.Subset("slow")
+	require.NoError(t, err)
+
+	execDone := make(chan error, 1)
+	go func() {
+		execDone <- sub.Execute(
+			context.Background(),
+			ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+			func(Chunk) error { return nil },
+		)
+	}()
+
+	<-toolStarted
+	shutdownDone := make(chan error, 1)
+	go func() {
+		close(shutdownStarted)
+		shutdownDone <- reg.Shutdown(context.Background())
+	}()
+
+	<-shutdownStarted
+	select {
+	case err := <-shutdownDone:
+		t.Fatalf("shutdown returned before in-flight tool finished: %v", err)
+	case <-releaseTool:
+		t.Fatal("release channel must not be closed before tool is released")
+	default:
+	}
+	close(releaseTool)
+	require.NoError(t, <-shutdownDone)
+	require.NoError(t, <-execDone)
+}
+
+func TestRegistry_Subset_InFlightWaitsOnSubsetShutdown(t *testing.T) {
+	toolStarted := make(chan struct{})
+	shutdownStarted := make(chan struct{})
+	releaseTool := make(chan struct{})
+
+	type A struct{}
+	type R struct{}
+	tool, err := NewTool("slow", "slow", func(_ context.Context, _ RunContext, _ A) (R, error) {
+		close(toolStarted)
+		<-releaseTool
+		return R{}, nil
+	})
+	require.NoError(t, err)
+
+	reg := mustBuildRegistry(t, []Tool{tool})
+	sub, err := reg.Subset("slow")
+	require.NoError(t, err)
+
+	execDone := make(chan error, 1)
+	go func() {
+		execDone <- reg.Execute(
+			context.Background(),
+			ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+			func(Chunk) error { return nil },
+		)
+	}()
+
+	<-toolStarted
+	shutdownDone := make(chan error, 1)
+	go func() {
+		close(shutdownStarted)
+		shutdownDone <- sub.Shutdown(context.Background())
+	}()
+
+	<-shutdownStarted
+	select {
+	case err := <-shutdownDone:
+		t.Fatalf("shutdown returned before in-flight tool finished: %v", err)
+	case <-releaseTool:
+		t.Fatal("release channel must not be closed before tool is released")
+	default:
+	}
+	close(releaseTool)
+	require.NoError(t, <-shutdownDone)
+	require.NoError(t, <-execDone)
+}
+
+func TestRegistry_InvalidRuntimeState(t *testing.T) {
+	var reg Registry
+	reg.tools = map[string]Tool{"x": mustNamedTool(t, "x")}
+
+	_, err := reg.Subset("x")
+	require.ErrorIs(t, err, ErrRegistryState)
+
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, ErrRegistryState)
+
+	err = reg.Shutdown(context.Background())
+	require.ErrorIs(t, err, ErrRegistryState)
+
+	err = ValidateContract(&reg, []string{"x"})
+	require.ErrorIs(t, err, ErrRegistryState)
+}
+
 func TestRegistry_Execute_ToolNotFound(t *testing.T) {
 	reg := mustBuildRegistry(t, nil)
 	err := reg.Execute(

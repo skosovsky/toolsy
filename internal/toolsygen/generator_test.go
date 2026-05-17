@@ -442,10 +442,10 @@ parameters:
 	for _, want := range []string{
 		"*int64",
 		"*bool",
-		"[]string",
+		"*[]string",
 		`if in.Count == nil`,
 		`if in.Active == nil`,
-		`if len(in.Tags) == 0`,
+		`if in.Tags == nil || len(*in.Tags) == 0`,
 		`missing required field: 'count'`,
 		`missing required field: 'active'`,
 	} {

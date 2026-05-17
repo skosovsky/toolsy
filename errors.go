@@ -11,6 +11,7 @@ var (
 	ErrTimeout          = errors.New("tool execution timeout")
 	ErrValidation       = errors.New("validation failed")
 	ErrShutdown         = errors.New("registry is shutting down")
+	ErrRegistryState    = errors.New("registry runtime state is not initialized")
 	ErrStreamAborted    = errors.New("stream aborted by caller")
 	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
 	ErrSuspend          = errors.New("execution suspended: waiting for external input")

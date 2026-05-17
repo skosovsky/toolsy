@@ -547,7 +547,7 @@ func mapGoType(filePath, schemaPath string, raw map[string]any, required bool, t
 	case "boolean":
 		return mapGoTypeBoolean(required, topLevel)
 	case "array":
-		return mapGoTypeArray(filePath, schemaPath, raw)
+		return mapGoTypeArray(filePath, schemaPath, raw, required, topLevel)
 	case "object":
 		return "", false, fmt.Errorf("%s: %s: nested objects are not supported", filePath, schemaPath)
 	default:
@@ -596,7 +596,7 @@ func mapGoTypeBoolean(required, topLevel bool) (string, bool, error) {
 	return "*bool", false, nil
 }
 
-func mapGoTypeArray(filePath, schemaPath string, raw map[string]any) (string, bool, error) {
+func mapGoTypeArray(filePath, schemaPath string, raw map[string]any, required, topLevel bool) (string, bool, error) {
 	items, ok := raw["items"].(map[string]any)
 	if !ok {
 		return "", false, fmt.Errorf("%s: %s.items: required object", filePath, schemaPath)
@@ -612,7 +612,12 @@ func mapGoTypeArray(filePath, schemaPath string, raw map[string]any) (string, bo
 		return "", false, fmt.Errorf("%s: %s.items: nested arrays are not supported", filePath, schemaPath)
 	}
 	itemType = strings.TrimPrefix(itemType, "*")
-	return "[]" + itemType, needsTime, nil
+	sliceType := "[]" + itemType
+	if required && topLevel {
+		// Pointer distinguishes a missing JSON key (nil) from an explicit empty array.
+		return "*" + sliceType, needsTime, nil
+	}
+	return sliceType, needsTime, nil
 }
 
 func rejectUnsupportedKeywords(schemaPath string, raw map[string]any) error {
@@ -1009,8 +1014,8 @@ func renderManifest(m *manifest) ([]byte, error) {
 			fmt.Fprintf(&buf, "\tif in.%s.IsZero() {\n", field.GoName)
 			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
 			buf.WriteString("\t}\n")
-		case strings.HasPrefix(field.GoType, "[]"):
-			fmt.Fprintf(&buf, "\tif len(in.%s) == 0 {\n", field.GoName)
+		case strings.HasPrefix(field.GoType, "*[]"):
+			fmt.Fprintf(&buf, "\tif in.%s == nil || len(*in.%s) == 0 {\n", field.GoName, field.GoName)
 			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
 			buf.WriteString("\t}\n")
 		case strings.HasPrefix(field.GoType, "*"):
