@@ -101,6 +101,8 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			func(ctx context.Context, _ toolsy.RunContext, args sendArgs) (sendResult, error) {
 				return doSend(ctx, sender, args, o.maxBodyBytes)
 			},
+			toolsy.WithDangerous(),
+			toolsy.WithRequiresConfirmation(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("toolkit/mail: build send tool: %w", err)
@@ -114,6 +116,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
 				return doSearch(ctx, reader, args, o.maxBodyBytes)
 			},
+			toolsy.WithReadOnly(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("toolkit/mail: build search tool: %w", err)
@@ -126,6 +129,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
 				return doRead(ctx, reader, args, o.maxBodyBytes)
 			},
+			toolsy.WithReadOnly(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("toolkit/mail: build read tool: %w", err)

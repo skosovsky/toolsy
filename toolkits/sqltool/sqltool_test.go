@@ -309,6 +309,8 @@ func TestAsTools_ToolCount(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "sql_inspect_schema", tools[0].Manifest().Name)
 	require.Equal(t, "sql_execute_read", tools[1].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
 }
 
 func TestAsTools_UnknownDialect(t *testing.T) {

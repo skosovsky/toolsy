@@ -133,6 +133,18 @@ func TestAsTool_ReturnsOneTool(t *testing.T) {
 	require.Equal(t, "document_extract_text", tool.Manifest().Name)
 }
 
+func TestAsTool_DefaultReadOnlyManifest(t *testing.T) {
+	tool, err := AsTool()
+	require.NoError(t, err)
+	require.True(t, tool.Manifest().ReadOnly)
+}
+
+func TestAsTool_AllowRemoteClearsReadOnlyManifest(t *testing.T) {
+	tool, err := AsTool(WithAllowRemote(true))
+	require.NoError(t, err)
+	require.False(t, tool.Manifest().ReadOnly)
+}
+
 func TestExtract_FileTooLarge(t *testing.T) {
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "big.csv")

@@ -226,7 +226,14 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 	require.ErrorIs(t, err, ErrTimeout)
 }
 
-func TestExecutePropagatesToolOptionMetadata(t *testing.T) {
+func TestNewDefaultsDangerousManifest(t *testing.T) {
+	sb := &mockSandbox{languages: []string{"python"}}
+	tool, err := New(sb)
+	require.NoError(t, err)
+	require.True(t, tool.Manifest().Dangerous)
+}
+
+func TestExecutePropagatesToolManifestPolicy(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
 	tool, err := New(
 		sb,

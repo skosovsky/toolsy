@@ -32,6 +32,20 @@ func TestYieldControl_HaltReturnsErrHalt(t *testing.T) {
 	require.ErrorIs(t, err, ErrHalt)
 }
 
+func TestYieldControl_UIActionReturnsErrUIAction(t *testing.T) {
+	var got Chunk
+	err := YieldControl(func(c Chunk) error {
+		got = c
+		return nil
+	}, &UIActionSignal{Action: "open_panel", PayloadJSON: []byte(`{"id":"x"}`)})
+	require.ErrorIs(t, err, ErrUIAction)
+	assert.Equal(t, EventControl, got.Event)
+	ui, ok := got.Control.(*UIActionSignal)
+	require.True(t, ok)
+	assert.Equal(t, "open_panel", ui.Action)
+	assert.JSONEq(t, `{"id":"x"}`, string(ui.PayloadJSON))
+}
+
 func TestYieldControl_NilSignalIsSystemError(t *testing.T) {
 	err := YieldControl(func(Chunk) error { return nil }, nil)
 	require.True(t, IsSystemError(err))
@@ -41,6 +55,7 @@ func TestIsControlError(t *testing.T) {
 	assert.True(t, IsControlError(ErrPause))
 	assert.True(t, IsControlError(ErrYield))
 	assert.True(t, IsControlError(ErrHalt))
+	assert.True(t, IsControlError(ErrUIAction))
 	assert.False(t, IsControlError(errors.New("other")))
 }
 

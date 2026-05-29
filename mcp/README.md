@@ -6,6 +6,7 @@ This module bridges MCP servers to [toolsy](https://github.com/skosovsky/toolsy)
 
 - **Transports**: `StdioTransport` (child process via stdin/stdout) and `SSETransport` (HTTP Server-Sent Events with dynamic POST endpoint).
 - **Client**: eager lifecycle via `Connect(ctx, transport, opts...)`. Handshake is executed during connect and returned client is ready for `GetTools`, `GetResourceTool`, `GetPrompts`, `GetPrompt`.
+- **Manifest policy**: MCP tool `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`) map to `toolsy` manifest fields on proxy tools. `openWorldHint` is accepted but not mapped (no direct manifest equivalent). `read_mcp_resource` is `ReadOnly`.
 - **Thread-safe**: Safe for concurrent use (e.g. `Registry.ExecuteBatchStream`). Request IDs are generated with `atomic.Uint64`; pending responses are correlated via `sync.Map`.
 - **Resilience**: Context cancellation and yield errors trigger `notifications/cancelled` and return `toolsy.ErrStreamAborted`. Process crash (stdio) unblocks all pending `Call`s with an error.
 
@@ -54,7 +55,8 @@ func main() {
 		panic(err)
 	}
 
-	// reg is ready for the LLM: it will generate JSON Schema, handle validation, streaming, progress, and timeouts.
+	// reg is ready for the LLM: it will generate JSON Schema, handle validation, streaming, and progress.
+	// Apply execution deadlines on the context passed to Execute (or wrap tools with routery).
 	_ = reg
 }
 ```

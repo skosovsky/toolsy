@@ -119,10 +119,11 @@ type ToolsListResult struct {
 //
 //revive:disable-next-line:exported
 type MCPTool struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
-	Title       string          `json:"title,omitempty"`
-	InputSchema json.RawMessage `json:"inputSchema"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	Title       string           `json:"title,omitempty"`
+	InputSchema json.RawMessage  `json:"inputSchema"`
+	Annotations *ToolAnnotations `json:"annotations,omitempty"`
 }
 
 // ToolsCallParams is the params for tools/call.

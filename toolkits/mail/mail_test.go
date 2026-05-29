@@ -222,6 +222,8 @@ func TestAsTools_ReadOnlyTrue_OnlyReadTools(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "mail_search_inbox", tools[0].Manifest().Name)
 	require.Equal(t, "mail_read_message", tools[1].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
 }
 
 func TestAsTools_NilSender_OnlyReadTools(t *testing.T) {
@@ -231,6 +233,8 @@ func TestAsTools_NilSender_OnlyReadTools(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "mail_search_inbox", tools[0].Manifest().Name)
 	require.Equal(t, "mail_read_message", tools[1].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
 }
 
 func TestAsTools_NilReader_OnlySendTool(t *testing.T) {
@@ -239,6 +243,8 @@ func TestAsTools_NilReader_OnlySendTool(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tools, 1)
 	require.Equal(t, "mail_send", tools[0].Manifest().Name)
+	require.True(t, tools[0].Manifest().Dangerous)
+	require.True(t, tools[0].Manifest().RequiresConfirmation)
 }
 
 func TestAsTools_BothNil_Error(t *testing.T) {

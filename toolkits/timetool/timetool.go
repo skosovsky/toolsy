@@ -42,6 +42,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		func(_ context.Context, _ toolsy.RunContext, _ currentArgs) (currentResult, error) {
 			return doCurrent(&o)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/timetool: build current tool: %w", err)
@@ -53,6 +54,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		func(_ context.Context, _ toolsy.RunContext, args calculateArgs) (calculateResult, error) {
 			return doCalculate(&o, args)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/timetool: build calculate tool: %w", err)

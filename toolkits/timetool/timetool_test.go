@@ -206,6 +206,8 @@ func TestAsTools_ToolCountAndNames(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "time_current", tools[0].Manifest().Name)
 	require.Equal(t, "time_calculate", tools[1].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
 }
 
 func TestAsTools_CustomNames(t *testing.T) {

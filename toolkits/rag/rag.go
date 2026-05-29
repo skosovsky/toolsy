@@ -54,5 +54,5 @@ func AsSearchTool(r Retriever, opts ...Option) (toolsy.Tool, error) {
 		return searchResult{Results: text}, nil
 	}
 
-	return toolsy.NewTool(o.name, o.description, handler)
+	return toolsy.NewTool(o.name, o.description, handler, toolsy.WithReadOnly())
 }

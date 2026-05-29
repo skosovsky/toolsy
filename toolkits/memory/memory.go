@@ -37,7 +37,7 @@ func (s *Scratchpad) AsTools() ([]toolsy.Tool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: build pin tool: %w", err)
 	}
-	readTool, err := toolsy.NewTool("memory_read_all", "Read all stored facts", s.readHandler)
+	readTool, err := toolsy.NewTool("memory_read_all", "Read all stored facts", s.readHandler, toolsy.WithReadOnly())
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: build read tool: %w", err)
 	}

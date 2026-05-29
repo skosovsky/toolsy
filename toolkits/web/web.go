@@ -59,6 +59,7 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
 			return doSearch(ctx, provider, args.Query)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/web: build search tool: %w", err)
@@ -70,6 +71,7 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, _ toolsy.RunContext, args scrapeArgs) (scrapeResult, error) {
 			return doScrape(ctx, &o, args.URL)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/web: build scrape tool: %w", err)

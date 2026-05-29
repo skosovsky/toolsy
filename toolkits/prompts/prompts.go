@@ -43,5 +43,5 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 		return getResult{Instructions: text}, nil
 	}
 
-	return toolsy.NewTool(o.name, o.description, handler)
+	return toolsy.NewTool(o.name, o.description, handler, toolsy.WithReadOnly())
 }

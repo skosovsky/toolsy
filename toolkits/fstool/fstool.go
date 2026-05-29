@@ -71,6 +71,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, _ toolsy.RunContext, args listArgs) (listResult, error) {
 			return doListDir(ctx, baseDir, &o, args.Path)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/fstool: build list_dir tool: %w", err)
@@ -82,6 +83,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
 			return doReadFile(ctx, baseDir, &o, args.Path)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/fstool: build read_file tool: %w", err)
@@ -96,6 +98,8 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 			func(ctx context.Context, _ toolsy.RunContext, args writeArgs) (statusResult, error) {
 				return doWriteFile(ctx, baseDir, args.Path, args.Content)
 			},
+			toolsy.WithDangerous(),
+			toolsy.WithRequiresConfirmation(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("toolkit/fstool: build write_file tool: %w", err)

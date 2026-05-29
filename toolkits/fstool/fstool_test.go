@@ -212,6 +212,10 @@ func TestAsTools_ToolCount(t *testing.T) {
 	require.Equal(t, "fs_list_dir", tools[0].Manifest().Name)
 	require.Equal(t, "fs_read_file", tools[1].Manifest().Name)
 	require.Equal(t, "fs_write_file", tools[2].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
+	require.True(t, tools[2].Manifest().Dangerous)
+	require.True(t, tools[2].Manifest().RequiresConfirmation)
 }
 
 func TestAsTools_ToolCountReadOnly(t *testing.T) {

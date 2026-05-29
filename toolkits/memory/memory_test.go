@@ -61,6 +61,21 @@ func executeAndDecode[T any](t *testing.T, reg *toolsy.Registry, state toolsy.St
 	return out
 }
 
+func TestScratchpad_ReadToolManifestReadOnly(t *testing.T) {
+	s := NewScratchpad()
+	tools, err := s.AsTools()
+	require.NoError(t, err)
+	var readTool toolsy.Tool
+	for _, tool := range tools {
+		if tool.Manifest().Name == "memory_read_all" {
+			readTool = tool
+			break
+		}
+	}
+	require.NotNil(t, readTool)
+	require.True(t, readTool.Manifest().ReadOnly)
+}
+
 func TestScratchpad_PinRead(t *testing.T) {
 	s := NewScratchpad()
 	reg := mustBuildMemoryRegistry(t, s)

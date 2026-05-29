@@ -44,9 +44,10 @@ func (*UIActionSignal) isControlSignal() {}
 
 // Control errors are not tool execution failures; middleware must pass them through unchanged.
 var (
-	ErrPause = errors.New("toolsy: control pause")
-	ErrYield = errors.New("toolsy: control yield")
-	ErrHalt  = errors.New("toolsy: control halt")
+	ErrPause    = errors.New("toolsy: control pause")
+	ErrYield    = errors.New("toolsy: control yield")
+	ErrHalt     = errors.New("toolsy: control halt")
+	ErrUIAction = errors.New("toolsy: control ui action")
 )
 
 // ControlErrorFromSignal maps a control signal to its sentinel error for Execute return values.
@@ -61,6 +62,8 @@ func ControlErrorFromSignal(sig ControlSignal) error {
 		return ErrYield
 	case *HaltSignal:
 		return ErrHalt
+	case *UIActionSignal:
+		return ErrUIAction
 	default:
 		return nil
 	}
@@ -70,7 +73,8 @@ func ControlErrorFromSignal(sig ControlSignal) error {
 func IsControlError(err error) bool {
 	return errors.Is(err, ErrPause) ||
 		errors.Is(err, ErrYield) ||
-		errors.Is(err, ErrHalt)
+		errors.Is(err, ErrHalt) ||
+		errors.Is(err, ErrUIAction)
 }
 
 // YieldControl emits a typed control chunk and returns the matching control error.

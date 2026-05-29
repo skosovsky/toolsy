@@ -21,6 +21,7 @@ func applyDefaults(o *options) {
 	if o.description == "" {
 		o.description = "Run code in a configured sandbox and return stdout, stderr, exit code, and duration"
 	}
+	o.toolOptions = append([]toolsy.ToolOption{toolsy.WithDangerous()}, o.toolOptions...)
 }
 
 // WithName overrides the public tool name.
@@ -45,7 +46,7 @@ func WithAllowedLanguages(languages ...string) Option {
 	}
 }
 
-// WithToolOptions forwards toolsy metadata/options to the generated tool.
+// WithToolOptions forwards toolsy manifest policy options to the generated tool.
 func WithToolOptions(opts ...toolsy.ToolOption) Option {
 	return func(o *options) {
 		o.toolOptions = append(o.toolOptions, opts...)

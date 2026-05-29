@@ -285,3 +285,12 @@ func TestHTMLScraper_StripsLayoutElements(t *testing.T) {
 	require.NotContains(t, out, "Sidebar")
 	require.NotContains(t, out, "Copyright")
 }
+
+func TestAsTools_ReadOnlyManifest(t *testing.T) {
+	provider := &mockSearchProvider{}
+	tools, err := AsTools(provider)
+	require.NoError(t, err)
+	require.Len(t, tools, 2)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().ReadOnly)
+}

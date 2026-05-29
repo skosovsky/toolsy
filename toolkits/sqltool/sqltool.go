@@ -56,6 +56,7 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 		func(ctx context.Context, _ toolsy.RunContext, args inspectArgs) (inspectResult, error) {
 			return doInspectSchema(ctx, db, driverName, d, &o, args.TableNames)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/sqltool: build inspect tool: %w", err)
@@ -67,6 +68,7 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 		func(ctx context.Context, _ toolsy.RunContext, args executeArgs) (executeResult, error) {
 			return doExecuteRead(ctx, db, &o, args.Query)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/sqltool: build execute tool: %w", err)

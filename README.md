@@ -133,6 +133,8 @@ if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list
 - `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`
 - `CompletionPolicy` (`continue`, `silent_yield`, `halt`)
 
+Built-in `toolkits/*` set these fields on each tool (read tools → `ReadOnly`, mutating/external side-effect tools → `Dangerous` and often `RequiresConfirmation`). `exectool` marks `exec_code` as `Dangerous` by default. MCP proxy tools map server `annotations` hints into the same manifest fields; `read_mcp_resource` is `ReadOnly`.
+
 Example:
 
 ```go
@@ -323,7 +325,7 @@ Tools emit control signals via `toolsy.YieldControl`:
 return toolsy.YieldControl(yield, &toolsy.PauseSignal{Reason: payloadJSON})
 ```
 
-Orchestrators should treat `ErrPause`, `ErrYield`, and `ErrHalt` as control-plane outcomes (`toolsy.IsControlError`), not tool failures.
+Orchestrators should treat `ErrPause`, `ErrYield`, `ErrHalt`, and `ErrUIAction` as control-plane outcomes (`toolsy.IsControlError`), not tool failures.
 Set manifest policy for routing after successful completion:
 
 ```go

@@ -198,7 +198,7 @@ func (c *Client) toolToProxy(m *MCPTool) (toolsy.Tool, error) {
 	handler := func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {
 		return c.runMCPToolCall(ctx, name, rawArgs, yield)
 	}
-	return toolsy.NewProxyTool(name, description, schema, handler)
+	return toolsy.NewProxyTool(name, description, schema, handler, mcpToolPolicyOptions(m.Annotations)...)
 }
 
 type callResultWithErr struct {
@@ -375,7 +375,13 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 			IsError:  chunkIsError,
 		})
 	}
-	return toolsy.NewProxyTool("read_mcp_resource", "Reads a resource by URI from the MCP server", schema, handler)
+	return toolsy.NewProxyTool(
+		"read_mcp_resource",
+		"Reads a resource by URI from the MCP server",
+		schema,
+		handler,
+		toolsy.WithReadOnly(),
+	)
 }
 
 // GetPrompts returns an iterator over prompt templates from the server (with cursor pagination).

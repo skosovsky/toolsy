@@ -102,6 +102,7 @@ func TestAsTool_WithNameAndDescription(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "get_role", tool.Manifest().Name)
 	require.Equal(t, "Fetch role instructions", tool.Manifest().Description)
+	require.True(t, tool.Manifest().ReadOnly)
 }
 
 func TestAsTool_MaxBytesTruncate(t *testing.T) {

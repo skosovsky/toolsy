@@ -36,12 +36,18 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 	}
 	applyDefaults(&o)
 
+	toolOpts := []toolsy.ToolOption{}
+	if !o.allowRemote {
+		toolOpts = append(toolOpts, toolsy.WithReadOnly())
+	}
+
 	tool, err := toolsy.NewTool[extractArgs, extractResult](
 		o.toolName,
 		o.toolDesc,
 		func(ctx context.Context, _ toolsy.RunContext, args extractArgs) (extractResult, error) {
 			return doExtract(ctx, &o, args.FilePath, args.URL)
 		},
+		toolOpts...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/document: build tool: %w", err)

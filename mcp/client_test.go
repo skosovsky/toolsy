@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy"
 )
 
 // quietConnectLogger returns a [ClientOption] that discards client logs during Connect tests.
@@ -211,4 +213,54 @@ func TestConnect_InitializedNotifyFailureReturnsErrorAndClosesTransport(t *testi
 	require.Contains(t, err.Error(), "notifications/initialized")
 	require.Equal(t, MethodInitialized, base.notifiedMethod)
 	require.Equal(t, 1, base.closeCalls)
+}
+
+func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
+	toolsList := ToolsListResult{
+		Tools: []MCPTool{
+			{
+				Name:        "read_tool",
+				Description: "read only",
+				InputSchema: []byte(`{"type":"object"}`),
+				Annotations: &ToolAnnotations{ReadOnlyHint: new(true)},
+			},
+			{
+				Name:        "delete_tool",
+				Description: "destructive",
+				InputSchema: []byte(`{"type":"object"}`),
+				Annotations: &ToolAnnotations{
+					DestructiveHint: new(true),
+					IdempotentHint:  new(true),
+				},
+			},
+		},
+	}
+	resultBytes, err := json.Marshal(toolsList)
+	require.NoError(t, err)
+
+	client := &Client{transport: &connectCaptureTransport{callResult: resultBytes}}
+	ctx := context.Background()
+
+	var tools []toolsy.Tool
+	for tool, iterErr := range client.GetTools(ctx) {
+		require.NoError(t, iterErr)
+		tools = append(tools, tool)
+	}
+	require.Len(t, tools, 2)
+
+	byName := make(map[string]toolsy.Tool, len(tools))
+	for _, tool := range tools {
+		byName[tool.Manifest().Name] = tool
+	}
+
+	readTool := byName["read_tool"]
+	require.NotNil(t, readTool)
+	require.True(t, readTool.Manifest().ReadOnly)
+	require.False(t, readTool.Manifest().Dangerous)
+
+	deleteTool := byName["delete_tool"]
+	require.NotNil(t, deleteTool)
+	require.True(t, deleteTool.Manifest().Dangerous)
+	require.True(t, deleteTool.Manifest().Idempotent)
+	require.False(t, deleteTool.Manifest().ReadOnly)
 }

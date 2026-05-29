@@ -147,3 +147,9 @@ func TestAsSearchTool_EmptyResult(t *testing.T) {
 	)
 	require.Equal(t, "No results found.", result)
 }
+
+func TestAsSearchTool_ReadOnlyManifest(t *testing.T) {
+	tool, err := AsSearchTool(&mockRetriever{results: []string{"a"}})
+	require.NoError(t, err)
+	require.True(t, tool.Manifest().ReadOnly)
+}

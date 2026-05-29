@@ -267,6 +267,9 @@ func TestAsTools_ToolCount(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "http_get", tools[0].Manifest().Name)
 	require.Equal(t, "http_post", tools[1].Manifest().Name)
+	require.True(t, tools[0].Manifest().ReadOnly)
+	require.True(t, tools[1].Manifest().Dangerous)
+	require.True(t, tools[1].Manifest().RequiresConfirmation)
 }
 
 func TestAsTools_CustomToolNames(t *testing.T) {

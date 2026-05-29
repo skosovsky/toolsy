@@ -48,6 +48,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, run toolsy.RunContext, args getArgs) (httpResult, error) {
 			return doGET(ctx, run, o.getName, &o, args.URL)
 		},
+		toolsy.WithReadOnly(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/httptool: build get tool: %w", err)
@@ -59,6 +60,8 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		func(ctx context.Context, run toolsy.RunContext, args postArgs) (httpResult, error) {
 			return doPOST(ctx, run, o.postName, &o, args.URL, args.JSONBody)
 		},
+		toolsy.WithDangerous(),
+		toolsy.WithRequiresConfirmation(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/httptool: build post tool: %w", err)
