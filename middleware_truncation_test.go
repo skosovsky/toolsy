@@ -18,7 +18,7 @@ func TestWithTruncation_TruncatesTextPayload(t *testing.T) {
 				Event:    EventResult,
 				Data:     []byte("abcdefghijklmnopqrstuvwxyz"),
 				MimeType: MimeTypeText,
-				Metadata: map[string]any{"k": "v"},
+				Progress: &ProgressInfo{Label: "k", Status: "v"},
 			})
 		},
 	)
@@ -33,7 +33,7 @@ func TestWithTruncation_TruncatesTextPayload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, EventResult, got.Event)
 	assert.Equal(t, MimeTypeText, got.MimeType)
-	assert.Equal(t, "v", got.Metadata["k"])
+	assert.Equal(t, "v", got.Progress.Status)
 	assert.Equal(t, "abcdefghi...", string(got.Data))
 	assert.Equal(t, 12, utf8.RuneCount(got.Data))
 }
@@ -47,7 +47,7 @@ func TestWithTruncation_TruncatesMarkdownPayload(t *testing.T) {
 				Event:    EventResult,
 				Data:     []byte(input),
 				MimeType: "text/markdown; charset=utf-8",
-				Metadata: map[string]any{"kind": "md"},
+				Progress: &ProgressInfo{Label: "kind", Status: "md"},
 			})
 		},
 	)
@@ -62,7 +62,7 @@ func TestWithTruncation_TruncatesMarkdownPayload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, EventResult, got.Event)
 	assert.Equal(t, "text/markdown; charset=utf-8", got.MimeType)
-	assert.Equal(t, "md", got.Metadata["kind"])
+	assert.Equal(t, "md", got.Progress.Status)
 	assert.NotEqual(t, input, string(got.Data))
 	assert.True(t, strings.HasSuffix(string(got.Data), "..."))
 	assert.Equal(t, 14, utf8.RuneCount(got.Data))

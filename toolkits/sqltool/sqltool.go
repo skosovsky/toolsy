@@ -10,7 +10,7 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/internal/sqlutil"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type inspectArgs struct {
@@ -284,7 +284,7 @@ func appendMarkdownDataRow(b *strings.Builder, vals []sql.NullString, maxCellByt
 		}
 		s := ""
 		if v.Valid {
-			s = escapeMarkdownCell(textutil.TruncateStringUTF8(v.String, maxCellBytes, cellTruncationSuffix))
+			s = escapeMarkdownCell(textprocessor.TruncateStringUTF8(v.String, maxCellBytes, cellTruncationSuffix))
 		}
 		b.WriteString(s)
 	}

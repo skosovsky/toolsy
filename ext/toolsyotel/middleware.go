@@ -18,7 +18,7 @@ import (
 const instrumentationName = "github.com/skosovsky/toolsy/ext/toolsyotel"
 
 // WithTracing returns middleware that emits one span per tool execution.
-// Span status is left neutral for toolsy.ErrSuspend and toolsy.ErrStreamAborted.
+// Span status is left neutral for control-plane errors and toolsy.ErrStreamAborted.
 func WithTracing(opts ...Option) toolsy.Middleware {
 	cfg := defaultConfig()
 	cfg.tracerProvider = otel.GetTracerProvider()
@@ -123,9 +123,9 @@ func applySpanStatusFromExec(span trace.Span, execErr error, hasSoftError bool, 
 		span.AddEvent("tool.soft_error")
 		span.SetStatus(codes.Error, "tool returned soft error chunk")
 	case execErr == nil:
-	case errors.Is(execErr, toolsy.ErrSuspend):
-		span.SetAttributes(attribute.Bool("gen_ai.tool.suspended", true))
-		span.AddEvent("tool.suspend")
+	case toolsy.IsControlError(execErr):
+		span.SetAttributes(attribute.Bool("gen_ai.tool.control_signal", true))
+		span.AddEvent("tool.control")
 	case errors.Is(execErr, toolsy.ErrStreamAborted):
 		span.SetAttributes(attribute.Bool("gen_ai.tool.stream_aborted", true))
 		span.AddEvent("tool.stream_aborted")

@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const truncationSuffix = "\n[Truncated]"
@@ -163,7 +163,7 @@ func doPOST(
 // readAndTruncate reads up to maxBytes from r. If more than maxBytes are available, returns
 // UTF-8 safe truncation plus truncationSuffix. Caller must drain r after return (e.g. via defer).
 func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
-	text, err := textutil.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
+	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
 	if err != nil {
 		return "", fmt.Errorf("toolkit/httptool: read body: %w", err)
 	}

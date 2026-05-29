@@ -98,8 +98,11 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 					})
 				}
 				if yieldErr := yield(toolsy.Chunk{
-					Event:    toolsy.EventProgress,
-					Metadata: map[string]any{"sub_agent_step": step.Name, "status": step.Status},
+					Event: toolsy.EventProgress,
+					Progress: &toolsy.ProgressInfo{ //nolint:exhaustruct // label/status only for sub-agent steps
+						Label:  step.Name,
+						Status: step.Status,
+					},
 				}); yieldErr != nil {
 					return yieldErr
 				}

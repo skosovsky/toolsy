@@ -70,11 +70,16 @@ func main() {
 - `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, run, input, yield)`.
 - `ToolCall` carries `Input toolsy.ToolInput`; old `ToolCall.Args` is removed.
 - `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
-- `Chunk` is MIME-aware payload envelope: `Event`, `Data`, `MimeType`, `IsError`, `Metadata`.
-- `Chunk.Event` is strongly typed: `EventProgress`, `EventResult`, `EventSuspend`.
+- `Chunk` data-plane: `Event`, `Data`, `MimeType`, `IsError`, `Progress`.
+- `Chunk` control-plane: `EventControl` + typed `ControlSignal` (`PauseSignal`, `YieldSignal`, `HaltSignal`, `UIActionSignal`).
+- `Chunk.Event` values: `EventProgress`, `EventResult`, `EventControl`.
 - `Chunk.RawData` is removed.
 - Runtime `Registry` is immutable. Use `RegistryBuilder` to add tools and middleware before `Build()`.
 - Runtime-aware handlers are the only builders in v2 (`NewTool`, `NewStreamTool`, `NewDynamicTool`, `NewProxyTool`).
+
+## Architecture
+
+vNext core is a **stateless tool execution engine**: typed manifests, middleware, streaming chunks, and session policies. Orchestrators (for example `flowy`) own the agent loop, chat persistence, and routing after `CompletionPolicy`. `toolsy` executes tools and emits control signals; the orchestrator applies manifest policy and stores history (`historycodec` wire format).
 
 ## Registry setup
 
@@ -118,20 +123,15 @@ if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list
 
 **Shutdown:** call `Shutdown` only on the root registry owner (for example your app on SIGTERM). Subset views share lifecycle: `subset.Shutdown()` stops the entire registry tree, not just one agent request.
 
-## Tool manifest and metadata
+## Tool manifest and policy fields
 
 `ToolManifest` contains:
 
 - `Name`, `Description`, `Parameters`
 - `Tags`, `Version`
-- `Metadata map[string]any`
-
-Use metadata keys for orchestrator policy:
-
-- `dangerous` (from `WithDangerous`)
-- `read_only` (from `WithReadOnly`)
-- `requires_confirmation` (set via `WithMetadata`)
-- `sensitivity` (set via `WithMetadata`)
+- `Metadata map[string]any` (custom extension keys only — not for system policy)
+- `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`
+- `CompletionPolicy` (`continue`, `silent_yield`, `halt`)
 
 Example:
 
@@ -141,16 +141,18 @@ tool, err := toolsy.NewTool(
 	"Delete a user account",
 	handler,
 	toolsy.WithDangerous(),
+	toolsy.WithRequiresConfirmation(),
+	toolsy.WithCompletionPolicy(toolsy.CompletionHalt),
 	toolsy.WithMetadata(map[string]any{
-		"requires_confirmation": true,
-		"sensitivity":           "critical",
+		"sensitivity": "critical",
 	}),
 )
 if err != nil {
 	return err
 }
-meta := tool.Manifest().Metadata
-_ = meta
+m := tool.Manifest()
+_ = m.ReadOnly
+_ = m.RequiresConfirmation
 ```
 
 ## toolsy-gen: Contract-First Generator
@@ -194,13 +196,23 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 - Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
 - Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
 
-## RunContext dependencies
+## RunContext and RunEnv
 
 `RunContext` carries runtime-only dependencies:
 
 - `Credentials` (`CredentialsProvider`)
 - `State` (`StateStore`)
-- `Services` (`ServiceProvider`)
+
+Application dependencies must be bound via typed `BindEnv` on the execution context:
+
+```go
+type AppEnv struct {
+	DB *sql.DB
+}
+
+ctx = toolsy.BindEnv(ctx, AppEnv{DB: db})
+env, ok := toolsy.EnvFromContext[AppEnv](ctx)
+```
 
 `ToolInput.Attachments` are exposed to handlers as `run.Attachments()`.
 
@@ -303,21 +315,51 @@ Notes:
 - `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxStepsExceeded`, shutdown/validator failures) remain hard errors.
 - If you need to classify step success/failure in an orchestrator using `SessionTrack`, use `Chunk.IsError` as the failure signal; `SessionTrack` counts executions, not outcome status.
 
-## ServiceProvider recipe
+## Control flow (typed suspend/yield)
+
+Tools emit control signals via `toolsy.YieldControl`:
 
 ```go
-if run.Services == nil {
-	return Result{}, fmt.Errorf("service provider is not configured")
+return toolsy.YieldControl(yield, &toolsy.PauseSignal{Reason: payloadJSON})
+```
+
+Orchestrators should treat `ErrPause`, `ErrYield`, and `ErrHalt` as control-plane outcomes (`toolsy.IsControlError`), not tool failures.
+Set manifest policy for routing after successful completion:
+
+```go
+toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContinue, CompletionHalt
+```
+
+## Authorization and idempotency
+
+- Registry-level: `WithAuthorizer` or middleware `WithAuthorization`.
+- Idempotent tools: mark with `WithIdempotent()` and wrap registry with `WithIdempotency(store, keyFn)`.
+
+### Session tool choice (RunPolicy)
+
+`RunPolicy` is validated and enforced only on `Session.Execute`. Direct `Registry.Execute` does not apply run policy; use `Registry.Subset` for static tool visibility.
+
+```go
+sess, err := toolsy.NewSession(reg, toolsy.WithRunPolicy(toolsy.RunPolicy{
+	AllowedTools: []string{"weather", "search"},
+}))
+if err != nil {
+	return err
 }
-dbAny, ok := run.Services.Get("database")
-if !ok {
-	return Result{}, fmt.Errorf("database service not found")
-}
-db, ok := dbAny.(*sql.DB)
-if !ok {
-	return Result{}, fmt.Errorf("database service has unexpected type")
-}
-_ = db
+err = sess.Execute(ctx, call, yield)
+```
+
+## Canonical history codec and text utilities
+
+Use `github.com/skosovsky/toolsy/historycodec` for wire-format serialization of `ToolCall` and delivered `Chunk` results.
+Use `github.com/skosovsky/toolsy/textprocessor` for standalone UTF-8 truncation without a registry.
+Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history` — see [Semantic history truncation](#semantic-history-truncation-byot).
+
+## Budget middleware
+
+```go
+ctx = toolsy.BindEnv(ctx, toolsy.BudgetEnv{Budget: tracker})
+reg.Execute(ctx, call, yield)
 ```
 
 ## Streaming and iteration
@@ -358,7 +400,7 @@ defer client.Close()
 
 `Connect` performs handshake during creation and returns ready client.
 
-## Migration notes (v1 -> v2)
+## Migration notes (v1 -> v2 -> vNext)
 
 - Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
 - Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
@@ -367,6 +409,15 @@ defer client.Close()
 - Replace `NewClient + Initialize` in `mcp` with `Connect`.
 - Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
 - `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
+
+**vNext breaking changes:**
+
+- `Chunk.Metadata` removed — use `Progress` for data-plane progress and `Control` for orchestrator signals.
+- System manifest flags moved out of `Metadata`: use `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`, `CompletionPolicy`.
+- Human-in-the-loop tools yield `EventControl` + `ErrPause`.
+- `EventSuspend` / `ErrSuspend` / `ServiceProvider` removed.
+- `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
+- Use `BindEnv` / `EnvFromContext` for all application dependencies.
 
 ## Zero-resiliency core (post v2)
 

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
@@ -83,7 +83,7 @@ func execute(
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	text, err := textutil.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	text, err := textprocessor.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("openapi: read response: %w", err)
 	}

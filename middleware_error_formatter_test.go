@@ -54,7 +54,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 	suspend := newMiddlewareMinTool(
 		"suspend",
 		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			return ErrSuspend
+			return ErrPause
 		},
 	)
 	streamAborted := newMiddlewareMinTool(
@@ -70,7 +70,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrSuspend)
+	require.ErrorIs(t, err, ErrPause)
 
 	err = WithErrorFormatter()(streamAborted).Execute(
 		context.Background(),
@@ -168,7 +168,8 @@ func TestSessionExecute_ErrorFormatterSoftErrorCountsStep(t *testing.T) {
 	reg, err := NewRegistryBuilder().Use(WithErrorFormatter()).Add(inner).Build()
 	require.NoError(t, err)
 
-	session := NewSession(reg, WithMaxSteps(5))
+	session, err := NewSession(reg, WithMaxSteps(5))
+	require.NoError(t, err)
 	var got Chunk
 	err = session.Execute(
 		context.Background(),
@@ -263,7 +264,8 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 	require.ErrorIs(t, err, ErrToolNotFound)
 	require.Empty(t, missingToolChunks)
 
-	session := NewSession(reg, WithMaxSteps(1))
+	session, err := NewSession(reg, WithMaxSteps(1))
+	require.NoError(t, err)
 	err = session.Execute(
 		context.Background(),
 		ToolCall{ToolName: "ok_tool", Input: ToolInput{CallID: "step-1", ArgsJSON: []byte(`{}`)}},

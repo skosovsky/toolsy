@@ -20,6 +20,12 @@ type ToolManifest struct {
 	Tags        []string
 	Version     string
 	Metadata    map[string]any
+
+	CompletionPolicy     CompletionPolicy
+	ReadOnly             bool
+	RequiresConfirmation bool
+	Dangerous            bool
+	Idempotent           bool
 }
 
 // ToolConfig is the internal split configuration for a tool.
@@ -64,16 +70,28 @@ func WithVersion(version string) ToolOption {
 // WithDangerous marks the tool as dangerous.
 func WithDangerous() ToolOption {
 	return func(c *ToolConfig) {
-		ensureManifestMetadata(&c.Manifest)
-		c.Manifest.Metadata["dangerous"] = true
+		c.Manifest.Dangerous = true
 	}
 }
 
 // WithReadOnly marks the tool as read-only.
 func WithReadOnly() ToolOption {
 	return func(c *ToolConfig) {
-		ensureManifestMetadata(&c.Manifest)
-		c.Manifest.Metadata["read_only"] = true
+		c.Manifest.ReadOnly = true
+	}
+}
+
+// WithRequiresConfirmation marks the tool as requiring human confirmation before execution.
+func WithRequiresConfirmation() ToolOption {
+	return func(c *ToolConfig) {
+		c.Manifest.RequiresConfirmation = true
+	}
+}
+
+// WithIdempotent marks mutating tools as safe to retry with identical arguments.
+func WithIdempotent() ToolOption {
+	return func(c *ToolConfig) {
+		c.Manifest.Idempotent = true
 	}
 }
 
@@ -100,6 +118,7 @@ type RegistryOption func(*registryOptions)
 type registryOptions struct {
 	recoverPanics bool
 	validator     Validator
+	authorizer    Authorizer
 	onBefore      func(context.Context, ToolCall)
 	onAfter       func(context.Context, ToolCall, ExecutionSummary, time.Duration)
 	onChunk       func(context.Context, Chunk)
@@ -147,11 +166,19 @@ type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
 	maxSteps int
+	policy   RunPolicy
 }
 
 // WithMaxSteps limits the total number of tool executions within a session track.
 func WithMaxSteps(n int) SessionOption {
 	return func(o *sessionOptions) {
 		o.maxSteps = n
+	}
+}
+
+// WithRunPolicy attaches session-level tool choice constraints enforced before each Execute.
+func WithRunPolicy(p RunPolicy) SessionOption {
+	return func(o *sessionOptions) {
+		o.policy = p
 	}
 }

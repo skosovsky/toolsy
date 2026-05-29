@@ -30,7 +30,8 @@ func TestSessionTrackExecutionCount(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxSteps(0))
+	require.NoError(t, err)
 
 	assert.Equal(t, int64(0), session.Track().ExecutionCount())
 	for range 2 {
@@ -61,7 +62,8 @@ func TestSessionValidatorFailureConsumesStep(t *testing.T) {
 			return errors.New("always reject")
 		},
 	}))
-	session := NewSession(reg, WithMaxSteps(10))
+	session, err := NewSession(reg, WithMaxSteps(10))
+	require.NoError(t, err)
 
 	err = session.Execute(
 		context.Background(),
@@ -83,7 +85,8 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session := NewSession(reg, WithMaxSteps(3))
+	session, err := NewSession(reg, WithMaxSteps(3))
+	require.NoError(t, err)
 
 	for i := 1; i <= 3; i++ {
 		err = session.Execute(
@@ -127,7 +130,8 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session := NewSession(reg, WithMaxSteps(2))
+	session, err := NewSession(reg, WithMaxSteps(2))
+	require.NoError(t, err)
 
 	var seen int
 	for chunk, iterErr := range session.ExecuteIter(context.Background(), ToolCall{
@@ -152,7 +156,8 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxSteps(0))
+	require.NoError(t, err)
 
 	const workers = 8
 	var wg sync.WaitGroup
@@ -182,9 +187,10 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 
 func TestSessionToolNotFoundConsumesStep(t *testing.T) {
 	reg := newSessionRegistry(t, nil)
-	session := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxSteps(0))
+	require.NoError(t, err)
 
-	err := session.Execute(
+	err = session.Execute(
 		context.Background(),
 		ToolCall{ToolName: "missing", Input: ToolInput{CallID: "missing", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
@@ -196,9 +202,10 @@ func TestSessionToolNotFoundConsumesStep(t *testing.T) {
 func TestSessionShutdownConsumesStep(t *testing.T) {
 	reg := newSessionRegistry(t, nil)
 	require.NoError(t, reg.Shutdown(context.Background()))
-	session := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxSteps(0))
+	require.NoError(t, err)
 
-	err := session.Execute(
+	err = session.Execute(
 		context.Background(),
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
@@ -218,7 +225,8 @@ func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxSteps(0))
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
@@ -256,7 +264,8 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 			beforeCount.Add(1)
 		}),
 	)
-	session := NewSession(reg, WithMaxSteps(1))
+	session, err := NewSession(reg, WithMaxSteps(1))
+	require.NoError(t, err)
 
 	err = session.Execute(
 		context.Background(),

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
@@ -54,11 +55,12 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	c := Chunk{
 		Event:    EventResult,
 		IsError:  false,
-		Metadata: map[string]any{"percent": 50},
+		Progress: &ProgressInfo{Percent: new(50)},
 	}
 	assert.Equal(t, EventResult, c.Event)
 	assert.False(t, c.IsError)
-	assert.Equal(t, 50, c.Metadata["percent"])
+	require.NotNil(t, c.Progress)
+	assert.Equal(t, 50, *c.Progress.Percent)
 
 	cErr := Chunk{Event: EventResult, Data: []byte("fail"), MimeType: MimeTypeText, IsError: true}
 	assert.Equal(t, EventResult, cErr.Event)

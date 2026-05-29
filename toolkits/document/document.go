@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const maxRedirects = 10
@@ -105,7 +105,7 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (extractRe
 	}
 	// Final truncation (UTF-8 safe)
 	if len(text) > o.maxBytes {
-		text = textutil.TruncateStringUTF8(text, o.maxBytes, truncateSuffix)
+		text = textprocessor.TruncateStringUTF8(text, o.maxBytes, truncateSuffix)
 	}
 	return extractResult{Text: text}, nil
 }

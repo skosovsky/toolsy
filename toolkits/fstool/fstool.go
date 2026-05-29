@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const truncationSuffix = "\n[Truncated]"
@@ -222,7 +222,7 @@ func checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath string) error {
 
 // readAndTruncate reads up to maxBytes from r. If more is available, returns UTF-8 safe truncation + suffix.
 func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
-	text, err := textutil.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
+	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
 	if err != nil {
 		return "", fmt.Errorf("toolkit/fstool: read: %w", err)
 	}

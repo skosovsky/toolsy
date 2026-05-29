@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"slices"
 	"sync/atomic"
 )
 
@@ -50,20 +51,25 @@ func (t *SessionTrack) MaxSteps() int64 {
 
 // Session is a stateful, concurrency-safe executor built on top of a stateless registry.
 type Session struct {
-	reg   *Registry
-	track *SessionTrack
+	reg    *Registry
+	track  *SessionTrack
+	policy RunPolicy
 }
 
 // NewSession creates a new session bound to reg.
-func NewSession(reg *Registry, opts ...SessionOption) *Session {
+func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	var cfg sessionOptions
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	return &Session{
-		reg:   reg,
-		track: newSessionTrack(cfg),
+	if err := ValidateRunPolicy(cfg.policy); err != nil {
+		return nil, err
 	}
+	return &Session{
+		reg:    reg,
+		track:  newSessionTrack(cfg),
+		policy: cfg.policy,
+	}, nil
 }
 
 // Track returns the session execution track.
@@ -79,10 +85,44 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 	if s == nil || s.reg == nil {
 		return ErrToolNotFound
 	}
+	if err := enforceRunPolicy(s.policy, call); err != nil {
+		return err
+	}
 	if err := s.track.consumeStep(); err != nil {
 		return err
 	}
 	return s.reg.execute(ctx, call, yield)
+}
+
+func enforceRunPolicy(p RunPolicy, call ToolCall) error {
+	if p.ForcedTool != "" && call.ToolName != p.ForcedTool {
+		return &ClientError{
+			Reason:    "tool " + call.ToolName + " is not the forced tool " + p.ForcedTool,
+			Retryable: false,
+			Err:       ErrValidation,
+		}
+	}
+	if len(p.AllowedTools) > 0 {
+		if slices.Contains(p.AllowedTools, call.ToolName) {
+			return nil
+		}
+		return &ClientError{
+			Reason:    "tool " + call.ToolName + " is not allowed by session run policy",
+			Retryable: false,
+			Err:       ErrValidation,
+		}
+	}
+	if len(p.RequiredTools) > 0 {
+		if slices.Contains(p.RequiredTools, call.ToolName) {
+			return nil
+		}
+		return &ClientError{
+			Reason:    "tool " + call.ToolName + " is not in required tools for this session",
+			Retryable: false,
+			Err:       ErrValidation,
+		}
+	}
+	return nil
 }
 
 // ExecuteIter runs one tool call and returns an iterator over (Chunk, error) pairs.

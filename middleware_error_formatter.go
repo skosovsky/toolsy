@@ -49,7 +49,7 @@ func (t *errorFormatterTool) Execute(
 }
 
 func shouldBypassErrorFormatting(err error) bool {
-	return errors.Is(err, ErrSuspend) ||
+	return IsControlError(err) ||
 		errors.Is(err, ErrStreamAborted) ||
 		errors.Is(err, context.Canceled)
 }

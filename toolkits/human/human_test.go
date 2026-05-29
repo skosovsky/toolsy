@@ -11,7 +11,7 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-func TestRequestApproval_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) {
+func TestRequestApproval_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	approvalTool := tools[0]
@@ -26,17 +26,18 @@ func TestRequestApproval_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) {
 			return nil
 		},
 	)
-	require.ErrorIs(t, err, toolsy.ErrSuspend)
-	require.Equal(t, toolsy.EventSuspend, gotChunk.Event)
-	require.Equal(t, toolsy.MimeTypeJSON, gotChunk.MimeType)
+	require.ErrorIs(t, err, toolsy.ErrPause)
+	require.Equal(t, toolsy.EventControl, gotChunk.Event)
+	pause, ok := gotChunk.Control.(*toolsy.PauseSignal)
+	require.True(t, ok)
 	require.JSONEq(
 		t,
 		`{"kind":"approval","action":"delete","reason":"user asked"}`,
-		string(gotChunk.Data),
+		pause.Reason,
 	)
 }
 
-func TestAskClarification_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) {
+func TestAskClarification_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	clarificationTool := tools[1]
@@ -51,17 +52,18 @@ func TestAskClarification_YieldsSuspendChunkThenReturnsErrSuspend(t *testing.T) 
 			return nil
 		},
 	)
-	require.ErrorIs(t, err, toolsy.ErrSuspend)
-	require.Equal(t, toolsy.EventSuspend, gotChunk.Event)
-	require.Equal(t, toolsy.MimeTypeJSON, gotChunk.MimeType)
+	require.ErrorIs(t, err, toolsy.ErrPause)
+	require.Equal(t, toolsy.EventControl, gotChunk.Event)
+	pause, ok := gotChunk.Control.(*toolsy.PauseSignal)
+	require.True(t, ok)
 	require.JSONEq(
 		t,
 		`{"kind":"clarification","question":"Which button?"}`,
-		string(gotChunk.Data),
+		pause.Reason,
 	)
 }
 
-func TestRequestApproval_YieldErrorShortCircuitsBeforeErrSuspend(t *testing.T) {
+func TestRequestApproval_YieldErrorShortCircuitsBeforeErrPause(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	approvalTool := tools[0]
@@ -74,7 +76,7 @@ func TestRequestApproval_YieldErrorShortCircuitsBeforeErrSuspend(t *testing.T) {
 		func(toolsy.Chunk) error { return yieldErr },
 	)
 	require.ErrorIs(t, err, toolsy.ErrStreamAborted)
-	require.NotErrorIs(t, err, toolsy.ErrSuspend)
+	require.NotErrorIs(t, err, toolsy.ErrPause)
 }
 
 func TestRequestApproval_PayloadShape(t *testing.T) {
@@ -82,16 +84,21 @@ func TestRequestApproval_PayloadShape(t *testing.T) {
 	require.NoError(t, err)
 	approvalTool := tools[0]
 
-	var payload map[string]string
+	var pauseReason string
 	err = approvalTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"send_email","reason":"user requested"}`)},
 		func(c toolsy.Chunk) error {
-			return json.Unmarshal(c.Data, &payload)
+			if pause, ok := c.Control.(*toolsy.PauseSignal); ok {
+				pauseReason = pause.Reason
+			}
+			return nil
 		},
 	)
-	require.ErrorIs(t, err, toolsy.ErrSuspend)
+	require.ErrorIs(t, err, toolsy.ErrPause)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal([]byte(pauseReason), &payload))
 	require.Equal(
 		t,
 		map[string]string{
@@ -108,16 +115,21 @@ func TestAskClarification_PayloadShape(t *testing.T) {
 	require.NoError(t, err)
 	clarificationTool := tools[1]
 
-	var payload map[string]string
+	var pauseReason string
 	err = clarificationTool.Execute(
 		context.Background(),
 		toolsy.RunContext{},
 		toolsy.ToolInput{ArgsJSON: []byte(`{"question":"What is the deadline?"}`)},
 		func(c toolsy.Chunk) error {
-			return json.Unmarshal(c.Data, &payload)
+			if pause, ok := c.Control.(*toolsy.PauseSignal); ok {
+				pauseReason = pause.Reason
+			}
+			return nil
 		},
 	)
-	require.ErrorIs(t, err, toolsy.ErrSuspend)
+	require.ErrorIs(t, err, toolsy.ErrPause)
+	var payload map[string]string
+	require.NoError(t, json.Unmarshal([]byte(pauseReason), &payload))
 	require.Equal(
 		t,
 		map[string]string{
@@ -140,4 +152,12 @@ func TestAsTools_CustomNames(t *testing.T) {
 	require.Len(t, tools, 2)
 	require.Equal(t, "approve", tools[0].Manifest().Name)
 	require.Equal(t, "clarify", tools[1].Manifest().Name)
+}
+
+func TestAsTools_CompletionPolicySilentYield(t *testing.T) {
+	tools, err := AsTools()
+	require.NoError(t, err)
+	for _, tool := range tools {
+		require.Equal(t, toolsy.CompletionSilentYield, tool.Manifest().CompletionPolicy)
+	}
 }

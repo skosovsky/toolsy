@@ -106,7 +106,7 @@ func rawArgsValidatedExecute(
 			if errors.Is(err, ErrStreamAborted) {
 				return err
 			}
-			if errors.Is(err, ErrSuspend) {
+			if IsControlError(err) {
 				return err
 			}
 			return wrapHandlerError(err)
@@ -153,7 +153,7 @@ func NewStreamTool[T any](
 			if errors.Is(err, ErrStreamAborted) {
 				return err
 			}
-			if errors.Is(err, ErrSuspend) {
+			if IsControlError(err) {
 				return err
 			}
 			return wrapHandlerError(err)
@@ -252,12 +252,17 @@ func buildToolManifest(name, description string, schema map[string]any, cfg Tool
 	tags := append([]string(nil), cfg.Tags...)
 	metadata := cloneMetadata(cfg.Metadata)
 	return ToolManifest{
-		Name:        name,
-		Description: description,
-		Parameters:  maps.Clone(schema),
-		Tags:        tags,
-		Version:     cfg.Version,
-		Metadata:    metadata,
+		Name:                 name,
+		Description:          description,
+		Parameters:           maps.Clone(schema),
+		Tags:                 tags,
+		Version:              cfg.Version,
+		Metadata:             metadata,
+		CompletionPolicy:     cfg.CompletionPolicy,
+		ReadOnly:             cfg.ReadOnly,
+		RequiresConfirmation: cfg.RequiresConfirmation,
+		Dangerous:            cfg.Dangerous,
+		Idempotent:           cfg.Idempotent,
 	}
 }
 
@@ -275,6 +280,11 @@ func (t *tool) Manifest() ToolManifest {
 	m.Tags = append([]string(nil), t.manifest.Tags...)
 	m.Parameters = maps.Clone(t.manifest.Parameters)
 	m.Metadata = cloneMetadata(t.manifest.Metadata)
+	m.CompletionPolicy = t.manifest.CompletionPolicy
+	m.ReadOnly = t.manifest.ReadOnly
+	m.RequiresConfirmation = t.manifest.RequiresConfirmation
+	m.Dangerous = t.manifest.Dangerous
+	m.Idempotent = t.manifest.Idempotent
 	return m
 }
 
@@ -292,7 +302,7 @@ func wrapHandlerError(err error) error {
 	if IsClientError(err) {
 		return err
 	}
-	if errors.Is(err, ErrSuspend) {
+	if IsControlError(err) {
 		return err
 	}
 	return &SystemError{Err: err}

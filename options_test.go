@@ -75,7 +75,7 @@ func TestWithDangerous(t *testing.T) {
 	}, WithDangerous())
 	require.NoError(t, err)
 
-	assert.Equal(t, true, tool.Manifest().Metadata["dangerous"])
+	assert.True(t, tool.Manifest().Dangerous)
 }
 
 func TestWithReadOnly(t *testing.T) {
@@ -87,7 +87,7 @@ func TestWithReadOnly(t *testing.T) {
 	}, WithReadOnly())
 	require.NoError(t, err)
 
-	assert.Equal(t, true, tool.Manifest().Metadata["read_only"])
+	assert.True(t, tool.Manifest().ReadOnly)
 }
 
 func TestWithMetadata(t *testing.T) {
@@ -96,14 +96,13 @@ func TestWithMetadata(t *testing.T) {
 
 	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
 		return R{}, nil
-	}, WithMetadata(map[string]any{
-		"requires_confirmation": true,
-		"sensitivity":           "high",
+	}, WithRequiresConfirmation(), WithMetadata(map[string]any{
+		"sensitivity": "high",
 	}))
 	require.NoError(t, err)
 
+	assert.True(t, tool.Manifest().RequiresConfirmation)
 	meta := tool.Manifest().Metadata
-	assert.Equal(t, true, meta["requires_confirmation"])
 	assert.Equal(t, "high", meta["sensitivity"])
 }
 

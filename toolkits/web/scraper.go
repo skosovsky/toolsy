@@ -5,7 +5,7 @@ import (
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // Scraper converts a raw HTML string to clean Markdown (e.g. for LLM context).
@@ -48,7 +48,7 @@ func (d *htmlScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	return textutil.TruncateStringUTF8(markdown, maxBytes, truncateSuffix), nil
+	return textprocessor.TruncateStringUTF8(markdown, maxBytes, truncateSuffix), nil
 }
 
 const truncateSuffix = "\n[Truncated]"

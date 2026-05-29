@@ -230,13 +230,13 @@ func TestExecutePropagatesToolOptionMetadata(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
 	tool, err := New(
 		sb,
-		WithToolOptions(toolsy.WithDangerous(), toolsy.WithMetadata(map[string]any{"requires_confirmation": true})),
+		WithToolOptions(toolsy.WithDangerous(), toolsy.WithRequiresConfirmation()),
 	)
 	require.NoError(t, err)
 
-	meta := tool.Manifest().Metadata
-	require.Equal(t, true, meta["dangerous"])
-	require.Equal(t, true, meta["requires_confirmation"])
+	m := tool.Manifest()
+	require.True(t, m.Dangerous)
+	require.True(t, m.RequiresConfirmation)
 }
 
 func TestNewRejectsEmptyLanguageNames(t *testing.T) {

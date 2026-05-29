@@ -11,7 +11,12 @@ type BudgetTracker interface {
 	Allow(ctx context.Context, manifest ToolManifest, input ToolInput) (allowed bool, reason string, err error)
 }
 
-// WithBudget enforces optional budget checks via run.Services.Get("budget").
+// BudgetEnv binds a [BudgetTracker] for [WithBudget] via [BindEnv].
+type BudgetEnv struct {
+	Budget BudgetTracker
+}
+
+// WithBudget enforces optional budget checks via [BudgetEnv] on the execution context.
 func WithBudget() Middleware {
 	return func(next Tool) Tool {
 		return &budgetTool{
@@ -30,18 +35,12 @@ func (t *budgetTool) Execute(
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {
-	if run.Services == nil {
-		return t.next.Execute(ctx, run, input, yield)
+	var budgetTracker BudgetTracker
+	if env, ok := EnvFromContext[BudgetEnv](ctx); ok && env.Budget != nil {
+		budgetTracker = env.Budget
 	}
-
-	rawBudget, ok := run.Services.Get("budget")
-	if !ok || rawBudget == nil {
+	if budgetTracker == nil {
 		return t.next.Execute(ctx, run, input, yield)
-	}
-
-	budgetTracker, ok := rawBudget.(BudgetTracker)
-	if !ok {
-		return &SystemError{Err: fmt.Errorf("toolsy: budget service has unexpected type %T", rawBudget)}
 	}
 
 	allowed, reason, err := budgetTracker.Allow(ctx, t.next.Manifest(), input)

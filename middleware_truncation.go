@@ -5,6 +5,8 @@ import (
 	"mime"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const defaultTruncationSuffix = "\n... [Output truncated. If you need more details, refine your query or use a specialized search tool.]"
@@ -77,7 +79,7 @@ func (t *truncationTool) Execute(
 		if utf8.RuneCount(c.Data) <= t.maxRunes {
 			return yield(c)
 		}
-		c.Data = truncateByRunes(c.Data, t.maxRunes, t.cfg.suffix)
+		c.Data = textprocessor.TruncateBytesByRunes(c.Data, t.maxRunes, t.cfg.suffix)
 		return yield(c)
 	}
 
@@ -97,29 +99,4 @@ func shouldTruncateMimeType(mimeType string, includeJSON bool) bool {
 	default:
 		return false
 	}
-}
-
-func truncateByRunes(data []byte, maxRunes int, suffix string) []byte {
-	if maxRunes <= 0 {
-		return nil
-	}
-
-	contentRunes := []rune(string(data))
-	if len(contentRunes) <= maxRunes {
-		out := make([]byte, len(data))
-		copy(out, data)
-		return out
-	}
-
-	if suffix == "" {
-		return []byte(string(contentRunes[:maxRunes]))
-	}
-
-	suffixRunes := []rune(suffix)
-	if len(suffixRunes) >= maxRunes {
-		return []byte(string(suffixRunes[:maxRunes]))
-	}
-
-	prefixRunes := maxRunes - len(suffixRunes)
-	return []byte(string(contentRunes[:prefixRunes]) + suffix)
 }

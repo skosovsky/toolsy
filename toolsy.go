@@ -5,13 +5,12 @@ import (
 )
 
 // EventType enumerates chunk event kinds for Chunk: EventProgress for intermediate UI status,
-// EventResult for final data or a stream chunk; EventSuspend signals orchestrator-managed pause.
+// EventResult for final data or a stream chunk; EventControl for orchestrator-managed signals.
 type EventType string
 
 const (
 	EventProgress EventType = "progress"
 	EventResult   EventType = "result"
-	EventSuspend  EventType = "suspend"
 )
 
 // MIME type constants for Chunk payloads.
@@ -53,11 +52,6 @@ type StateStore interface {
 	Load(ctx context.Context, key string) ([]byte, error)
 }
 
-// ServiceProvider resolves runtime service dependencies by key.
-type ServiceProvider interface {
-	Get(key string) (any, bool)
-}
-
 // Attachment is binary input passed together with JSON args.
 type Attachment struct {
 	MimeType string
@@ -90,10 +84,10 @@ type ToolInput struct {
 }
 
 // RunContext carries runtime-only dependencies that should not be hidden in context values.
+// Application dependencies should be bound via [BindEnv] on the execution context.
 type RunContext struct {
 	Credentials CredentialsProvider
 	State       StateStore
-	Services    ServiceProvider
 
 	attachments []Attachment
 	async       *asyncRuntime
@@ -111,7 +105,18 @@ type ToolCall struct {
 	Run      RunContext
 }
 
+// ProgressInfo carries optional data-plane progress for EventProgress chunks.
+type ProgressInfo struct {
+	Percent *int
+	Total   *int
+	Message string
+	Label   string
+	Status  string
+	Token   string
+}
+
 // Chunk is a single stream event from a tool execution.
+// Data-plane payloads use Data/MimeType. Control-plane signals use EventControl + Control.
 type Chunk struct {
 	CallID   string
 	ToolName string
@@ -119,7 +124,10 @@ type Chunk struct {
 	Data     []byte
 	MimeType string
 	IsError  bool
-	Metadata map[string]any // optional: progress 0-100, etc.
+	// Control carries typed orchestrator signals when Event == EventControl.
+	Control ControlSignal
+	// Progress carries optional progress metadata for EventProgress.
+	Progress *ProgressInfo
 }
 
 // ExecutionSummary is passed to the after-execution hook (WithOnAfterExecute) when a tool

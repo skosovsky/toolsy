@@ -10,13 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mapServiceProvider map[string]any
-
-func (m mapServiceProvider) Get(key string) (any, bool) {
-	v, ok := m[key]
-	return v, ok
-}
-
 type testBudgetTracker struct {
 	allowFn func(context.Context, ToolManifest, ToolInput) (bool, string, error)
 	calls   atomic.Int64
@@ -30,7 +23,11 @@ func (t *testBudgetTracker) Allow(ctx context.Context, manifest ToolManifest, in
 	return t.allowFn(ctx, manifest, input)
 }
 
-func TestWithBudget_NoServicesPassThrough(t *testing.T) {
+func budgetCtx(tracker BudgetTracker) context.Context {
+	return BindEnv(context.Background(), BudgetEnv{Budget: tracker})
+}
+
+func TestWithBudget_NoEnvPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
@@ -48,7 +45,7 @@ func TestWithBudget_NoServicesPassThrough(t *testing.T) {
 	assert.True(t, executed.Load())
 }
 
-func TestWithBudget_MissingBudgetServicePassThrough(t *testing.T) {
+func TestWithBudget_MissingBudgetEnvPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
@@ -59,12 +56,8 @@ func TestWithBudget_MissingBudgetServicePassThrough(t *testing.T) {
 	)
 	wrapped := WithBudget()(inner)
 
-	err := wrapped.Execute(
-		context.Background(),
-		RunContext{Services: mapServiceProvider{"other": "x"}},
-		ToolInput{ArgsJSON: []byte(`{}`)},
-		func(Chunk) error { return nil },
-	)
+	ctx := BindEnv(context.Background(), struct{ Other string }{Other: "x"})
+	err := wrapped.Execute(ctx, RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error { return nil })
 	require.NoError(t, err)
 	assert.True(t, executed.Load())
 }
@@ -87,8 +80,8 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 
 	var chunks []Chunk
 	err := wrapped.Execute(
-		context.Background(),
-		RunContext{Services: mapServiceProvider{"budget": tracker}},
+		budgetCtx(tracker),
+		RunContext{},
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c Chunk) error {
 			chunks = append(chunks, c)
@@ -102,27 +95,6 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 	assert.Contains(t, string(chunks[0].Data), "token budget exceeded")
 	assert.False(t, executed.Load())
 	assert.Equal(t, int64(1), tracker.calls.Load())
-}
-
-func TestWithBudget_BudgetTypeMismatchReturnsSystemError(t *testing.T) {
-	inner := newMiddlewareMinTool(
-		"guarded",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			return nil
-		},
-	)
-	wrapped := WithBudget()(inner)
-
-	err := wrapped.Execute(
-		context.Background(),
-		RunContext{Services: mapServiceProvider{"budget": "not-a-tracker"}},
-		ToolInput{ArgsJSON: []byte(`{}`)},
-		func(Chunk) error { return nil },
-	)
-	require.Error(t, err)
-	var sysErr *SystemError
-	require.ErrorAs(t, err, &sysErr)
-	assert.Contains(t, sysErr.Err.Error(), "unexpected type")
 }
 
 func TestWithBudget_AllowErrorReturnsSystemError(t *testing.T) {
@@ -140,8 +112,8 @@ func TestWithBudget_AllowErrorReturnsSystemError(t *testing.T) {
 	wrapped := WithBudget()(inner)
 
 	err := wrapped.Execute(
-		context.Background(),
-		RunContext{Services: mapServiceProvider{"budget": tracker}},
+		budgetCtx(tracker),
+		RunContext{},
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -160,14 +132,14 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 			return ErrTimeout
 		},
 	)
-	tool.manifest.Metadata = map[string]any{"read_only": true}
+	tool.manifest.ReadOnly = true
 
 	tracker := &testBudgetTracker{
 		allowFn: func(_ context.Context, _ ToolManifest, _ ToolInput) (bool, string, error) {
 			return true, "", nil
 		},
 	}
-	runCtx := RunContext{Services: mapServiceProvider{"budget": tracker}}
+	ctx := budgetCtx(tracker)
 
 	reg, err := NewRegistryBuilder().
 		Use(
@@ -181,10 +153,9 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 
 	var chunks []Chunk
 	err = reg.ExecuteBatchStream(
-		context.Background(),
+		ctx,
 		[]ToolCall{{
 			ToolName: "readonly_network",
-			Run:      runCtx,
 			Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
 		}},
 		func(c Chunk) error {
@@ -210,14 +181,14 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 			return ErrTimeout
 		},
 	)
-	tool.manifest.Metadata = map[string]any{"read_only": true}
+	tool.manifest.ReadOnly = true
 
 	tracker := &testBudgetTracker{
 		allowFn: func(_ context.Context, _ ToolManifest, _ ToolInput) (bool, string, error) {
 			return false, "budget exceeded", nil
 		},
 	}
-	runCtx := RunContext{Services: mapServiceProvider{"budget": tracker}}
+	ctx := budgetCtx(tracker)
 
 	reg, err := NewRegistryBuilder().
 		Use(
@@ -230,10 +201,9 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 
 	var chunks []Chunk
 	err = reg.Execute(
-		context.Background(),
+		ctx,
 		ToolCall{
 			ToolName: "readonly_budget",
-			Run:      runCtx,
 			Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
 		},
 		func(c Chunk) error {

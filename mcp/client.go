@@ -252,18 +252,23 @@ func (c *Client) newToolProgressForwarder(progressCh chan toolsy.Chunk, done cha
 		if json.Unmarshal(params, &p) != nil {
 			return
 		}
-		meta := map[string]any{"progressToken": p.ProgressToken}
+		var progress *toolsy.ProgressInfo
 		if p.Progress >= 0 {
-			meta["progress"] = p.Progress
+			progress = &toolsy.ProgressInfo{ //nolint:exhaustruct // MCP progress fields are sparse
+				Percent: &p.Progress,
+				Token:   p.ProgressToken,
+			}
+		} else if p.ProgressToken != "" {
+			progress = &toolsy.ProgressInfo{Token: p.ProgressToken} //nolint:exhaustruct // token-only progress update
 		}
-		if p.Total > 0 {
-			meta["total"] = p.Total
-		}
-		if p.ProgressMessage != "" {
-			meta["progressMessage"] = p.ProgressMessage
+		if progress != nil {
+			if p.Total > 0 {
+				progress.Total = &p.Total
+			}
+			progress.Message = p.ProgressMessage
 		}
 		select {
-		case progressCh <- toolsy.Chunk{Event: toolsy.EventProgress, Metadata: meta}:
+		case progressCh <- toolsy.Chunk{Event: toolsy.EventProgress, Progress: progress}:
 		case <-done:
 		}
 	}

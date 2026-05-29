@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // Provider is the interface the toolkit expects. Implement it with any backend
@@ -38,7 +38,7 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 			return getResult{}, fmt.Errorf("toolkit/prompts: get failed: %w", err)
 		}
 		if o.maxBytes > 0 && len(text) > o.maxBytes {
-			text = textutil.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
+			text = textprocessor.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
 		}
 		return getResult{Instructions: text}, nil
 	}

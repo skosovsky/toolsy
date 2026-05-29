@@ -342,6 +342,12 @@ func (r *Registry) runToolWithValidationAndExecute(
 	toolYield func(Chunk) error,
 	summary *ExecutionSummary,
 ) {
+	if r.opts.authorizer != nil {
+		if aErr := r.opts.authorizer.Authorize(ctx, tool.Manifest(), call.Input); aErr != nil {
+			summary.Error = aErr
+			return
+		}
+	}
 	if r.opts.validator != nil {
 		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Input.ArgsJSON)); vErr != nil {
 			summary.Error = &ClientError{
@@ -436,7 +442,7 @@ func (r *Registry) handleBatchToolError(
 		return
 	}
 	switch {
-	case errors.Is(execErr, ErrSuspend):
+	case IsControlError(execErr):
 		suspendMu.Lock()
 		if *suspendErr == nil {
 			*suspendErr = execErr

@@ -10,8 +10,14 @@ func validateChunk(c Chunk) error {
 	if c.Event == "" {
 		return &SystemError{Err: errors.New("toolsy: chunk event is required")}
 	}
-	if c.Event != EventProgress && c.Event != EventResult && c.Event != EventSuspend {
+	if c.Event != EventProgress && c.Event != EventResult && c.Event != EventControl {
 		return &SystemError{Err: fmt.Errorf("toolsy: unsupported chunk event %q", c.Event)}
+	}
+	if c.Event == EventControl {
+		if c.Control == nil {
+			return &SystemError{Err: errors.New("toolsy: control chunk requires typed Control signal")}
+		}
+		return nil
 	}
 	if c.IsError {
 		if len(c.Data) == 0 {

@@ -118,14 +118,14 @@ func TestWithTracing_ErrorMarksSpan(t *testing.T) {
 	assert.Equal(t, codes.Error, spans[0].Status().Code)
 }
 
-func TestWithTracing_SuspendIsNeutral(t *testing.T) {
+func TestWithTracing_ControlPauseIsNeutral(t *testing.T) {
 	tp, rec := newSpanRecorder()
 	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "human_approval"},
 		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
-			return toolsy.ErrSuspend
+			return toolsy.ErrPause
 		},
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
@@ -133,17 +133,17 @@ func TestWithTracing_SuspendIsNeutral(t *testing.T) {
 	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
-	require.ErrorIs(t, err, toolsy.ErrSuspend)
+	require.ErrorIs(t, err, toolsy.ErrPause)
 
 	spans := rec.Ended()
 	require.Len(t, spans, 1)
 	span := spans[0]
 	assert.Equal(t, codes.Unset, span.Status().Code)
-	assert.True(t, hasEvent(span, "tool.suspend"))
+	assert.True(t, hasEvent(span, "tool.control"))
 
-	suspended, ok := attrValue(span, "gen_ai.tool.suspended")
+	control, ok := attrValue(span, "gen_ai.tool.control_signal")
 	require.True(t, ok)
-	assert.True(t, suspended.AsBool())
+	assert.True(t, control.AsBool())
 }
 
 func TestWithTracing_StreamAbortedIsNeutral(t *testing.T) {

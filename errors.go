@@ -14,7 +14,6 @@ var (
 	ErrRegistryState    = errors.New("registry runtime state is not initialized")
 	ErrStreamAborted    = errors.New("stream aborted by caller")
 	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
-	ErrSuspend          = errors.New("execution suspended: waiting for external input")
 )
 
 // ClientError is an error that should be sent back to the LLM for self-correction

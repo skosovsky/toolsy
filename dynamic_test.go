@@ -176,7 +176,7 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 	m := tool.Manifest()
 	assert.Equal(t, []string{"a", "b"}, m.Tags)
 	assert.Equal(t, "1.0", m.Version)
-	assert.Equal(t, true, m.Metadata["dangerous"])
+	assert.True(t, m.Dangerous)
 }
 
 func TestNewDynamicTool_StrictOption(t *testing.T) {

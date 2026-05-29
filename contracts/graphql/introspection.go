@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
@@ -247,7 +247,7 @@ func executeGraphQL(
 		return fmt.Errorf("graphql: do: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	data, err := textutil.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	data, err := textprocessor.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("graphql: read: %w", err)
 	}

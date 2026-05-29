@@ -6,19 +6,21 @@
 // Execute. Input JSON is validated against generated schema, the handler is called,
 // and results are streamed as Chunk values.
 //
-// # v2 contracts
+// # vNext contracts
 //
 //   - Tool interface:
 //     Manifest() ToolManifest
 //     Execute(ctx, run, input, yield)
 //   - ToolCall carries Input ToolInput (CallID + ArgsJSON + Attachments).
-//   - Chunk payload is MIME-aware: Event, Data, MimeType, IsError, Metadata.
-//   - Event is strongly typed via EventType (EventProgress/EventResult/EventSuspend).
-//   - RunContext carries runtime dependencies (Credentials, State, Services).
+//   - Chunk data-plane: Event, Data, MimeType, IsError, Progress.
+//   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/UIAction).
+//   - ToolManifest SSOT: ReadOnly, RequiresConfirmation, Dangerous, Idempotent, CompletionPolicy.
+//   - RunEnv: BindEnv / EnvFromContext for typed application dependencies (replaces string-key Services).
 //   - Registry runtime is immutable; use RegistryBuilder for setup-time mutation.
 //
 // Use Extractor when you only need schema generation/validation. Use NewDynamicTool or
-// NewProxyTool for runtime schemas (OpenAPI, MCP, etc.).
+// NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical
+// ToolCall/ToolResult wire format and textprocessor for standalone UTF-8 truncation.
 //
 // # Example
 //

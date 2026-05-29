@@ -6,7 +6,7 @@ import (
 
 	"github.com/ledongthuc/pdf"
 
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // parsePDF extracts text from a PDF file at filePath. Reads at most maxBytes to avoid OOM.
@@ -28,7 +28,7 @@ func parsePDF(filePath string, maxBytes int) (string, error) {
 	}
 	s := string(b)
 	if len(b) > maxBytes {
-		s = textutil.TruncateStringUTF8(s, maxBytes, truncateSuffix)
+		s = textprocessor.TruncateStringUTF8(s, maxBytes, truncateSuffix)
 	}
 	return s, nil
 }

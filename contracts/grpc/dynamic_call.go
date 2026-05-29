@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/internal/textutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
@@ -37,6 +37,6 @@ func invokeRPC(
 	if err != nil {
 		return fmt.Errorf("grpc: marshal response: %w", err)
 	}
-	text := textutil.TruncateBytesToValidUTF8String(data, opts.maxResponseBytes(), truncationSuffix)
+	text := textprocessor.TruncateBytesToValidUTF8String(data, opts.maxResponseBytes(), truncationSuffix)
 	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(text), MimeType: toolsy.MimeTypeJSON})
 }
