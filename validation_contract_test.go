@@ -24,29 +24,18 @@ func TestValidateContract_EmptyRequired(t *testing.T) {
 func TestValidateContract_MissingTools(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "a")})
 	err := ValidateContract(reg, []string{"a", "b", "c"})
-	require.Error(t, err)
-
-	var mte *MissingToolsError
-	require.ErrorAs(t, err, &mte)
-	assert.Equal(t, []string{"a", "b", "c"}, mte.Required)
-	assert.Equal(t, []string{"b", "c"}, mte.Missing)
-	assert.Contains(t, mte.Error(), "missing required tools")
+	requireToolsContractMissing(t, err, []string{"a", "b", "c"}, []string{"b", "c"})
 }
 
 func TestValidateContract_NilRegistry(t *testing.T) {
 	err := ValidateContract(nil, []string{"a"})
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 }
 
 func TestValidateContract_DedupRequiredNames(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "a")})
 	err := ValidateContract(reg, []string{"a", "a", "missing", "missing"})
-	require.Error(t, err)
-
-	var mte *MissingToolsError
-	require.ErrorAs(t, err, &mte)
-	assert.Equal(t, []string{"a", "missing"}, mte.Required)
-	assert.Equal(t, []string{"missing"}, mte.Missing)
+	requireToolsContractMissing(t, err, []string{"a", "missing"}, []string{"missing"})
 }
 
 func TestValidateContract_InvalidRuntimeState(t *testing.T) {
@@ -54,5 +43,17 @@ func TestValidateContract_InvalidRuntimeState(t *testing.T) {
 	reg.tools = map[string]Tool{"x": mustNamedTool(t, "x")}
 
 	err := ValidateContract(&reg, []string{"x"})
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
+}
+
+func requireToolsContractMissing(t *testing.T, err error, required, missing []string) {
+	t.Helper()
+	te, ok := AsToolError(err)
+	require.True(t, ok, "expected ToolError, got %T: %v", err, err)
+	require.Equal(t, CodeToolsContractMissing, te.Code)
+	assert.Equal(t, missing, te.FixableArgs)
+	assert.Contains(t, te.Reason, "missing required tools")
+	for _, name := range required {
+		assert.Contains(t, te.Reason, name)
+	}
 }

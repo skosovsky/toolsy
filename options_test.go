@@ -17,7 +17,7 @@ func TestWithStrict(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("strict_tool", "desc", func(_ context.Context, _ RunContext, a Args) (R, error) {
+	tool, err := NewTool("strict_tool", "desc", func(_ context.Context, _ *RunEnv, a Args) (R, error) {
 		return R{Y: a.X}, nil
 	}, WithStrict())
 	require.NoError(t, err)
@@ -25,7 +25,7 @@ func TestWithStrict(t *testing.T) {
 	var res R
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x":1}`)},
 		func(c Chunk) error { return json.Unmarshal(c.Data, &res) },
 	)
@@ -34,19 +34,19 @@ func TestWithStrict(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x":1,"extra":2}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
 func TestWithTags(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithTags("tag1", "tag2"))
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestWithVersion(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithVersion("1.0.0"))
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestWithDangerous(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithDangerous())
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestWithReadOnly(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithReadOnly())
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestWithMetadata(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithRequiresConfirmation(), WithMetadata(map[string]any{
 		"sensitivity": "high",
@@ -114,7 +114,7 @@ func TestToolOptions_Combined(t *testing.T) {
 		Double int `json:"double"`
 	}
 
-	tool, err := NewTool("combined", "desc", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("combined", "desc", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Double: a.N * 2}, nil
 	}, WithStrict(), WithVersion("0.1"))
 	require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestToolOptions_Combined(t *testing.T) {
 	var res R
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"n":21}`)},
 		func(c Chunk) error { return json.Unmarshal(c.Data, &res) },
 	)

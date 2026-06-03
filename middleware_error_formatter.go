@@ -26,11 +26,11 @@ type errorFormatterTool struct {
 
 func (t *errorFormatterTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	env *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {
-	err := t.next.Execute(ctx, run, input, yield)
+	err := t.next.Execute(ctx, env, input, yield)
 	if err == nil {
 		return nil
 	}
@@ -55,25 +55,14 @@ func shouldBypassErrorFormatting(err error) bool {
 }
 
 func formatExecutionError(err error) string {
-	var clientErr *ClientError
-	if errors.As(err, &clientErr) {
-		reason := strings.TrimSpace(clientErr.Reason)
-		if reason == "" {
-			reason = "tool input is invalid"
+	if te, ok := AsToolError(err); ok {
+		if msg := formatToolErrorMessage(te); msg != "" {
+			return msg
 		}
-		if clientErr.Retryable {
-			return "Error executing tool: " + reason + ". Hint: This issue may be transient, retry the same call."
-		}
-		return "Error executing tool: " + reason + ". Hint: Fix the tool arguments and try again."
 	}
 
 	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
 		return "Error executing tool: execution timed out. Hint: Narrow the query or retry later."
-	}
-
-	var systemErr *SystemError
-	if errors.As(err, &systemErr) {
-		return "Error executing tool: internal system error. Hint: Retry later or use a narrower query."
 	}
 
 	reason := sanitizeErrorReason(err.Error())
@@ -81,6 +70,35 @@ func formatExecutionError(err error) string {
 		reason = "request failed"
 	}
 	return "Error executing tool: " + reason + ". Hint: Retry later or refine the query."
+}
+
+func formatToolErrorMessage(te *ToolError) string {
+	reason := strings.TrimSpace(te.SafeMessage)
+	if reason == "" {
+		reason = strings.TrimSpace(te.Reason)
+	}
+	if ClientCorrectable(te.Code) {
+		if reason == "" {
+			reason = "tool input is invalid"
+		}
+		if te.Retryable {
+			return "Error executing tool: " + reason + ". Hint: This issue may be transient, retry the same call."
+		}
+		return "Error executing tool: " + reason + ". Hint: Fix the tool arguments and try again."
+	}
+	if orchestratorSystemCode(te.Code) {
+		return "Error executing tool: internal system error. Hint: Retry later or use a narrower query."
+	}
+	if te.Code == CodeDependencyMissing {
+		return "Error executing tool: required dependency is missing. Hint: Check agent configuration and session wiring."
+	}
+	if te.Code == CodeToolsContractMissing {
+		return "Error executing tool: required tools are not registered. Hint: Register missing tools or adjust the contract."
+	}
+	if reason == "" {
+		return ""
+	}
+	return "Error executing tool: " + sanitizeErrorReason(reason) + ". Hint: Retry later or refine the query."
 }
 
 func newErrorChunk(message string) Chunk {

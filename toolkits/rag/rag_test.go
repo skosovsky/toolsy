@@ -44,7 +44,7 @@ func TestAsSearchTool_FormatsMarkdown(t *testing.T) {
 		t,
 		tool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSearchResult(t, c).Results
@@ -62,7 +62,7 @@ func TestAsSearchTool_MaxResults(t *testing.T) {
 	var result string
 	_ = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSearchResult(t, c).Results
@@ -79,7 +79,7 @@ func TestAsSearchTool_MaxBytesTruncate(t *testing.T) {
 	var result string
 	_ = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSearchResult(t, c).Results
@@ -97,7 +97,7 @@ func TestAsSearchTool_MaxBytesUTF8Safe(t *testing.T) {
 	var result string
 	_ = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSearchResult(t, c).Results
@@ -115,12 +115,12 @@ func TestAsSearchTool_RetrieverError(t *testing.T) {
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	// Core wraps handler errors in SystemError; the underlying cause should contain our prefix
+	// Core wraps handler errors in ToolError; the underlying cause should contain our prefix
 	cause := err
 	for cause != nil {
 		if strings.Contains(cause.Error(), "toolkit/rag:") {
@@ -138,7 +138,7 @@ func TestAsSearchTool_EmptyResult(t *testing.T) {
 	var result string
 	_ = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSearchResult(t, c).Results

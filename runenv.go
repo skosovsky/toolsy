@@ -1,21 +1,186 @@
 package toolsy
 
-import "context"
+import (
+	"reflect"
+	"sync"
+)
 
-type runEnvContextKey struct{}
+// DepKeyBudget is the dependency map key for [BudgetTracker] used by [WithBudget].
+const DepKeyBudget = "toolsy.budget"
 
-// BindEnv attaches a typed application environment to ctx for the duration of a tool call.
-func BindEnv[T any](ctx context.Context, env T) context.Context {
-	return context.WithValue(ctx, runEnvContextKey{}, env)
+// runEnvStore holds shared session maps; clones of [RunEnv] share the same store pointer.
+type runEnvStore struct {
+	mu    sync.RWMutex
+	deps  map[string]any
+	state map[string]any
 }
 
-// EnvFromContext returns the bound application environment, or false when absent or wrong type.
-func EnvFromContext[T any](ctx context.Context) (T, bool) {
+func newRunEnvStore() *runEnvStore {
+	return &runEnvStore{
+		mu:    sync.RWMutex{},
+		deps:  make(map[string]any),
+		state: make(map[string]any),
+	}
+}
+
+// RunEnv is the shared session execution environment: credentials, persisted state,
+// keyed dependencies (deps), and in-memory session state (state).
+type RunEnv struct {
+	Credentials CredentialsProvider
+	StateStore  StateStore
+
+	store       *runEnvStore
+	attachments []Attachment
+	async       *asyncRuntime
+}
+
+// RunEnvOption configures [NewRunEnv].
+type RunEnvOption func(*RunEnv)
+
+// WithCredentials sets the credentials provider on the environment.
+func WithCredentials(p CredentialsProvider) RunEnvOption {
+	return func(e *RunEnv) {
+		e.Credentials = p
+	}
+}
+
+// WithStateStore sets the persisted state store on the environment.
+func WithStateStore(s StateStore) RunEnvOption {
+	return func(e *RunEnv) {
+		e.StateStore = s
+	}
+}
+
+// NewRunEnv creates a run environment with empty deps and session state maps.
+func NewRunEnv(opts ...RunEnvOption) *RunEnv {
+	env := &RunEnv{ //nolint:exhaustruct // optional providers set via RunEnvOption
+		store: newRunEnvStore(),
+	}
+	for _, opt := range opts {
+		opt(env)
+	}
+	return env
+}
+
+// Attachments returns runtime attachments for the current call (cloned).
+func (e *RunEnv) Attachments() []Attachment {
+	if e == nil {
+		return nil
+	}
+	return cloneAttachments(e.attachments)
+}
+
+// cloneForExecute returns a shallow copy sharing the session store but with per-call attachments and async runtime.
+func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) *RunEnv {
+	if e == nil {
+		return &RunEnv{ //nolint:exhaustruct // nil env bootstrap
+			store:       newRunEnvStore(),
+			attachments: cloneAttachments(attachments),
+			async:       async,
+		}
+	}
+	return &RunEnv{
+		Credentials: e.Credentials,
+		StateStore:  e.StateStore,
+		store:       e.store,
+		attachments: cloneAttachments(attachments),
+		async:       async,
+	}
+}
+
+// Put stores a session dependency. Prefer calling before tool execution; tools should read via [Require] or [Lookup].
+// If env is nil, Put is a no-op (use [NewRunEnv] before wiring dependencies).
+func Put[T any](env *RunEnv, key string, val T) {
+	if env == nil || env.store == nil {
+		return
+	}
+	env.store.mu.Lock()
+	defer env.store.mu.Unlock()
+	if env.store.deps == nil {
+		env.store.deps = make(map[string]any)
+	}
+	env.store.deps[key] = val
+}
+
+// Require returns a dependency or a [ToolError] with [CodeDependencyMissing].
+func Require[T any](env *RunEnv, key string) (T, error) {
 	var zero T
-	raw := ctx.Value(runEnvContextKey{})
-	if raw == nil {
+	if env == nil || env.store == nil {
+		return zero, NewDependencyMissingError(key)
+	}
+	env.store.mu.RLock()
+	defer env.store.mu.RUnlock()
+	v, ok := resolveTyped[T](env.store.deps, key)
+	if !ok {
+		return zero, NewDependencyMissingError(key)
+	}
+	return v, nil
+}
+
+// Lookup returns a dependency and whether it was present and non-nil.
+func Lookup[T any](env *RunEnv, key string) (T, bool) {
+	var zero T
+	if env == nil || env.store == nil {
 		return zero, false
 	}
-	env, ok := raw.(T)
-	return env, ok
+	env.store.mu.RLock()
+	defer env.store.mu.RUnlock()
+	return resolveTyped[T](env.store.deps, key)
+}
+
+// SetState stores mutable session-scoped data shared across tool calls.
+// If env is nil, SetState is a no-op (use [NewRunEnv] and pass the same pointer on [ToolCall.Env]).
+func SetState[T any](env *RunEnv, key string, val T) {
+	if env == nil || env.store == nil {
+		return
+	}
+	env.store.mu.Lock()
+	defer env.store.mu.Unlock()
+	if env.store.state == nil {
+		env.store.state = make(map[string]any)
+	}
+	env.store.state[key] = val
+}
+
+// GetState returns session-scoped data when present and non-nil.
+func GetState[T any](env *RunEnv, key string) (T, bool) {
+	var zero T
+	if env == nil || env.store == nil {
+		return zero, false
+	}
+	env.store.mu.RLock()
+	defer env.store.mu.RUnlock()
+	return resolveTyped[T](env.store.state, key)
+}
+
+func resolveTyped[T any](store map[string]any, key string) (T, bool) {
+	var zero T
+	if store == nil {
+		return zero, false
+	}
+	raw, ok := store[key]
+	if !ok {
+		return zero, false
+	}
+	typed, ok := raw.(T)
+	if !ok {
+		return zero, false
+	}
+	if isNilValue(typed) {
+		return zero, false
+	}
+	return typed, true
+}
+
+func isNilValue(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return rv.IsNil()
+	default:
+		return false
+	}
 }

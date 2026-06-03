@@ -13,7 +13,7 @@ import (
 func TestWithTruncation_TruncatesTextPayload(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"truncate",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte("abcdefghijklmnopqrstuvwxyz"),
@@ -26,7 +26,7 @@ func TestWithTruncation_TruncatesTextPayload(t *testing.T) {
 	wrapped := WithTruncation(12, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -42,7 +42,7 @@ func TestWithTruncation_TruncatesMarkdownPayload(t *testing.T) {
 	input := "# Heading\nSome **very long** markdown text"
 	inner := newMiddlewareMinTool(
 		"markdown",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte(input),
@@ -55,7 +55,7 @@ func TestWithTruncation_TruncatesMarkdownPayload(t *testing.T) {
 	wrapped := WithTruncation(14, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -73,7 +73,7 @@ func TestWithTruncation_DoesNotTruncateBinaryPayload(t *testing.T) {
 	raw := []byte{0x00, 0x01, 0x02, 0x03, 0x04}
 	inner := newMiddlewareMinTool(
 		"binary",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     raw,
@@ -85,7 +85,7 @@ func TestWithTruncation_DoesNotTruncateBinaryPayload(t *testing.T) {
 	wrapped := WithTruncation(2, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -97,7 +97,7 @@ func TestWithTruncation_JSONIsOptIn(t *testing.T) {
 	jsonText := `{"value":"abcdefghijklmnopqrstuvwxyz"}`
 	inner := newMiddlewareMinTool(
 		"json",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte(jsonText),
@@ -112,7 +112,7 @@ func TestWithTruncation_JSONIsOptIn(t *testing.T) {
 	var gotWithout, gotWith Chunk
 	err := withoutJSON.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c Chunk) error {
 			gotWithout = c
@@ -120,7 +120,7 @@ func TestWithTruncation_JSONIsOptIn(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	err = withJSON.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err = withJSON.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		gotWith = c
 		return nil
 	})
@@ -135,7 +135,7 @@ func TestWithTruncation_PreservesUTF8Boundaries(t *testing.T) {
 	input := "приветмир"
 	inner := newMiddlewareMinTool(
 		"utf8",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte(input),
@@ -147,7 +147,7 @@ func TestWithTruncation_PreservesUTF8Boundaries(t *testing.T) {
 	wrapped := WithTruncation(6, WithTruncationSuffix("..."))(inner)
 
 	var got string
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = string(c.Data)
 		return nil
 	})

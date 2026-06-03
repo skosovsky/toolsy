@@ -193,7 +193,7 @@ func appendToolsForOperationKind(
 			name,
 			descPrefix+f.Name,
 			schemaBytes,
-			func(ctx context.Context, run toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+			func(ctx context.Context, run *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 				return executeGraphQL(ctx, run, name, endpointCopy, queryText, argsJSON, &optsCopy, yield)
 			},
 		)
@@ -207,7 +207,7 @@ func appendToolsForOperationKind(
 
 func executeGraphQL(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	toolName string,
 	endpoint, queryText string,
 	argsJSON []byte,

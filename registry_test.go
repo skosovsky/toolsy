@@ -33,7 +33,7 @@ func TestRegistryBuilder_BuildAndExecute(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("double", "Double x", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("double", "Double x", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X * 2}, nil
 	})
 	require.NoError(t, err)
@@ -57,9 +57,9 @@ func TestRegistryBuilder_BuildAndExecute(t *testing.T) {
 func TestRegistryBuilder_DuplicateToolName(t *testing.T) {
 	type A struct{}
 	type R struct{}
-	t1, err := NewTool("same", "First", func(_ context.Context, _ RunContext, _ A) (R, error) { return R{}, nil })
+	t1, err := NewTool("same", "First", func(_ context.Context, _ *RunEnv, _ A) (R, error) { return R{}, nil })
 	require.NoError(t, err)
-	t2, err := NewTool("same", "Second", func(_ context.Context, _ RunContext, _ A) (R, error) { return R{}, nil })
+	t2, err := NewTool("same", "Second", func(_ context.Context, _ *RunEnv, _ A) (R, error) { return R{}, nil })
 	require.NoError(t, err)
 
 	_, err = NewRegistryBuilder().Add(t1, t2).Build()
@@ -71,7 +71,7 @@ func mustNamedTool(t *testing.T, name string) Tool {
 	t.Helper()
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool(name, name, func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool(name, name, func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
@@ -119,7 +119,7 @@ func TestRegistry_Subset_UnknownTool(t *testing.T) {
 	reg := mustBuildRegistry(t, []Tool{mustNamedTool(t, "a")})
 	_, err := reg.Subset("a", "missing")
 	require.Error(t, err)
-	require.ErrorIs(t, err, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 	assert.Contains(t, err.Error(), "unknown tool in subset")
 }
 
@@ -148,7 +148,7 @@ func TestRegistry_Subset_ExecuteDeniedForNonMember(t *testing.T) {
 		ToolCall{ToolName: "denied", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 }
 
 func TestRegistry_Subset_ParentShutdownBlocksSubsetExecute(t *testing.T) {
@@ -161,7 +161,7 @@ func TestRegistry_Subset_ParentShutdownBlocksSubsetExecute(t *testing.T) {
 		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrShutdown)
+	requireToolErrorCode(t, err, CodeShutdown, ErrShutdown)
 }
 
 func TestRegistry_Subset_ShutdownBlocksParentExecute(t *testing.T) {
@@ -174,7 +174,7 @@ func TestRegistry_Subset_ShutdownBlocksParentExecute(t *testing.T) {
 		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrShutdown)
+	requireToolErrorCode(t, err, CodeShutdown, ErrShutdown)
 }
 
 func TestRegistry_Subset_InFlightWaitsOnParentShutdown(t *testing.T) {
@@ -184,7 +184,7 @@ func TestRegistry_Subset_InFlightWaitsOnParentShutdown(t *testing.T) {
 
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool("slow", "slow", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("slow", "slow", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		close(toolStarted)
 		<-releaseTool
 		return R{}, nil
@@ -231,7 +231,7 @@ func TestRegistry_Subset_InFlightWaitsOnSubsetShutdown(t *testing.T) {
 
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool("slow", "slow", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("slow", "slow", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		close(toolStarted)
 		<-releaseTool
 		return R{}, nil
@@ -276,20 +276,20 @@ func TestRegistry_InvalidRuntimeState(t *testing.T) {
 	reg.tools = map[string]Tool{"x": mustNamedTool(t, "x")}
 
 	_, err := reg.Subset("x")
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 
 	err = reg.Execute(
 		context.Background(),
 		ToolCall{ToolName: "x", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 
 	err = reg.Shutdown(context.Background())
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 
 	err = ValidateContract(&reg, []string{"x"})
-	require.ErrorIs(t, err, ErrRegistryState)
+	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 }
 
 func TestRegistry_Execute_ToolNotFound(t *testing.T) {
@@ -300,7 +300,7 @@ func TestRegistry_Execute_ToolNotFound(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 }
 
 func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
@@ -308,7 +308,7 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 		X int `json:"x"`
 	}
 	type R struct{}
-	tool, err := NewTool("panic", "Panics", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("panic", "Panics", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		panic("oops")
 	})
 	require.NoError(t, err)
@@ -329,8 +329,9 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	var panicSE *SystemError
-	require.ErrorAs(t, err, &panicSE)
+	var panicTE *ToolError
+	require.ErrorAs(t, err, &panicTE)
+	require.Equal(t, CodeInternal, panicTE.Code)
 	assert.Equal(t, "1", lastSummary.CallID)
 	assert.Equal(t, "panic", lastSummary.ToolName)
 	require.Error(t, lastSummary.Error)
@@ -339,7 +340,7 @@ func TestRegistry_Execute_PanicRecovery_OnAfterSummary(t *testing.T) {
 func TestRegistry_Execute_OnAfterSummaryTracksSoftErrorChunk(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"soft_summary",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte("budget exceeded"),
@@ -374,7 +375,7 @@ func TestRegistry_Execute_OnAfterSummaryTracksSoftErrorChunk(t *testing.T) {
 func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"batch_soft_summary",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("batch tool failed")
 		},
 	)
@@ -418,7 +419,7 @@ func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *t
 func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksValidatorSoftenedError(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"validator_soft_summary",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return nil
 		},
 	)
@@ -467,7 +468,7 @@ func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksValidatorSoftenedError(
 func TestRegistry_Execute_ContextDeadlineMapsToErrTimeout(t *testing.T) {
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ *RunEnv, _ A) (R, error) {
 		<-ctx.Done()
 		return R{}, ctx.Err()
 	})
@@ -481,7 +482,7 @@ func TestRegistry_Execute_ContextDeadlineMapsToErrTimeout(t *testing.T) {
 		ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrTimeout)
+	requireToolErrorCode(t, err, CodeTimeout, ErrTimeout)
 }
 
 func TestRegistry_ExecuteIter(t *testing.T) {
@@ -491,7 +492,7 @@ func TestRegistry_ExecuteIter(t *testing.T) {
 	tool, err := NewStreamTool(
 		"iter_stream",
 		"Stream",
-		func(_ context.Context, _ RunContext, a A, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, a A, yield func(Chunk) error) error {
 			for i := range a.N {
 				if err := yield(
 					Chunk{Event: EventProgress, Data: []byte{byte('0' + i)}, MimeType: MimeTypeText},
@@ -527,7 +528,7 @@ func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("double", "Double", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("double", "Double", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X * 2}, nil
 	})
 	require.NoError(t, err)
@@ -568,7 +569,7 @@ func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
 	type R struct {
 		OK bool `json:"ok"`
 	}
-	tool, err := NewTool("guarded", "Guarded", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("guarded", "Guarded", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{OK: true}, nil
 	})
 	require.NoError(t, err)
@@ -577,7 +578,7 @@ func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
 	middleware := func(next Tool) Tool {
 		return newMiddlewareMinTool(
 			next.Manifest().Name,
-			func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 				return errRateLimit
 			},
 		)
@@ -607,7 +608,7 @@ func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
 func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesEmptyErrorText(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"empty_err",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("")
 		},
 	)
@@ -633,7 +634,7 @@ func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesEmptyErrorTex
 func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesInvalidUTF8(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"utf8_err",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return invalidUTF8Error{}
 		},
 	)
@@ -663,7 +664,7 @@ func TestRegistry_ExecuteBatchStream_ReturnsErrStreamAbortedOnYieldError(t *test
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("double_abort", "Double", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("double_abort", "Double", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X * 2}, nil
 	})
 	require.NoError(t, err)
@@ -706,7 +707,7 @@ func TestRegistry_ExecuteBatchStream_StreamAbortCancelsSiblings(t *testing.T) {
 
 	tool := newMiddlewareMinTool(
 		"batch_abort",
-		func(ctx context.Context, _ RunContext, input ToolInput, yield func(Chunk) error) error {
+		func(ctx context.Context, _ *RunEnv, input ToolInput, yield func(Chunk) error) error {
 			if input.CallID == "c1" {
 				<-startedSecond
 				if err := yield(Chunk{Event: EventResult, Data: []byte("first"), MimeType: MimeTypeText}); err != nil {
@@ -745,7 +746,7 @@ func TestRegistry_ExecuteBatchStream_StreamAbortPreventsExtraCallbackOnValidator
 	allowFirstReturn := make(chan struct{})
 	tool := newMiddlewareMinTool(
 		"batch_abort_mix",
-		func(_ context.Context, _ RunContext, input ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, input ToolInput, yield func(Chunk) error) error {
 			if input.CallID != "c1" {
 				return nil
 			}
@@ -797,7 +798,7 @@ func TestRegistry_ValidatorFailClosed(t *testing.T) {
 	type R struct {
 		OK bool `json:"ok"`
 	}
-	tool, err := NewTool("sql", "SQL", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("sql", "SQL", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{OK: true}, nil
 	})
 	require.NoError(t, err)
@@ -820,7 +821,7 @@ func TestRegistry_ValidatorFailClosed(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	require.ErrorIs(t, err, ErrValidation)
 }
 
@@ -832,7 +833,7 @@ func TestRegistry_ShutdownRejectsNewCalls(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrShutdown)
+	requireToolErrorCode(t, err, CodeShutdown, ErrShutdown)
 }
 
 func TestRegistry_ConcurrentExecute_BothSucceed(t *testing.T) {
@@ -840,7 +841,7 @@ func TestRegistry_ConcurrentExecute_BothSucceed(t *testing.T) {
 	type R struct {
 		OK bool `json:"ok"`
 	}
-	tool, err := NewTool("quick", "Quick", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("quick", "Quick", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{OK: true}, nil
 	})
 	require.NoError(t, err)
@@ -869,7 +870,7 @@ func TestRegistry_OnChunkCountsOnlySuccess(t *testing.T) {
 	tool, err := NewStreamTool(
 		"stream",
 		"stream",
-		func(_ context.Context, _ RunContext, _ A, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ A, yield func(Chunk) error) error {
 			_ = yield(Chunk{Event: EventProgress, Data: []byte("chunk1"), MimeType: MimeTypeText})
 			_ = yield(Chunk{Event: EventProgress, Data: []byte("chunk2"), MimeType: MimeTypeText})
 			return yield(Chunk{Event: EventResult, Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
@@ -909,7 +910,7 @@ func TestRegistry_ExecuteBatchStream_YieldIsSerialized(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("inc", "Inc", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("inc", "Inc", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)

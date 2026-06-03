@@ -44,7 +44,7 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 	tool, err := toolsy.NewTool[extractArgs, extractResult](
 		o.toolName,
 		o.toolDesc,
-		func(ctx context.Context, _ toolsy.RunContext, args extractArgs) (extractResult, error) {
+		func(ctx context.Context, _ *toolsy.RunEnv, args extractArgs) (extractResult, error) {
 			return doExtract(ctx, &o, args.FilePath, args.URL)
 		},
 		toolOpts...,
@@ -57,25 +57,13 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 
 func doExtract(ctx context.Context, o *options, filePath, url string) (extractResult, error) {
 	if filePath == "" && url == "" {
-		return extractResult{}, &toolsy.ClientError{
-			Reason:    "file_path or url is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return extractResult{}, toolsy.NewValidationError("file_path or url is required")
 	}
 	if filePath != "" && url != "" {
-		return extractResult{}, &toolsy.ClientError{
-			Reason:    "provide either file_path or url, not both",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return extractResult{}, toolsy.NewValidationError("provide either file_path or url, not both")
 	}
 	if url != "" && !o.allowRemote {
-		return extractResult{}, &toolsy.ClientError{
-			Reason:    "URL fetch is disabled (use WithAllowRemote(true))",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return extractResult{}, toolsy.NewValidationError("URL fetch is disabled (use WithAllowRemote(true))")
 	}
 
 	var path string
@@ -92,14 +80,10 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (extractRe
 		var info os.FileInfo
 		info, err = os.Stat(path)
 		if err != nil {
-			return extractResult{}, fmt.Errorf("toolkit/document: stat: %w", err)
+			return extractResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat: %w", err))
 		}
 		if info.Size() > int64(o.maxBytes) {
-			return extractResult{}, &toolsy.ClientError{
-				Reason:    "file too large",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return extractResult{}, toolsy.NewValidationError("file too large")
 		}
 		format = formatFromURL(path)
 	}
@@ -127,13 +111,13 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 		defer func() { _ = f.Close() }()
 		text, err := parseCSV(f, o.maxBytes)
 		if err != nil {
-			return "", fmt.Errorf("toolkit/document: parse: %w", err)
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
 		return text, nil
 	case "pdf":
 		text, err := parsePDF(path, o.maxBytes)
 		if err != nil {
-			return "", fmt.Errorf("toolkit/document: parse: %w", err)
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
 		return text, nil
 	case "docx":
@@ -144,30 +128,22 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 		defer func() { _ = f.Close() }()
 		info, statErr := f.Stat()
 		if statErr != nil {
-			return "", fmt.Errorf("toolkit/document: stat docx file: %w", statErr)
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat docx file: %w", statErr))
 		}
 		text, err := parseDOCX(f, info.Size(), o.maxBytes)
 		if err != nil {
-			return "", fmt.Errorf("toolkit/document: parse: %w", err)
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
 		return text, nil
 	default:
-		return "", &toolsy.ClientError{
-			Reason:    "unsupported format: " + format,
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("unsupported format: " + format)
 	}
 }
 
 // copyRemoteResponseToTemp writes resp.Body to a temp file (caller must defer resp.Body.Close).
 func copyRemoteResponseToTemp(resp *http.Response, rawURL string, o *options) (string, string, error) {
 	if resp.StatusCode != http.StatusOK {
-		return "", "", &toolsy.ClientError{
-			Reason:    "remote file fetch failed: " + resp.Status,
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", "", toolsy.NewValidationError("remote file fetch failed: " + resp.Status)
 	}
 	format := formatFromURL(rawURL)
 	if format == "" {
@@ -187,11 +163,7 @@ func copyRemoteResponseToTemp(resp *http.Response, rawURL string, o *options) (s
 	if n > int64(o.maxBytes) {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-		return "", "", &toolsy.ClientError{
-			Reason:    "remote file too large",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", "", toolsy.NewValidationError("remote file too large")
 	}
 	if closeErr := tmp.Close(); closeErr != nil {
 		_ = os.Remove(tmpPath)
@@ -207,7 +179,7 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("toolkit/document: request: %w", err)
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: request: %w", err))
 	}
 	hc := o.httpClient
 	if hc == nil {
@@ -215,11 +187,7 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	}
 	checkRedirect := func(redirectReq *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
-			return &toolsy.ClientError{
-				Reason:    "too many redirects",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return toolsy.NewValidationError("too many redirects")
 		}
 		if verr := validateRemoteURL(redirectReq.Context(), redirectReq.URL.String(), false); verr != nil {
 			return verr
@@ -235,10 +203,10 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 		}
 		resp, doErr := hc.Do(req) // #nosec G704
 		if doErr != nil {
-			if toolsy.IsClientError(doErr) {
+			if toolErrorClientCorrectable(doErr) {
 				return "", "", doErr
 			}
-			return "", "", fmt.Errorf("toolkit/document: fetch: %w", doErr)
+			return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: fetch: %w", doErr))
 		}
 		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 		return copyRemoteResponseToTemp(resp, rawURL, o)
@@ -247,13 +215,18 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	client.CheckRedirect = checkRedirect
 	resp, doErr := client.Do(req) // #nosec G704 -- URL validated; redirects validated in CheckRedirect
 	if doErr != nil {
-		if toolsy.IsClientError(doErr) {
+		if toolErrorClientCorrectable(doErr) {
 			return "", "", doErr
 		}
-		return "", "", fmt.Errorf("toolkit/document: fetch: %w", doErr)
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: fetch: %w", doErr))
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return copyRemoteResponseToTemp(resp, rawURL, o)
+}
+
+func toolErrorClientCorrectable(err error) bool {
+	te, ok := toolsy.AsToolError(err)
+	return ok && toolsy.ClientCorrectable(te.Code)
 }
 
 func formatFromURL(u string) string {
@@ -285,45 +258,25 @@ func formatFromContentType(ct string) string {
 func validateRemoteURL(ctx context.Context, rawURL string, allowPrivateIPs bool) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return &toolsy.ClientError{
-			Reason:    "invalid URL: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("invalid URL: " + err.Error())
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
-		return &toolsy.ClientError{
-			Reason:    "only http and https schemes are allowed",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("only http and https schemes are allowed")
 	}
 	host := strings.TrimSpace(u.Hostname())
 	if host == "" {
-		return &toolsy.ClientError{
-			Reason:    "URL host is missing",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("URL host is missing")
 	}
 	if allowPrivateIPs {
 		return nil
 	}
 	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
-		return &toolsy.ClientError{
-			Reason:    "SSRF: host lookup failed: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("SSRF: host lookup failed: " + err.Error())
 	}
 	if slices.ContainsFunc(addrs, func(a net.IPAddr) bool { return isPrivateIP(a.IP) }) {
-		return &toolsy.ClientError{
-			Reason:    "SSRF: private or loopback IP not allowed",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("SSRF: private or loopback IP not allowed")
 	}
 	return nil
 }

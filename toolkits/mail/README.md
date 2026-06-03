@@ -12,13 +12,13 @@ go get github.com/skosovsky/toolsy/toolkits/mail
 
 ## Available tools
 
-| Tool                 | Description                    | Input                                    |
-|----------------------|--------------------------------|------------------------------------------|
-| `mail_send`          | Send an email                  | `{"to": ["string"], "subject": "string", "body": "string"}` |
-| `mail_search_inbox`  | Search inbox by query          | `{"query": "string", "limit": int}`      |
-| `mail_read_message`  | Read a single message by ID    | `{"message_id": "string"}`              |
+| Tool                | Description                 | Input                                                       |
+| ------------------- | --------------------------- | ----------------------------------------------------------- |
+| `mail_send`         | Send an email               | `{"to": ["string"], "subject": "string", "body": "string"}` |
+| `mail_search_inbox` | Search inbox by query       | `{"query": "string", "limit": int}`                         |
+| `mail_read_message` | Read a single message by ID | `{"message_id": "string"}`                                  |
 
-Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. Body in `mail_read_message` is converted to Markdown only when it looks like HTML (tag-like patterns); plain text with `<` (e.g. "x < 5") is left as-is. `message_id` is trimmed; whitespace-only is rejected with ClientError.
+Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. Body in `mail_read_message` is converted to Markdown only when it looks like HTML (tag-like patterns); plain text with `<` (e.g. "x < 5") is left as-is. `message_id` is trimmed; whitespace-only is rejected with `CodeValidationFailed` ([`ToolError`](../../errors.go)).
 
 ## Configuration & Security
 
@@ -27,7 +27,7 @@ Tools are generated only when the corresponding interface is provided: nil sende
 - **Nil-safe:** Pass `nil` for sender to get only search/read tools; pass `nil` for reader to get only send. At least one must be non-nil.
 - **WithReadOnly(true):** Disables mail_send even when sender is non-nil.
 - **WithMaxBodyBytes(n):** Limits body size for send and read (default 256KB).
-- **Query required:** Empty or whitespace-only `query` in mail_search_inbox returns ClientError (avoids dumping entire inbox). Same for `message_id` in mail_read_message.
+- **Query required:** Empty or whitespace-only `query` in mail_search_inbox returns validation `ToolError` (avoids dumping entire inbox). Same for `message_id` in mail_read_message.
 
 ## Quick start
 

@@ -19,7 +19,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	tool, err := NewStreamTool(
 		"stream",
 		"Stream N chunks",
-		func(_ context.Context, _ RunContext, a Args, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, a Args, yield func(Chunk) error) error {
 			for i := range a.N {
 				if err := yield(
 					Chunk{Event: EventProgress, Data: []byte{byte('0' + i)}, MimeType: MimeTypeText},
@@ -35,7 +35,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	var chunks [][]byte
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"n": 3}`)},
 		func(c Chunk) error {
 			chunks = append(chunks, append([]byte(nil), c.Data...))
@@ -57,7 +57,7 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 	tool, err := NewStreamTool(
 		"abort",
 		"Abort on yield",
-		func(_ context.Context, _ RunContext, _ Args, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ Args, yield func(Chunk) error) error {
 			_ = yield(Chunk{Event: EventProgress, Data: []byte("first"), MimeType: MimeTypeText})
 			return yield(Chunk{Event: EventResult, Data: []byte("second"), MimeType: MimeTypeText})
 		},
@@ -67,7 +67,7 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 	var received [][]byte
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(c Chunk) error {
 			received = append(received, append([]byte(nil), c.Data...))
@@ -89,14 +89,14 @@ func TestNewStreamTool_ZeroChunks(t *testing.T) {
 	tool, err := NewStreamTool(
 		"nop",
 		"No chunks",
-		func(_ context.Context, _ RunContext, _ Args, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ Args, _ func(Chunk) error) error {
 			return nil
 		},
 	)
 	require.NoError(t, err)
 
 	var count int
-	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		count++
 		return nil
 	})
@@ -111,7 +111,7 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("once", "Once", func(_ context.Context, _ RunContext, a Args) (R, error) {
+	tool, err := NewTool("once", "Once", func(_ context.Context, _ *RunEnv, a Args) (R, error) {
 		return R{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
@@ -120,7 +120,7 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	var out R
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 		func(c Chunk) error {
 			callCount++
@@ -135,13 +135,13 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 func TestNewTool_YieldErrorReturnsErrStreamAborted(t *testing.T) {
 	type Args struct{}
 	type R struct{}
-	tool, err := NewTool("yield_fail", "Yield fails", func(_ context.Context, _ RunContext, _ Args) (R, error) {
+	tool, err := NewTool("yield_fail", "Yield fails", func(_ context.Context, _ *RunEnv, _ Args) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
 
 	yieldErr := errors.New("connection closed")
-	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return yieldErr
 	})
 	require.Error(t, err)
@@ -155,7 +155,7 @@ func TestRegistry_ExecuteBatchStream_ChunkTags(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("double", "Double", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("double", "Double", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X * 2}, nil
 	})
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestRegistry_ExecuteBatchStream_SerializedYield(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("inc", "Inc", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("inc", "Inc", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ func TestRegistry_ExecuteBatchStream_YieldError(t *testing.T) {
 	type R struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("double", "Double", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("double", "Double", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X * 2}, nil
 	})
 	require.NoError(t, err)

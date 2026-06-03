@@ -44,7 +44,7 @@ func formatStepOutput(text string, artifacts []Artifact) string {
 	return b.String()
 }
 
-func resolveAuthHeader(ctx context.Context, run toolsy.RunContext, toolName string) (string, error) {
+func resolveAuthHeader(ctx context.Context, run *toolsy.RunEnv, toolName string) (string, error) {
 	if run.Credentials == nil {
 		return "", nil
 	}
@@ -63,7 +63,7 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 		return nil, errors.New("agents: inputSchema must not be empty")
 	}
 	return toolsy.NewProxyTool(name, description, inputSchema,
-		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+		func(ctx context.Context, run *toolsy.RunEnv, args []byte, yield func(toolsy.Chunk) error) error {
 			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
 			if authErr != nil {
 				return fmt.Errorf("agents: get create task auth: %w", authErr)
@@ -123,7 +123,7 @@ func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.
 		return nil, errors.New("agents: schema must not be empty")
 	}
 	return toolsy.NewProxyTool(name, desc, schema,
-		func(ctx context.Context, run toolsy.RunContext, args []byte, yield func(toolsy.Chunk) error) error {
+		func(ctx context.Context, run *toolsy.RunEnv, args []byte, yield func(toolsy.Chunk) error) error {
 			createAuth, authErr := resolveAuthHeader(ctx, run, createTaskAuthToolName)
 			if authErr != nil {
 				return fmt.Errorf("agents: get create task auth: %w", authErr)

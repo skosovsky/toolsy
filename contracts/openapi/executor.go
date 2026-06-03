@@ -20,7 +20,7 @@ const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
 // execute runs the HTTP request for one operation: path params in path, query params in query string, body params in body only.
 func execute(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	toolName string,
 	method, pathTemplate string,
 	pathParamNames, queryParamNames []string,

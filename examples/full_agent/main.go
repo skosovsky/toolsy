@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -23,9 +22,11 @@ func main() {
 		log.Fatalf("build registry: %v", err)
 	}
 
+	demonstrateCallParser()
+
 	if err := runBatchStream(reg); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "batch error: %v\n", err)
-		if toolsy.IsClientError(err) {
+		if te, ok := toolsy.AsToolError(err); ok && toolsy.ClientCorrectable(te.Code) {
 			_, _ = fmt.Fprintln(os.Stderr, "  -> client error, LLM may retry with fixed input")
 		}
 	}
@@ -42,7 +43,7 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 	add, err := toolsy.NewTool(
 		"add",
 		"Add two integers",
-		func(_ context.Context, _ toolsy.RunContext, in AddIn) (AddOut, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, in AddIn) (AddOut, error) {
 			return AddOut{Sum: in.A + in.B}, nil
 		},
 	)
@@ -60,7 +61,7 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 	mul, err := toolsy.NewTool(
 		"mul",
 		"Multiply two integers",
-		func(_ context.Context, _ toolsy.RunContext, in MulIn) (MulOut, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, in MulIn) (MulOut, error) {
 			return MulOut{Product: in.A * in.B}, nil
 		},
 	)
@@ -68,6 +69,20 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 		return nil, nil, err
 	}
 	return add, mul, nil
+}
+
+func demonstrateCallParser() {
+	parts := []toolsy.ContentPart{
+		{Type: toolsy.ContentTypeText, Text: "I'll add."},
+		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: "add", Args: `{"a":1,`},
+		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: "add", ArgsChunk: `"b":2}`},
+	}
+	raw, err := toolsy.StandardCallParser{}.ExtractExactlyOne(parts, "add")
+	if err != nil {
+		log.Printf("CallParser demo: %v", err)
+		return
+	}
+	log.Printf("CallParser demo: args=%s", string(raw))
 }
 
 func runBatchStream(reg *toolsy.Registry) error {
@@ -90,15 +105,15 @@ func runBatchStream(reg *toolsy.Registry) error {
 		}
 		switch c.ToolName {
 		case "add":
-			var out AddOut
-			if err := json.Unmarshal(c.Data, &out); err != nil {
+			out, err := toolsy.DecodeChunkAs[AddOut](c)
+			if err != nil {
 				log.Printf("decode add result: %v", err)
 				return nil
 			}
 			_, _ = fmt.Fprintf(os.Stdout, "result[%d] add: sum=%d\n", idx, out.Sum)
 		case "mul":
-			var out MulOut
-			if err := json.Unmarshal(c.Data, &out); err != nil {
+			out, err := toolsy.DecodeChunkAs[MulOut](c)
+			if err != nil {
 				log.Printf("decode mul result: %v", err)
 				return nil
 			}

@@ -19,7 +19,7 @@ func TestRequestApproval_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	var gotChunk toolsy.Chunk
 	err = approvalTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c
@@ -45,7 +45,7 @@ func TestAskClarification_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	var gotChunk toolsy.Chunk
 	err = clarificationTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"question":"Which button?"}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c
@@ -71,7 +71,7 @@ func TestRequestApproval_YieldErrorShortCircuitsBeforeErrPause(t *testing.T) {
 	yieldErr := errors.New("stream closed")
 	err = approvalTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
 		func(toolsy.Chunk) error { return yieldErr },
 	)
@@ -87,7 +87,7 @@ func TestRequestApproval_PayloadShape(t *testing.T) {
 	var pauseReason string
 	err = approvalTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"send_email","reason":"user requested"}`)},
 		func(c toolsy.Chunk) error {
 			if pause, ok := c.Control.(*toolsy.PauseSignal); ok {
@@ -118,7 +118,7 @@ func TestAskClarification_PayloadShape(t *testing.T) {
 	var pauseReason string
 	err = clarificationTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"question":"What is the deadline?"}`)},
 		func(c toolsy.Chunk) error {
 			if pause, ok := c.Control.(*toolsy.PauseSignal); ok {

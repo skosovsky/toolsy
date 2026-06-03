@@ -15,7 +15,7 @@ func ExampleRegistryBuilder_Add() {
 	type Out struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("with_opts", "Tool with options", func(_ context.Context, _ RunContext, a Args) (Out, error) {
+	tool, err := NewTool("with_opts", "Tool with options", func(_ context.Context, _ *RunEnv, a Args) (Out, error) {
 		return Out{Y: a.X * 2}, nil
 	}, WithStrict())
 	if err != nil {
@@ -71,7 +71,7 @@ func ExampleRegistryBuilder_Use() {
 	type Out struct {
 		Double int `json:"double"`
 	}
-	tool, err := NewTool("double", "Double the number", func(_ context.Context, _ RunContext, a Args) (Out, error) {
+	tool, err := NewTool("double", "Double the number", func(_ context.Context, _ *RunEnv, a Args) (Out, error) {
 		return Out{Double: a.N * 2}, nil
 	})
 	if err != nil {

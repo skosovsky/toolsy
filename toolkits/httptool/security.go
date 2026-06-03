@@ -15,56 +15,32 @@ import (
 func validateURL(ctx context.Context, rawURL string, allowedDomains []string, allowPrivateIPs bool) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, &toolsy.ClientError{
-			Reason:    "invalid URL: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("invalid URL: " + err.Error())
 	}
 
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
-		return nil, &toolsy.ClientError{
-			Reason:    "only http and https schemes are allowed",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("only http and https schemes are allowed")
 	}
 
 	if len(allowedDomains) == 0 {
-		return nil, &toolsy.ClientError{
-			Reason:    "no allowed domains configured",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("no allowed domains configured")
 	}
 
 	hostname := strings.TrimSpace(u.Hostname())
 	if hostname == "" {
-		return nil, &toolsy.ClientError{
-			Reason:    "missing host in URL",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("missing host in URL")
 	}
 
 	hostLower := strings.ToLower(hostname)
 	if !hostMatchesAllowedDomains(hostLower, allowedDomains) {
-		return nil, &toolsy.ClientError{
-			Reason:    "SSRF: domain not allowed",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("SSRF: domain not allowed")
 	}
 
 	if !allowPrivateIPs {
 		ips, err := net.DefaultResolver.LookupHost(ctx, hostname)
 		if err != nil {
-			return nil, &toolsy.ClientError{
-				Reason:    "SSRF: host lookup failed: " + err.Error(),
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return nil, toolsy.NewValidationError("SSRF: host lookup failed: " + err.Error())
 		}
 		for _, ipStr := range ips {
 			ip := net.ParseIP(ipStr)
@@ -72,11 +48,7 @@ func validateURL(ctx context.Context, rawURL string, allowedDomains []string, al
 				continue
 			}
 			if isPrivateIP(ip) {
-				return nil, &toolsy.ClientError{
-					Reason:    "SSRF: private IP resolved",
-					Retryable: false,
-					Err:       toolsy.ErrValidation,
-				}
+				return nil, toolsy.NewValidationError("SSRF: private IP resolved")
 			}
 		}
 	}

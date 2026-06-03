@@ -386,8 +386,8 @@ parameters:
 		"DoctorID string",
 		`errors.New("missing required field: 'doctor_id'")`,
 		`in.SlotTime.IsZero()`,
-		`return &toolsy.ClientError{Reason: "Validation failed: " + err.Error(), Err: toolsy.ErrValidation}`,
-		`return &toolsy.ClientError{Reason: "Validation failed: invalid JSON format or type mismatch"`,
+		`return toolsy.NewValidationError("Validation failed: " + err.Error())`,
+		`return toolsy.NewSchemaError("Validation failed: invalid JSON format or type mismatch"`,
 		"return toolsy.AsAsyncTool(proxy), nil",
 	} {
 		if !strings.Contains(code, want) {
@@ -664,7 +664,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 	var got string
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"d1\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
 		func(c toolsy.Chunk) error {
 		got = string(c.Data)
@@ -679,26 +679,26 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{}")},
 		func(toolsy.Chunk) error { return nil },
 	)
-	if err == nil || !toolsy.IsClientError(err) {
+	if te, ok := toolsy.AsToolError(err); err == nil || !ok || !toolsy.ClientCorrectable(te.Code) {
 		t.Fatalf("missing required field error = %v, want client error", err)
 	}
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
 		func(toolsy.Chunk) error { return nil },
 	)
-	if err == nil || !toolsy.IsClientError(err) {
+	if te, ok := toolsy.AsToolError(err); err == nil || !ok || !toolsy.ClientCorrectable(te.Code) {
 		t.Fatalf("empty doctor_id error = %v, want client error", err)
 	}
-	var ce *toolsy.ClientError
+	var ce *toolsy.ToolError
 	if !errors.As(err, &ce) {
-		t.Fatalf("error type = %T, want *toolsy.ClientError", err)
+		t.Fatalf("error type = %T, want *toolsy.ToolError", err)
 	}
 	if !strings.Contains(ce.Reason, "Validation failed:") || !strings.Contains(ce.Reason, "missing required field: 'doctor_id'") {
 		t.Fatalf("empty doctor_id reason = %q", ce.Reason)
@@ -706,28 +706,31 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{not-json") },
 		func(toolsy.Chunk) error { return nil },
 	)
-	if err == nil || !toolsy.IsClientError(err) {
+	if te, ok := toolsy.AsToolError(err); err == nil || !ok || !toolsy.ClientCorrectable(te.Code) {
 		t.Fatalf("invalid json error = %v, want client error", err)
 	}
 	if !errors.As(err, &ce) {
 		t.Fatalf("invalid json error type = %T", err)
 	}
 	// NewProxyTool validates ArgsJSON before the generated handler; malformed JSON uses wrapJSONParseError.
-	if !strings.HasPrefix(ce.Reason, "json parse error:") {
-		t.Fatalf("invalid json reason = %q, want json parse error prefix", ce.Reason)
+	if ce.Reason != "invalid JSON" {
+		t.Fatalf("invalid json reason = %q, want invalid JSON", ce.Reason)
+	}
+	if ce.Unwrap() == nil {
+		t.Fatal("invalid json unwrap is nil")
 	}
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":1,\"slot_time\":\"2026-03-18T09:00:00Z\"}") },
 		func(toolsy.Chunk) error { return nil },
 	)
-	if err == nil || !toolsy.IsClientError(err) {
+	if te, ok := toolsy.AsToolError(err); err == nil || !ok || !toolsy.ClientCorrectable(te.Code) {
 		t.Fatalf("type mismatch error = %v, want client error", err)
 	}
 	if !errors.As(err, &ce) {
@@ -830,7 +833,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	var accepted toolsy.AsyncAccepted
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":1}")},
 		func(c toolsy.Chunk) error {
 			if err := json.Unmarshal(c.Data, &accepted); err != nil {
@@ -853,7 +856,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	streamObsMu.Unlock()
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":-1}")},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &accepted)
@@ -879,7 +882,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	streamHandlerInvoked.Store(false)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte("{}")},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &accepted)

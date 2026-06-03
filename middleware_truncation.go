@@ -61,7 +61,7 @@ type truncationTool struct {
 
 func (t *truncationTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	run *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {

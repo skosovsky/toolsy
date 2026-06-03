@@ -32,7 +32,7 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 		t,
 		currentTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeTimeChunk[currentResult](t, c)
@@ -57,7 +57,7 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeTimeChunk[calculateResult](t, c)
@@ -73,35 +73,39 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 	require.Equal(t, "Saturday", result.Weekday)
 }
 
-func TestTimeCalculate_InvalidBaseDate_ClientError(t *testing.T) {
+func TestTimeCalculate_InvalidBaseDate_ValidationToolError(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	calculateTool := tools[1]
 
 	err = calculateTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"not-a-date","add_days":0,"add_hours":0}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "invalid base_date")
 }
 
-func TestTimeCalculate_EmptyBaseDate_ClientError(t *testing.T) {
+func TestTimeCalculate_EmptyBaseDate_ValidationToolError(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
 	calculateTool := tools[1]
 
 	err = calculateTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"add_days":0,"add_hours":0}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "base_date")
 }
 
@@ -120,7 +124,7 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeTimeChunk[calculateResult](t, c)
@@ -149,7 +153,7 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeTimeChunk[calculateResult](t, c)
@@ -182,7 +186,7 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 		t,
 		calculateTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeTimeChunk[calculateResult](t, c)

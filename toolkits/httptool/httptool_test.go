@@ -2,7 +2,6 @@ package httptool
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,10 +14,9 @@ import (
 
 func decodeHTTPResult(t *testing.T, c toolsy.Chunk) httpResult {
 	t.Helper()
-	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
-	var out httpResult
-	require.NoError(t, json.Unmarshal(c.Data, &out))
-	return out
+	out, err := toolsy.DecodeChunkAs[httpResult](c)
+	require.NoError(t, err)
+	return *out
 }
 
 func TestHTTPGet_Success(t *testing.T) {
@@ -40,7 +38,7 @@ func TestHTTPGet_Success(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -59,12 +57,14 @@ func TestHTTPGet_DomainBlocked(t *testing.T) {
 
 	err = getTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"https://evil.com/path"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestHTTPGet_Truncation(t *testing.T) {
@@ -91,7 +91,7 @@ func TestHTTPGet_Truncation(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -127,7 +127,7 @@ func TestHTTPPost_Success(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"key":"value"}}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -161,7 +161,7 @@ func TestHTTPPost_ContentTypeSet(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"a":1}}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -193,7 +193,7 @@ func TestHTTPPost_EmptyBody(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -222,7 +222,7 @@ func TestHTTPGet_HeadersApplied(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -249,7 +249,7 @@ func TestHTTPGet_ServerError(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)

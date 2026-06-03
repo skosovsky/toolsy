@@ -262,7 +262,7 @@ func TestRunCreatesCleanupTimeoutAtRemoveTime(t *testing.T) {
 	require.Greater(t, client.removeDeadlineIn, 80*time.Millisecond)
 }
 
-func TestRunCollectsLogsAfterRunContextExpires(t *testing.T) {
+func TestRunCollectsLogsAfterContextExpires(t *testing.T) {
 	client := &delayedLogsClient{
 		mockClient: mockClient{
 			waitResponse: container.WaitResponse{StatusCode: 0},

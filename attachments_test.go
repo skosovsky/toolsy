@@ -18,7 +18,7 @@ func buildAttachmentsProbeTool(t *testing.T) Tool {
 	tool, err := NewTool(
 		"attachments_probe",
 		"Probe attachments from run context",
-		func(_ context.Context, run RunContext, _ struct{}) (attachmentsOut, error) {
+		func(_ context.Context, run *RunEnv, _ struct{}) (attachmentsOut, error) {
 			atts := run.Attachments()
 			out := attachmentsOut{Count: len(atts)}
 			if len(atts) > 0 {
@@ -51,7 +51,7 @@ func TestToolExecute_AttachmentsHydrated(t *testing.T) {
 	}
 
 	var got attachmentsOut
-	err := tool.Execute(context.Background(), RunContext{}, input, func(c Chunk) error {
+	err := tool.Execute(context.Background(), NewRunEnv(), input, func(c Chunk) error {
 		got = decodeAttachmentsOut(t, c)
 		return nil
 	})
@@ -86,11 +86,11 @@ func TestRegistryExecute_AttachmentsHydrated(t *testing.T) {
 	require.Equal(t, MimeTypePNG, got.FirstMIME)
 }
 
-func TestToolExecute_AttachmentsAreReadOnlyFromRunContext(t *testing.T) {
+func TestToolExecute_AttachmentsAreReadOnlyFromRunEnv(t *testing.T) {
 	tool, err := NewTool(
 		"attachments_mutate_direct",
 		"Mutate attachment from run context",
-		func(_ context.Context, run RunContext, _ struct{}) (attachmentsOut, error) {
+		func(_ context.Context, run *RunEnv, _ struct{}) (attachmentsOut, error) {
 			atts := run.Attachments()
 			if len(atts) > 0 && len(atts[0].Data) > 0 {
 				atts[0].Data[0] = 99
@@ -107,16 +107,16 @@ func TestToolExecute_AttachmentsAreReadOnlyFromRunContext(t *testing.T) {
 		},
 	}
 
-	err = tool.Execute(context.Background(), RunContext{}, input, func(Chunk) error { return nil })
+	err = tool.Execute(context.Background(), NewRunEnv(), input, func(Chunk) error { return nil })
 	require.NoError(t, err)
 	require.Equal(t, byte(1), input.Attachments[0].Data[0], "handler must not mutate caller-owned attachments")
 }
 
-func TestRegistryExecute_AttachmentsAreReadOnlyFromRunContext(t *testing.T) {
+func TestRegistryExecute_AttachmentsAreReadOnlyFromRunEnv(t *testing.T) {
 	tool, err := NewTool(
 		"attachments_mutate_registry",
 		"Mutate attachment from run context",
-		func(_ context.Context, run RunContext, _ struct{}) (attachmentsOut, error) {
+		func(_ context.Context, run *RunEnv, _ struct{}) (attachmentsOut, error) {
 			atts := run.Attachments()
 			if len(atts) > 0 && len(atts[0].Data) > 0 {
 				atts[0].Data[0] = 42

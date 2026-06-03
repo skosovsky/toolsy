@@ -9,7 +9,7 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-func noopProxyHandler(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
+func noopProxyHandler(context.Context, *toolsy.RunEnv, []byte, func(toolsy.Chunk) error) error {
 	return nil
 }
 

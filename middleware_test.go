@@ -16,7 +16,7 @@ import (
 
 func newMiddlewareMinTool(
 	name string,
-	execute func(context.Context, RunContext, ToolInput, func(Chunk) error) error,
+	execute func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error,
 ) *minTool {
 	return &minTool{
 		manifest: ToolManifest{Name: name, Parameters: map[string]any{"type": "object"}},
@@ -30,14 +30,14 @@ func TestWithLogging(t *testing.T) {
 
 	inner := newMiddlewareMinTool(
 		"log_me",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
 		},
 	)
 	wrapped := WithLogging(logger)(inner)
 
 	var out []byte
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		out = c.Data
 		return nil
 	})
@@ -56,7 +56,7 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 
 	inner := newMiddlewareMinTool(
 		"log_soft_error",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{
 				Event:    EventResult,
 				Data:     []byte("budget exceeded"),
@@ -67,7 +67,7 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 	)
 	wrapped := WithLogging(logger)(inner)
 
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 func TestWithRecovery(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"panic_me",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			panic("test panic")
 		},
 	)
@@ -90,12 +90,12 @@ func TestWithRecovery(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	var sysErr *SystemError
+	var sysErr *ToolError
 	require.ErrorAs(t, err, &sysErr)
 	assert.Contains(t, sysErr.Err.Error(), "panic")
 }
@@ -110,7 +110,7 @@ func TestRegistryBuilderUse(t *testing.T) {
 
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	tool, err := NewTool("wrap_me", "desc", func(_ context.Context, _ RunContext, a A) (R, error) {
+	tool, err := NewTool("wrap_me", "desc", func(_ context.Context, _ *RunEnv, a A) (R, error) {
 		return R{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestMiddlewareShortCircuitSkipsInnerTool(t *testing.T) {
 	var called atomic.Bool
 	inner := newMiddlewareMinTool(
 		"blocked",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			called.Store(true)
 			return nil
 		},
@@ -144,7 +144,7 @@ func TestMiddlewareShortCircuitSkipsInnerTool(t *testing.T) {
 	shortCircuit := func(next Tool) Tool {
 		return newMiddlewareMinTool(
 			next.Manifest().Name,
-			func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+			func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 				return errRateLimit
 			},
 		)

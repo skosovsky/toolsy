@@ -12,7 +12,7 @@ type MockTool struct {
 	ManifestVal toolsy.ToolManifest
 	ExecuteFn   func(
 		ctx context.Context,
-		run toolsy.RunContext,
+		run *toolsy.RunEnv,
 		input toolsy.ToolInput,
 		yield func(toolsy.Chunk) error,
 	) error
@@ -36,7 +36,7 @@ func (m *MockTool) Manifest() toolsy.ToolManifest {
 // Execute runs ExecuteFn if set, otherwise returns nil.
 func (m *MockTool) Execute(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	input toolsy.ToolInput,
 	yield func(toolsy.Chunk) error,
 ) error {

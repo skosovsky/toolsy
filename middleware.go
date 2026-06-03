@@ -20,7 +20,7 @@ func WithLogging(logger *slog.Logger) Middleware {
 	}
 }
 
-// WithRecovery returns a middleware that recovers panics and returns SystemError.
+// WithRecovery returns a middleware that recovers panics and returns [ToolError] with [CodeInternal].
 //
 // Deprecated: [Registry] is built with panic recovery enabled by default ([NewRegistryBuilder] sets
 // recoverPanics). Using WithRecovery in Use() recovers panics before the registry's recovery and
@@ -43,7 +43,7 @@ type middlewareTool struct {
 	logger *slog.Logger
 }
 
-func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+func (m *middlewareTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	toolName := m.next.Manifest().Name
 	m.logger.InfoContext(ctx, "tool start", "tool", toolName)
 	start := time.Now()
@@ -88,7 +88,7 @@ func (m *middlewareTool) Execute(ctx context.Context, run RunContext, input Tool
 			m.logger.Info("tool end", "tool", toolName, "duration", dur, "chunks", chunks, "bytes", totalBytes)
 		}
 	}()
-	err = m.next.Execute(ctx, run, input, yieldWrapped)
+	err = m.next.Execute(ctx, env, input, yieldWrapped)
 	return err
 }
 
@@ -96,14 +96,14 @@ type recoveryTool struct{ toolBase }
 
 func (r *recoveryTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	env *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) (err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			err = &SystemError{Err: &panicError{p: p}}
+			err = NewInternalError(&panicError{p: p})
 		}
 	}()
-	return r.next.Execute(ctx, run, input, yield)
+	return r.next.Execute(ctx, env, input, yield)
 }

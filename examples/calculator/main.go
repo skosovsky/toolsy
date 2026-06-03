@@ -23,7 +23,7 @@ func main() {
 	add, err := toolsy.NewTool(
 		"add",
 		"Add two numbers",
-		func(_ context.Context, _ toolsy.RunContext, args CalcArgs) (CalcResult, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, args CalcArgs) (CalcResult, error) {
 			return CalcResult{Sum: args.A + args.B}, nil
 		},
 	)
@@ -37,7 +37,7 @@ func main() {
 	sub, err := toolsy.NewTool(
 		"sub",
 		"Subtract b from a",
-		func(_ context.Context, _ toolsy.RunContext, args CalcArgs) (SubResult, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, args CalcArgs) (SubResult, error) {
 			return SubResult{Diff: args.A - args.B}, nil
 		},
 	)

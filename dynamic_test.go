@@ -23,7 +23,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 		"dynamic",
 		"A dynamic tool",
 		schema,
-		func(_ context.Context, _ RunContext, argsJSON []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, argsJSON []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: argsJSON, MimeType: MimeTypeJSON})
 		},
 	)
@@ -35,7 +35,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 	var res []byte
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
 		func(c Chunk) error {
 			res = c.Data
@@ -61,20 +61,20 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 		"weather",
 		"Weather",
 		schema,
-		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
 
 	yieldNop := func(Chunk) error { return nil }
-	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, yieldNop)
+	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, yieldNop)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 
-	err = tool.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{"unit": "kelvin"}`)}, yieldNop)
+	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{"unit": "kelvin"}`)}, yieldNop)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
 func TestNewDynamicTool_InvalidSchema(t *testing.T) {
@@ -84,7 +84,7 @@ func TestNewDynamicTool_InvalidSchema(t *testing.T) {
 		"bad",
 		"Bad",
 		invalidSchema,
-		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
 			return nil
 		},
 	)
@@ -94,7 +94,7 @@ func TestNewDynamicTool_InvalidSchema(t *testing.T) {
 		"nil",
 		"Nil",
 		nil,
-		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
 			return nil
 		},
 	)
@@ -115,12 +115,12 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 		"type":       "object",
 		"properties": map[string]any{"x": map[string]any{"type": "integer"}},
 	}
-	clientErr := &ClientError{Reason: "bad request"}
+	clientErr := NewValidationError("bad request")
 	tool, err := NewDynamicTool(
 		"classify",
 		"Classify",
 		schema,
-		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
 			return clientErr
 		},
 	)
@@ -128,13 +128,13 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
-	var ce *ClientError
+	requireClientCorrectable(t, err)
+	var ce *ToolError
 	require.ErrorAs(t, err, &ce)
 	assert.Equal(t, "bad request", ce.Reason)
 
@@ -142,19 +142,19 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 		"sys",
 		"Sys",
 		schema,
-		func(_ context.Context, _ RunContext, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
 			return errors.New("internal failure")
 		},
 	)
 	require.NoError(t, err)
 	err = tool2.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsSystemError(err))
+	requireSystemToolError(t, err)
 }
 
 func TestNewDynamicTool_MetadataOptions(t *testing.T) {
@@ -164,7 +164,7 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 		"meta",
 		"Meta",
 		schema,
-		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithTags("a", "b"),
@@ -192,7 +192,7 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 		"strict_tool",
 		"Strict",
 		schema,
-		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
@@ -228,7 +228,7 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 		"no_mutate",
 		"No mutate",
 		schemaMap,
-		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
@@ -258,7 +258,7 @@ func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *te
 		"isolated",
 		"Isolated",
 		schemaMap,
-		func(_ context.Context, _ RunContext, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)

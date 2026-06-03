@@ -35,7 +35,9 @@ func TestSanitizePath_PathNotFound(t *testing.T) {
 	// Path inside sandbox that does not exist -> "path not found", not "outside sandbox"
 	_, err := sanitizePath(base, "missing/file.txt")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "path not found")
 }
 
@@ -44,7 +46,9 @@ func TestSanitizePath_PathTraversalBlocked(t *testing.T) {
 
 	_, err := sanitizePath(base, "../../etc/passwd")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "outside sandbox")
 }
 
@@ -53,7 +57,9 @@ func TestSanitizePath_TraversalSegmentBlockedBeforeJoin(t *testing.T) {
 	// Any ".." segment is rejected before Join (consistent message)
 	_, err := sanitizePath(base, "a/../b")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "outside sandbox")
 }
 
@@ -63,7 +69,9 @@ func TestSanitizePath_AbsolutePathInterpretedAsRelative(t *testing.T) {
 	// Rel(base, "/etc/passwd") gives ".." or "../.." + "/etc/passwd" -> blocked.
 	_, err := sanitizePath(base, "/etc/passwd")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestSanitizePath_SymlinkEscapeBlocked(t *testing.T) {
@@ -77,7 +85,9 @@ func TestSanitizePath_SymlinkEscapeBlocked(t *testing.T) {
 
 	_, err := sanitizePath(base, "escape")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestSanitizePathForWrite_ValidParent(t *testing.T) {
@@ -92,7 +102,9 @@ func TestSanitizePathForWrite_TraversalBlocked(t *testing.T) {
 	base := t.TempDir()
 	_, err := sanitizePathForWrite(base, "../../etc/secret")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "outside sandbox")
 }
 
@@ -100,6 +112,8 @@ func TestSanitizePathForWrite_TraversalSegmentBlocked(t *testing.T) {
 	base := t.TempDir()
 	_, err := sanitizePathForWrite(base, "sub/../../file.txt")
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "outside sandbox")
 }

@@ -11,7 +11,7 @@ import (
 
 func TestWithIdempotency_ReturnsCachedResult(t *testing.T) {
 	var calls atomic.Int32
-	tool, err := NewTool("echo", "Echo", func(_ context.Context, _ RunContext, _ struct {
+	tool, err := NewTool("echo", "Echo", func(_ context.Context, _ *RunEnv, _ struct {
 		N int `json:"n"`
 	}) (struct {
 		N int `json:"n"`
@@ -51,7 +51,7 @@ func TestWithIdempotency_ReturnsCachedResult(t *testing.T) {
 
 func TestWithIdempotency_SkipsNonIdempotentTools(t *testing.T) {
 	var calls atomic.Int32
-	tool, err := NewTool("mut", "Mut", func(_ context.Context, _ RunContext, _ struct{}) (struct{}, error) {
+	tool, err := NewTool("mut", "Mut", func(_ context.Context, _ *RunEnv, _ struct{}) (struct{}, error) {
 		calls.Add(1)
 		return struct{}{}, nil
 	})

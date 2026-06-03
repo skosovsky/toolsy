@@ -44,7 +44,7 @@ func (e *Extractor[T]) Schema() map[string]any {
 }
 
 // ParseAndValidate deserializes argsJSON into T, runs Layer 1 (schema validation) and
-// Layer 2 (Validatable.Validate() if T implements it). Returns ClientError for invalid
+// Layer 2 (Validatable.Validate() if T implements it). Returns [ToolError] for invalid
 // JSON or validation failures so the caller can pass the message to the LLM for self-correction.
 func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 	var zero T
@@ -62,10 +62,10 @@ func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 	// Layer 2: Validatable. Try args first (value receiver or T is *SomeType), then &args only
 	// for value type T when args does not implement Validatable (pointer receiver).
 	if err := runLayer2Validation(args); err != nil {
-		if IsClientError(err) {
+		if clientCorrectable(err) {
 			return zero, err
 		}
-		return zero, &ClientError{Reason: err.Error(), Retryable: false, Err: ErrValidation}
+		return zero, NewValidationError(err.Error())
 	}
 	return args, nil
 }

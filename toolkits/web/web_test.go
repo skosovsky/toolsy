@@ -48,7 +48,7 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 		t,
 		searchTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"test"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[searchResult](t, c)
@@ -61,17 +61,19 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 	require.Contains(t, result.Results, "An example site")
 }
 
-func TestWebSearch_EmptyQuery_ClientError(t *testing.T) {
+func TestWebSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 	tools, err := AsTools(&mockSearchProvider{})
 	require.NoError(t, err)
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"  "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestWebScrape_Success(t *testing.T) {
@@ -91,7 +93,7 @@ func TestWebScrape_Success(t *testing.T) {
 		t,
 		scrapeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -120,7 +122,7 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 		t,
 		scrapeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -140,12 +142,14 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://127.0.0.1:9999/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "private")
 }
 
@@ -156,12 +160,14 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://0.0.0.0:80/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
@@ -173,7 +179,9 @@ func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
 		[]string{"evil.example.com"},
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "blocked")
 }
 
@@ -189,12 +197,12 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	// Redirect to loopback is rejected by CheckRedirect (ClientError) or connection fails; scrape must not succeed
+	// Redirect to loopback is rejected by CheckRedirect (validation ToolError) or connection fails; scrape must not succeed
 }
 
 func TestWebScrape_WithCustomScraper(t *testing.T) {
@@ -217,7 +225,7 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -265,12 +273,14 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "blocked")
 }
 

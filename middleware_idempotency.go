@@ -40,7 +40,7 @@ type idempotencyTool struct {
 
 func (t *idempotencyTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	run *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {
@@ -50,7 +50,7 @@ func (t *idempotencyTool) Execute(
 	}
 	key := t.keyFn(manifest, input)
 	if cached, ok, err := t.store.Get(ctx, key); err != nil {
-		return &SystemError{Err: fmt.Errorf("toolsy: idempotency get: %w", err)}
+		return NewInternalError(fmt.Errorf("toolsy: idempotency get: %w", err))
 	} else if ok {
 		return yield(Chunk{
 			Event:    EventResult,
@@ -70,7 +70,7 @@ func (t *idempotencyTool) Execute(
 		return err
 	}
 	if putErr := t.store.Put(ctx, key, captured); putErr != nil {
-		return &SystemError{Err: fmt.Errorf("toolsy: idempotency put: %w", putErr)}
+		return NewInternalError(fmt.Errorf("toolsy: idempotency put: %w", putErr))
 	}
 	return nil
 }

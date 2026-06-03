@@ -24,7 +24,7 @@ func TestSessionTrackExecutionCount(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("noop_count", "Noop", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("noop_count", "Noop", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestSessionValidatorFailureConsumesStep(t *testing.T) {
 	type R struct{}
 
 	var executed bool
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		executed = true
 		return R{}, nil
 	})
@@ -79,7 +79,7 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "4", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
 	assert.Equal(t, int64(4), session.Track().ExecutionCount())
 }
 
@@ -116,7 +116,7 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 	tool, err := NewStreamTool(
 		"count",
 		"Count",
-		func(_ context.Context, _ RunContext, a A, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, a A, yield func(Chunk) error) error {
 			for i := range a.N {
 				if err := yield(
 					Chunk{Event: EventProgress, Data: []byte{byte(i)}, MimeType: MimeTypeText},
@@ -150,7 +150,7 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
@@ -195,7 +195,7 @@ func TestSessionToolNotFoundConsumesStep(t *testing.T) {
 		ToolCall{ToolName: "missing", Input: ToolInput{CallID: "missing", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 	assert.Equal(t, int64(1), session.Track().ExecutionCount())
 }
 
@@ -210,7 +210,7 @@ func TestSessionShutdownConsumesStep(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrShutdown)
+	requireToolErrorCode(t, err, CodeShutdown, ErrShutdown)
 	assert.Equal(t, int64(1), session.Track().ExecutionCount())
 }
 
@@ -218,7 +218,7 @@ func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("slow", "Slow", func(ctx context.Context, _ *RunEnv, _ A) (R, error) {
 		<-ctx.Done()
 		return R{}, ctx.Err()
 	})
@@ -235,7 +235,7 @@ func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 		ToolCall{ToolName: "slow", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrTimeout)
+	requireToolErrorCode(t, err, CodeTimeout, ErrTimeout)
 	assert.Equal(t, int64(1), session.Track().ExecutionCount())
 }
 
@@ -247,7 +247,7 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 	var beforeCount atomic.Int32
 	var validateCount atomic.Int32
 
-	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("noop", "Noop", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		executed.Store(true)
 		return R{}, nil
 	})
@@ -283,7 +283,7 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	require.ErrorIs(t, err, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
 	require.False(t, executed.Load())
 	assert.Equal(t, int32(1), beforeCount.Load())
 	assert.Equal(t, int32(1), validateCount.Load())

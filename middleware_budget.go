@@ -11,12 +11,7 @@ type BudgetTracker interface {
 	Allow(ctx context.Context, manifest ToolManifest, input ToolInput) (allowed bool, reason string, err error)
 }
 
-// BudgetEnv binds a [BudgetTracker] for [WithBudget] via [BindEnv].
-type BudgetEnv struct {
-	Budget BudgetTracker
-}
-
-// WithBudget enforces optional budget checks via [BudgetEnv] on the execution context.
+// WithBudget enforces optional budget checks via [DepKeyBudget] on [RunEnv].
 func WithBudget() Middleware {
 	return func(next Tool) Tool {
 		return &budgetTool{
@@ -31,24 +26,21 @@ type budgetTool struct {
 
 func (t *budgetTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	env *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {
-	var budgetTracker BudgetTracker
-	if env, ok := EnvFromContext[BudgetEnv](ctx); ok && env.Budget != nil {
-		budgetTracker = env.Budget
-	}
-	if budgetTracker == nil {
-		return t.next.Execute(ctx, run, input, yield)
+	budgetTracker, ok := Lookup[BudgetTracker](env, DepKeyBudget)
+	if !ok || budgetTracker == nil {
+		return t.next.Execute(ctx, env, input, yield)
 	}
 
 	allowed, reason, err := budgetTracker.Allow(ctx, t.next.Manifest(), input)
 	if err != nil {
-		return &SystemError{Err: fmt.Errorf("toolsy: budget allow check failed: %w", err)}
+		return NewInternalError(fmt.Errorf("toolsy: budget allow check failed: %w", err))
 	}
 	if allowed {
-		return t.next.Execute(ctx, run, input, yield)
+		return t.next.Execute(ctx, env, input, yield)
 	}
 
 	msg := strings.TrimSpace(reason)

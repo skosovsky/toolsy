@@ -80,7 +80,7 @@ func IsControlError(err error) bool {
 // YieldControl emits a typed control chunk and returns the matching control error.
 func YieldControl(yield func(Chunk) error, sig ControlSignal) error {
 	if sig == nil {
-		return &SystemError{Err: errors.New("toolsy: nil control signal")}
+		return NewInternalError(errors.New("toolsy: nil control signal"))
 	}
 	c := Chunk{
 		Event:   EventControl,

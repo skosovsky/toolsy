@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
@@ -17,7 +18,7 @@ const wordDocXML = "word/document.xml"
 func parseDOCX(r io.ReaderAt, size int64, maxBytes int) (string, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
-		return "", fmt.Errorf("document: docx zip: %w", err)
+		return "", toolsy.NewInternalError(fmt.Errorf("document: docx zip: %w", err))
 	}
 	var docFile *zip.File
 	for _, f := range zr.File {
@@ -27,10 +28,12 @@ func parseDOCX(r io.ReaderAt, size int64, maxBytes int) (string, error) {
 		}
 	}
 	if docFile == nil {
-		return "", fmt.Errorf("document: docx missing %s", wordDocXML)
+		return "", toolsy.NewValidationError(fmt.Sprintf("document: docx missing %s", wordDocXML))
 	}
 	if maxBytes > 0 && docFile.UncompressedSize64 > uint64(maxBytes) {
-		return "", fmt.Errorf("document: docx uncompressed size %d exceeds limit", docFile.UncompressedSize64)
+		return "", toolsy.NewValidationError(
+			fmt.Sprintf("document: docx uncompressed size %d exceeds limit", docFile.UncompressedSize64),
+		)
 	}
 	rc, err := docFile.Open()
 	if err != nil {

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,7 +34,7 @@ func TestFSListDir_Success(t *testing.T) {
 		t,
 		listTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":""}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[listResult](t, c)
@@ -66,7 +65,7 @@ func TestFSReadFile_Success(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"f.txt"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[readResult](t, c)
@@ -94,7 +93,7 @@ func TestFSReadFile_Truncation(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"big.txt"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[readResult](t, c)
@@ -116,7 +115,7 @@ func TestFSWriteFile_Success(t *testing.T) {
 		t,
 		writeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"a/b/f.txt","content":"written"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -141,12 +140,14 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"uploads/link/evil.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "outside sandbox")
 }
 
@@ -165,16 +166,15 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"report.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	// Framework may wrap error; ensure write was rejected (sandbox escape blocked)
-	require.True(
-		t,
-		strings.Contains(err.Error(), "outside sandbox") || strings.Contains(err.Error(), "internal system error"),
-	)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
+	require.Contains(t, err.Error(), "outside sandbox")
 }
 
 func TestFSWriteFile_ReadOnlyBlocked(t *testing.T) {
@@ -191,12 +191,14 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 
 	err = listTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"../../etc"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestAsTools_InvalidBaseDir(t *testing.T) {

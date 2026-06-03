@@ -51,7 +51,7 @@ func TestOverrideTool_ExecutesBase(t *testing.T) {
 			Name:       "echo",
 			Parameters: map[string]any{"type": "object"},
 		},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, input toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, input toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: input.ArgsJSON, MimeType: toolsy.MimeTypeJSON})
 		},
 	}
@@ -59,7 +59,7 @@ func TestOverrideTool_ExecutesBase(t *testing.T) {
 	var got []byte
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"a":1}`)},
 		func(c toolsy.Chunk) error {
 			got = c.Data
@@ -76,7 +76,7 @@ func TestOverrideTool_ThreadSafety(_ *testing.T) {
 			Name:       "base",
 			Parameters: map[string]any{"type": "object"},
 		},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult})
 		},
 	}
@@ -89,13 +89,13 @@ func TestOverrideTool_ThreadSafety(_ *testing.T) {
 			_ = w2.Manifest().Description
 			_ = w1.Execute(
 				context.Background(),
-				toolsy.RunContext{},
+				toolsy.NewRunEnv(),
 				toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 				func(toolsy.Chunk) error { return nil },
 			)
 			_ = w2.Execute(
 				context.Background(),
-				toolsy.RunContext{},
+				toolsy.NewRunEnv(),
 				toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 				func(toolsy.Chunk) error { return nil },
 			)
@@ -162,7 +162,7 @@ func TestOverrideTool_Parameters_DeepCopy(t *testing.T) {
 func TestOverrideTool_Execute_ChunkToolNameUsesAlias(t *testing.T) {
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "internal_tool", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{
 				Event:    toolsy.EventResult,
 				ToolName: "internal_tool",
@@ -176,7 +176,7 @@ func TestOverrideTool_Execute_ChunkToolNameUsesAlias(t *testing.T) {
 	var gotChunk toolsy.Chunk
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c

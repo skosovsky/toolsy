@@ -324,7 +324,7 @@ func (g *generator) loadManifest(path string) (*manifest, error) {
 		name,
 		description,
 		[]byte(schemaJSON),
-		func(_ context.Context, _ toolsy.RunContext, _ []byte, _ func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ *toolsy.RunEnv, _ []byte, _ func(toolsy.Chunk) error) error {
 			return nil
 		},
 	); proxyErr != nil {
@@ -1049,19 +1049,19 @@ func renderManifest(m *manifest) ([]byte, error) {
 	fmt.Fprintf(&buf, "\tconst rawSchema = %s\n\n", strconvQuote(m.RawSchemaJSON))
 	fmt.Fprintf(
 		&buf,
-		"\tproxy, err := toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
+		"\tproxy, err := toolsy.NewProxyTool(%s, %s, []byte(rawSchema), func(ctx context.Context, _ *toolsy.RunEnv, rawArgs []byte, yield func(toolsy.Chunk) error) error {\n",
 		strconvQuote(m.Name),
 		strconvQuote(m.Description),
 	)
 	fmt.Fprintf(&buf, "\t\tvar input %s\n", m.InputTypeName)
 	buf.WriteString("\t\tif err := json.Unmarshal(rawArgs, &input); err != nil {\n")
 	buf.WriteString(
-		"\t\t\treturn &toolsy.ClientError{Reason: \"Validation failed: invalid JSON format or type mismatch\", Err: err}\n",
+		"\t\t\treturn toolsy.NewSchemaError(\"Validation failed: invalid JSON format or type mismatch\")\n",
 	)
 	buf.WriteString("\t\t}\n")
 	buf.WriteString("\t\tif err := input.Validate(); err != nil {\n")
 	buf.WriteString(
-		"\t\t\treturn &toolsy.ClientError{Reason: \"Validation failed: \" + err.Error(), Err: toolsy.ErrValidation}\n",
+		"\t\t\treturn toolsy.NewValidationError(\"Validation failed: \" + err.Error())\n",
 	)
 	buf.WriteString("\t\t}\n")
 

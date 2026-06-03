@@ -21,7 +21,7 @@ const (
 func ValidateReadOnlyQuery(query string) error {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return validationClientError("query is required")
+		return validationToolError("query is required")
 	}
 	upper := strings.ToUpper(query)
 	firstToken, tokens, err := sqlTokensOutsideStringsAndComments(upper)
@@ -29,23 +29,19 @@ func ValidateReadOnlyQuery(query string) error {
 		return err
 	}
 	if firstToken != "SELECT" && firstToken != "WITH" {
-		return validationClientError("only SELECT and WITH (CTE) queries are allowed")
+		return validationToolError("only SELECT and WITH (CTE) queries are allowed")
 	}
 	forbidden := forbiddenReadOnlyKeywords()
 	for _, tok := range tokens {
 		if slices.Contains(forbidden, tok) {
-			return validationClientError("only read-only SELECT queries are allowed")
+			return validationToolError("only read-only SELECT queries are allowed")
 		}
 	}
 	return nil
 }
 
-func validationClientError(reason string) *toolsy.ClientError {
-	return &toolsy.ClientError{
-		Reason:    reason,
-		Retryable: false,
-		Err:       toolsy.ErrValidation,
-	}
+func validationToolError(reason string) *toolsy.ToolError {
+	return toolsy.NewValidationError(reason)
 }
 
 func forbiddenReadOnlyKeywords() []string {
@@ -92,7 +88,7 @@ func (s *upperSQLScan) run() (string, []string, error) {
 		}
 	}
 	if len(s.tokens) == 0 {
-		return "", s.tokens, validationClientError("only SELECT and WITH (CTE) queries are allowed")
+		return "", s.tokens, validationToolError("only SELECT and WITH (CTE) queries are allowed")
 	}
 	return s.tokens[0], s.tokens, nil
 }
@@ -113,7 +109,7 @@ func (s *upperSQLScan) stepNormal() error {
 		s.state = scanStateBlockComment
 		s.i += 2
 	case c == ';':
-		return validationClientError("multiple statements are not allowed")
+		return validationToolError("multiple statements are not allowed")
 	case (c >= 'A' && c <= 'Z') || c == '_':
 		s.i += s.appendIdentifierToken()
 	default:

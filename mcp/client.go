@@ -195,7 +195,7 @@ func (c *Client) toolToProxy(m *MCPTool) (toolsy.Tool, error) {
 	if len(schema) == 0 {
 		schema = defaultToolInputSchemaJSON()
 	}
-	handler := func(ctx context.Context, _ toolsy.RunContext, rawArgs []byte, yield func(toolsy.Chunk) error) error {
+	handler := func(ctx context.Context, _ *toolsy.RunEnv, rawArgs []byte, yield func(toolsy.Chunk) error) error {
 		return c.runMCPToolCall(ctx, name, rawArgs, yield)
 	}
 	return toolsy.NewProxyTool(name, description, schema, handler, mcpToolPolicyOptions(m.Annotations)...)
@@ -350,7 +350,7 @@ func (c *Client) nextProgressToken() string {
 func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 	schema := []byte(`{"type":"object","properties":{"uri":{"type":"string"}},"required":["uri"]}`)
 	transport := c.transport
-	handler := func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+	handler := func(ctx context.Context, _ *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 		var args struct {
 			URI string `json:"uri"`
 		}

@@ -23,41 +23,49 @@ func (t *testBudgetTracker) Allow(ctx context.Context, manifest ToolManifest, in
 	return t.allowFn(ctx, manifest, input)
 }
 
-func budgetCtx(tracker BudgetTracker) context.Context {
-	return BindEnv(context.Background(), BudgetEnv{Budget: tracker})
+func budgetEnv(tracker BudgetTracker) *RunEnv {
+	env := NewRunEnv()
+	Put(env, DepKeyBudget, tracker)
+	return env
 }
 
 func TestWithBudget_NoEnvPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			executed.Store(true)
 			return nil
 		},
 	)
 	wrapped := WithBudget()(inner)
 
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
 	assert.True(t, executed.Load())
 }
 
-func TestWithBudget_MissingBudgetEnvPassThrough(t *testing.T) {
+func TestWithBudget_MissingBudgetDepPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			executed.Store(true)
 			return nil
 		},
 	)
 	wrapped := WithBudget()(inner)
 
-	ctx := BindEnv(context.Background(), struct{ Other string }{Other: "x"})
-	err := wrapped.Execute(ctx, RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error { return nil })
+	env := NewRunEnv()
+	Put(env, "other", "x")
+	err := wrapped.Execute(
+		context.Background(),
+		env,
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
 	require.NoError(t, err)
 	assert.True(t, executed.Load())
 }
@@ -66,7 +74,7 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"guarded",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			executed.Store(true)
 			return nil
 		},
@@ -80,8 +88,8 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 
 	var chunks []Chunk
 	err := wrapped.Execute(
-		budgetCtx(tracker),
-		RunContext{},
+		context.Background(),
+		budgetEnv(tracker),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c Chunk) error {
 			chunks = append(chunks, c)
@@ -97,10 +105,10 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 	assert.Equal(t, int64(1), tracker.calls.Load())
 }
 
-func TestWithBudget_AllowErrorReturnsSystemError(t *testing.T) {
+func TestWithBudget_AllowErrorReturnsToolError(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"guarded",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return nil
 		},
 	)
@@ -112,22 +120,23 @@ func TestWithBudget_AllowErrorReturnsSystemError(t *testing.T) {
 	wrapped := WithBudget()(inner)
 
 	err := wrapped.Execute(
-		budgetCtx(tracker),
-		RunContext{},
+		context.Background(),
+		budgetEnv(tracker),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	var sysErr *SystemError
-	require.ErrorAs(t, err, &sysErr)
-	assert.Contains(t, sysErr.Err.Error(), "budget allow check failed")
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, CodeInternal, te.Code)
+	assert.Contains(t, te.Unwrap().Error(), "budget allow check failed")
 }
 
 func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicated(t *testing.T) {
 	var attempts atomic.Int64
 	tool := newMiddlewareMinTool(
 		"readonly_network",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			attempts.Add(1)
 			return ErrTimeout
 		},
@@ -139,7 +148,7 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 			return true, "", nil
 		},
 	}
-	ctx := budgetCtx(tracker)
+	env := budgetEnv(tracker)
 
 	reg, err := NewRegistryBuilder().
 		Use(
@@ -153,10 +162,11 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 
 	var chunks []Chunk
 	err = reg.ExecuteBatchStream(
-		ctx,
+		context.Background(),
 		[]ToolCall{{
 			ToolName: "readonly_network",
 			Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
+			Env:      env,
 		}},
 		func(c Chunk) error {
 			chunks = append(chunks, c)
@@ -176,7 +186,7 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 	var attempts atomic.Int64
 	tool := newMiddlewareMinTool(
 		"readonly_budget",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			attempts.Add(1)
 			return ErrTimeout
 		},
@@ -188,7 +198,7 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 			return false, "budget exceeded", nil
 		},
 	}
-	ctx := budgetCtx(tracker)
+	env := budgetEnv(tracker)
 
 	reg, err := NewRegistryBuilder().
 		Use(
@@ -201,10 +211,11 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 
 	var chunks []Chunk
 	err = reg.Execute(
-		ctx,
+		context.Background(),
 		ToolCall{
 			ToolName: "readonly_budget",
 			Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
+			Env:      env,
 		},
 		func(c Chunk) error {
 			chunks = append(chunks, c)

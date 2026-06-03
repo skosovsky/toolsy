@@ -69,31 +69,26 @@ func resolveSupportedLanguages(sandbox Sandbox, o *options) ([]string, error) {
 func newExecHandler(
 	sandbox Sandbox,
 	supported []string,
-) func(context.Context, toolsy.RunContext, []byte, func(toolsy.Chunk) error) error {
-	return func(ctx context.Context, _ toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+) func(context.Context, *toolsy.RunEnv, []byte, func(toolsy.Chunk) error) error {
+	return func(ctx context.Context, _ *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 		var args execArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return &toolsy.ClientError{
-				Reason:    "json parse error: " + err.Error(),
-				Retryable: false,
-				Err:       nil,
-			}
+			return toolsy.NewJSONParseError(err)
 		}
 
 		if strings.TrimSpace(args.Code) == "" {
-			return &toolsy.ClientError{Reason: "code is required", Retryable: false, Err: toolsy.ErrValidation}
+			return toolsy.NewValidationError("code is required")
 		}
 
 		language := strings.TrimSpace(args.Language)
 		if !containsLanguage(supported, language) {
-			return fmt.Errorf("%w: %s", ErrUnsupportedLanguage, language)
+			return toolsy.NewValidationError(
+				fmt.Sprintf("unsupported language %q for this sandbox", language),
+			)
 		}
 
 		if err := ctx.Err(); err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return fmt.Errorf("exectool: sandbox run: %w", ErrTimeout)
-			}
-			return err
+			return mapExecError(err)
 		}
 
 		req := RunRequest{
@@ -105,14 +100,11 @@ func newExecHandler(
 
 		res, err := sandbox.Run(ctx, req)
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return fmt.Errorf("exectool: sandbox run: %w", ErrTimeout)
-			}
-			return fmt.Errorf("exectool: sandbox run: %w", err)
+			return mapExecError(err)
 		}
 		out, err := json.Marshal(res)
 		if err != nil {
-			return fmt.Errorf("exectool: marshal result: %w", err)
+			return toolsy.NewInternalError(fmt.Errorf("exectool: marshal result: %w", err))
 		}
 		return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
 	}
@@ -194,6 +186,22 @@ func intersectLanguages(supported, allowed []string) []string {
 
 func containsLanguage(languages []string, target string) bool {
 	return slices.Contains(languages, target)
+}
+
+func mapExecError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, ErrUnsupportedLanguage) {
+		return toolsy.NewValidationError(err.Error())
+	}
+	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return toolsy.NewTimeoutError(true)
+	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	return fmt.Errorf("exectool: sandbox run: %w", err)
 }
 
 func cloneEnv(env map[string]string) map[string]string {

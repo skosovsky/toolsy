@@ -9,17 +9,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWithErrorFormatter_ClientErrorBecomesErrorChunk(t *testing.T) {
+func TestWithErrorFormatter_ValidationErrorBecomesErrorChunk(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"client_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			return &ClientError{Reason: "city is required", Retryable: false, Err: ErrValidation}
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewValidationError("city is required")
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 
 	var chunks []Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		chunks = append(chunks, c)
 		return nil
 	})
@@ -30,17 +30,17 @@ func TestWithErrorFormatter_ClientErrorBecomesErrorChunk(t *testing.T) {
 	assert.Contains(t, string(chunks[0].Data), "city is required")
 }
 
-func TestWithErrorFormatter_SystemErrorDoesNotLeakInternalMessage(t *testing.T) {
+func TestWithErrorFormatter_InternalToolErrorDoesNotLeakInternalMessage(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"system_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
-			return &SystemError{Err: errors.New("db password leaked")}
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewInternalError(errors.New("db password leaked"))
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -50,23 +50,87 @@ func TestWithErrorFormatter_SystemErrorDoesNotLeakInternalMessage(t *testing.T) 
 	assert.Contains(t, string(got.Data), "internal system error")
 }
 
+func TestWithErrorFormatter_DependencyMissingHint(t *testing.T) {
+	inner := newMiddlewareMinTool(
+		"dep_missing",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewDependencyMissingError("db")
+		},
+	)
+	wrapped := WithErrorFormatter()(inner)
+
+	var got Chunk
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+		got = c
+		return nil
+	})
+	require.NoError(t, err)
+	assert.True(t, got.IsError)
+	assert.Contains(t, string(got.Data), "required dependency is missing")
+	assert.Contains(t, string(got.Data), "agent configuration")
+}
+
+func TestWithErrorFormatter_ToolsContractMissingHint(t *testing.T) {
+	inner := newMiddlewareMinTool(
+		"contract_missing",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewToolsContractMissingError([]string{"a", "b"}, []string{"b"})
+		},
+	)
+	wrapped := WithErrorFormatter()(inner)
+
+	var got Chunk
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+		got = c
+		return nil
+	})
+	require.NoError(t, err)
+	assert.True(t, got.IsError)
+	assert.Contains(t, string(got.Data), "required tools are not registered")
+	assert.Contains(t, string(got.Data), "Register missing tools")
+}
+
+func TestWithErrorFormatter_PrefersSafeMessageOverReason(t *testing.T) {
+	inner := newMiddlewareMinTool(
+		"safe_msg",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return WithSafeMessage(
+				NewValidationError("secret internal: api_key=leaked"),
+				"Please provide a valid city name",
+			)
+		},
+	)
+	wrapped := WithErrorFormatter()(inner)
+
+	var got Chunk
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+		got = c
+		return nil
+	})
+	require.NoError(t, err)
+	body := string(got.Data)
+	assert.Contains(t, body, "valid city name")
+	assert.NotContains(t, body, "api_key")
+	assert.NotContains(t, body, "secret internal")
+}
+
 func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 	suspend := newMiddlewareMinTool(
 		"suspend",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return ErrPause
 		},
 	)
 	streamAborted := newMiddlewareMinTool(
 		"abort",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return ErrStreamAborted
 		},
 	)
 
 	err := WithErrorFormatter()(suspend).Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -74,7 +138,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 
 	err = WithErrorFormatter()(streamAborted).Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -84,7 +148,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 func TestWithErrorFormatter_BypassesContextCanceled(t *testing.T) {
 	canceled := newMiddlewareMinTool(
 		"canceled",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return context.Canceled
 		},
 	)
@@ -92,7 +156,7 @@ func TestWithErrorFormatter_BypassesContextCanceled(t *testing.T) {
 	yieldCalls := 0
 	err := WithErrorFormatter()(canceled).Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error {
 			yieldCalls++
@@ -106,13 +170,13 @@ func TestWithErrorFormatter_BypassesContextCanceled(t *testing.T) {
 func TestWithErrorFormatter_YieldFailureIsWrapped(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("boom")
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return errors.New("stop")
 	})
 	require.Error(t, err)
@@ -122,14 +186,14 @@ func TestWithErrorFormatter_YieldFailureIsWrapped(t *testing.T) {
 func TestWithErrorFormatter_PlainErrorPreservesActionableMessage(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"plain_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("rate limit exceeded")
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -141,14 +205,14 @@ func TestWithErrorFormatter_PlainErrorPreservesActionableMessage(t *testing.T) {
 func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"multiline_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("database connection failed\nstack line 1")
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), RunContext{}, ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
 		got = c
 		return nil
 	})
@@ -161,7 +225,7 @@ func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
 func TestSessionExecute_ErrorFormatterSoftErrorCountsStep(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"soft_error",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("raw failure")
 		},
 	)
@@ -187,7 +251,7 @@ func TestSessionExecute_ErrorFormatterSoftErrorCountsStep(t *testing.T) {
 func TestWithErrorFormatter_RegistryExecuteIter_EmitsSoftErrorChunk(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"iter_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("iter failure")
 		},
 	)
@@ -218,7 +282,7 @@ func TestWithErrorFormatter_RegistryExecuteIter_EmitsSoftErrorChunk(t *testing.T
 func TestWithErrorFormatter_RegistryExecuteBatchStream_NoDuplicateErrorChunk(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"batch_fail",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return errors.New("batch failure")
 		},
 	)
@@ -245,7 +309,7 @@ func TestWithErrorFormatter_RegistryExecuteBatchStream_NoDuplicateErrorChunk(t *
 func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"ok_tool",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return nil
 		},
 	)
@@ -261,7 +325,7 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 			return nil
 		},
 	)
-	require.ErrorIs(t, err, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 	require.Empty(t, missingToolChunks)
 
 	session, err := NewSession(reg, WithMaxSteps(1))
@@ -282,6 +346,6 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 			return nil
 		},
 	)
-	require.ErrorIs(t, err, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
 	require.Empty(t, maxStepChunks)
 }

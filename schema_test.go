@@ -238,14 +238,14 @@ func TestSchemaRegistry_IsolatedByDefault(t *testing.T) {
 	toolWithShared, err := NewTool(
 		"shared",
 		"desc",
-		func(_ context.Context, _ RunContext, _ Args) (struct{}, error) { return struct{}{}, nil },
+		func(_ context.Context, _ *RunEnv, _ Args) (struct{}, error) { return struct{}{}, nil },
 		WithSchemaRegistry(registry),
 	)
 	require.NoError(t, err)
 	toolWithLocal, err := NewTool(
 		"local",
 		"desc",
-		func(_ context.Context, _ RunContext, _ Args) (struct{}, error) { return struct{}{}, nil },
+		func(_ context.Context, _ *RunEnv, _ Args) (struct{}, error) { return struct{}{}, nil },
 	)
 	require.NoError(t, err)
 
@@ -318,4 +318,19 @@ func TestSchemaRegistryRegisterType_InvalidArgs_Panic(t *testing.T) {
 	registry := NewSchemaRegistry()
 	assert.Panics(t, func() { registry.RegisterType(nil, "string", "uuid") })
 	assert.Panics(t, func() { registry.RegisterType(struct{}{}, "", "uuid") })
+}
+
+func TestGenerateSchema_JSONRawMessage(t *testing.T) {
+	type withRaw struct {
+		Body json.RawMessage `json:"body"`
+	}
+	m, _, err := generateSchema[withRaw](testSchemaConfig(false))
+	require.NoError(t, err)
+	obj := findSchemaObject(m)
+	require.NotNil(t, obj)
+	props, ok := obj["properties"].(map[string]any)
+	require.True(t, ok)
+	bodyProp, ok := props["body"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "object", bodyProp["type"])
 }

@@ -28,7 +28,7 @@ func decodeAccepted(t *testing.T, c toolsy.Chunk) toolsy.AsyncAccepted {
 func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "heavy", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, _ func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, _ func(toolsy.Chunk) error) error {
 			time.Sleep(10 * time.Millisecond)
 			return nil
 		},
@@ -38,7 +38,7 @@ func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	var accepted toolsy.AsyncAccepted
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			accepted = decodeAccepted(t, c)
@@ -61,7 +61,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "echo", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(`"done"`), MimeType: toolsy.MimeTypeJSON})
 		},
 	}
@@ -77,7 +77,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(_ toolsy.Chunk) error {
 			return nil
@@ -94,14 +94,14 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 func TestAsAsyncTool_NilCallback(t *testing.T) {
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "nop", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
 	wrapped := toolsy.AsAsyncTool(base)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -117,7 +117,7 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "fail", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return wantErr
 		},
 	}
@@ -130,7 +130,7 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -145,7 +145,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 	var callbackMu sync.Mutex
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "slow", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			time.Sleep(50 * time.Millisecond)
 			return nil
 		},
@@ -157,7 +157,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error {
 			return yieldErr
@@ -180,7 +180,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	var callbackMu sync.Mutex
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "nop", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
@@ -191,7 +191,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		ctx,
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -204,7 +204,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
+func TestAsAsyncTool_PanicInBase_CallbackGetsInternalToolError(t *testing.T) {
 	var (
 		done   sync.WaitGroup
 		gotErr error
@@ -212,7 +212,7 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 	done.Add(1)
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "panic_tool", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			panic("intentional panic for test")
 		},
 	}
@@ -225,19 +225,21 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsSystemError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.NoError(t, err)
 	done.Wait()
-	require.True(t, toolsy.IsSystemError(gotErr))
+	te, ok := toolsy.AsToolError(gotErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
 }
 
 func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "ok", Parameters: map[string]any{"type": "object"}},
-		ExecuteFn: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return nil
 		},
 	}
@@ -246,7 +248,7 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -261,7 +263,7 @@ func TestAsAsyncTool_MultipleAcceptedCallsDoNotBlockRegistry(t *testing.T) {
 	base, err := toolsy.NewTool(
 		"slow_async",
 		"slow async",
-		func(_ context.Context, _ toolsy.RunContext, _ A) (R, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, _ A) (R, error) {
 			<-block
 			return R{}, nil
 		},
@@ -295,7 +297,7 @@ func TestAsAsyncTool_RegistryShutdownWaitsForBackground(t *testing.T) {
 
 	block := make(chan struct{})
 	started := atomic.Bool{}
-	base, err := toolsy.NewTool("worker", "worker", func(_ context.Context, _ toolsy.RunContext, _ A) (R, error) {
+	base, err := toolsy.NewTool("worker", "worker", func(_ context.Context, _ *toolsy.RunEnv, _ A) (R, error) {
 		started.Store(true)
 		<-block
 		return R{}, nil

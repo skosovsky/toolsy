@@ -23,7 +23,7 @@ func TestMockTool(t *testing.T) {
 			Description: "For tests",
 			Parameters:  map[string]any{"type": "object"},
 		},
-		ExecuteFn: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(
 				toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(`{"done":true}`), MimeType: toolsy.MimeTypeJSON},
 			)
@@ -38,7 +38,7 @@ func TestMockTool(t *testing.T) {
 	var out []byte
 	err := m.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			out = c.Data
@@ -59,7 +59,7 @@ func TestNewTestRegistry(t *testing.T) {
 		ManifestVal: toolsy.ToolManifest{Name: "m", Parameters: map[string]any{"type": "object"}},
 		ExecuteFn: func(
 			_ context.Context,
-			_ toolsy.RunContext,
+			_ *toolsy.RunEnv,
 			_ toolsy.ToolInput,
 			yield func(toolsy.Chunk) error,
 		) error {

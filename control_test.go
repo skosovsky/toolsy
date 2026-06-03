@@ -46,9 +46,9 @@ func TestYieldControl_UIActionReturnsErrUIAction(t *testing.T) {
 	assert.JSONEq(t, `{"id":"x"}`, string(ui.PayloadJSON))
 }
 
-func TestYieldControl_NilSignalIsSystemError(t *testing.T) {
+func TestYieldControl_NilSignalIsInternalToolError(t *testing.T) {
 	err := YieldControl(func(Chunk) error { return nil }, nil)
-	require.True(t, IsSystemError(err))
+	requireSystemToolError(t, err)
 }
 
 func TestIsControlError(t *testing.T) {
@@ -62,14 +62,14 @@ func TestIsControlError(t *testing.T) {
 func TestWithErrorFormatter_BypassesControlErrors(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"ctrl",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			return ErrPause
 		},
 	)
 	wrapped := WithErrorFormatter()(inner)
 	err := wrapped.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -78,13 +78,13 @@ func TestWithErrorFormatter_BypassesControlErrors(t *testing.T) {
 
 func TestValidateChunk_ControlRequiresSignal(t *testing.T) {
 	err := validateChunk(Chunk{Event: EventControl})
-	require.True(t, IsSystemError(err))
+	requireSystemToolError(t, err)
 }
 
 func TestWithCompletionPolicy(t *testing.T) {
 	type A struct{}
 	type R struct{}
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithCompletionPolicy(CompletionSilentYield))
 	require.NoError(t, err)

@@ -32,7 +32,7 @@ func main() {
 	tool, err := toolsy.NewTool(
 		"weather",
 		"Get temperature for city",
-		func(_ context.Context, _ toolsy.RunContext, a Args) (Out, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, a Args) (Out, error) {
 			return Out{Temp: 22.5}, nil
 		},
 	)
@@ -55,7 +55,12 @@ func main() {
 
 	var out Out
 	err = reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
-		return json.Unmarshal(c.Data, &out)
+		decoded, decErr := toolsy.DecodeChunkAs[Out](c)
+		if decErr != nil {
+			return decErr
+		}
+		out = *decoded
+		return nil
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -67,7 +72,7 @@ func main() {
 
 ## v2 API contracts
 
-- `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, run, input, yield)`.
+- `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, env, input, yield)`.
 - `ToolCall` carries `Input toolsy.ToolInput`; old `ToolCall.Args` is removed.
 - `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
 - `Chunk` data-plane: `Event`, `Data`, `MimeType`, `IsError`, `Progress`.
@@ -116,7 +121,7 @@ if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list
 ```
 
 - **`Subset`**: creates a capability view with only the named tools. Duplicate names are ignored. Unknown names return an error. Subset shares runtime state (shutdown and in-flight tracking) with the root registry.
-- **`ValidateContract`**: returns `*MissingToolsError` when required tools are missing (use `errors.As`). Duplicate names in `requiredNames` are deduplicated. Requires a valid registry runtime state (`errors.Is(err, ErrRegistryState)` on nil or uninitialized registry).
+- **`ValidateContract`**: returns `*ToolError` with `CodeToolsContractMissing` when required tools are missing (`AsToolError` + `FixableArgs` lists missing names). Duplicate names in `requiredNames` are deduplicated. Requires a valid registry runtime state (`CodeRegistryNotReady` / `errors.Is(err, ErrRegistryState)`).
 - **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
 
 **Capability vs runtime authorization:** use `Subset` for which tools a profile may use at all. Use middleware for per-call checks (tenant, role, payload) that depend on `context` or arguments.
@@ -190,7 +195,7 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 
 - Required fields from schema `required` are enforced in generated `Validate()` with explicit Go checks (no `validator/v10`, no `validate` struct tags).
 - Top-level `integer`/`boolean` use pointers so `Validate()` can detect absent keys without rejecting legitimate `0`/`false` values.
-- Parse/validate failures in the factory return `ClientError` with reason prefix `Validation failed:` for LLM self-correction.
+- Parse/validate failures in the factory return `*ToolError` (`CodeValidationFailed` / `CodeSchemaInvalid`) for LLM self-correction.
 
 **Stream tools (`stream: true`):**
 
@@ -198,25 +203,23 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 - Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
 - Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
 
-## RunContext and RunEnv
+## RunEnv (session + DI)
 
-`RunContext` carries runtime-only dependencies:
+`*RunEnv` is shared via `ToolCall.Env`:
 
-- `Credentials` (`CredentialsProvider`)
-- `State` (`StateStore`)
-
-Application dependencies must be bound via typed `BindEnv` on the execution context:
+- `StateStore` — persisted key/value state
+- `Put` / `Require` / `Lookup` — session dependencies (`deps` map)
+- `SetState` / `GetState` — mutable in-memory session state (`state` map)
 
 ```go
-type AppEnv struct {
-	DB *sql.DB
-}
+env := toolsy.NewRunEnv(toolsy.WithStateStore(store))
+toolsy.Put(env, "db", db) // dependencies — not SetState
+toolsy.SetState(env, "trace_id", traceID)
 
-ctx = toolsy.BindEnv(ctx, AppEnv{DB: db})
-env, ok := toolsy.EnvFromContext[AppEnv](ctx)
+call.Env = env
 ```
 
-`ToolInput.Attachments` are exposed to handlers as `run.Attachments()`.
+`ToolInput.Attachments` are exposed to handlers as `env.Attachments()` (cloned per call).
 
 `ToolInput.CallID` is the orchestrator/LLM tool call identifier used for metadata tagging in `Registry`/`Session` execution paths and observability middleware.
 Direct low-level `Tool.Execute(...)` does not auto-fill `Chunk.CallID`.
@@ -273,7 +276,7 @@ func (t *rateLimitTool) Manifest() toolsy.ToolManifest { return t.next.Manifest(
 
 func (t *rateLimitTool) Execute(
 	ctx context.Context,
-	run toolsy.RunContext,
+	env *toolsy.RunEnv,
 	input toolsy.ToolInput,
 	yield func(toolsy.Chunk) error,
 ) error {
@@ -360,7 +363,9 @@ Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history`
 ## Budget middleware
 
 ```go
-ctx = toolsy.BindEnv(ctx, toolsy.BudgetEnv{Budget: tracker})
+env := toolsy.NewRunEnv()
+toolsy.Put(env, toolsy.DepKeyBudget, tracker)
+call.Env = env
 reg.Execute(ctx, call, yield)
 ```
 
@@ -419,7 +424,9 @@ defer client.Close()
 - Human-in-the-loop tools yield `EventControl` + `ErrPause`.
 - `EventSuspend` / `ErrSuspend` / `ServiceProvider` removed.
 - `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
-- Use `BindEnv` / `EnvFromContext` for all application dependencies.
+- `RunContext` → `*RunEnv` on `ToolCall.Env`; `BindEnv` → `Put` / `Require` / `Lookup`.
+- `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
+- See [docs/migration-task22.md](docs/migration-task22.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
 
 ## Zero-resiliency core (post v2)
 

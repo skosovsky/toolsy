@@ -143,7 +143,7 @@ func (t *overriddenTool) Manifest() ToolManifest {
 	return manifest
 }
 
-func (t *overriddenTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+func (t *overriddenTool) Execute(ctx context.Context, run *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	if t.opts.name != nil {
 		alias := *t.opts.name
 		origYield := yield

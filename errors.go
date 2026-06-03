@@ -16,57 +16,240 @@ var (
 	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
 )
 
-// ClientError is an error that should be sent back to the LLM for self-correction
-// (e.g. invalid JSON, schema validation failure, bad enum value).
-// Do not expose stack traces or internal details to the LLM.
-// Err optionally wraps a sentinel (e.g. ErrValidation) for [errors.Is]/[errors.As].
-type ClientError struct {
-	Reason string
-	// Retryable is set by the application (not by toolsy). When true, the orchestrator
-	// may retry the same call without changing arguments (e.g. transient rate limit).
-	Retryable bool
-	Err       error // wrapped sentinel for [errors.Is]/[errors.As]
+// ErrorCode is a machine-readable tool execution error category.
+type ErrorCode string
+
+const (
+	CodeSchemaInvalid        ErrorCode = "SCHEMA_INVALID"
+	CodeValidationFailed     ErrorCode = "VALIDATION_FAILED"
+	CodeTimeout              ErrorCode = "TIMEOUT"
+	CodeToolNotFound         ErrorCode = "TOOL_NOT_FOUND"
+	CodeDependencyMissing    ErrorCode = "DEPENDENCY_MISSING"
+	CodeInternal             ErrorCode = "INTERNAL"
+	CodeShutdown             ErrorCode = "SHUTDOWN"
+	CodeMaxStepsExceeded     ErrorCode = "MAX_STEPS_EXCEEDED"
+	CodeRegistryNotReady     ErrorCode = "REGISTRY_NOT_READY"
+	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
+)
+
+// ToolError is the structured execution error envelope for orchestrator routing.
+// Use [AsToolError] and [errors.Is] on [Err] for sentinel checks.
+type ToolError struct {
+	Code        ErrorCode
+	Retryable   bool
+	Reason      string
+	FixableArgs []string
+	SafeMessage string
+	Err         error
 }
 
-func (e *ClientError) Error() string {
-	return fmt.Sprintf("invalid tool input: %s", e.Reason)
-}
-
-// Unwrap supports [errors.Is]/[errors.As] on wrapped chains (e.g. [errors.Is](err, ErrValidation)).
-func (e *ClientError) Unwrap() error { return e.Err }
-
-// SystemError represents an internal failure (DB down, panic, etc.).
-// The LLM should not see the underlying error message or stack.
-type SystemError struct {
-	Err error
-}
-
-func (e *SystemError) Error() string {
-	return "internal system error during tool execution"
-}
-
-func (e *SystemError) Unwrap() error { return e.Err }
-
-// IsClientError returns true if err is or wraps a ClientError.
-func IsClientError(err error) bool {
-	var ce *ClientError
-	return errors.As(err, &ce)
-}
-
-// IsSystemError returns true if err is or wraps a SystemError.
-func IsSystemError(err error) bool {
-	var se *SystemError
-	return errors.As(err, &se)
-}
-
-// wrapJSONParseError returns a ClientError for JSON unmarshal failures.
-// Used by Extractor.ParseAndValidate and NewDynamicTool execute path so parse errors are consistent.
-func wrapJSONParseError(err error) error {
-	return &ClientError{
-		Reason:    "json parse error: " + err.Error(),
-		Retryable: false,
-		Err:       nil,
+// NewValidationError builds a non-retryable validation [ToolError].
+func NewValidationError(reason string, fixableFields ...string) *ToolError {
+	return &ToolError{ //nolint:exhaustruct // SafeMessage optional for LLM-facing copy
+		Code:        CodeValidationFailed,
+		Reason:      reason,
+		Retryable:   false,
+		FixableArgs: append([]string(nil), fixableFields...),
+		Err:         ErrValidation,
 	}
+}
+
+// NewSchemaError builds a non-retryable schema or parse [ToolError].
+func NewSchemaError(reason string) *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeSchemaInvalid,
+		Reason:    reason,
+		Retryable: false,
+	}
+}
+
+// NewJSONParseError reports invalid tool argument JSON with details in [ToolError.Unwrap].
+func NewJSONParseError(err error) *ToolError {
+	if err == nil {
+		return nil
+	}
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeSchemaInvalid,
+		Reason:    "invalid JSON",
+		Retryable: false,
+		Err:       err,
+	}
+}
+
+// NewInternalError wraps an internal failure as [ToolError].
+// Technical details are available via [ToolError.Unwrap]; [ToolError.Reason] is generic.
+func NewInternalError(err error) *ToolError {
+	if err == nil {
+		return nil
+	}
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeInternal,
+		Reason:    "internal error",
+		Retryable: false,
+		Err:       err,
+	}
+}
+
+// WithSafeMessage sets [ToolError.SafeMessage] for user-facing or LLM-safe copy.
+func WithSafeMessage(te *ToolError, safe string) *ToolError {
+	if te == nil {
+		return nil
+	}
+	te.SafeMessage = safe
+	return te
+}
+
+// NewDependencyMissingError reports a missing or nil typed dependency.
+func NewDependencyMissingError(key string) *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeDependencyMissing,
+		Reason:    fmt.Sprintf("dependency %q is missing or nil", key),
+		Retryable: false,
+	}
+}
+
+// NewToolNotFoundError reports an unknown tool name.
+func NewToolNotFoundError() *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeToolNotFound,
+		Reason:    ErrToolNotFound.Error(),
+		Retryable: false,
+		Err:       ErrToolNotFound,
+	}
+}
+
+// NewTimeoutError reports execution timeout; set retryable when the orchestrator may retry.
+func NewTimeoutError(retryable bool) *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeTimeout,
+		Reason:    ErrTimeout.Error(),
+		Retryable: retryable,
+		Err:       ErrTimeout,
+	}
+}
+
+// NewShutdownError reports registry shutdown.
+func NewShutdownError() *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeShutdown,
+		Reason:    ErrShutdown.Error(),
+		Retryable: false,
+		Err:       ErrShutdown,
+	}
+}
+
+// NewMaxStepsExceededError reports session step budget exhaustion.
+func NewMaxStepsExceededError() *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeMaxStepsExceeded,
+		Reason:    ErrMaxStepsExceeded.Error(),
+		Retryable: false,
+		Err:       ErrMaxStepsExceeded,
+	}
+}
+
+// NewRegistryStateError reports uninitialized registry runtime state.
+func NewRegistryStateError() *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeRegistryNotReady,
+		Reason:    ErrRegistryState.Error(),
+		Retryable: false,
+		Err:       ErrRegistryState,
+	}
+}
+
+// NewToolsContractMissingError reports required tools missing from the registry contract.
+func NewToolsContractMissingError(required, missing []string) *ToolError {
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:        CodeToolsContractMissing,
+		Reason:      fmt.Sprintf("missing required tools: %v (contract requires %v)", missing, required),
+		Retryable:   false,
+		FixableArgs: append([]string(nil), missing...),
+	}
+}
+
+// NewToolNotFoundInSubsetError reports an unknown tool name when building a registry subset.
+func NewToolNotFoundInSubsetError(name string) *ToolError {
+	te := NewToolNotFoundError()
+	te.Reason = fmt.Sprintf("unknown tool in subset: %q", name)
+	return te
+}
+
+func (e *ToolError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Reason != "" {
+		return fmt.Sprintf("%s: %s", e.Code, e.Reason)
+	}
+	if e.SafeMessage != "" {
+		return fmt.Sprintf("%s: %s", e.Code, e.SafeMessage)
+	}
+	return string(e.Code)
+}
+
+func (e *ToolError) Unwrap() error { return e.Err }
+
+// AsToolError returns a [*ToolError] when err is or wraps one.
+func AsToolError(err error) (*ToolError, bool) {
+	var te *ToolError
+	if errors.As(err, &te) {
+		return te, true
+	}
+	return nil, false
+}
+
+// ClientCorrectable reports whether the error code is correctable by the caller (LLM/agent).
+//
+// Returns true for SCHEMA_INVALID, VALIDATION_FAILED, and TOOL_NOT_FOUND — the LLM can fix
+// arguments or pick another tool. Returns false for orchestrator/host issues such as
+// DEPENDENCY_MISSING, TOOLS_CONTRACT_MISSING, INTERNAL, TIMEOUT, SHUTDOWN,
+// MAX_STEPS_EXCEEDED, and REGISTRY_NOT_READY; route those by comparing [ToolError.Code] explicitly.
+//
+// Example:
+//
+//	te, ok := AsToolError(err)
+//	if !ok {
+//	    return handleUnexpected(err)
+//	}
+//	switch {
+//	case ClientCorrectable(te.Code):
+//	    return retryWithLLMFix(te)
+//	case te.Code == CodeTimeout && te.Retryable:
+//	    return retryLater()
+//	case te.Code == CodeToolsContractMissing:
+//	    return registerMissingTools(te.FixableArgs)
+//	default:
+//	    return escalate(te)
+//	}
+func ClientCorrectable(code ErrorCode) bool {
+	switch code {
+	case CodeValidationFailed, CodeSchemaInvalid, CodeToolNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
+func orchestratorSystemCode(code ErrorCode) bool {
+	switch code {
+	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady:
+		return true
+	default:
+		return false
+	}
+}
+
+func clientCorrectable(err error) bool {
+	te, ok := AsToolError(err)
+	if !ok {
+		return false
+	}
+	return ClientCorrectable(te.Code)
+}
+
+func wrapJSONParseError(err error) error {
+	return NewJSONParseError(err)
 }
 
 // wrapYieldError wraps an error returned by the yield callback so that callers can detect
