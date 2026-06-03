@@ -18,14 +18,14 @@ import (
 
 type stubTool struct {
 	manifest toolsy.ToolManifest
-	execute  func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error
+	execute  func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error
 }
 
 func (s *stubTool) Manifest() toolsy.ToolManifest { return s.manifest }
 
 func (s *stubTool) Execute(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	input toolsy.ToolInput,
 	yield func(toolsy.Chunk) error,
 ) error {
@@ -75,7 +75,7 @@ func TestWithTracing_SetsSpanNameAndAttributes(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{CallID: "call-1", ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -102,13 +102,13 @@ func TestWithTracing_ErrorMarksSpan(t *testing.T) {
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "db_tool"},
-		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		execute: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return errors.New("db down")
 		},
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.Error(t, err)
@@ -124,13 +124,13 @@ func TestWithTracing_ControlPauseIsNeutral(t *testing.T) {
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "human_approval"},
-		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		execute: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return toolsy.ErrPause
 		},
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.ErrorIs(t, err, toolsy.ErrPause)
@@ -152,13 +152,13 @@ func TestWithTracing_StreamAbortedIsNeutral(t *testing.T) {
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "stream_tool"},
-		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		execute: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return toolsy.ErrStreamAborted
 		},
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.ErrorIs(t, err, toolsy.ErrStreamAborted)
@@ -180,7 +180,7 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "soft_error_tool"},
-		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			if err := yield(toolsy.Chunk{
 				Event:    toolsy.EventResult,
 				Data:     []byte("budget exceeded"),
@@ -194,7 +194,7 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.RunContext{}, toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -220,7 +220,7 @@ func TestMiddleware_ContentCapture_DisabledDefault_ErrorPath(t *testing.T) {
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "capture_off_err"},
-		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		execute: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return errors.New("sensitive failure")
 		},
 	}
@@ -228,7 +228,7 @@ func TestMiddleware_ContentCapture_DisabledDefault_ErrorPath(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"secret":true}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -247,7 +247,7 @@ func TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk(t *testing.T)
 
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "yield_err"},
-		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			if err := yield(toolsy.Chunk{Data: []byte("delivered"), MimeType: toolsy.MimeTypeText}); err != nil {
 				return err
 			}
@@ -262,7 +262,7 @@ func TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk(t *testing.T)
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			if string(c.Data) == "undelivered" {
@@ -288,7 +288,7 @@ func TestMiddleware_ContentCapture_DisabledDefault(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"q":"secret"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -310,7 +310,7 @@ func TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -332,7 +332,7 @@ func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
 	args := []byte(`{"city":"Berlin"}`)
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "capture_on"},
-		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			if err := yield(toolsy.Chunk{Data: []byte("part-1"), MimeType: toolsy.MimeTypeText}); err != nil {
 				return err
 			}
@@ -346,7 +346,7 @@ func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: args},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -376,7 +376,7 @@ func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
 	hugeArgs := []byte(`{"payload":"` + strings.Repeat("x", 64) + `"}`)
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "capture_trunc"},
-		execute: func(_ context.Context, _ toolsy.RunContext, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
 			return yield(toolsy.Chunk{Data: []byte(strings.Repeat("y", 64)), MimeType: toolsy.MimeTypeText})
 		},
 	}
@@ -388,7 +388,7 @@ func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: hugeArgs},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -415,7 +415,7 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 	hugeErr := errors.New(strings.Repeat("e", 64))
 	tool := &stubTool{
 		manifest: toolsy.ToolManifest{Name: "capture_err"},
-		execute: func(context.Context, toolsy.RunContext, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+		execute: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
 			return hugeErr
 		},
 	}
@@ -427,7 +427,7 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{},
 		func(toolsy.Chunk) error { return nil },
 	)

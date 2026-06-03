@@ -19,7 +19,7 @@ func (a stubAuthorizer) Authorize(_ context.Context, _ ToolManifest, _ ToolInput
 func TestWithAuthorizer_DenyBeforeExecute(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"secret",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			t.Fatal("tool should not run when denied")
 			return nil
 		},
@@ -41,7 +41,7 @@ func TestWithAuthorizer_DenyBeforeExecute(t *testing.T) {
 func TestWithAuthorizationMiddleware_Deny(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"secret",
-		func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 			t.Fatal("tool should not run when denied")
 			return nil
 		},

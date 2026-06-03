@@ -68,7 +68,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 	listTool, err := toolsy.NewTool[listArgs, listResult](
 		o.listDirName,
 		o.listDirDesc,
-		func(ctx context.Context, _ toolsy.RunContext, args listArgs) (listResult, error) {
+		func(ctx context.Context, _ *toolsy.RunEnv, args listArgs) (listResult, error) {
 			return doListDir(ctx, baseDir, &o, args.Path)
 		},
 		toolsy.WithReadOnly(),
@@ -80,7 +80,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 	readTool, err := toolsy.NewTool[readArgs, readResult](
 		o.readFileName,
 		o.readFileDesc,
-		func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
+		func(ctx context.Context, _ *toolsy.RunEnv, args readArgs) (readResult, error) {
 			return doReadFile(ctx, baseDir, &o, args.Path)
 		},
 		toolsy.WithReadOnly(),
@@ -95,7 +95,7 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		writeTool, err := toolsy.NewTool[writeArgs, statusResult](
 			o.writeFileName,
 			o.writeFileDesc,
-			func(ctx context.Context, _ toolsy.RunContext, args writeArgs) (statusResult, error) {
+			func(ctx context.Context, _ *toolsy.RunEnv, args writeArgs) (statusResult, error) {
 				return doWriteFile(ctx, baseDir, args.Path, args.Content)
 			},
 			toolsy.WithDangerous(),
@@ -117,18 +117,14 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 	}
 	info, err := os.Stat(resolved)
 	if err != nil {
-		return listResult{}, fmt.Errorf("toolkit/fstool: stat: %w", err)
+		return listResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: stat: %w", err))
 	}
 	if !info.IsDir() {
-		return listResult{}, &toolsy.ClientError{
-			Reason:    "path is not a directory",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return listResult{}, toolsy.NewValidationError("path is not a directory")
 	}
 	entries, err := os.ReadDir(resolved)
 	if err != nil {
-		return listResult{}, fmt.Errorf("toolkit/fstool: read dir: %w", err)
+		return listResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: read dir: %w", err))
 	}
 	infos := make([]entryInfo, 0, len(entries))
 	for _, e := range entries {
@@ -150,19 +146,15 @@ func doReadFile(_ context.Context, baseDir string, o *options, path string) (rea
 	}
 	f, err := os.Open(resolved) // #nosec G304 -- path validated by sanitizePath
 	if err != nil {
-		return readResult{}, fmt.Errorf("toolkit/fstool: open file: %w", err)
+		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: open file: %w", err))
 	}
 	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
-		return readResult{}, fmt.Errorf("toolkit/fstool: stat file: %w", err)
+		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: stat file: %w", err))
 	}
 	if info.IsDir() {
-		return readResult{}, &toolsy.ClientError{
-			Reason:    "path is a directory, not a file",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return readResult{}, toolsy.NewValidationError("path is a directory, not a file")
 	}
 	content, err := readAndTruncate(f, o.maxBytes)
 	if err != nil {
@@ -178,20 +170,20 @@ func doWriteFile(_ context.Context, baseDir, path, content string) (statusResult
 	}
 	parent := filepath.Dir(target)
 	if mkdirErr := os.MkdirAll(parent, 0o750); mkdirErr != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: mkdir: %w", mkdirErr)
+		return statusResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: mkdir: %w", mkdirErr))
 	}
 	// Post-creation symlink check: resolve parent and ensure still under sandbox
 	resolvedParent, err := filepath.EvalSymlinks(parent)
 	if err != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: resolve parent: %w", err)
+		return statusResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: resolve parent: %w", err))
 	}
 	baseAbs, err := filepath.Abs(baseDir)
 	if err != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: base dir: %w", err)
+		return statusResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: base dir: %w", err))
 	}
 	baseCanon, err := filepath.EvalSymlinks(baseAbs)
 	if err != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: base dir: %w", err)
+		return statusResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: base dir: %w", err))
 	}
 	if uerr := pathUnderBase(baseCanon, resolvedParent); uerr != nil {
 		return statusResult{}, uerr
@@ -202,7 +194,7 @@ func doWriteFile(_ context.Context, baseDir, path, content string) (statusResult
 		return statusResult{}, symErr
 	}
 	if writeErr := os.WriteFile(finalPath, []byte(content), 0o600); writeErr != nil {
-		return statusResult{}, fmt.Errorf("toolkit/fstool: write file: %w", writeErr)
+		return statusResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: write file: %w", writeErr))
 	}
 	return statusResult{Status: "Success"}, nil
 }
@@ -217,18 +209,26 @@ func checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath string) error {
 	if fi.Mode()&os.ModeSymlink == 0 {
 		return nil
 	}
-	resolvedTarget, err := filepath.EvalSymlinks(finalPath)
+	linkDest, err := os.Readlink(finalPath)
 	if err != nil {
-		return fmt.Errorf("toolkit/fstool: resolve target symlink: %w", err)
+		return toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: read target symlink: %w", err))
 	}
-	return pathUnderBase(baseCanon, resolvedTarget)
+	checkPath := linkDest
+	if !filepath.IsAbs(checkPath) {
+		checkPath = filepath.Join(filepath.Dir(finalPath), checkPath)
+	}
+	checkPath = filepath.Clean(checkPath)
+	if resolved, evalErr := filepath.EvalSymlinks(finalPath); evalErr == nil {
+		checkPath = resolved
+	}
+	return pathUnderBase(baseCanon, checkPath)
 }
 
 // readAndTruncate reads up to maxBytes from r. If more is available, returns UTF-8 safe truncation + suffix.
 func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
 	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
 	if err != nil {
-		return "", fmt.Errorf("toolkit/fstool: read: %w", err)
+		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: read: %w", err))
 	}
 	return text, nil
 }

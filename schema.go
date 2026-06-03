@@ -51,6 +51,8 @@ func ensureSchemaConfig(cfg SchemaConfig) SchemaConfig {
 	if cfg.Registry == nil {
 		cfg.Registry = NewSchemaRegistry()
 	}
+	// json.RawMessage is []byte; default jsonschema maps it to "array". Tool args use it for JSON objects.
+	cfg.Registry.RegisterType(json.RawMessage(nil), "object", "")
 	return cfg
 }
 

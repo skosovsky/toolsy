@@ -71,7 +71,7 @@ func TestNewSucceeds(t *testing.T) {
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -98,7 +98,7 @@ func TestExecuteSuccess(t *testing.T) {
 	var result RunResult
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{
 			ArgsJSON: []byte(`{"language":"python","code":"print(1)","env":{"A":"B"},"files":{"main.txt":"hello"}}`),
 		},
@@ -114,19 +114,21 @@ func TestExecuteSuccess(t *testing.T) {
 	require.Equal(t, []byte("hello"), sb.lastReq.Files["main.txt"])
 }
 
-func TestExecuteEmptyCodeReturnsClientError(t *testing.T) {
+func TestExecuteEmptyCodeReturnsValidationToolError(t *testing.T) {
 	sb := &mockSandbox{languages: []string{"python"}}
 	tool, err := New(sb)
 	require.NoError(t, err)
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"   "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
@@ -137,12 +139,15 @@ func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"bash","code":"echo 1"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestExecuteSucceedsWithinShortContextDeadline(t *testing.T) {
@@ -155,7 +160,7 @@ func TestExecuteSucceedsWithinShortContextDeadline(t *testing.T) {
 
 	err = tool.Execute(
 		ctx,
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -172,13 +177,16 @@ func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 
 	err = tool.Execute(
 		ctx,
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsSystemError(err))
-	require.ErrorIs(t, err, ErrTimeout)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+	require.ErrorIs(t, err, toolsy.ErrTimeout)
 }
 
 func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
@@ -197,13 +205,16 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 	start := time.Now()
 	err = tool.Execute(
 		ctx,
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsSystemError(err))
-	require.ErrorIs(t, err, ErrTimeout)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+	require.ErrorIs(t, err, toolsy.ErrTimeout)
 	require.Less(t, time.Since(start), 200*time.Millisecond)
 }
 
@@ -217,13 +228,16 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsSystemError(err))
-	require.ErrorIs(t, err, ErrTimeout)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+	require.ErrorIs(t, err, toolsy.ErrTimeout)
 }
 
 func TestNewDefaultsDangerousManifest(t *testing.T) {
@@ -260,12 +274,14 @@ func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsSystemError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, te.Code == toolsy.CodeInternal || te.Code == toolsy.CodeTimeout)
 	require.ErrorIs(t, err, ErrSandboxFailure)
 	require.NotErrorIs(t, err, ErrUnsupportedLanguage)
 }

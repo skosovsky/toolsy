@@ -32,7 +32,7 @@ type authorizationTool struct {
 
 func (t *authorizationTool) Execute(
 	ctx context.Context,
-	run RunContext,
+	run *RunEnv,
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {

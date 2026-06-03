@@ -98,7 +98,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		t, err := toolsy.NewTool[sendArgs, sendResult](
 			o.sendName,
 			o.sendDesc,
-			func(ctx context.Context, _ toolsy.RunContext, args sendArgs) (sendResult, error) {
+			func(ctx context.Context, _ *toolsy.RunEnv, args sendArgs) (sendResult, error) {
 				return doSend(ctx, sender, args, o.maxBodyBytes)
 			},
 			toolsy.WithDangerous(),
@@ -113,7 +113,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		searchTool, err := toolsy.NewTool[searchArgs, searchResult](
 			o.searchName,
 			o.searchDesc,
-			func(ctx context.Context, _ toolsy.RunContext, args searchArgs) (searchResult, error) {
+			func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (searchResult, error) {
 				return doSearch(ctx, reader, args, o.maxBodyBytes)
 			},
 			toolsy.WithReadOnly(),
@@ -126,7 +126,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 		readTool, err := toolsy.NewTool[readArgs, readResult](
 			o.readName,
 			o.readDesc,
-			func(ctx context.Context, _ toolsy.RunContext, args readArgs) (readResult, error) {
+			func(ctx context.Context, _ *toolsy.RunEnv, args readArgs) (readResult, error) {
 				return doRead(ctx, reader, args, o.maxBodyBytes)
 			},
 			toolsy.WithReadOnly(),
@@ -141,11 +141,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 
 func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes int) (sendResult, error) {
 	if len(args.To) == 0 {
-		return sendResult{}, &toolsy.ClientError{
-			Reason:    "at least one recipient (to) is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return sendResult{}, toolsy.NewValidationError("at least one recipient (to) is required")
 	}
 	body := args.Body
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
@@ -153,7 +149,7 @@ func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes 
 	}
 	err := sender.Send(ctx, OutgoingMessage{To: args.To, Subject: args.Subject, Body: body})
 	if err != nil {
-		return sendResult{}, fmt.Errorf("toolkit/mail: send: %w", err)
+		return sendResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: send: %w", err))
 	}
 	return sendResult{Status: "sent"}, nil
 }
@@ -161,11 +157,7 @@ func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes 
 func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (searchResult, error) {
 	query := strings.TrimSpace(args.Query)
 	if query == "" {
-		return searchResult{}, &toolsy.ClientError{
-			Reason:    "query is required (empty query would return entire inbox)",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return searchResult{}, toolsy.NewValidationError("query is required (empty query would return entire inbox)")
 	}
 	limit := args.Limit
 	if limit <= 0 {
@@ -176,7 +168,7 @@ func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (s
 	}
 	list, err := reader.Search(ctx, query, limit)
 	if err != nil {
-		return searchResult{}, fmt.Errorf("toolkit/mail: search: %w", err)
+		return searchResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: search: %w", err))
 	}
 	var b strings.Builder
 	b.WriteString("| ID | From | Subject | Date |\n|----|------|---------|------|\n")
@@ -197,15 +189,11 @@ func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (s
 func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes int) (readResult, error) {
 	messageID := strings.TrimSpace(args.MessageID)
 	if messageID == "" {
-		return readResult{}, &toolsy.ClientError{
-			Reason:    "message_id is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return readResult{}, toolsy.NewValidationError("message_id is required")
 	}
 	msg, err := reader.Read(ctx, messageID)
 	if err != nil {
-		return readResult{}, fmt.Errorf("toolkit/mail: read: %w", err)
+		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: read: %w", err))
 	}
 	body := normalizeBody(msg.Body)
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {

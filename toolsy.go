@@ -30,7 +30,7 @@ type Tool interface {
 	// Execute runs the tool and streams chunks via yield. The tool may call yield
 	// once (simple response) or multiple times (streaming). If yield returns an error,
 	// execution must stop and that error is returned (wrapped as ErrStreamAborted).
-	Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error
+	Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error
 }
 
 // Validator checks JSON arguments before tool execution (e.g. guardrails).
@@ -83,26 +83,11 @@ type ToolInput struct {
 	Attachments []Attachment
 }
 
-// RunContext carries runtime-only dependencies that should not be hidden in context values.
-// Application dependencies should be bound via [BindEnv] on the execution context.
-type RunContext struct {
-	Credentials CredentialsProvider
-	State       StateStore
-
-	attachments []Attachment
-	async       *asyncRuntime
-}
-
-// Attachments returns runtime attachments for the current call.
-func (r RunContext) Attachments() []Attachment {
-	return cloneAttachments(r.attachments)
-}
-
 // ToolCall is a single execution request (as produced by the LLM).
 type ToolCall struct {
 	ToolName string
 	Input    ToolInput
-	Run      RunContext
+	Env      *RunEnv
 }
 
 // ProgressInfo carries optional data-plane progress for EventProgress chunks.

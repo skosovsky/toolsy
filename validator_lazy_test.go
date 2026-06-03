@@ -10,7 +10,7 @@ import (
 )
 
 func TestWithValidatorFromRegistry_LazyBinding(t *testing.T) {
-	tool := newMiddlewareMinTool("x", func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+	tool := newMiddlewareMinTool("x", func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 		return nil
 	})
 
@@ -46,7 +46,7 @@ func TestWithValidatorFromRegistry_LazyBinding(t *testing.T) {
 }
 
 func TestWithValidatorFromRegistry_RejectsRecursiveDelegate(t *testing.T) {
-	tool := newMiddlewareMinTool("x", func(_ context.Context, _ RunContext, _ ToolInput, _ func(Chunk) error) error {
+	tool := newMiddlewareMinTool("x", func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 		return nil
 	})
 	var built *Registry

@@ -66,7 +66,7 @@ func TestExtractor_ParseAndValidate_InvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 	_, err = ext.ParseAndValidate([]byte(`{invalid`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
 func TestExtractor_ParseAndValidate_SchemaViolation(t *testing.T) {
@@ -79,7 +79,7 @@ func TestExtractor_ParseAndValidate_SchemaViolation(t *testing.T) {
 	// Wrong type (string instead of int) yields schema validation error
 	_, err = ext.ParseAndValidate([]byte(`{"count": "not a number"}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
 func TestExtractor_ParseAndValidate_Validatable(t *testing.T) {
@@ -94,7 +94,7 @@ func TestExtractor_ParseAndValidate_Validatable(t *testing.T) {
 	// Invalid: low > high
 	_, err = ext.ParseAndValidate([]byte(`{"low": 10, "high": 5}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	assert.ErrorIs(t, err, ErrValidation)
 }
 
@@ -110,7 +110,7 @@ func TestExtractor_ParseAndValidate_ValidatablePointer(t *testing.T) {
 	// Invalid: min > max — pointer receiver Validate() is called
 	_, err = ext.ParseAndValidate([]byte(`{"min": 10, "max": 5}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	assert.ErrorIs(t, err, ErrValidation)
 }
 
@@ -128,7 +128,7 @@ func TestExtractor_ParseAndValidate_PointerT(t *testing.T) {
 	// Invalid: min > max — Validate() on *pointerValidatableArgs is called
 	_, err = ext.ParseAndValidate([]byte(`{"min": 10, "max": 5}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	assert.ErrorIs(t, err, ErrValidation)
 }
 
@@ -158,29 +158,29 @@ func TestExtractor_ParseAndValidate_StrictMissingRequired(t *testing.T) {
 	require.NoError(t, err)
 	_, err = ext.ParseAndValidate([]byte(`{"a": "only"}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
-// clientErrValidatable returns ClientError from Validate for passthrough test.
-type clientErrValidatable struct {
+// validationErrValidatable returns [ToolError] from Validate for passthrough test.
+type validationErrValidatable struct {
 	V int `json:"v"`
 }
 
-func (c clientErrValidatable) Validate() error {
+func (c validationErrValidatable) Validate() error {
 	if c.V < 0 {
-		return &ClientError{Reason: "v must be >= 0", Err: ErrValidation}
+		return NewValidationError("v must be >= 0")
 	}
 	return nil
 }
 
-func TestExtractor_ParseAndValidate_ValidatableClientErrorPassthrough(t *testing.T) {
+func TestExtractor_ParseAndValidate_ValidatableToolErrorPassthrough(t *testing.T) {
 	t.Parallel()
-	ext, err := NewExtractor[clientErrValidatable](false)
+	ext, err := NewExtractor[validationErrValidatable](false)
 	require.NoError(t, err)
 	_, err = ext.ParseAndValidate([]byte(`{"v": -1}`))
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
-	var ce *ClientError
+	requireClientCorrectable(t, err)
+	var ce *ToolError
 	require.ErrorAs(t, err, &ce)
 	assert.Equal(t, "v must be >= 0", ce.Reason)
 }

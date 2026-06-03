@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
@@ -14,7 +15,7 @@ func parseCSV(r io.Reader, maxBytes int) (string, error) {
 	rd := csv.NewReader(r)
 	rows, err := rd.ReadAll()
 	if err != nil {
-		return "", fmt.Errorf("document: csv read: %w", err)
+		return "", toolsy.NewInternalError(fmt.Errorf("document: csv read: %w", err))
 	}
 	if len(rows) == 0 {
 		return "", nil

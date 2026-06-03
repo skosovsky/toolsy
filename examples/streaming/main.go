@@ -18,7 +18,7 @@ func main() {
 	tool, err := toolsy.NewStreamTool(
 		"stream_numbers",
 		"Stream numbers 1..N",
-		func(_ context.Context, _ toolsy.RunContext, q QueryArgs, yield func(toolsy.Chunk) error) error {
+		func(_ context.Context, _ *toolsy.RunEnv, q QueryArgs, yield func(toolsy.Chunk) error) error {
 			for i := 1; i <= q.Limit; i++ {
 				chunk, _ := json.Marshal(map[string]int{"n": i})
 				if err := yield(toolsy.Chunk{

@@ -27,7 +27,7 @@ func (t *SessionTrack) consumeStep() error {
 	}
 	step := t.count.Add(1)
 	if t.maxSteps > 0 && step > t.maxSteps {
-		return ErrMaxStepsExceeded
+		return NewMaxStepsExceededError()
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func (s *Session) Track() *SessionTrack {
 // Execute runs one tool call through the session budget tracker.
 func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
 	if s == nil || s.reg == nil {
-		return ErrToolNotFound
+		return NewToolNotFoundError()
 	}
 	if err := enforceRunPolicy(s.policy, call); err != nil {
 		return err
@@ -96,31 +96,19 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 
 func enforceRunPolicy(p RunPolicy, call ToolCall) error {
 	if p.ForcedTool != "" && call.ToolName != p.ForcedTool {
-		return &ClientError{
-			Reason:    "tool " + call.ToolName + " is not the forced tool " + p.ForcedTool,
-			Retryable: false,
-			Err:       ErrValidation,
-		}
+		return NewValidationError("tool " + call.ToolName + " is not the forced tool " + p.ForcedTool)
 	}
 	if len(p.AllowedTools) > 0 {
 		if slices.Contains(p.AllowedTools, call.ToolName) {
 			return nil
 		}
-		return &ClientError{
-			Reason:    "tool " + call.ToolName + " is not allowed by session run policy",
-			Retryable: false,
-			Err:       ErrValidation,
-		}
+		return NewValidationError("tool " + call.ToolName + " is not allowed by session run policy")
 	}
 	if len(p.RequiredTools) > 0 {
 		if slices.Contains(p.RequiredTools, call.ToolName) {
 			return nil
 		}
-		return &ClientError{
-			Reason:    "tool " + call.ToolName + " is not in required tools for this session",
-			Retryable: false,
-			Err:       ErrValidation,
-		}
+		return NewValidationError("tool " + call.ToolName + " is not in required tools for this session")
 	}
 	return nil
 }

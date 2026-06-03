@@ -38,7 +38,7 @@ func TestValidatable_Implemented(t *testing.T) {
 	tool, err := NewTool(
 		"validatable_tool",
 		"desc",
-		func(_ context.Context, _ RunContext, _ validatableArgs) (struct{ Ok bool }, error) {
+		func(_ context.Context, _ *RunEnv, _ validatableArgs) (struct{ Ok bool }, error) {
 			return struct{ Ok bool }{Ok: true}, nil
 		},
 	)
@@ -49,7 +49,7 @@ func TestValidatable_Implemented(t *testing.T) {
 	}
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"low":1,"high":10}`)},
 		func(c Chunk) error {
 			return json.Unmarshal(c.Data, &res)
@@ -60,12 +60,12 @@ func TestValidatable_Implemented(t *testing.T) {
 	// Invalid: low > high — Validatable.Validate returns error
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"low":10,"high":5}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	assert.ErrorIs(t, err, ErrValidation)
 }
 
@@ -86,7 +86,7 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	tool, err := NewTool(
 		"ptr_validatable",
 		"desc",
-		func(_ context.Context, _ RunContext, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
+		func(_ context.Context, _ *RunEnv, _ pointerValidatableArgs) (struct{ Ok bool }, error) {
 			return struct{ Ok bool }{Ok: true}, nil
 		},
 	)
@@ -97,7 +97,7 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	}
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"min":1,"max":10}`)},
 		func(c Chunk) error {
 			return json.Unmarshal(c.Data, &res)
@@ -108,11 +108,11 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	// Invalid: min > max — Validatable.Validate (pointer receiver) returns error
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"min":10,"max":5}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 	assert.ErrorIs(t, err, ErrValidation)
 }

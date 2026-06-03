@@ -38,7 +38,7 @@ func WithOnComplete(cb AsyncCallback) AsyncOption {
 // AsAsyncTool wraps a tool so that Execute returns immediately with AsyncAccepted;
 // the base tool runs in a goroutine. If the client's yield returns an error (e.g. stream closed),
 // the goroutine is not started (yield-guard).
-// When executed via Registry, the registry injects an async tracker via RunContext; the background
+// When executed via Registry, the registry injects an async tracker via *RunEnv; the background
 // job is tracked so Shutdown waits for it to finish.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 	var o asyncOptions
@@ -84,7 +84,7 @@ func (r *asyncRuntime) trackBackground() func() {
 	}
 }
 
-func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+func (t *asyncTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -94,7 +94,7 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 	}
 	accepted, err := json.Marshal(AsyncAccepted{Status: "accepted", TaskID: taskID})
 	if err != nil {
-		return &SystemError{Err: fmt.Errorf("async: marshal accepted payload: %w", err)}
+		return NewInternalError(fmt.Errorf("async: marshal accepted payload: %w", err))
 	}
 	chunk := Chunk{
 		Event:    EventResult,
@@ -111,8 +111,8 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 		return wrapYieldError(err)
 	}
 	var bgDone func()
-	if run.async != nil {
-		bgDone = run.async.trackBackground()
+	if env.async != nil {
+		bgDone = env.async.trackBackground()
 	}
 	go func(parentCtx context.Context) {
 		if bgDone != nil {
@@ -125,13 +125,12 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 		}
 
 		baseCtx := context.WithoutCancel(parentCtx)
-		bgRun := run
-		bgRun.async = nil
+		bgEnv := env.cloneForExecute(env.attachments, nil)
 
 		var executionErr error
 		defer func() {
 			if r := recover(); r != nil {
-				executionErr = &SystemError{Err: &panicError{p: r}}
+				executionErr = NewInternalError(&panicError{p: r})
 			}
 			if t.opts.onComplete != nil {
 				func() {
@@ -141,7 +140,7 @@ func (t *asyncTool) Execute(ctx context.Context, run RunContext, input ToolInput
 			}
 		}()
 
-		executionErr = t.next.Execute(baseCtx, bgRun, input, collectYield)
+		executionErr = t.next.Execute(baseCtx, bgEnv, input, collectYield)
 	}(ctx)
 	return nil
 }

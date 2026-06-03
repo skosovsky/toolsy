@@ -13,7 +13,7 @@ import (
 
 const factsStateKey = "toolsy.memory.facts"
 
-// Scratchpad configures memory tools behavior. Session state is stored in run.State.
+// Scratchpad configures memory tools behavior. Session state is stored in env.StateStore.
 type Scratchpad struct {
 	mu       sync.Mutex // serializes load/modify/save of facts blob (concurrent pin/unpin)
 	maxFacts int
@@ -57,7 +57,7 @@ type statusResult struct {
 	Status string `json:"status"`
 }
 
-func (s *Scratchpad) pinHandler(ctx context.Context, run toolsy.RunContext, args pinArgs) (statusResult, error) {
+func (s *Scratchpad) pinHandler(ctx context.Context, run *toolsy.RunEnv, args pinArgs) (statusResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
@@ -66,11 +66,7 @@ func (s *Scratchpad) pinHandler(ctx context.Context, run toolsy.RunContext, args
 	}
 	if s.maxFacts > 0 && len(facts) >= s.maxFacts {
 		if _, exists := facts[args.Key]; !exists {
-			return statusResult{}, &toolsy.ClientError{
-				Reason:    "memory limit reached",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return statusResult{}, toolsy.NewValidationError("memory limit reached")
 		}
 	}
 	facts[args.Key] = args.Value
@@ -84,7 +80,7 @@ type readResult struct {
 	Facts string `json:"facts"`
 }
 
-func (s *Scratchpad) readHandler(ctx context.Context, run toolsy.RunContext, _ struct{}) (readResult, error) {
+func (s *Scratchpad) readHandler(ctx context.Context, run *toolsy.RunEnv, _ struct{}) (readResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
@@ -113,7 +109,7 @@ type unpinArgs struct {
 	Key string `json:"key"`
 }
 
-func (s *Scratchpad) unpinHandler(ctx context.Context, run toolsy.RunContext, args unpinArgs) (statusResult, error) {
+func (s *Scratchpad) unpinHandler(ctx context.Context, run *toolsy.RunEnv, args unpinArgs) (statusResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	facts, err := loadFacts(ctx, run)
@@ -130,15 +126,11 @@ func (s *Scratchpad) unpinHandler(ctx context.Context, run toolsy.RunContext, ar
 	return statusResult{Status: "Success: fact unpinned"}, nil
 }
 
-func loadFacts(ctx context.Context, run toolsy.RunContext) (map[string]string, error) {
-	if run.State == nil {
-		return nil, &toolsy.ClientError{
-			Reason:    "run.State is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+func loadFacts(ctx context.Context, run *toolsy.RunEnv) (map[string]string, error) {
+	if run.StateStore == nil {
+		return nil, toolsy.NewValidationError("run.StateStore is required")
 	}
-	raw, err := run.State.Load(ctx, factsStateKey)
+	raw, err := run.StateStore.Load(ctx, factsStateKey)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: load facts: %w", err)
 	}
@@ -152,19 +144,15 @@ func loadFacts(ctx context.Context, run toolsy.RunContext) (map[string]string, e
 	return facts, nil
 }
 
-func saveFacts(ctx context.Context, run toolsy.RunContext, facts map[string]string) error {
-	if run.State == nil {
-		return &toolsy.ClientError{
-			Reason:    "run.State is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+func saveFacts(ctx context.Context, run *toolsy.RunEnv, facts map[string]string) error {
+	if run.StateStore == nil {
+		return toolsy.NewValidationError("run.StateStore is required")
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {
 		return fmt.Errorf("toolkit/memory: encode facts: %w", err)
 	}
-	if err := run.State.Save(ctx, factsStateKey, raw); err != nil {
+	if err := run.StateStore.Save(ctx, factsStateKey, raw); err != nil {
 		return fmt.Errorf("toolkit/memory: save facts: %w", err)
 	}
 	return nil

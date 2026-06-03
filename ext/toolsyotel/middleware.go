@@ -154,7 +154,7 @@ func (t *tracingTool) wrapYield(
 
 func (t *tracingTool) Execute(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	input toolsy.ToolInput,
 	yield func(toolsy.Chunk) error,
 ) error {

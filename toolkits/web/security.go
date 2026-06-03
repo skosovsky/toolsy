@@ -23,27 +23,15 @@ func validateScrapeURL(
 ) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, &toolsy.ClientError{
-			Reason:    "invalid URL: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("invalid URL: " + err.Error())
 	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
-		return nil, &toolsy.ClientError{
-			Reason:    "only http and https schemes are allowed",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("only http and https schemes are allowed")
 	}
 	host := strings.TrimSpace(u.Hostname())
 	if host == "" {
-		return nil, &toolsy.ClientError{
-			Reason:    "URL host is missing",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("URL host is missing")
 	}
 	hostLower := strings.ToLower(host)
 	for _, b := range blockedDomains {
@@ -53,28 +41,16 @@ func validateScrapeURL(
 		blockLower := strings.TrimSpace(strings.ToLower(b))
 		if blockLower == hostLower ||
 			(len(hostLower) > len(blockLower) && strings.HasSuffix(hostLower, "."+blockLower)) {
-			return nil, &toolsy.ClientError{
-				Reason:    "SSRF: domain is blocked",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return nil, toolsy.NewValidationError("SSRF: domain is blocked")
 		}
 	}
 	if !allowPrivateIPs {
 		addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 		if err != nil {
-			return nil, &toolsy.ClientError{
-				Reason:    "SSRF: host lookup failed: " + err.Error(),
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return nil, toolsy.NewValidationError("SSRF: host lookup failed: " + err.Error())
 		}
 		if slices.ContainsFunc(addrs, func(a net.IPAddr) bool { return isBlockedIP(a.IP) }) {
-			return nil, &toolsy.ClientError{
-				Reason:    "SSRF: private or loopback IP not allowed",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return nil, toolsy.NewValidationError("SSRF: private or loopback IP not allowed")
 		}
 	}
 	return u, nil
@@ -99,11 +75,7 @@ func isBlockedIP(ip net.IP) bool {
 func checkRedirect(allowPrivateIPs bool, blockedDomains []string) func(*http.Request, []*http.Request) error {
 	return func(redirectReq *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
-			return &toolsy.ClientError{
-				Reason:    "too many redirects",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return toolsy.NewValidationError("too many redirects")
 		}
 		if _, err := validateScrapeURL(
 			redirectReq.Context(),
@@ -129,19 +101,11 @@ func rebindingSafeDialContext(ctx context.Context, network, addr string) (net.Co
 		return nil, err
 	}
 	if len(ips) == 0 {
-		return nil, &toolsy.ClientError{
-			Reason:    "SSRF: no address for host",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return nil, toolsy.NewValidationError("SSRF: no address for host")
 	}
 	for i := range ips {
 		if isBlockedIP(ips[i].IP) {
-			return nil, &toolsy.ClientError{
-				Reason:    "SSRF: private or loopback IP not allowed",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return nil, toolsy.NewValidationError("SSRF: private or loopback IP not allowed")
 		}
 	}
 	// Pin to first resolved IP so re-lookup cannot switch to private

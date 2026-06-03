@@ -23,27 +23,15 @@ func containsTraversal(path string) bool {
 // Traversal segments ("..") are rejected before Join so that escape is blocked regardless of platform.
 func sanitizePath(baseDir, userPath string) (string, error) {
 	if containsTraversal(userPath) {
-		return "", &toolsy.ClientError{
-			Reason:    "access denied: path outside sandbox",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("access denied: path outside sandbox")
 	}
 	baseAbs, err := filepath.Abs(baseDir)
 	if err != nil {
-		return "", &toolsy.ClientError{
-			Reason:    "base dir: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("base dir: " + err.Error())
 	}
 	baseCanon, err := filepath.EvalSymlinks(baseAbs)
 	if err != nil {
-		return "", &toolsy.ClientError{
-			Reason:    "base dir: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("base dir: " + err.Error())
 	}
 	joined := filepath.Join(baseCanon, filepath.Clean("/"+userPath))
 	// Reject paths that are structurally outside sandbox before resolving symlinks
@@ -53,17 +41,9 @@ func sanitizePath(baseDir, userPath string) (string, error) {
 	resolved, err := filepath.EvalSymlinks(joined)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", &toolsy.ClientError{
-				Reason:    "path not found",
-				Retryable: false,
-				Err:       toolsy.ErrValidation,
-			}
+			return "", toolsy.NewValidationError("path not found")
 		}
-		return "", &toolsy.ClientError{
-			Reason:    "access denied: path outside sandbox",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("access denied: path outside sandbox")
 	}
 	if uerr := pathUnderBase(baseCanon, resolved); uerr != nil {
 		return "", uerr
@@ -77,26 +57,14 @@ func sanitizePath(baseDir, userPath string) (string, error) {
 func sanitizePathForWrite(baseDir, userPath string) (string, error) {
 	baseAbs, err := filepath.Abs(baseDir)
 	if err != nil {
-		return "", &toolsy.ClientError{
-			Reason:    "base dir: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("base dir: " + err.Error())
 	}
 	baseCanon, err := filepath.EvalSymlinks(baseAbs)
 	if err != nil {
-		return "", &toolsy.ClientError{
-			Reason:    "base dir: " + err.Error(),
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("base dir: " + err.Error())
 	}
 	if containsTraversal(userPath) {
-		return "", &toolsy.ClientError{
-			Reason:    "access denied: path outside sandbox",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return "", toolsy.NewValidationError("access denied: path outside sandbox")
 	}
 	cleanPath := filepath.Clean("/" + userPath)
 	joined := filepath.Join(baseCanon, cleanPath)
@@ -106,24 +74,16 @@ func sanitizePathForWrite(baseDir, userPath string) (string, error) {
 	return joined, nil
 }
 
-// pathUnderBase returns nil if resolvedPath is under baseDir; otherwise ClientError.
+// pathUnderBase returns nil if resolvedPath is under baseDir; otherwise validation [ToolError].
 // Uses [filepath.Rel] to avoid prefix bypass (e.g. /app/sandbox vs /app/sandbox-bypass).
 func pathUnderBase(baseDir, resolvedPath string) error {
 	rel, err := filepath.Rel(baseDir, resolvedPath)
 	if err != nil {
-		return &toolsy.ClientError{
-			Reason:    "access denied: path outside sandbox",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("access denied: path outside sandbox")
 	}
 	sep := string(filepath.Separator)
 	if rel == ".." || strings.HasPrefix(rel, ".."+sep) {
-		return &toolsy.ClientError{
-			Reason:    "access denied: path outside sandbox",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return toolsy.NewValidationError("access denied: path outside sandbox")
 	}
 	return nil
 }

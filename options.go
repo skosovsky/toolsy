@@ -14,12 +14,13 @@ type SchemaConfig struct {
 
 // ToolManifest contains metadata exposed to orchestrators and discovery layers.
 type ToolManifest struct {
-	Name        string
-	Description string
-	Parameters  map[string]any
-	Tags        []string
-	Version     string
-	Metadata    map[string]any
+	Name         string
+	Description  string
+	Parameters   map[string]any
+	OutputSchema map[string]any
+	Tags         []string
+	Version      string
+	Metadata     map[string]any
 
 	CompletionPolicy     CompletionPolicy
 	ReadOnly             bool
@@ -112,6 +113,17 @@ func ensureManifestMetadata(m *ToolManifest) {
 	}
 }
 
+// WithOutputSchema sets the JSON Schema for tool results exposed to orchestrators.
+func WithOutputSchema(schema map[string]any) ToolOption {
+	return func(c *ToolConfig) {
+		if len(schema) == 0 {
+			c.Manifest.OutputSchema = nil
+			return
+		}
+		c.Manifest.OutputSchema = maps.Clone(schema)
+	}
+}
+
 // RegistryOption configures a Registry.
 type RegistryOption func(*registryOptions)
 
@@ -124,7 +136,7 @@ type registryOptions struct {
 	onChunk       func(context.Context, Chunk)
 }
 
-// WithRecoverPanics enables panic recovery in Execute (returns SystemError).
+// WithRecoverPanics enables panic recovery in Execute (returns [ToolError] with [CodeInternal]).
 func WithRecoverPanics(enable bool) RegistryOption {
 	return func(o *registryOptions) {
 		o.recoverPanics = enable

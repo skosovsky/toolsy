@@ -11,13 +11,13 @@ import (
 // tool is the internal implementation of Tool built by NewTool, NewStreamTool, NewDynamicTool, or NewProxyTool.
 type tool struct {
 	manifest ToolManifest
-	execute  func(context.Context, RunContext, ToolInput, func(Chunk) error) error
+	execute  func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error
 }
 
-// NewTool builds a Tool from a typed function that also receives RunContext.
+// NewTool builds a Tool from a typed function that also receives [*RunEnv].
 func NewTool[T any, R any](
 	name, description string,
-	fn func(ctx context.Context, run RunContext, args T) (R, error),
+	fn func(ctx context.Context, env *RunEnv, args T) (R, error),
 	opts ...ToolOption,
 ) (Tool, error) {
 	var cfg ToolConfig
@@ -29,18 +29,25 @@ func NewTool[T any, R any](
 	if err != nil {
 		return nil, err
 	}
-	execute := func(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+	if len(cfg.Manifest.OutputSchema) == 0 {
+		outSchema, genErr := generateOutputSchema[R](cfg.Schema)
+		if genErr != nil {
+			return nil, genErr
+		}
+		cfg.Manifest.OutputSchema = outSchema
+	}
+	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		args, err := ext.ParseAndValidate(input.ArgsJSON)
 		if err != nil {
 			return err
 		}
-		res, err := fn(ctx, run, args)
+		res, err := fn(ctx, env, args)
 		if err != nil {
 			return wrapHandlerError(err)
 		}
 		data, err := json.Marshal(res)
 		if err != nil {
-			return &SystemError{Err: fmt.Errorf("toolsy: marshal typed result: %w", err)}
+			return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
 		}
 		chunk := Chunk{
 			Event:    EventResult,
@@ -59,6 +66,11 @@ func NewTool[T any, R any](
 		manifest: buildToolManifest(name, description, ext.Schema(), cfg.Manifest),
 		execute:  execute,
 	}, nil
+}
+
+func generateOutputSchema[R any](cfg SchemaConfig) (map[string]any, error) {
+	schemaMap, _, err := generateSchema[R](cfg)
+	return schemaMap, err
 }
 
 // deepCopySchemaFromMap returns a defensive deep copy of schemaMap for mutation (strict mode, strip IDs).
@@ -80,9 +92,9 @@ func deepCopySchemaFromMap(schemaMap map[string]any) (map[string]any, error) {
 //nolint:gocognit
 func rawArgsValidatedExecute(
 	compiled schemaValidator,
-	handler func(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error,
-) func(context.Context, RunContext, ToolInput, func(Chunk) error) error {
-	return func(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+	handler func(ctx context.Context, env *RunEnv, argsJSON []byte, yield func(Chunk) error) error,
+) func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error {
+	return func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		var v any
 		if err := json.Unmarshal(input.ArgsJSON, &v); err != nil {
 			return wrapJSONParseError(err)
@@ -99,8 +111,8 @@ func rawArgsValidatedExecute(
 			}
 			return nil
 		}
-		if err := handler(ctx, run, input.ArgsJSON, yieldWrapped); err != nil {
-			if IsClientError(err) {
+		if err := handler(ctx, env, input.ArgsJSON, yieldWrapped); err != nil {
+			if clientCorrectable(err) {
 				return err
 			}
 			if errors.Is(err, ErrStreamAborted) {
@@ -115,12 +127,17 @@ func rawArgsValidatedExecute(
 	}
 }
 
-// NewStreamTool builds a Tool from a typed streaming function that also receives RunContext.
+// NewStreamTool builds a Tool from a typed streaming function that also receives [*RunEnv].
+//
+// Unlike [NewTool], stream tools do not have a single typed result type R, so
+// [ToolManifest.OutputSchema] is not generated automatically. Set it with
+// [WithOutputSchema] when the LLM should know the shape of final JSON results,
+// or document progress/result chunks in the tool description.
 //
 //nolint:gocognit
 func NewStreamTool[T any](
 	name, description string,
-	fn func(ctx context.Context, run RunContext, args T, yield func(Chunk) error) error,
+	fn func(ctx context.Context, env *RunEnv, args T, yield func(Chunk) error) error,
 	opts ...ToolOption,
 ) (Tool, error) {
 	var cfg ToolConfig
@@ -132,7 +149,7 @@ func NewStreamTool[T any](
 	if err != nil {
 		return nil, err
 	}
-	execute := func(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		yieldWrapped := func(c Chunk) error {
 			if err := validateChunk(c); err != nil {
 				return err
@@ -146,8 +163,8 @@ func NewStreamTool[T any](
 		if err != nil {
 			return err
 		}
-		if err := fn(ctx, run, args, yieldWrapped); err != nil {
-			if IsClientError(err) {
+		if err := fn(ctx, env, args, yieldWrapped); err != nil {
+			if clientCorrectable(err) {
 				return err
 			}
 			if errors.Is(err, ErrStreamAborted) {
@@ -174,7 +191,7 @@ func NewStreamTool[T any](
 func NewDynamicTool(
 	name, description string,
 	schemaMap map[string]any,
-	fn func(ctx context.Context, run RunContext, argsJSON []byte, yield func(Chunk) error) error,
+	fn func(ctx context.Context, env *RunEnv, argsJSON []byte, yield func(Chunk) error) error,
 	opts ...ToolOption,
 ) (Tool, error) {
 	var cfg ToolConfig
@@ -212,7 +229,7 @@ func NewDynamicTool(
 func NewProxyTool(
 	name, description string,
 	rawJSONSchema []byte,
-	handler func(ctx context.Context, run RunContext, rawArgs []byte, yield func(Chunk) error) error,
+	handler func(ctx context.Context, env *RunEnv, rawArgs []byte, yield func(Chunk) error) error,
 	opts ...ToolOption,
 ) (Tool, error) {
 	var cfg ToolConfig
@@ -255,6 +272,7 @@ func buildToolManifest(name, description string, schema map[string]any, cfg Tool
 		Name:                 name,
 		Description:          description,
 		Parameters:           maps.Clone(schema),
+		OutputSchema:         maps.Clone(cfg.OutputSchema),
 		Tags:                 tags,
 		Version:              cfg.Version,
 		Metadata:             metadata,
@@ -279,6 +297,7 @@ func (t *tool) Manifest() ToolManifest {
 	m := t.manifest
 	m.Tags = append([]string(nil), t.manifest.Tags...)
 	m.Parameters = maps.Clone(t.manifest.Parameters)
+	m.OutputSchema = maps.Clone(t.manifest.OutputSchema)
 	m.Metadata = cloneMetadata(t.manifest.Metadata)
 	m.CompletionPolicy = t.manifest.CompletionPolicy
 	m.ReadOnly = t.manifest.ReadOnly
@@ -288,24 +307,31 @@ func (t *tool) Manifest() ToolManifest {
 	return m
 }
 
-func (t *tool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
-	runCopy := run
-	runCopy.attachments = cloneAttachments(input.Attachments)
-	return t.execute(ctx, runCopy, input, yield)
+func (t *tool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
+	if env == nil {
+		env = NewRunEnv()
+	}
+	if len(input.Attachments) > 0 {
+		env = env.cloneForExecute(input.Attachments, env.async)
+	}
+	return t.execute(ctx, env, input, yield)
 }
 
-// wrapHandlerError passes through ClientError; wraps other errors as SystemError.
+// wrapHandlerError passes through [ToolError] and control errors; wraps other errors as internal [ToolError].
 func wrapHandlerError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if IsClientError(err) {
-		return err
-	}
 	if IsControlError(err) {
 		return err
 	}
-	return &SystemError{Err: err}
+	if _, ok := AsToolError(err); ok {
+		return err
+	}
+	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return NewTimeoutError(true)
+	}
+	return NewInternalError(err)
 }
 
 var _ Tool = (*tool)(nil)

@@ -17,7 +17,7 @@ func TestNewTool_Simple(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Result, error) {
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ *RunEnv, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
@@ -37,7 +37,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Result, error) {
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ *RunEnv, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	var out Result
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 		func(c Chunk) error {
 			assert.JSONEq(t, `{"y":6}`, string(c.Data))
@@ -63,19 +63,19 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 	}
 	type Result struct{}
 
-	tool, err := NewTool("id", "desc", func(_ context.Context, _ RunContext, _ Args) (Result, error) {
+	tool, err := NewTool("id", "desc", func(_ context.Context, _ *RunEnv, _ Args) (Result, error) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
 
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{invalid`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }
 
 func TestNewTool_Execute_SchemaValidation(t *testing.T) {
@@ -84,19 +84,41 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 	}
 	type Result struct{}
 
-	tool, err := NewTool("id", "desc", func(_ context.Context, _ RunContext, _ Args) (Result, error) {
+	tool, err := NewTool("id", "desc", func(_ context.Context, _ *RunEnv, _ Args) (Result, error) {
 		return Result{}, nil
 	})
 	require.NoError(t, err)
 
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"count":"not a number"}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
+}
+
+func TestNewTool_Execute_PreservesDependencyMissingToolError(t *testing.T) {
+	type in struct{}
+	type out struct{}
+
+	tool, err := NewTool("needs_db", "d", func(_ context.Context, e *RunEnv, _ in) (out, error) {
+		_, depErr := Require[pingDB](e, "db")
+		return out{}, depErr
+	})
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, CodeDependencyMissing, te.Code)
 }
 
 func TestNewTool_ImplementsTool(t *testing.T) {
@@ -107,7 +129,7 @@ func TestNewTool_ImplementsTool(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool[A, R]("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool[A, R]("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	})
 	require.NoError(t, err)
@@ -118,7 +140,7 @@ func TestTool_ManifestTags_ReturnsCopy(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, _ A) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
 	}, WithTags("a", "b"))
 	require.NoError(t, err)
@@ -139,7 +161,7 @@ func TestTool_ManifestParameters_ReturnsCopy(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, a Args) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, a Args) (R, error) {
 		return R{Y: a.X}, nil
 	})
 	require.NoError(t, err)
@@ -161,7 +183,7 @@ func TestTool_ManifestParameters_ShallowCopyNested(t *testing.T) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("t", "d", func(_ context.Context, _ RunContext, a Args) (R, error) {
+	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, a Args) (R, error) {
 		return R{Y: a.X}, nil
 	})
 	require.NoError(t, err)
@@ -188,7 +210,7 @@ func BenchmarkExecute(b *testing.B) {
 		Y int `json:"y"`
 	}
 
-	tool, err := NewTool("bench", "desc", func(_ context.Context, _ RunContext, a Args) (Result, error) {
+	tool, err := NewTool("bench", "desc", func(_ context.Context, _ *RunEnv, a Args) (Result, error) {
 		return Result{Y: a.X + 1}, nil
 	})
 	if err != nil {
@@ -201,7 +223,7 @@ func BenchmarkExecute(b *testing.B) {
 
 	b.ResetTimer()
 	for range b.N {
-		_ = tool.Execute(ctx, RunContext{}, input, yield)
+		_ = tool.Execute(ctx, NewRunEnv(), input, yield)
 	}
 }
 
@@ -211,7 +233,7 @@ func TestNewProxyTool(t *testing.T) {
 		"proxy_echo",
 		"Echo args as result",
 		rawSchema,
-		func(_ context.Context, _ RunContext, rawArgs []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, rawArgs []byte, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: rawArgs, MimeType: MimeTypeJSON})
 		},
 	)
@@ -226,7 +248,7 @@ func TestNewProxyTool(t *testing.T) {
 	var res []byte
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
 		func(c Chunk) error {
 			res = c.Data
@@ -242,10 +264,10 @@ func TestNewProxyTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		RunContext{},
+		NewRunEnv(),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	assert.True(t, IsClientError(err))
+	requireClientCorrectable(t, err)
 }

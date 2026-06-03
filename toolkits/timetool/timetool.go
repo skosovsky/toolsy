@@ -39,7 +39,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	currentTool, err := toolsy.NewTool[currentArgs, currentResult](
 		o.currentName,
 		o.currentDesc,
-		func(_ context.Context, _ toolsy.RunContext, _ currentArgs) (currentResult, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, _ currentArgs) (currentResult, error) {
 			return doCurrent(&o)
 		},
 		toolsy.WithReadOnly(),
@@ -51,7 +51,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	calculateTool, err := toolsy.NewTool[calculateArgs, calculateResult](
 		o.calculateName,
 		o.calculateDesc,
-		func(_ context.Context, _ toolsy.RunContext, args calculateArgs) (calculateResult, error) {
+		func(_ context.Context, _ *toolsy.RunEnv, args calculateArgs) (calculateResult, error) {
 			return doCalculate(&o, args)
 		},
 		toolsy.WithReadOnly(),
@@ -76,19 +76,13 @@ func doCurrent(o *options) (currentResult, error) {
 
 func doCalculate(o *options, args calculateArgs) (calculateResult, error) {
 	if args.BaseDate == "" {
-		return calculateResult{}, &toolsy.ClientError{
-			Reason:    "base_date is required",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return calculateResult{}, toolsy.NewValidationError("base_date is required")
 	}
 	baseDate, err := time.Parse(time.RFC3339, args.BaseDate)
 	if err != nil {
-		return calculateResult{}, &toolsy.ClientError{
-			Reason:    "invalid base_date: must be RFC3339 (e.g. 2026-03-11T12:00:00Z)",
-			Retryable: false,
-			Err:       toolsy.ErrValidation,
-		}
+		return calculateResult{}, toolsy.NewValidationError(
+			"invalid base_date: must be RFC3339 (e.g. 2026-03-11T12:00:00Z)",
+		)
 	}
 	// DST-safe: perform arithmetic in configured location so calendar days respect DST boundaries
 	inLoc := baseDate.In(o.location)

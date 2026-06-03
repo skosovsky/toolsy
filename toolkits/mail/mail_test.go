@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -65,26 +64,28 @@ func TestMailSend_ArgsPassed(t *testing.T) {
 		t,
 		tools[0].Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"to":["a@b.com"],"subject":"Hi","body":"Hello"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
 	)
 }
 
-func TestMailSend_EmptyTo_ClientError(t *testing.T) {
+func TestMailSend_EmptyTo_ValidationToolError(t *testing.T) {
 	sender := &mockSender{}
 	tools, err := AsTools(sender, nil)
 	require.NoError(t, err)
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"to":[],"subject":"x","body":"y"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "recipient")
 }
 
@@ -102,7 +103,7 @@ func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
 		t,
 		searchTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"test","limit":5}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[searchResult](t, c)
@@ -116,19 +117,21 @@ func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
 	require.Contains(t, result.Results, "|")
 }
 
-func TestMailSearch_EmptyQuery_ClientError(t *testing.T) {
+func TestMailSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 	reader := &mockReader{}
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"   ","limit":5}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "query")
 }
 
@@ -145,7 +148,7 @@ func TestMailReadMessage_ReturnsBody(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)
@@ -158,35 +161,39 @@ func TestMailReadMessage_ReturnsBody(t *testing.T) {
 	require.Contains(t, result.Body, "Subj")
 }
 
-func TestMailRead_EmptyMessageID_ClientError(t *testing.T) {
+func TestMailRead_EmptyMessageID_ValidationToolError(t *testing.T) {
 	reader := &mockReader{}
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "message_id")
 }
 
-func TestMailRead_WhitespaceOnlyMessageID_ClientError(t *testing.T) {
+func TestMailRead_WhitespaceOnlyMessageID_ValidationToolError(t *testing.T) {
 	reader := &mockReader{}
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"   \t"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "message_id")
 }
 
@@ -201,7 +208,7 @@ func TestMailRead_PlainTextWithAngleBrackets_NotConverted(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)
@@ -260,19 +267,15 @@ func TestMailSend_HandlerError_Wrapped(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"to":["a@b.com"],"subject":"x","body":"y"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	msg := err.Error()
-	require.True(
-		t,
-		strings.Contains(msg, "toolkit/mail") || strings.Contains(msg, "smtp") ||
-			strings.Contains(msg, "internal system error"),
-		"error should mention toolkit/mail, smtp, or system: %s",
-		msg,
-	)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok, "expected ToolError, got %v", err)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.Error(t, te.Unwrap())
 }
 
 func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
@@ -288,7 +291,7 @@ func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)

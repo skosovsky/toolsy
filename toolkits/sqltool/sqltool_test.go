@@ -44,7 +44,7 @@ func TestInspectSchema_Success(t *testing.T) {
 		t,
 		inspectTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[inspectResult](t, c)
@@ -73,7 +73,7 @@ func TestInspectSchema_AllowedTables(t *testing.T) {
 		t,
 		inspectTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[inspectResult](t, c)
@@ -99,7 +99,7 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 		t,
 		inspectTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["users","nonexistent_table_xyz"]}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[inspectResult](t, c)
@@ -128,7 +128,7 @@ func TestExecuteRead_Success(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[executeResult](t, c)
@@ -158,7 +158,7 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id FROM t"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[executeResult](t, c)
@@ -178,12 +178,14 @@ func TestExecuteRead_BlocksWrite(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"INSERT INTO t VALUES (1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
@@ -194,12 +196,14 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT 1; DELETE FROM t"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "multiple statements")
 }
 
@@ -212,12 +216,14 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 
 	err = executeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"WITH x AS (DELETE FROM t) SELECT 1"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 	require.Contains(t, err.Error(), "read-only")
 }
 
@@ -236,7 +242,7 @@ func TestExecuteRead_KeywordInStringAllowed(t *testing.T) {
 	var result executeResult
 	err = executeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSQLChunk[executeResult](t, c)
@@ -258,7 +264,7 @@ func TestExecuteRead_KeywordInCommentAllowed(t *testing.T) {
 	var result executeResult
 	err = executeTool.Execute(
 		context.Background(),
-		toolsy.RunContext{},
+		toolsy.NewRunEnv(),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT 1 AS x -- INSERT here"}`)},
 		func(c toolsy.Chunk) error {
 			result = decodeSQLChunk[executeResult](t, c)
@@ -285,7 +291,7 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[executeResult](t, c)
@@ -335,7 +341,7 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 		t,
 		executeTool.Execute(
 			context.Background(),
-			toolsy.RunContext{},
+			toolsy.NewRunEnv(),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, long_text FROM t"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeSQLChunk[executeResult](t, c)

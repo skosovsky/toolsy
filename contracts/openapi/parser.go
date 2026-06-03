@@ -117,7 +117,7 @@ func toolsForPath(
 			name,
 			desc,
 			schemaBytes,
-			func(ctx context.Context, run toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+			func(ctx context.Context, run *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
 				return execute(
 					ctx,
 					run,

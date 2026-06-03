@@ -27,11 +27,22 @@ const (
 	policyBulkheadLimit = 4
 )
 
-// execReq carries validated args plus [toolsy.RunContext] so credentials and attachments
+// httpGetArgs matches the http_get tool input schema.
+type httpGetArgs struct {
+	URL string `json:"url"`
+}
+
+// httpGetResult matches the http_get tool JSON result (status + body).
+type httpGetResult struct {
+	Status int    `json:"status"`
+	Body   string `json:"body"`
+}
+
+// execReq carries typed args plus [*toolsy.RunEnv] so credentials and attachments
 // reach the underlying toolkit while [routery.Executor] stays generic.
 type execReq struct {
-	Run  toolsy.RunContext
-	Args map[string]any
+	Env  *toolsy.RunEnv
+	Args httpGetArgs
 }
 
 func main() {
@@ -80,15 +91,19 @@ func run() error {
 			ArgsJSON: fmt.Appendf(nil, `{"url":%q}`, srv.URL),
 		},
 	}
-	var result []byte
+	var resultChunk toolsy.Chunk
 	execErr := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
-		result = append(result, c.Data...)
+		resultChunk = c
 		return nil
 	})
 	if execErr != nil {
 		return fmt.Errorf("execute: %w", execErr)
 	}
-	_, err = fmt.Fprintln(os.Stdout, string(result))
+	out, decErr := toolsy.DecodeChunkAs[httpGetResult](resultChunk)
+	if decErr != nil {
+		return fmt.Errorf("decode result: %w", decErr)
+	}
+	_, err = fmt.Fprintf(os.Stdout, "status=%d body=%s\n", out.Status, out.Body)
 	return err
 }
 
@@ -101,32 +116,31 @@ func findHTTPGetTool(tools []toolsy.Tool) (toolsy.Tool, error) {
 	return nil, errors.New("http_get tool not found")
 }
 
-func buildReliableExecutor(baseGet toolsy.Tool) routery.Executor[execReq, any] {
-	base := routery.ExecutorFunc[execReq, any](func(ctx context.Context, req execReq) (any, error) {
+func buildReliableExecutor(baseGet toolsy.Tool) routery.Executor[execReq, httpGetResult] {
+	base := routery.ExecutorFunc[execReq, httpGetResult](func(ctx context.Context, req execReq) (httpGetResult, error) {
 		raw, marshalErr := json.Marshal(req.Args)
 		if marshalErr != nil {
-			return nil, marshalErr
+			return httpGetResult{}, marshalErr
 		}
-		var buf []byte
-		execToolErr := baseGet.Execute(ctx, req.Run, toolsy.ToolInput{ArgsJSON: raw}, func(c toolsy.Chunk) error {
-			buf = append(buf, c.Data...)
+		var resultChunk toolsy.Chunk
+		execToolErr := baseGet.Execute(ctx, req.Env, toolsy.ToolInput{ArgsJSON: raw}, func(c toolsy.Chunk) error {
+			resultChunk = c
 			return nil
 		})
 		if execToolErr != nil {
-			return nil, execToolErr
+			return httpGetResult{}, execToolErr
 		}
-		var v any
-		unmarshalErr := json.Unmarshal(buf, &v)
-		if unmarshalErr != nil {
-			return nil, unmarshalErr
+		decoded, decErr := toolsy.DecodeChunkAs[httpGetResult](resultChunk)
+		if decErr != nil {
+			return httpGetResult{}, decErr
 		}
-		return v, nil
+		return *decoded, nil
 	})
 
 	return routery.Apply(base,
-		routery.Timeout[execReq, any](policyTimeout),
-		routery.RetryIf[execReq, any](policyRetryAttempts, policyRetryBackoff, retryOnNetTimeout),
-		routery.Bulkhead[execReq, any](policyBulkheadLimit),
+		routery.Timeout[execReq, httpGetResult](policyTimeout),
+		routery.RetryIf[execReq, httpGetResult](policyRetryAttempts, policyRetryBackoff, retryOnNetTimeout),
+		routery.Bulkhead[execReq, httpGetResult](policyBulkheadLimit),
 	)
 }
 
@@ -140,19 +154,19 @@ func retryOnNetTimeout(_ context.Context, _ execReq, execErr error) bool {
 
 func buildWrappedTool(
 	baseGet toolsy.Tool,
-	reliable routery.Executor[execReq, any],
+	reliable routery.Executor[execReq, httpGetResult],
 ) (toolsy.Tool, error) {
 	manifest := baseGet.Manifest()
 	return toolsy.NewDynamicTool(
 		manifest.Name+"_resilient",
 		manifest.Description+" (routery: timeout, retry, bulkhead)",
 		manifest.Parameters,
-		func(ctx context.Context, run toolsy.RunContext, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-			var args map[string]any
+		func(ctx context.Context, run *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+			var args httpGetArgs
 			if unmarshalArgsErr := json.Unmarshal(argsJSON, &args); unmarshalArgsErr != nil {
-				return unmarshalArgsErr
+				return toolsy.NewJSONParseError(unmarshalArgsErr)
 			}
-			out, execReliableErr := reliable.Execute(ctx, execReq{Run: run, Args: args})
+			out, execReliableErr := reliable.Execute(ctx, execReq{Env: run, Args: args})
 			if execReliableErr != nil {
 				return execReliableErr
 			}

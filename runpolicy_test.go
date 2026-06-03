@@ -49,13 +49,13 @@ func TestValidateRunPolicy_DuplicateAllowed(t *testing.T) {
 func TestSession_EnforcesRequiredTools(t *testing.T) {
 	toolA := newMiddlewareMinTool(
 		"a",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	toolB := newMiddlewareMinTool(
 		"b",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
@@ -81,13 +81,13 @@ func TestSession_EnforcesRequiredTools(t *testing.T) {
 func TestSession_EnforcesRunPolicyAllowedTools(t *testing.T) {
 	toolA := newMiddlewareMinTool(
 		"a",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	toolB := newMiddlewareMinTool(
 		"b",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
@@ -113,13 +113,13 @@ func TestSession_EnforcesRunPolicyAllowedTools(t *testing.T) {
 func TestSession_EnforcesForcedTool(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"only",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
 	other := newMiddlewareMinTool(
 		"other",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
@@ -138,7 +138,7 @@ func TestSession_EnforcesForcedTool(t *testing.T) {
 func TestRegistry_DoesNotEnforceRunPolicy(t *testing.T) {
 	toolB := newMiddlewareMinTool(
 		"b",
-		func(_ context.Context, _ RunContext, _ ToolInput, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)

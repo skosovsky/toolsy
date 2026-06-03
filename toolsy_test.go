@@ -71,12 +71,12 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 
 type minTool struct {
 	manifest ToolManifest
-	execute  func(context.Context, RunContext, ToolInput, func(Chunk) error) error
+	execute  func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error
 }
 
 func (m minTool) Manifest() ToolManifest { return m.manifest }
 
-func (m minTool) Execute(ctx context.Context, run RunContext, input ToolInput, yield func(Chunk) error) error {
+func (m minTool) Execute(ctx context.Context, run *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	if m.execute != nil {
 		return m.execute(ctx, run, input, yield)
 	}
@@ -97,7 +97,7 @@ func ExampleNewTool() {
 	tool, err := NewTool(
 		"weather",
 		"Get temperature for a city",
-		func(_ context.Context, _ RunContext, _ Args) (Out, error) {
+		func(_ context.Context, _ *RunEnv, _ Args) (Out, error) {
 			return Out{Temp: 22.5}, nil
 		},
 	)
@@ -118,7 +118,7 @@ func ExampleRegistry_Execute() {
 	type Out struct {
 		Y int `json:"y"`
 	}
-	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ RunContext, a Args) (Out, error) {
+	tool, err := NewTool("add_one", "Add one", func(_ context.Context, _ *RunEnv, a Args) (Out, error) {
 		return Out{Y: a.X + 1}, nil
 	})
 	if err != nil {
@@ -151,7 +151,7 @@ func ExampleRegistry_ExecuteBatchStream() {
 	type Out struct {
 		Sum int `json:"sum"`
 	}
-	tool, err := NewTool("add", "Add two numbers", func(_ context.Context, _ RunContext, a Args) (Out, error) {
+	tool, err := NewTool("add", "Add two numbers", func(_ context.Context, _ *RunEnv, a Args) (Out, error) {
 		return Out{Sum: a.A + a.B}, nil
 	})
 	if err != nil {

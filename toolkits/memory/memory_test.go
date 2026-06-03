@@ -50,7 +50,7 @@ func mustBuildMemoryRegistry(t *testing.T, s *Scratchpad) *toolsy.Registry {
 
 func executeAndDecode[T any](t *testing.T, reg *toolsy.Registry, state toolsy.StateStore, call toolsy.ToolCall) T {
 	t.Helper()
-	call.Run = toolsy.RunContext{State: state}
+	call.Env = toolsy.NewRunEnv(toolsy.WithStateStore(state))
 	var out T
 	err := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
 		return json.Unmarshal(c.Data, &out)
@@ -230,10 +230,12 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 	err := reg.Execute(context.Background(), toolsy.ToolCall{
 		ToolName: "memory_pin_fact",
 		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"key":"c","value":"3"}`)},
-		Run:      toolsy.RunContext{State: store},
+		Env:      toolsy.NewRunEnv(toolsy.WithStateStore(store)),
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestScratchpad_RequiresStateStore(t *testing.T) {
@@ -245,8 +247,10 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
-	require.True(t, toolsy.IsClientError(err))
-	require.Contains(t, err.Error(), "run.State is required")
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
+	require.Contains(t, err.Error(), "run.StateStore is required")
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 

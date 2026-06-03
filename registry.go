@@ -108,7 +108,7 @@ func NewRegistry(tools ...Tool) (*Registry, error) {
 
 func (r *Registry) requireRuntimeState() (*registryRuntimeState, error) {
 	if r == nil || r.state == nil {
-		return nil, ErrRegistryState
+		return nil, NewRegistryStateError()
 	}
 	return r.state, nil
 }
@@ -191,7 +191,7 @@ func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
 		seen[name] = struct{}{}
 		tool, ok := r.tools[name]
 		if !ok {
-			return nil, fmt.Errorf("toolsy: unknown tool in subset: %q: %w", name, ErrToolNotFound)
+			return nil, NewToolNotFoundInSubsetError(name)
 		}
 		tools[name] = tool
 	}
@@ -282,22 +282,24 @@ func (r *Registry) executeWithSummary(
 	}
 	select {
 	case <-state.done:
-		return summary, false, ErrShutdown
+		return summary, false, NewShutdownError()
 	default:
 	}
 	tool, ok := r.tools[call.ToolName]
 	if !ok {
-		return summary, false, ErrToolNotFound
+		return summary, false, NewToolNotFoundError()
 	}
 	state.running.Add(1)
 
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { state.running.Done() }) }
-	run := call.Run
-	run.attachments = cloneAttachments(call.Input.Attachments)
-	run.async = newAsyncRuntime(r)
+	execEnv := call.Env
+	if execEnv == nil {
+		execEnv = NewRunEnv()
+	}
+	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r))
 	defer func() {
-		if run.async == nil || !run.async.backgroundStarted.Load() {
+		if execEnv.async == nil || !execEnv.async.backgroundStarted.Load() {
 			release()
 		}
 	}()
@@ -317,7 +319,7 @@ func (r *Registry) executeWithSummary(
 	if r.opts.recoverPanics {
 		defer func() {
 			if p := recover(); p != nil {
-				summary.Error = &SystemError{Err: &panicError{p: p}}
+				summary.Error = NewInternalError(&panicError{p: p})
 				err = summary.Error
 			}
 		}()
@@ -328,7 +330,7 @@ func (r *Registry) executeWithSummary(
 	}
 
 	toolYield := r.wrapYieldWithMetadata(ctx, call, &summary, yield)
-	r.runToolWithValidationAndExecute(ctx, call, run, tool, toolYield, &summary)
+	r.runToolWithValidationAndExecute(ctx, call, execEnv, tool, toolYield, &summary)
 	err = summary.Error
 	return summary, summaryReady, err
 }
@@ -337,7 +339,7 @@ func (r *Registry) executeWithSummary(
 func (r *Registry) runToolWithValidationAndExecute(
 	ctx context.Context,
 	call ToolCall,
-	run RunContext,
+	env *RunEnv,
 	tool Tool,
 	toolYield func(Chunk) error,
 	summary *ExecutionSummary,
@@ -350,17 +352,15 @@ func (r *Registry) runToolWithValidationAndExecute(
 	}
 	if r.opts.validator != nil {
 		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Input.ArgsJSON)); vErr != nil {
-			summary.Error = &ClientError{
-				Reason:    "tool execution failed: security validation failed: " + vErr.Error() + ". Please fix the arguments and try again.",
-				Retryable: false,
-				Err:       ErrValidation,
-			}
+			summary.Error = NewValidationError(
+				"tool execution failed: security validation failed: " + vErr.Error() + ". Please fix the arguments and try again.",
+			)
 			return
 		}
 	}
-	summary.Error = tool.Execute(ctx, run, call.Input, toolYield)
+	summary.Error = tool.Execute(ctx, env, call.Input, toolYield)
 	if errors.Is(summary.Error, context.DeadlineExceeded) {
-		summary.Error = ErrTimeout
+		summary.Error = NewTimeoutError(true)
 	}
 }
 
@@ -591,7 +591,7 @@ func (r *Registry) Shutdown(ctx context.Context) error {
 	}
 }
 
-// panicError wraps a recovered panic value for SystemError.
+// panicError wraps a recovered panic value for internal [ToolError].
 type panicError struct{ p any }
 
 func (e *panicError) Error() string {

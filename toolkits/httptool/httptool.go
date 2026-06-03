@@ -25,8 +25,8 @@ type httpResult struct {
 }
 
 type postArgs struct {
-	URL      string         `json:"url"`
-	JSONBody map[string]any `json:"json_body,omitempty"`
+	URL      string          `json:"url"`
+	JSONBody json.RawMessage `json:"json_body,omitempty"`
 }
 
 // AsTools returns two tools: http_get and http_post. Options configure client, allowed domains, headers, and limits.
@@ -45,7 +45,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	getTool, err := toolsy.NewTool[getArgs, httpResult](
 		o.getName,
 		o.getDesc,
-		func(ctx context.Context, run toolsy.RunContext, args getArgs) (httpResult, error) {
+		func(ctx context.Context, run *toolsy.RunEnv, args getArgs) (httpResult, error) {
 			return doGET(ctx, run, o.getName, &o, args.URL)
 		},
 		toolsy.WithReadOnly(),
@@ -57,7 +57,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	postTool, err := toolsy.NewTool[postArgs, httpResult](
 		o.postName,
 		o.postDesc,
-		func(ctx context.Context, run toolsy.RunContext, args postArgs) (httpResult, error) {
+		func(ctx context.Context, run *toolsy.RunEnv, args postArgs) (httpResult, error) {
 			return doPOST(ctx, run, o.postName, &o, args.URL, args.JSONBody)
 		},
 		toolsy.WithDangerous(),
@@ -70,7 +70,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	return []toolsy.Tool{getTool, postTool}, nil
 }
 
-func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *options, rawURL string) (httpResult, error) {
+func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options, rawURL string) (httpResult, error) {
 	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
 		return httpResult{}, err
@@ -78,7 +78,7 @@ func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *optio
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return httpResult{}, fmt.Errorf("toolkit/httptool: new request: %w", err)
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: new request: %w", err))
 	}
 	for k, v := range o.headers {
 		req.Header.Set(k, v)
@@ -86,7 +86,9 @@ func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *optio
 	if run.Credentials != nil {
 		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
 		if authErr != nil {
-			return httpResult{}, fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr)
+			return httpResult{}, toolsy.NewInternalError(
+				fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr),
+			)
 		}
 		if authHeader != "" {
 			req.Header.Set("Authorization", authHeader)
@@ -96,7 +98,7 @@ func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *optio
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
 	resp, err := o.httpClient.Do(req) // #nosec G704
 	if err != nil {
-		return httpResult{}, fmt.Errorf("toolkit/httptool: do request: %w", err)
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
@@ -109,11 +111,11 @@ func doGET(ctx context.Context, run toolsy.RunContext, toolName string, o *optio
 
 func doPOST(
 	ctx context.Context,
-	run toolsy.RunContext,
+	run *toolsy.RunEnv,
 	toolName string,
 	o *options,
 	rawURL string,
-	jsonBody map[string]any,
+	jsonBody json.RawMessage,
 ) (httpResult, error) {
 	u, err := validateURL(ctx, rawURL, o.allowedDomains, o.allowPrivateIPs)
 	if err != nil {
@@ -122,16 +124,12 @@ func doPOST(
 
 	var reqBody io.Reader
 	if len(jsonBody) > 0 {
-		bodyBytes, marshalErr := json.Marshal(jsonBody)
-		if marshalErr != nil {
-			return httpResult{}, fmt.Errorf("toolkit/httptool: marshal body: %w", marshalErr)
-		}
-		reqBody = bytes.NewReader(bodyBytes)
+		reqBody = bytes.NewReader(jsonBody)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), reqBody)
 	if err != nil {
-		return httpResult{}, fmt.Errorf("toolkit/httptool: new request: %w", err)
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: new request: %w", err))
 	}
 	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -142,7 +140,9 @@ func doPOST(
 	if run.Credentials != nil {
 		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
 		if authErr != nil {
-			return httpResult{}, fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr)
+			return httpResult{}, toolsy.NewInternalError(
+				fmt.Errorf("toolkit/httptool: credentials for %s: %w", toolName, authErr),
+			)
 		}
 		if authHeader != "" {
 			req.Header.Set("Authorization", authHeader)
@@ -152,7 +152,7 @@ func doPOST(
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
 	resp, err := o.httpClient.Do(req) // #nosec G704
 	if err != nil {
-		return httpResult{}, fmt.Errorf("toolkit/httptool: do request: %w", err)
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
@@ -168,7 +168,7 @@ func doPOST(
 func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
 	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
 	if err != nil {
-		return "", fmt.Errorf("toolkit/httptool: read body: %w", err)
+		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
 	}
 	return text, nil
 }
