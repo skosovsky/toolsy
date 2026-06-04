@@ -64,7 +64,7 @@ func TestExecuteTruncatesOversizedResponse(t *testing.T) {
 	var got toolsy.Chunk
 	err := execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"list_items",
 		http.MethodGet,
 		"/items",
@@ -105,7 +105,7 @@ func TestExecuteTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 	var got toolsy.Chunk
 	err := execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"list_items",
 		http.MethodGet,
 		"/items",
@@ -155,7 +155,7 @@ func TestExecuteReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	var got toolsy.Chunk
 	err := execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"list_items",
 		http.MethodGet,
 		"/items",

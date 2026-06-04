@@ -35,7 +35,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 	var chunks [][]byte
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"n": 3}`)},
 		func(c Chunk) error {
 			chunks = append(chunks, append([]byte(nil), c.Data...))
@@ -67,7 +67,7 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 	var received [][]byte
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(c Chunk) error {
 			received = append(received, append([]byte(nil), c.Data...))
@@ -96,7 +96,7 @@ func TestNewStreamTool_ZeroChunks(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err = tool.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		count++
 		return nil
 	})
@@ -120,7 +120,7 @@ func TestNewTool_YieldCalledOnce(t *testing.T) {
 	var out R
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 		func(c Chunk) error {
 			callCount++
@@ -141,7 +141,7 @@ func TestNewTool_YieldErrorReturnsErrStreamAborted(t *testing.T) {
 	require.NoError(t, err)
 
 	yieldErr := errors.New("connection closed")
-	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err = tool.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return yieldErr
 	})
 	require.Error(t, err)

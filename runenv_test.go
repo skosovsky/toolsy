@@ -19,7 +19,7 @@ type pingDBImpl struct{}
 func (pingDBImpl) Ping() {}
 
 func TestPut_Require_TypedNilInterface(t *testing.T) {
-	env := NewRunEnv()
+	env := NewRunEnv(nil)
 	var iface pingDB = (*pingDBImpl)(nil)
 	Put(env, "db", iface)
 
@@ -31,7 +31,7 @@ func TestPut_Require_TypedNilInterface(t *testing.T) {
 }
 
 func TestPut_Require_Lookup_TypedNil(t *testing.T) {
-	env := NewRunEnv()
+	env := NewRunEnv(nil)
 	var p *mockHTTP
 	var i any = p
 	Put(env, "db", i)
@@ -47,7 +47,9 @@ func TestPut_Require_Lookup_TypedNil(t *testing.T) {
 }
 
 func TestSetState_GetState_RoundTrip(t *testing.T) {
-	env := NewRunEnv()
+	sess, err := NewSession(nil)
+	require.NoError(t, err)
+	env := NewRunEnv(sess)
 	SetState(env, "trace", "abc-123")
 	v, ok := GetState[string](env, "trace")
 	require.True(t, ok)
@@ -55,7 +57,9 @@ func TestSetState_GetState_RoundTrip(t *testing.T) {
 }
 
 func TestNamespaceIsolation_ClientKey(t *testing.T) {
-	env := NewRunEnv()
+	sess, err := NewSession(nil)
+	require.NoError(t, err)
+	env := NewRunEnv(sess)
 	Put(env, "client", mockHTTP{})
 	SetState(env, "client", "user-id")
 
@@ -80,7 +84,7 @@ func TestMiddlewareBudget_UsesDepKey(t *testing.T) {
 	reg, err := NewRegistryBuilder().Use(WithBudget()).Add(tool).Build()
 	require.NoError(t, err)
 
-	env := NewRunEnv()
+	env := NewRunEnv(nil)
 	Put(env, DepKeyBudget, tracker)
 	err = reg.Execute(context.Background(), ToolCall{
 		ToolName: "t",
@@ -91,7 +95,9 @@ func TestMiddlewareBudget_UsesDepKey(t *testing.T) {
 }
 
 func TestSameRunEnv_OrchestratorToTool(t *testing.T) {
-	env := NewRunEnv()
+	sess, err := NewSession(nil)
+	require.NoError(t, err)
+	env := NewRunEnv(sess)
 	SetState(env, "token", "shared")
 
 	var seen string
@@ -118,7 +124,9 @@ func TestSameRunEnv_OrchestratorToTool(t *testing.T) {
 }
 
 func TestRunEnv_CloneSharesStore_NoDataRace(t *testing.T) {
-	parent := NewRunEnv()
+	sess, err := NewSession(nil)
+	require.NoError(t, err)
+	parent := NewRunEnv(sess)
 	exec := parent.cloneForExecute(nil, nil)
 
 	const key = "counter"

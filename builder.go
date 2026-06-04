@@ -307,9 +307,11 @@ func (t *tool) Manifest() ToolManifest {
 	return m
 }
 
+// Execute runs the tool handler. When env is nil, a DI-only [NewRunEnv](nil) is used (no session state).
+// Attachment clones share env.session when the parent env was bound to a [Session].
 func (t *tool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	if env == nil {
-		env = NewRunEnv()
+		env = NewRunEnv(nil)
 	}
 	if len(input.Attachments) > 0 {
 		env = env.cloneForExecute(input.Attachments, env.async)

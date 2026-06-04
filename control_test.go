@@ -69,7 +69,7 @@ func TestWithErrorFormatter_BypassesControlErrors(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 	err := wrapped.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)

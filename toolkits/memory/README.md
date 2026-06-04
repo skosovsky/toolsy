@@ -21,7 +21,7 @@ go get github.com/skosovsky/toolsy/toolkits/memory
 ## Configuration and security
 
 - **MaxFacts:** Optional limit on how many facts can be stored. Use `WithMaxFacts(n)` when creating the scratchpad. When the limit is reached, `memory_pin_fact` returns a client error so the LLM can adjust.
-- The toolkit does not keep in-process mutable memory. Persistence and lifetime are defined by the `toolsy.StateStore` on `*toolsy.RunEnv` (`WithStateStore` / `NewRunEnv`) at execution time.
+- The toolkit does not keep in-process mutable memory. Facts live in `toolsy.StateStore` on `*toolsy.RunEnv` (`NewRunEnv(session, toolsy.WithStateStore(...))` or `NewRunEnv(nil, ...)` for DI-only runs). That is separate from **session in-memory overlay** (`SetSessionState` / `Export` on `*toolsy.Session`), which is not used by memory tools and is not included in `Export`.
 
 ## Quick start
 
@@ -45,7 +45,7 @@ func main() {
 		builder.Add(tool)
 	}
 
-	// Important: pass env with StateStore: toolsy.NewRunEnv(toolsy.WithStateStore(yourStateStore)).
+	// Important: pass env with StateStore: toolsy.NewRunEnv(nil, toolsy.WithStateStore(yourStateStore)).
 	// Without StateStore, memory tools return a validation error.
 }
 ```

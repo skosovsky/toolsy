@@ -38,7 +38,7 @@ func TestMockTool(t *testing.T) {
 	var out []byte
 	err := m.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			out = c.Data

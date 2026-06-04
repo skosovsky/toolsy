@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"maps"
 	"slices"
+	"sync"
 	"sync/atomic"
 )
 
@@ -50,10 +52,15 @@ func (t *SessionTrack) MaxSteps() int64 {
 }
 
 // Session is a stateful, concurrency-safe executor built on top of a stateless registry.
+// It owns mutable in-memory session state; [RunEnv] holds per-call dependencies only.
 type Session struct {
 	reg    *Registry
 	track  *SessionTrack
 	policy RunPolicy
+	opts   sessionOptions
+
+	stateMu sync.RWMutex
+	state   map[string]any
 }
 
 // NewSession creates a new session bound to reg.
@@ -65,11 +72,53 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err := ValidateRunPolicy(cfg.policy); err != nil {
 		return nil, err
 	}
-	return &Session{
+	return &Session{ //nolint:exhaustruct // stateMu zero value; state map initialized below
 		reg:    reg,
 		track:  newSessionTrack(cfg),
 		policy: cfg.policy,
+		opts:   cfg,
+		state:  make(map[string]any),
 	}, nil
+}
+
+// Export returns a shallow copy of in-memory session state suitable for JSON serialization.
+// Dependencies, attachments, and [StateStore] data are not included.
+// Export on a nil receiver returns nil; an empty session returns a non-nil empty map.
+func (s *Session) Export() map[string]any {
+	if s == nil {
+		return nil
+	}
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	out := make(map[string]any, len(s.state))
+	maps.Copy(out, s.state)
+	return out
+}
+
+// Import replaces in-memory session state from data (e.g. after JSON unmarshal).
+// Registered keys in [WithStateTypeRegistry] are restored to concrete Go types.
+// Import(nil) clears all session state keys.
+func (s *Session) Import(data map[string]any) error {
+	if s == nil {
+		return NewValidationError("nil session")
+	}
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	next := make(map[string]any, len(data))
+	for k, v := range data {
+		if v == nil {
+			next[k] = nil
+			continue
+		}
+		decoded, err := importStateValue(s.opts.stateRegistry, k, v)
+		if err != nil {
+			return err
+		}
+		next[k] = decoded
+	}
+	s.state = next
+	return nil
 }
 
 // Track returns the session execution track.
@@ -85,6 +134,9 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 	if s == nil || s.reg == nil {
 		return NewToolNotFoundError()
 	}
+	if err := validateSessionRunEnv(s, call.Env); err != nil {
+		return err
+	}
 	if err := enforceRunPolicy(s.policy, call); err != nil {
 		return err
 	}
@@ -92,6 +144,25 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 		return err
 	}
 	return s.reg.execute(ctx, call, yield)
+}
+
+// ValidateRunEnvSession checks that env is nil, DI-only (no session), or bound to s.
+// Use before [Registry.Execute] when the track uses in-memory session state; [Session.Execute] calls this internally.
+func ValidateRunEnvSession(s *Session, env *RunEnv) error {
+	return validateSessionRunEnv(s, env)
+}
+
+func validateSessionRunEnv(s *Session, env *RunEnv) error {
+	if env == nil || env.session == nil {
+		return nil
+	}
+	if s == nil {
+		return NewValidationError("nil session")
+	}
+	if env.session != s {
+		return NewValidationError("session/env mismatch: ToolCall.Env is bound to a different Session")
+	}
+	return nil
 }
 
 func enforceRunPolicy(p RunPolicy, call ToolCall) error {

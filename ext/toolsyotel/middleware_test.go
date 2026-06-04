@@ -75,7 +75,7 @@ func TestWithTracing_SetsSpanNameAndAttributes(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{CallID: "call-1", ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -108,7 +108,7 @@ func TestWithTracing_ErrorMarksSpan(t *testing.T) {
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(nil), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.Error(t, err)
@@ -130,7 +130,7 @@ func TestWithTracing_ControlPauseIsNeutral(t *testing.T) {
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(nil), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.ErrorIs(t, err, toolsy.ErrPause)
@@ -158,7 +158,7 @@ func TestWithTracing_StreamAbortedIsNeutral(t *testing.T) {
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(nil), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.ErrorIs(t, err, toolsy.ErrStreamAborted)
@@ -194,7 +194,7 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 	}
 	wrapped := WithTracing(WithTracerProvider(tp))(tool)
 
-	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(), toolsy.ToolInput{}, func(toolsy.Chunk) error {
+	err := wrapped.Execute(context.Background(), toolsy.NewRunEnv(nil), toolsy.ToolInput{}, func(toolsy.Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestMiddleware_ContentCapture_DisabledDefault_ErrorPath(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"secret":true}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -262,7 +262,7 @@ func TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk(t *testing.T)
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			if string(c.Data) == "undelivered" {
@@ -288,7 +288,7 @@ func TestMiddleware_ContentCapture_DisabledDefault(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"q":"secret"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -310,7 +310,7 @@ func TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -346,7 +346,7 @@ func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: args},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -388,7 +388,7 @@ func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
 
 	require.NoError(t, wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: hugeArgs},
 		func(toolsy.Chunk) error { return nil },
 	))
@@ -427,7 +427,7 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{},
 		func(toolsy.Chunk) error { return nil },
 	)

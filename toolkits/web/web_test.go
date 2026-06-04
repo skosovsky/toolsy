@@ -48,7 +48,7 @@ func TestWebSearch_ReturnsMarkdown(t *testing.T) {
 		t,
 		searchTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"test"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[searchResult](t, c)
@@ -66,7 +66,7 @@ func TestWebSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 	require.NoError(t, err)
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"  "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -93,7 +93,7 @@ func TestWebScrape_Success(t *testing.T) {
 		t,
 		scrapeTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -122,7 +122,7 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 		t,
 		scrapeTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -142,7 +142,7 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://127.0.0.1:9999/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -160,7 +160,7 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"http://0.0.0.0:80/"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -197,7 +197,7 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -225,7 +225,7 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeWebChunk[scrapeResult](t, c)
@@ -273,7 +273,7 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)

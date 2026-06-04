@@ -38,7 +38,7 @@ func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	var accepted toolsy.AsyncAccepted
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			accepted = decodeAccepted(t, c)
@@ -77,7 +77,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(_ toolsy.Chunk) error {
 			return nil
@@ -101,7 +101,7 @@ func TestAsAsyncTool_NilCallback(t *testing.T) {
 	wrapped := toolsy.AsAsyncTool(base)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -130,7 +130,7 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -157,7 +157,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error {
 			return yieldErr
@@ -191,7 +191,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -225,7 +225,7 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsInternalToolError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -248,7 +248,7 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)

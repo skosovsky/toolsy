@@ -203,21 +203,34 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 - Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
 - Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
 
-## RunEnv (session + DI)
+## Session state and RunEnv (DI)
 
-`*RunEnv` is shared via `ToolCall.Env`:
+Mutable in-memory state lives on [`Session`](session.go): `SetSessionState` / `GetSessionState`, `Export` / `Import`, and optional [`StateTypeRegistry`](state_registry.go) via `WithStateTypeRegistry`.
 
-- `StateStore` — persisted key/value state
-- `Put` / `Require` / `Lookup` — session dependencies (`deps` map)
-- `SetState` / `GetState` — mutable in-memory session state (`state` map)
+`*RunEnv` is shared via `ToolCall.Env` and must be bound to the same session:
+
+- `StateStore` — persisted key/value store (not included in `Session.Export`)
+- `Put` / `Require` / `Lookup` — per-run dependencies (`deps` map)
+- `SetState` / `GetState` — delegate to the bound `Session` (no-op when `session` is nil)
+
+Each `NewRunEnv(session)` gets its own dependency map; reuse the same `*RunEnv` or call `Put` again. For stateful tracks use `session.Execute` (validates `ToolCall.Env` matches that session); direct `Registry.Execute` does not perform this check.
 
 ```go
-env := toolsy.NewRunEnv(toolsy.WithStateStore(store))
-toolsy.Put(env, "db", db) // dependencies — not SetState
-toolsy.SetState(env, "trace_id", traceID)
+types := toolsy.NewStateTypeRegistry()
+types.Register("ctx", MyContext{})
+
+sess, _ := toolsy.NewSession(reg, toolsy.WithStateTypeRegistry(types))
+toolsy.SetSessionState(sess, "ctx", MyContext{TraceID: "t1"})
+
+env := toolsy.NewRunEnv(sess, toolsy.WithStateStore(store))
+toolsy.Put(env, "db", db) // dependencies — not SetSessionState
 
 call.Env = env
+// ... after tools run:
+checkpoint, _ := json.Marshal(sess.Export())
 ```
+
+See [docs/migration-task23.md](docs/migration-task23.md) and `examples/session_checkpoint`.
 
 `ToolInput.Attachments` are exposed to handlers as `env.Attachments()` (cloned per call).
 
@@ -363,7 +376,7 @@ Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history`
 ## Budget middleware
 
 ```go
-env := toolsy.NewRunEnv()
+env := toolsy.NewRunEnv(nil)
 toolsy.Put(env, toolsy.DepKeyBudget, tracker)
 call.Env = env
 reg.Execute(ctx, call, yield)

@@ -50,7 +50,7 @@ func mustBuildMemoryRegistry(t *testing.T, s *Scratchpad) *toolsy.Registry {
 
 func executeAndDecode[T any](t *testing.T, reg *toolsy.Registry, state toolsy.StateStore, call toolsy.ToolCall) T {
 	t.Helper()
-	call.Env = toolsy.NewRunEnv(toolsy.WithStateStore(state))
+	call.Env = toolsy.NewRunEnv(nil, toolsy.WithStateStore(state))
 	var out T
 	err := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
 		return json.Unmarshal(c.Data, &out)
@@ -230,7 +230,7 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 	err := reg.Execute(context.Background(), toolsy.ToolCall{
 		ToolName: "memory_pin_fact",
 		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"key":"c","value":"3"}`)},
-		Env:      toolsy.NewRunEnv(toolsy.WithStateStore(store)),
+		Env:      toolsy.NewRunEnv(nil, toolsy.WithStateStore(store)),
 	}, func(toolsy.Chunk) error { return nil })
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)

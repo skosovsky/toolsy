@@ -6,7 +6,7 @@ Agent Protocol bridge for [toolsy](https://github.com/skosovsky/toolsy). This mo
 
 ## Features
 
-- **REST client:** `CreateTask`, `CancelTask` with custom HTTP client and runtime auth supplied through `*toolsy.RunEnv` (`toolsy.WithCredentials` on `toolsy.NewRunEnv`).
+- **REST client:** `CreateTask`, `CancelTask` with custom HTTP client and runtime auth supplied through `*toolsy.RunEnv` (`toolsy.WithCredentials` on `toolsy.NewRunEnv(session, ...)`).
 - **SSE streaming:** `StreamSteps` consumes `GET /ap/v1/agent/tasks/{id}/steps?stream=true`, parses steps, and supports **Last-Event-ID** auto-reconnect with a 1s backoff on disconnect.
 - **Delegation:** `AsTool` (sync delegation with progress streaming) and `AsBackgroundTool` (fire-and-forget, returns `task_id` for status checks).
 
@@ -54,7 +54,8 @@ func main() {
 	builder.Add(tool)
 	reg, _ := builder.Build()
 
-	env := toolsy.NewRunEnv(toolsy.WithCredentials(staticCredentials{}))
+	// DI-only: no in-memory session state. For stateful tracks use session.Execute with NewRunEnv(session).
+	env := toolsy.NewRunEnv(nil, toolsy.WithCredentials(staticCredentials{}))
 	_ = reg.Execute(context.Background(), toolsy.ToolCall{
 		ToolName: "delegate_to_coder",
 		Input: toolsy.ToolInput{

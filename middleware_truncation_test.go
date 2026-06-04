@@ -26,10 +26,15 @@ func TestWithTruncation_TruncatesTextPayload(t *testing.T) {
 	wrapped := WithTruncation(12, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, EventResult, got.Event)
 	assert.Equal(t, MimeTypeText, got.MimeType)
@@ -55,10 +60,15 @@ func TestWithTruncation_TruncatesMarkdownPayload(t *testing.T) {
 	wrapped := WithTruncation(14, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, EventResult, got.Event)
 	assert.Equal(t, "text/markdown; charset=utf-8", got.MimeType)
@@ -85,10 +95,15 @@ func TestWithTruncation_DoesNotTruncateBinaryPayload(t *testing.T) {
 	wrapped := WithTruncation(2, WithTruncationSuffix("..."))(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, raw, got.Data)
 }
@@ -107,12 +122,18 @@ func TestWithTruncation_JSONIsOptIn(t *testing.T) {
 	)
 
 	withoutJSON := WithTruncation(10, WithTruncationSuffix("..."))(inner)
-	withJSON := WithTruncation(10, WithTruncationSuffix("..."), WithTruncationIncludeJSON(true))(inner)
+	withJSON := WithTruncation(
+		10,
+		WithTruncationSuffix("..."),
+		WithTruncationIncludeJSON(true),
+	)(
+		inner,
+	)
 
 	var gotWithout, gotWith Chunk
 	err := withoutJSON.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c Chunk) error {
 			gotWithout = c
@@ -120,10 +141,15 @@ func TestWithTruncation_JSONIsOptIn(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	err = withJSON.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		gotWith = c
-		return nil
-	})
+	err = withJSON.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			gotWith = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 
 	assert.JSONEq(t, jsonText, string(gotWithout.Data))
@@ -147,10 +173,15 @@ func TestWithTruncation_PreservesUTF8Boundaries(t *testing.T) {
 	wrapped := WithTruncation(6, WithTruncationSuffix("..."))(inner)
 
 	var got string
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = string(c.Data)
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = string(c.Data)
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, utf8.ValidString(got))
 	assert.Equal(t, 6, utf8.RuneCountInString(got))

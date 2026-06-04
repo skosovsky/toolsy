@@ -295,7 +295,7 @@ func (r *Registry) executeWithSummary(
 	release := func() { releaseOnce.Do(func() { state.running.Done() }) }
 	execEnv := call.Env
 	if execEnv == nil {
-		execEnv = NewRunEnv()
+		execEnv = NewRunEnv(nil)
 	}
 	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r))
 	defer func() {

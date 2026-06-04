@@ -1,34 +1,32 @@
 package toolsy
 
 import (
-	"reflect"
 	"sync"
 )
 
 // DepKeyBudget is the dependency map key for [BudgetTracker] used by [WithBudget].
 const DepKeyBudget = "toolsy.budget"
 
-// runEnvStore holds shared session maps; clones of [RunEnv] share the same store pointer.
+// runEnvStore holds per-run dependency maps; clones of [RunEnv] share the same store pointer.
 type runEnvStore struct {
-	mu    sync.RWMutex
-	deps  map[string]any
-	state map[string]any
+	mu   sync.RWMutex
+	deps map[string]any
 }
 
 func newRunEnvStore() *runEnvStore {
 	return &runEnvStore{
-		mu:    sync.RWMutex{},
-		deps:  make(map[string]any),
-		state: make(map[string]any),
+		mu:   sync.RWMutex{},
+		deps: make(map[string]any),
 	}
 }
 
-// RunEnv is the shared session execution environment: credentials, persisted state,
-// keyed dependencies (deps), and in-memory session state (state).
+// RunEnv is the per-call execution environment: credentials, [StateStore], and keyed dependencies.
+// Mutable in-memory session state lives on [Session]; wire via [NewRunEnv](session).
 type RunEnv struct {
 	Credentials CredentialsProvider
 	StateStore  StateStore
 
+	session     *Session
 	store       *runEnvStore
 	attachments []Attachment
 	async       *asyncRuntime
@@ -51,15 +49,25 @@ func WithStateStore(s StateStore) RunEnvOption {
 	}
 }
 
-// NewRunEnv creates a run environment with empty deps and session state maps.
-func NewRunEnv(opts ...RunEnvOption) *RunEnv {
+// NewRunEnv creates a run environment bound to session (may be nil for DI-only tests).
+// State mutations require a non-nil session; use [SetSessionState] from the host when needed.
+func NewRunEnv(session *Session, opts ...RunEnvOption) *RunEnv {
 	env := &RunEnv{ //nolint:exhaustruct // optional providers set via RunEnvOption
-		store: newRunEnvStore(),
+		session: session,
+		store:   newRunEnvStore(),
 	}
 	for _, opt := range opts {
 		opt(env)
 	}
 	return env
+}
+
+// Session returns the session this environment is bound to, or nil for DI-only envs.
+func (e *RunEnv) Session() *Session {
+	if e == nil {
+		return nil
+	}
+	return e.session
 }
 
 // Attachments returns runtime attachments for the current call (cloned).
@@ -70,7 +78,7 @@ func (e *RunEnv) Attachments() []Attachment {
 	return cloneAttachments(e.attachments)
 }
 
-// cloneForExecute returns a shallow copy sharing the session store but with per-call attachments and async runtime.
+// cloneForExecute returns a shallow copy sharing session and deps store with per-call attachments and async runtime.
 func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) *RunEnv {
 	if e == nil {
 		return &RunEnv{ //nolint:exhaustruct // nil env bootstrap
@@ -82,6 +90,7 @@ func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) 
 	return &RunEnv{
 		Credentials: e.Credentials,
 		StateStore:  e.StateStore,
+		session:     e.session,
 		store:       e.store,
 		attachments: cloneAttachments(attachments),
 		async:       async,
@@ -126,61 +135,4 @@ func Lookup[T any](env *RunEnv, key string) (T, bool) {
 	env.store.mu.RLock()
 	defer env.store.mu.RUnlock()
 	return resolveTyped[T](env.store.deps, key)
-}
-
-// SetState stores mutable session-scoped data shared across tool calls.
-// If env is nil, SetState is a no-op (use [NewRunEnv] and pass the same pointer on [ToolCall.Env]).
-func SetState[T any](env *RunEnv, key string, val T) {
-	if env == nil || env.store == nil {
-		return
-	}
-	env.store.mu.Lock()
-	defer env.store.mu.Unlock()
-	if env.store.state == nil {
-		env.store.state = make(map[string]any)
-	}
-	env.store.state[key] = val
-}
-
-// GetState returns session-scoped data when present and non-nil.
-func GetState[T any](env *RunEnv, key string) (T, bool) {
-	var zero T
-	if env == nil || env.store == nil {
-		return zero, false
-	}
-	env.store.mu.RLock()
-	defer env.store.mu.RUnlock()
-	return resolveTyped[T](env.store.state, key)
-}
-
-func resolveTyped[T any](store map[string]any, key string) (T, bool) {
-	var zero T
-	if store == nil {
-		return zero, false
-	}
-	raw, ok := store[key]
-	if !ok {
-		return zero, false
-	}
-	typed, ok := raw.(T)
-	if !ok {
-		return zero, false
-	}
-	if isNilValue(typed) {
-		return zero, false
-	}
-	return typed, true
-}
-
-func isNilValue(v any) bool {
-	if v == nil {
-		return true
-	}
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Interface, reflect.Pointer, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
-		return rv.IsNil()
-	default:
-		return false
-	}
 }

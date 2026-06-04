@@ -34,7 +34,7 @@ func TestFSListDir_Success(t *testing.T) {
 		t,
 		listTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":""}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[listResult](t, c)
@@ -65,7 +65,7 @@ func TestFSReadFile_Success(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"f.txt"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[readResult](t, c)
@@ -93,7 +93,7 @@ func TestFSReadFile_Truncation(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"big.txt"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[readResult](t, c)
@@ -115,7 +115,7 @@ func TestFSWriteFile_Success(t *testing.T) {
 		t,
 		writeTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"a/b/f.txt","content":"written"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -140,7 +140,7 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"uploads/link/evil.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -166,7 +166,7 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 
 	err = writeTool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"report.txt","content":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -191,7 +191,7 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 
 	err = listTool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"../../etc"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)

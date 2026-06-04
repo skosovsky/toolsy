@@ -177,8 +177,16 @@ func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
-	maxSteps int
-	policy   RunPolicy
+	maxSteps      int
+	policy        RunPolicy
+	stateRegistry *StateTypeRegistry
+}
+
+// WithStateTypeRegistry sets the registry used by [Session.Import] to restore typed state values.
+func WithStateTypeRegistry(r *StateTypeRegistry) SessionOption {
+	return func(o *sessionOptions) {
+		o.stateRegistry = r
+	}
 }
 
 // WithMaxSteps limits the total number of tool executions within a session track.

@@ -15,7 +15,8 @@
 //   - Chunk data-plane: Event, Data, MimeType, IsError, Progress.
 //   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/UIAction).
 //   - ToolManifest SSOT: ReadOnly, RequiresConfirmation, Dangerous, Idempotent, CompletionPolicy.
-//   - RunEnv: Put/Require/Lookup (deps) and SetState/GetState (session); shared via ToolCall.Env.
+//   - Session: SetSessionState/GetSessionState, Export/Import, StateTypeRegistry (WithStateTypeRegistry), ValidateRunEnvSession.
+//   - RunEnv: Put/Require/Lookup (deps); SetState/GetState delegate to Session; NewRunEnv(session).
 //   - ToolError: structured errors with Code and Retryable (replaces ClientError/SystemError).
 //   - CallParser + DecodeChunkAs for typed host integration (see docs/migration-task22.md).
 //   - Registry runtime is immutable; use RegistryBuilder for setup-time mutation.
@@ -32,7 +33,7 @@
 //		return Out{Temp: 22.5}, nil
 //	})
 //	reg, _ := toolsy.NewRegistryBuilder().Add(tool).Build()
-//	env := toolsy.NewRunEnv()
+//	env := toolsy.NewRunEnv(nil)
 //	call := toolsy.ToolCall{
 //		ToolName: "weather",
 //		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"city":"Moscow"}`)},
