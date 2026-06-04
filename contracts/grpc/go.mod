@@ -2,10 +2,8 @@ module github.com/skosovsky/toolsy/contracts/grpc
 
 go 1.26.3
 
-replace github.com/skosovsky/toolsy => ../..
-
 require (
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.8.2
 	google.golang.org/grpc v1.79.2
 	google.golang.org/protobuf v1.36.11
 )
