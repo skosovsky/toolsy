@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.8.3
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -15,5 +15,3 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..
