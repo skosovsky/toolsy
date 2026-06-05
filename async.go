@@ -23,10 +23,14 @@ type AsyncAccepted struct {
 // chunks holds all chunks collected from the base tool's yield; err is the error returned by Execute.
 type AsyncCallback func(ctx context.Context, taskID string, chunks []Chunk, err error)
 
+// DefaultMaxCollectedChunks is the default cap on chunks buffered during async background execution.
+const DefaultMaxCollectedChunks = 1000
+
 // asyncOptions holds configuration for AsAsyncTool.
 type asyncOptions struct {
-	onComplete AsyncCallback
-	timeout    time.Duration
+	onComplete         AsyncCallback
+	timeout            time.Duration
+	maxCollectedChunks int
 }
 
 // AsyncOption configures AsAsyncTool.
@@ -48,6 +52,17 @@ func WithBackgroundTimeout(d time.Duration) AsyncOption {
 	}
 }
 
+// WithMaxCollectedChunks overrides the default cap on chunks buffered for [WithOnComplete].
+// Values n <= 0 are ignored. Default is [DefaultMaxCollectedChunks] (1000).
+// When the cap is exceeded, [ErrAsyncCollectedLimitExceeded] is surfaced in [WithOnComplete].
+func WithMaxCollectedChunks(n int) AsyncOption {
+	return func(o *asyncOptions) {
+		if n > 0 {
+			o.maxCollectedChunks = n
+		}
+	}
+}
+
 // AsAsyncTool wraps a standard Tool to execute its core logic in a background goroutine,
 // immediately returning an AsyncAccepted chunk to the caller. If the client's yield returns
 // an error (e.g. stream closed), the goroutine is not started (yield-guard).
@@ -62,12 +77,17 @@ func WithBackgroundTimeout(d time.Duration) AsyncOption {
 //
 // [RegistryBuilder.Build] unwraps the tool, applies Use() middleware inside the background
 // goroutine, and re-wraps it safely. For direct Execute without a registry, wrap middleware
-// around the base tool before AsAsyncTool. Nested AsAsyncTool(AsAsyncTool(...)) is unsupported.
+// around the base tool before AsAsyncTool. Nested AsAsyncTool(AsAsyncTool(...)) is invalid
+// and rejected at [RegistryBuilder.Build] (including when manual middleware wraps nested
+// async tools before Add). Manual middleware before Add must implement [ChainUnwrapper].
+// Direct Execute without a registry does not re-check nesting.
 //
 // When executed via [Registry], the registry injects an async tracker via [*RunEnv]; the
 // background job is tracked so [Registry.Shutdown] waits for it to finish.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
-	var o asyncOptions
+	o := asyncOptions{ //nolint:exhaustruct // onComplete, timeout set via AsyncOption
+		maxCollectedChunks: DefaultMaxCollectedChunks,
+	}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -115,7 +135,7 @@ func (t *asyncTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, y
 		return ctx.Err()
 	}
 	if env == nil {
-		env = NewRunEnv()
+		env = NewRunEnv(nil)
 	}
 	taskID, err := generateTaskID()
 	if err != nil {
@@ -170,8 +190,18 @@ func (t *asyncTool) runBackground(
 		backgroundYieldErr error
 	)
 	collectYield := func(c Chunk) error {
-		if err := validateChunk(c); err != nil && backgroundYieldErr == nil {
-			backgroundYieldErr = err
+		if len(collected) >= t.opts.maxCollectedChunks {
+			err := fmt.Errorf("%w (%d)", ErrAsyncCollectedLimitExceeded, t.opts.maxCollectedChunks)
+			if backgroundYieldErr == nil {
+				backgroundYieldErr = err
+			}
+			return err
+		}
+		if err := validateChunk(c); err != nil {
+			if backgroundYieldErr == nil {
+				backgroundYieldErr = err
+			}
+			return err
 		}
 		collected = append(collected, c)
 		return nil

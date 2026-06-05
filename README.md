@@ -203,21 +203,28 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 - Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
 - Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
 
-## RunEnv (session + DI)
+## Session state and RunEnv (DI)
 
-`*RunEnv` is shared via `ToolCall.Env`:
+In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState`, `Export`, `Import`).
+`*RunEnv` is shared via `ToolCall.Env` for DI and handler access:
 
-- `StateStore` — persisted key/value state
-- `Put` / `Require` / `Lookup` — session dependencies (`deps` map)
-- `SetState` / `GetState` — mutable in-memory session state (`state` map)
+- `StateStore` — persisted key/value state (optional)
+- `Put` / `Require` / `Lookup` — dependencies (`deps` map, not serialized)
+- `SetState` / `GetState` — delegate to the bound `Session` when `NewRunEnv(session)` was used
 
 ```go
-env := toolsy.NewRunEnv(toolsy.WithStateStore(store))
-toolsy.Put(env, "db", db) // dependencies — not SetState
-toolsy.SetState(env, "trace_id", traceID)
+sess, _ := toolsy.NewSession(reg, toolsy.WithStateTypeRegistry(types))
+env := toolsy.NewRunEnv(sess, toolsy.WithStateStore(store))
+toolsy.Put(env, "db", db)
+toolsy.SetSessionState(sess, "trace_id", traceID) // or SetState(env, ...)
 
 call.Env = env
+sess.Execute(ctx, call, yield) // validates env is bound to sess
 ```
+
+Do not pass `Env: nil` on `Session.Execute` if tools use `SetState` — in-memory state will not persist.
+
+See [docs/migration-task23.md](docs/migration-task23.md) for breaking changes and checkpoint flow.
 
 `ToolInput.Attachments` are exposed to handlers as `env.Attachments()` (cloned per call).
 
@@ -363,7 +370,7 @@ Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history`
 ## Budget middleware
 
 ```go
-env := toolsy.NewRunEnv()
+env := toolsy.NewRunEnv(nil)
 toolsy.Put(env, toolsy.DepKeyBudget, tracker)
 call.Env = env
 reg.Execute(ctx, call, yield)
@@ -383,9 +390,11 @@ Use `AsAsyncTool(base, WithOnComplete(...))` for fire-and-forget execution with 
 
 When registered via `RegistryBuilder`, global middleware from `Use()` runs **inside the background goroutine** (not during the synchronous accept path). Use `WithBackgroundTimeout` on `AsAsyncTool` to cap background work independently of the caller context.
 
+Manual middleware applied before `RegistryBuilder.Add` must implement `toolsy.ChainUnwrapper` so `Build` can detect invalid nested `AsAsyncTool` chains (see `ext/toolsyotel` for an example).
+
 When async tool is executed via `Registry`, background jobs are tracked so `Shutdown` can wait for them to finish. Registry hooks such as `WithOnAfterExecute` run when the synchronous `Execute` path returns (for async tools that is usually right after `AsyncAccepted`), not when background work finishes — use `WithOnComplete` for background completion.
 
-`WithOnComplete` receives every chunk yielded during background execution in an unbounded in-memory slice. Very chatty streaming tools can grow memory until the goroutine finishes; cap payload volume in the base tool or consume results via another channel if you stream many chunks.
+`WithOnComplete` buffers chunks in memory for the completion callback (default cap: 1000). Override with `WithMaxCollectedChunks(n)`. The cap applies in the background collector even without `WithOnComplete`, protecting memory during async execution. When the cap is exceeded, collection stops and `ErrAsyncCollectedLimitExceeded` is passed to `WithOnComplete` even if the base tool ignores yield errors. For very chatty streams, raise the limit or consume chunks via synchronous yield instead of relying on the callback buffer.
 
 ### Note on resiliency with async tools
 

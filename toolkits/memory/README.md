@@ -45,7 +45,7 @@ func main() {
 		builder.Add(tool)
 	}
 
-	// Important: pass env with StateStore: toolsy.NewRunEnv(toolsy.WithStateStore(yourStateStore)).
+	// Important: pass env with StateStore: toolsy.NewRunEnv(nil, toolsy.WithStateStore(yourStateStore)).
 	// Without StateStore, memory tools return a validation error.
 }
 ```

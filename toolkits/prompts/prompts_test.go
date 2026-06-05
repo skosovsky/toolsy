@@ -60,7 +60,7 @@ func TestAsTool_RoleAndVariables(t *testing.T) {
 		t,
 		tool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"doctor","variables":{"patient_name":"Ivan"}}`)},
 			func(c toolsy.Chunk) error {
 				result = decodePromptResult(t, c).Instructions
@@ -81,7 +81,7 @@ func TestAsTool_ProviderError(t *testing.T) {
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -115,7 +115,7 @@ func TestAsTool_MaxBytesTruncate(t *testing.T) {
 		t,
 		tool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"r"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodePromptResult(t, c).Instructions

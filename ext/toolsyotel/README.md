@@ -18,6 +18,8 @@ toolsyotel.WithTracing(
 
 When enabled, spans include `langfuse.observation.input` / `output` and `gen_ai.tool.call.arguments` / `result`, truncated with `... [truncated]` when over the limit.
 
+If you wrap tools manually before `RegistryBuilder.Add` (instead of using `Use`), the wrapper must implement `toolsy.ChainUnwrapper` with `UnwrapNext()`. This lets `Build` detect invalid nested `AsAsyncTool` chains. `tracingTool` implements the contract; prefer `Use(WithTracing(...)).Add(...)` for async tools.
+
 ## Semantic truncation observability
 
 When you use `history.ApplySemanticTruncation(...)`, forward its report to

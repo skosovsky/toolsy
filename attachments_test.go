@@ -51,7 +51,7 @@ func TestToolExecute_AttachmentsHydrated(t *testing.T) {
 	}
 
 	var got attachmentsOut
-	err := tool.Execute(context.Background(), NewRunEnv(), input, func(c Chunk) error {
+	err := tool.Execute(context.Background(), NewRunEnv(nil), input, func(c Chunk) error {
 		got = decodeAttachmentsOut(t, c)
 		return nil
 	})
@@ -107,7 +107,7 @@ func TestToolExecute_AttachmentsAreReadOnlyFromRunEnv(t *testing.T) {
 		},
 	}
 
-	err = tool.Execute(context.Background(), NewRunEnv(), input, func(Chunk) error { return nil })
+	err = tool.Execute(context.Background(), NewRunEnv(nil), input, func(Chunk) error { return nil })
 	require.NoError(t, err)
 	require.Equal(t, byte(1), input.Attachments[0].Data[0], "handler must not mutate caller-owned attachments")
 }

@@ -59,7 +59,7 @@ func TestOverrideTool_ExecutesBase(t *testing.T) {
 	var got []byte
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"a":1}`)},
 		func(c toolsy.Chunk) error {
 			got = c.Data
@@ -89,13 +89,13 @@ func TestOverrideTool_ThreadSafety(_ *testing.T) {
 			_ = w2.Manifest().Description
 			_ = w1.Execute(
 				context.Background(),
-				toolsy.NewRunEnv(),
+				toolsy.NewRunEnv(nil),
 				toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 				func(toolsy.Chunk) error { return nil },
 			)
 			_ = w2.Execute(
 				context.Background(),
-				toolsy.NewRunEnv(),
+				toolsy.NewRunEnv(nil),
 				toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 				func(toolsy.Chunk) error { return nil },
 			)
@@ -176,7 +176,7 @@ func TestOverrideTool_Execute_ChunkToolNameUsesAlias(t *testing.T) {
 	var gotChunk toolsy.Chunk
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			gotChunk = c

@@ -177,8 +177,16 @@ func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
-	maxSteps int
-	policy   RunPolicy
+	maxSteps     int
+	policy       RunPolicy
+	typeRegistry *StateTypeRegistry
+}
+
+// WithStateTypeRegistry configures typed deserialization for [Session.Import].
+func WithStateTypeRegistry(r *StateTypeRegistry) SessionOption {
+	return func(o *sessionOptions) {
+		o.typeRegistry = r
+	}
 }
 
 // WithMaxSteps limits the total number of tool executions within a session track.

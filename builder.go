@@ -309,7 +309,7 @@ func (t *tool) Manifest() ToolManifest {
 
 func (t *tool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 	if env == nil {
-		env = NewRunEnv()
+		env = NewRunEnv(nil)
 	}
 	if len(input.Attachments) > 0 {
 		env = env.cloneForExecute(input.Attachments, env.async)

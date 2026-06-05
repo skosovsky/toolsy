@@ -49,7 +49,7 @@ func TestValidatable_Implemented(t *testing.T) {
 	}
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"low":1,"high":10}`)},
 		func(c Chunk) error {
 			return json.Unmarshal(c.Data, &res)
@@ -60,7 +60,7 @@ func TestValidatable_Implemented(t *testing.T) {
 	// Invalid: low > high — Validatable.Validate returns error
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"low":10,"high":5}`)},
 		func(Chunk) error { return nil },
 	)
@@ -97,7 +97,7 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	}
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"min":1,"max":10}`)},
 		func(c Chunk) error {
 			return json.Unmarshal(c.Data, &res)
@@ -108,7 +108,7 @@ func TestValidatable_PointerReceiver(t *testing.T) {
 	// Invalid: min > max — Validatable.Validate (pointer receiver) returns error
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"min":10,"max":5}`)},
 		func(Chunk) error { return nil },
 	)

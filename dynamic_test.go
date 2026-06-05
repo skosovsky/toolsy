@@ -35,7 +35,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 	var res []byte
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
 		func(c Chunk) error {
 			res = c.Data
@@ -68,11 +68,16 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 	require.NoError(t, err)
 
 	yieldNop := func(Chunk) error { return nil }
-	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, yieldNop)
+	err = tool.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, yieldNop)
 	require.Error(t, err)
 	requireClientCorrectable(t, err)
 
-	err = tool.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{"unit": "kelvin"}`)}, yieldNop)
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{"unit": "kelvin"}`)},
+		yieldNop,
+	)
 	require.Error(t, err)
 	requireClientCorrectable(t, err)
 }
@@ -128,7 +133,7 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(Chunk) error { return nil },
 	)
@@ -149,7 +154,7 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 	require.NoError(t, err)
 	err = tool2.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 1}`)},
 		func(Chunk) error { return nil },
 	)

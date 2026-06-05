@@ -19,10 +19,15 @@ func TestWithErrorFormatter_ValidationErrorBecomesErrorChunk(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var chunks []Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		chunks = append(chunks, c)
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
@@ -40,10 +45,15 @@ func TestWithErrorFormatter_InternalToolErrorDoesNotLeakInternalMessage(t *testi
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
 	assert.NotContains(t, string(got.Data), "password")
@@ -60,10 +70,15 @@ func TestWithErrorFormatter_DependencyMissingHint(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
 	assert.Contains(t, string(got.Data), "required dependency is missing")
@@ -80,10 +95,15 @@ func TestWithErrorFormatter_ToolsContractMissingHint(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
 	assert.Contains(t, string(got.Data), "required tools are not registered")
@@ -103,10 +123,15 @@ func TestWithErrorFormatter_PrefersSafeMessageOverReason(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	body := string(got.Data)
 	assert.Contains(t, body, "valid city name")
@@ -130,7 +155,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 
 	err := WithErrorFormatter()(suspend).Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -138,7 +163,7 @@ func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
 
 	err = WithErrorFormatter()(streamAborted).Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -156,7 +181,7 @@ func TestWithErrorFormatter_BypassesContextCanceled(t *testing.T) {
 	yieldCalls := 0
 	err := WithErrorFormatter()(canceled).Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error {
 			yieldCalls++
@@ -176,7 +201,7 @@ func TestWithErrorFormatter_YieldFailureIsWrapped(t *testing.T) {
 	)
 	wrapped := WithErrorFormatter()(inner)
 
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return errors.New("stop")
 	})
 	require.Error(t, err)
@@ -193,10 +218,15 @@ func TestWithErrorFormatter_PlainErrorPreservesActionableMessage(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
 	assert.Contains(t, string(got.Data), "rate limit exceeded")
@@ -212,10 +242,15 @@ func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
 	wrapped := WithErrorFormatter()(inner)
 
 	var got Chunk
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		got = c
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			got = c
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
 	assert.Contains(t, string(got.Data), "database connection failed")

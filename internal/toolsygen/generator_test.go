@@ -664,7 +664,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 	var got string
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"d1\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
 		func(c toolsy.Chunk) error {
 		got = string(c.Data)
@@ -679,7 +679,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{}")},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -689,7 +689,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -706,7 +706,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{not-json") },
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -726,7 +726,7 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":1,\"slot_time\":\"2026-03-18T09:00:00Z\"}") },
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -833,7 +833,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	var accepted toolsy.AsyncAccepted
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":1}")},
 		func(c toolsy.Chunk) error {
 			if err := json.Unmarshal(c.Data, &accepted); err != nil {
@@ -856,7 +856,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	streamObsMu.Unlock()
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":-1}")},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &accepted)
@@ -882,7 +882,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	streamHandlerInvoked.Store(false)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte("{}")},
 		func(c toolsy.Chunk) error {
 			return json.Unmarshal(c.Data, &accepted)

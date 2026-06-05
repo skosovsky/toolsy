@@ -8,27 +8,26 @@ import (
 // DepKeyBudget is the dependency map key for [BudgetTracker] used by [WithBudget].
 const DepKeyBudget = "toolsy.budget"
 
-// runEnvStore holds shared session maps; clones of [RunEnv] share the same store pointer.
+// runEnvStore holds shared dependency maps; clones of [RunEnv] share the same store pointer.
 type runEnvStore struct {
-	mu    sync.RWMutex
-	deps  map[string]any
-	state map[string]any
+	mu   sync.RWMutex
+	deps map[string]any
 }
 
 func newRunEnvStore() *runEnvStore {
 	return &runEnvStore{
-		mu:    sync.RWMutex{},
-		deps:  make(map[string]any),
-		state: make(map[string]any),
+		mu:   sync.RWMutex{},
+		deps: make(map[string]any),
 	}
 }
 
-// RunEnv is the shared session execution environment: credentials, persisted state,
-// keyed dependencies (deps), and in-memory session state (state).
+// RunEnv is the per-call execution environment: credentials, persisted state store,
+// keyed dependencies (deps), and optional binding to a [Session] for in-memory state.
 type RunEnv struct {
 	Credentials CredentialsProvider
 	StateStore  StateStore
 
+	session     *Session
 	store       *runEnvStore
 	attachments []Attachment
 	async       *asyncRuntime
@@ -51,10 +50,12 @@ func WithStateStore(s StateStore) RunEnvOption {
 	}
 }
 
-// NewRunEnv creates a run environment with empty deps and session state maps.
-func NewRunEnv(opts ...RunEnvOption) *RunEnv {
+// NewRunEnv creates a run environment. When session is non-nil, [SetState] and [GetState]
+// delegate to that session's in-memory state. session may be nil for DI-only usage.
+func NewRunEnv(session *Session, opts ...RunEnvOption) *RunEnv {
 	env := &RunEnv{ //nolint:exhaustruct // optional providers set via RunEnvOption
-		store: newRunEnvStore(),
+		session: session,
+		store:   newRunEnvStore(),
 	}
 	for _, opt := range opts {
 		opt(env)
@@ -70,7 +71,7 @@ func (e *RunEnv) Attachments() []Attachment {
 	return cloneAttachments(e.attachments)
 }
 
-// cloneForExecute returns a shallow copy sharing the session store but with per-call attachments and async runtime.
+// cloneForExecute returns a shallow copy sharing deps store and session pointer with per-call attachments.
 func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) *RunEnv {
 	if e == nil {
 		return &RunEnv{ //nolint:exhaustruct // nil env bootstrap
@@ -80,6 +81,7 @@ func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) 
 		}
 	}
 	return &RunEnv{
+		session:     e.session,
 		Credentials: e.Credentials,
 		StateStore:  e.StateStore,
 		store:       e.store,
@@ -128,29 +130,22 @@ func Lookup[T any](env *RunEnv, key string) (T, bool) {
 	return resolveTyped[T](env.store.deps, key)
 }
 
-// SetState stores mutable session-scoped data shared across tool calls.
-// If env is nil, SetState is a no-op (use [NewRunEnv] and pass the same pointer on [ToolCall.Env]).
+// SetState stores mutable session-scoped data on the bound [Session].
+// If env or env.session is nil, SetState is a no-op.
 func SetState[T any](env *RunEnv, key string, val T) {
-	if env == nil || env.store == nil {
+	if env == nil || env.session == nil {
 		return
 	}
-	env.store.mu.Lock()
-	defer env.store.mu.Unlock()
-	if env.store.state == nil {
-		env.store.state = make(map[string]any)
-	}
-	env.store.state[key] = val
+	SetSessionState(env.session, key, val)
 }
 
-// GetState returns session-scoped data when present and non-nil.
+// GetState returns session-scoped data from the bound [Session] when present and non-nil.
 func GetState[T any](env *RunEnv, key string) (T, bool) {
-	var zero T
-	if env == nil || env.store == nil {
+	if env == nil || env.session == nil {
+		var zero T
 		return zero, false
 	}
-	env.store.mu.RLock()
-	defer env.store.mu.RUnlock()
-	return resolveTyped[T](env.store.state, key)
+	return GetSessionState[T](env.session, key)
 }
 
 func resolveTyped[T any](store map[string]any, key string) (T, bool) {

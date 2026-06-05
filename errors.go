@@ -15,6 +15,8 @@ var (
 	ErrRegistryState    = errors.New("registry runtime state is not initialized")
 	ErrStreamAborted    = errors.New("stream aborted by caller")
 	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
+	// ErrAsyncCollectedLimitExceeded is returned when background chunk collection exceeds WithMaxCollectedChunks.
+	ErrAsyncCollectedLimitExceeded = errors.New("toolsy: async collected chunks limit exceeded")
 )
 
 // ErrorCode is a machine-readable tool execution error category.

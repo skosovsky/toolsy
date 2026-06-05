@@ -45,7 +45,7 @@ func TestNewTool_Execute_Success(t *testing.T) {
 	var out Result
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 5}`)},
 		func(c Chunk) error {
 			assert.JSONEq(t, `{"y":6}`, string(c.Data))
@@ -70,7 +70,7 @@ func TestNewTool_Execute_InvalidJSON(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{invalid`)},
 		func(Chunk) error { return nil },
 	)
@@ -91,7 +91,7 @@ func TestNewTool_Execute_SchemaValidation(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"count":"not a number"}`)},
 		func(Chunk) error { return nil },
 	)
@@ -111,7 +111,7 @@ func TestNewTool_Execute_PreservesDependencyMissingToolError(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -223,7 +223,7 @@ func BenchmarkExecute(b *testing.B) {
 
 	b.ResetTimer()
 	for range b.N {
-		_ = tool.Execute(ctx, NewRunEnv(), input, yield)
+		_ = tool.Execute(ctx, NewRunEnv(nil), input, yield)
 	}
 }
 
@@ -248,7 +248,7 @@ func TestNewProxyTool(t *testing.T) {
 	var res []byte
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x": 42}`)},
 		func(c Chunk) error {
 			res = c.Data
@@ -264,7 +264,7 @@ func TestNewProxyTool(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)

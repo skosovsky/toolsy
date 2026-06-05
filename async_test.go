@@ -38,7 +38,7 @@ func TestAsAsyncTool_ReturnsTaskID(t *testing.T) {
 	var accepted toolsy.AsyncAccepted
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			accepted = decodeAccepted(t, c)
@@ -77,7 +77,7 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(_ toolsy.Chunk) error {
 			return nil
@@ -101,7 +101,7 @@ func TestAsAsyncTool_NilCallback(t *testing.T) {
 	wrapped := toolsy.AsAsyncTool(base)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -130,7 +130,7 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -157,7 +157,7 @@ func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error {
 			return yieldErr
@@ -191,7 +191,7 @@ func TestAsAsyncTool_CanceledContext_NoAcceptedNoGoroutine(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -225,7 +225,7 @@ func TestAsAsyncTool_PanicInBase_CallbackGetsInternalToolError(t *testing.T) {
 	)
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -248,7 +248,7 @@ func TestAsAsyncTool_OnCompletePanic_DoesNotCrashProcess(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -349,7 +349,7 @@ func TestAsAsyncTool_InputCloneRace(t *testing.T) {
 	input := toolsy.ToolInput{ArgsJSON: []byte(original)}
 	err := wrapped.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		input,
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -403,7 +403,7 @@ func testBackgroundTimeout(t *testing.T, cancelParentAfterAccept bool) {
 	}
 	err := wrapped.Execute(
 		parentCtx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error {
 			if cancelParentAfterAccept {
@@ -416,4 +416,117 @@ func testBackgroundTimeout(t *testing.T, cancelParentAfterAccept bool) {
 	done.Wait()
 	require.ErrorIs(t, gotErr, context.DeadlineExceeded)
 	close(block)
+}
+
+func TestAsAsyncTool_MaxCollectedChunks_Exceeded(t *testing.T) {
+	const limit = 3
+	var (
+		done      sync.WaitGroup
+		gotChunks []toolsy.Chunk
+		gotErr    error
+	)
+	done.Add(1)
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "stream", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			for range limit + 2 {
+				_ = yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(`"x"`), MimeType: toolsy.MimeTypeJSON})
+			}
+			return nil // ignores yield errors; onComplete must still see limit via backgroundYieldErr
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithMaxCollectedChunks(limit),
+		toolsy.WithOnComplete(func(_ context.Context, _ string, chunks []toolsy.Chunk, err error) {
+			gotChunks = chunks
+			gotErr = err
+			done.Done()
+		}),
+	)
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.Error(t, gotErr)
+	require.ErrorIs(t, gotErr, toolsy.ErrAsyncCollectedLimitExceeded)
+	require.Len(t, gotChunks, limit)
+}
+
+func TestAsAsyncTool_MaxCollectedChunks_DefaultCap(t *testing.T) {
+	const overDefault = toolsy.DefaultMaxCollectedChunks + 1
+	var (
+		done   sync.WaitGroup
+		gotErr error
+	)
+	done.Add(1)
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "stream_default", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			for range overDefault {
+				_ = yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(`"x"`), MimeType: toolsy.MimeTypeJSON})
+			}
+			return nil
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.ErrorIs(t, gotErr, toolsy.ErrAsyncCollectedLimitExceeded)
+}
+
+func TestAsAsyncTool_InvalidChunk_StopsBackgroundCollect(t *testing.T) {
+	var (
+		done      sync.WaitGroup
+		gotChunks []toolsy.Chunk
+		gotErr    error
+	)
+	done.Add(1)
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "invalid_chunk", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			for range 3 {
+				_ = yield(toolsy.Chunk{Event: "not-a-valid-event", Data: []byte(`"x"`), MimeType: toolsy.MimeTypeJSON})
+			}
+			return nil // ignores yield errors; onComplete must still see validateChunk via backgroundYieldErr
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, chunks []toolsy.Chunk, err error) {
+			gotChunks = chunks
+			gotErr = err
+			done.Done()
+		}),
+	)
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.Error(t, gotErr)
+	te, ok := toolsy.AsToolError(gotErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.Contains(t, te.Err.Error(), "unsupported chunk event")
+	require.Empty(t, gotChunks)
 }

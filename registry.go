@@ -53,6 +53,7 @@ func (b *RegistryBuilder) WithOptions(opts ...RegistryOption) *RegistryBuilder {
 }
 
 // Build creates an immutable runtime registry.
+// Rejects tools with more than one [AsAsyncTool] layer anywhere in the chain (see [ChainUnwrapper]).
 func (b *RegistryBuilder) Build() (*Registry, error) {
 	tools := make(map[string]Tool, len(b.tools))
 	for _, raw := range b.tools {
@@ -60,6 +61,12 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 			return nil, errors.New("toolsy: nil tool in registry builder")
 		}
 		t := raw
+		if n := countAsyncLayers(t); n > 1 {
+			return nil, fmt.Errorf(
+				"toolsy: tool %q is wrapped in multiple AsAsyncTool layers, which is invalid",
+				t.Manifest().Name,
+			)
+		}
 		var asyncOpts *asyncOptions
 		if aw, ok := t.(*asyncTool); ok {
 			asyncOpts = &aw.opts
@@ -88,6 +95,22 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 		opts:  b.opts,
 		state: newRegistryRuntimeState(),
 	}, nil
+}
+
+// countAsyncLayers walks toolBase chains and counts AsAsyncTool wrappers.
+func countAsyncLayers(t Tool) int {
+	n := 0
+	for t != nil {
+		if _, ok := t.(*asyncTool); ok {
+			n++
+		}
+		u, ok := t.(ChainUnwrapper)
+		if !ok {
+			break
+		}
+		t = u.UnwrapNext()
+	}
+	return n
 }
 
 // registryRuntimeState is shared by a root registry and all Subset views derived from it.
@@ -278,6 +301,9 @@ func (r *Registry) wrapYieldWithMetadata(
 // The after-execution hook (WithOnAfterExecute) is always invoked via defer with ExecutionSummary.
 // ChunksDelivered and TotalBytes count only chunks with !IsError. ErrorChunks/LastErrorText
 // describe delivered soft-error chunks.
+//
+// Execute does not validate that call.Env is bound to a [Session]. For stateful agent tracks use
+// [Session.Execute] or call [ValidateRunEnvSession] before Execute when env must match a session.
 func (r *Registry) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
 	return r.execute(ctx, call, yield)
 }
@@ -319,7 +345,7 @@ func (r *Registry) executeWithSummary(
 	release := func() { releaseOnce.Do(func() { state.running.Done() }) }
 	execEnv := call.Env
 	if execEnv == nil {
-		execEnv = NewRunEnv()
+		execEnv = NewRunEnv(nil)
 	}
 	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r))
 	defer func() {
@@ -392,6 +418,7 @@ func (r *Registry) runToolWithValidationAndExecute(
 // Push-to-push: no channels or extra goroutines; the iterator calls Execute with a callback that forwards to yield.
 // When the consumer breaks out of the loop, cancel() is called and Execute exits via [context.Canceled].
 // Once yield returns false, the iterator must not call yield again (iter contract).
+// Env/session binding: same as [Registry.Execute] (no automatic ValidateRunEnvSession).
 func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chunk, error] {
 	return func(yield func(Chunk, error) bool) {
 		ctxChild, cancel := context.WithCancel(ctx)

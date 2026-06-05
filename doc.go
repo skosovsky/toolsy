@@ -15,12 +15,19 @@
 //   - Chunk data-plane: Event, Data, MimeType, IsError, Progress.
 //   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/UIAction).
 //   - ToolManifest SSOT: ReadOnly, RequiresConfirmation, Dangerous, Idempotent, CompletionPolicy.
-//   - RunEnv: Put/Require/Lookup (deps) and SetState/GetState (session); shared via ToolCall.Env.
+//   - Session: in-memory state via SetSessionState/GetSessionState; Export/Import for checkpoints;
+//     optional StateTypeRegistry for typed JSON roundtrips (see docs/migration-task23.md).
+//   - RunEnv: Put/Require/Lookup (deps); SetState/GetState delegate to bound Session;
+//     NewRunEnv(session, opts...); session may be nil for DI-only usage.
 //   - ToolError: structured errors with Code and Retryable (replaces ClientError/SystemError).
 //   - CallParser + DecodeChunkAs for typed host integration (see docs/migration-task22.md).
 //   - Registry runtime is immutable; use RegistryBuilder for setup-time mutation.
 //   - AsAsyncTool: register via RegistryBuilder.Use(...).Add(AsAsyncTool(base)).Build()
 //     so global middleware runs inside the background goroutine (unwrap-wrap in Build).
+//     Nested AsAsyncTool layers anywhere in the tool chain are rejected at Build
+//     (walk uses ChainUnwrapper; external middleware before Add must implement it).
+//     Default background chunk buffer cap is DefaultMaxCollectedChunks (1000);
+//     see WithMaxCollectedChunks and ErrAsyncCollectedLimitExceeded.
 //
 // Use Extractor when you only need schema generation/validation. Use NewDynamicTool or
 // NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical
@@ -34,7 +41,7 @@
 //		return Out{Temp: 22.5}, nil
 //	})
 //	reg, _ := toolsy.NewRegistryBuilder().Add(tool).Build()
-//	env := toolsy.NewRunEnv()
+//	env := toolsy.NewRunEnv(nil)
 //	call := toolsy.ToolCall{
 //		ToolName: "weather",
 //		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"city":"Moscow"}`)},

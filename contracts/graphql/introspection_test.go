@@ -64,7 +64,7 @@ func TestExecuteGraphQLTruncatesOversizedResponse(t *testing.T) {
 	var got toolsy.Chunk
 	err := executeGraphQL(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"graphql_demo",
 		server.URL,
 		"query { demo }",
@@ -105,7 +105,7 @@ func TestExecuteGraphQLTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 	var got toolsy.Chunk
 	err := executeGraphQL(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"graphql_demo",
 		server.URL,
 		"query { demo }",
@@ -155,7 +155,7 @@ func TestExecuteGraphQLReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	var got toolsy.Chunk
 	err := executeGraphQL(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		"graphql_demo",
 		"https://example.com/graphql",
 		"query { demo }",

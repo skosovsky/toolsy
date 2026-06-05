@@ -54,7 +54,7 @@ func main() {
 	builder.Add(tool)
 	reg, _ := builder.Build()
 
-	env := toolsy.NewRunEnv(toolsy.WithCredentials(staticCredentials{}))
+	env := toolsy.NewRunEnv(nil, toolsy.WithCredentials(staticCredentials{}))
 	_ = reg.Execute(context.Background(), toolsy.ToolCall{
 		ToolName: "delegate_to_coder",
 		Input: toolsy.ToolInput{

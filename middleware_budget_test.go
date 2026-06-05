@@ -24,7 +24,7 @@ func (t *testBudgetTracker) Allow(ctx context.Context, manifest ToolManifest, in
 }
 
 func budgetEnv(tracker BudgetTracker) *RunEnv {
-	env := NewRunEnv()
+	env := NewRunEnv(nil)
 	Put(env, DepKeyBudget, tracker)
 	return env
 }
@@ -40,7 +40,7 @@ func TestWithBudget_NoEnvPassThrough(t *testing.T) {
 	)
 	wrapped := WithBudget()(inner)
 
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestWithBudget_MissingBudgetDepPassThrough(t *testing.T) {
 	)
 	wrapped := WithBudget()(inner)
 
-	env := NewRunEnv()
+	env := NewRunEnv(nil)
 	Put(env, "other", "x")
 	err := wrapped.Execute(
 		context.Background(),

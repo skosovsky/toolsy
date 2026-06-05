@@ -155,7 +155,7 @@ func TestAsTool_CancelTaskUsesBoundedContext(t *testing.T) {
 	var abortOnce sync.Once
 	execErr := tool.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(c toolsy.Chunk) error {
 			if c.Event == toolsy.EventProgress {

@@ -25,7 +25,7 @@ func TestAsAsyncTool_BackgroundDoesNotInheritSyncEnvAttachments(t *testing.T) {
 	}
 	wrapped := AsAsyncTool(base)
 
-	syncEnv := NewRunEnv()
+	syncEnv := NewRunEnv(nil)
 	syncEnv = syncEnv.cloneForExecute([]Attachment{{MimeType: MimeTypePNG, Data: []byte{1}}}, nil)
 
 	err := wrapped.Execute(
@@ -60,7 +60,7 @@ func TestAsAsyncTool_BackgroundGetsAttachmentsFromToolInput(t *testing.T) {
 	wrapped := AsAsyncTool(base)
 	err = wrapped.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{
 			ArgsJSON:    []byte(`{}`),
 			Attachments: []Attachment{{MimeType: MimeTypeJSON, Data: []byte(`"x"`)}},
@@ -90,7 +90,7 @@ func TestAsAsyncTool_CustomToolGetsAttachmentsFromClonedInput(t *testing.T) {
 	wrapped := AsAsyncTool(base)
 	err := wrapped.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{
 			ArgsJSON:    []byte(`{}`),
 			Attachments: []Attachment{{MimeType: MimeTypeJSON, Data: []byte(`"y"`)}},

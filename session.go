@@ -5,6 +5,7 @@ import (
 	"errors"
 	"iter"
 	"slices"
+	"sync"
 	"sync/atomic"
 )
 
@@ -51,9 +52,12 @@ func (t *SessionTrack) MaxSteps() int64 {
 
 // Session is a stateful, concurrency-safe executor built on top of a stateless registry.
 type Session struct {
-	reg    *Registry
-	track  *SessionTrack
-	policy RunPolicy
+	reg     *Registry
+	track   *SessionTrack
+	policy  RunPolicy
+	opts    sessionOptions
+	stateMu sync.RWMutex
+	state   map[string]any
 }
 
 // NewSession creates a new session bound to reg.
@@ -65,10 +69,12 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err := ValidateRunPolicy(cfg.policy); err != nil {
 		return nil, err
 	}
-	return &Session{
+	return &Session{ //nolint:exhaustruct // stateMu zero value; state map initialized below
 		reg:    reg,
 		track:  newSessionTrack(cfg),
 		policy: cfg.policy,
+		opts:   cfg,
+		state:  make(map[string]any),
 	}, nil
 }
 
@@ -81,6 +87,8 @@ func (s *Session) Track() *SessionTrack {
 }
 
 // Execute runs one tool call through the session budget tracker.
+// When call.Env is non-nil, it must be created with NewRunEnv(s) for this session (see ValidateRunEnvSession).
+// call.Env may be nil for DI-only paths; SetState/GetState in tools are then no-ops — prefer NewRunEnv(s) for stateful tracks.
 func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
 	if s == nil || s.reg == nil {
 		return NewToolNotFoundError()
@@ -90,6 +98,11 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 	}
 	if err := s.track.consumeStep(); err != nil {
 		return err
+	}
+	if call.Env != nil {
+		if err := ValidateRunEnvSession(s, call.Env); err != nil {
+			return err
+		}
 	}
 	return s.reg.execute(ctx, call, yield)
 }

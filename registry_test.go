@@ -67,6 +67,47 @@ func TestRegistryBuilder_DuplicateToolName(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicate tool name")
 }
 
+func TestRegistryBuilder_NestedAsyncTool_FailsBuild(t *testing.T) {
+	base := mustNamedTool(t, "nested_base")
+	nested := AsAsyncTool(AsAsyncTool(base))
+
+	_, err := NewRegistryBuilder().Add(nested).Build()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple AsAsyncTool layers")
+	assert.Contains(t, err.Error(), "nested_base")
+}
+
+func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithManualMiddleware(t *testing.T) {
+	base := mustNamedTool(t, "nested_mw_base")
+	nested := WithRecovery()(AsAsyncTool(AsAsyncTool(base)))
+
+	_, err := NewRegistryBuilder().Add(nested).Build()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple AsAsyncTool layers")
+	assert.Contains(t, err.Error(), "nested_mw_base")
+}
+
+func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithUse(t *testing.T) {
+	base := mustNamedTool(t, "nested_use_base")
+	nested := AsAsyncTool(AsAsyncTool(base))
+
+	_, err := NewRegistryBuilder().Use(WithLogging(nil)).Add(nested).Build()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple AsAsyncTool layers")
+	assert.Contains(t, err.Error(), "nested_use_base")
+}
+
+func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithIdempotency(t *testing.T) {
+	base := mustNamedTool(t, "nested_idem_base")
+	store := NewMemoryIdempotencyStore()
+	nested := WithIdempotency(store, nil)(AsAsyncTool(AsAsyncTool(base)))
+
+	_, err := NewRegistryBuilder().Add(nested).Build()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple AsAsyncTool layers")
+	assert.Contains(t, err.Error(), "nested_idem_base")
+}
+
 func mustNamedTool(t *testing.T, name string) Tool {
 	t.Helper()
 	type A struct{}

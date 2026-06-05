@@ -46,6 +46,12 @@ func (t *tracingTool) Manifest() toolsy.ToolManifest {
 	return t.next.Manifest()
 }
 
+func (t *tracingTool) UnwrapNext() toolsy.Tool {
+	return t.next
+}
+
+var _ toolsy.ChainUnwrapper = (*tracingTool)(nil)
+
 type softErrorState struct {
 	mu   sync.Mutex
 	flag bool

@@ -41,10 +41,11 @@ Control-plane signals (`ErrPause`, `ErrHalt`, …) stay separate — use `toolsy
 
 ## RunEnv (replaces RunContext + BindEnv)
 
+Since v0.9.0, `NewRunEnv` takes a `*Session` as the first argument. See [migration-task23.md](migration-task23.md) for in-memory state on `Session`.
+
 ```go
-env := toolsy.NewRunEnv(toolsy.WithStateStore(store))
-toolsy.Put(env, toolsy.DepKeyBudget, tracker)   // dependencies — init only
-toolsy.SetState(env, "trace_id", id)            // mutable session state
+env := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
+toolsy.Put(env, toolsy.DepKeyBudget, tracker) // dependencies — init only
 
 reg.Execute(ctx, toolsy.ToolCall{
     ToolName: "my_tool",
@@ -52,6 +53,8 @@ reg.Execute(ctx, toolsy.ToolCall{
     Env:      env,
 }, yield)
 ```
+
+For mutable in-memory state between tool calls, bind a session: `sess, _ := toolsy.NewSession(reg)` then `env := toolsy.NewRunEnv(sess)` and use `SetSessionState` / `SetState(env, ...)`.
 
 | Before              | After                                         |
 | ------------------- | --------------------------------------------- |
@@ -99,7 +102,7 @@ Typed `NewTool[T, R]` fills `ToolManifest.OutputSchema` automatically. Override 
 
 ## RunEnv nil safety
 
-`Put` and `SetState` on a nil `*RunEnv` are intentional no-ops. Always create `env := toolsy.NewRunEnv(...)` and pass the same pointer on `ToolCall.Env`. `Require` returns `CodeDependencyMissing` when env is nil.
+`Put` and `SetState` on a nil `*RunEnv` are intentional no-ops. Always create `env := toolsy.NewRunEnv(nil, ...)` (or `NewRunEnv(session, ...)`) and pass the same pointer on `ToolCall.Env`. `Require` returns `CodeDependencyMissing` when env is nil.
 
 ## Host orchestrator (outside toolsy)
 
@@ -107,6 +110,6 @@ toolsy provides `AsToolError`, `ToolError.Code`, `ToolError.Retryable`, and `Cli
 
 - Route retries and escalation using `te.Code` and `te.Retryable`, not `strings.Contains` on error text.
 - Use `DecodeChunkAs[T]` / typed tool handlers for results instead of `map[string]any`.
-- Share one `*RunEnv` per session via `ToolCall.Env` (`Put` deps at init, `SetState` during the track).
+- Share one `*RunEnv` per session via `ToolCall.Env` (`Put` deps at init). For in-memory state use `SetSessionState(sess, ...)` or `SetState` on `NewRunEnv(sess)` — see [migration-task23.md](migration-task23.md).
 
 This migration is a separate task in the host repository; it is not part of the toolsy library release.

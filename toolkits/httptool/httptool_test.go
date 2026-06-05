@@ -38,7 +38,7 @@ func TestHTTPGet_Success(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -57,7 +57,7 @@ func TestHTTPGet_DomainBlocked(t *testing.T) {
 
 	err = getTool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"https://evil.com/path"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -91,7 +91,7 @@ func TestHTTPGet_Truncation(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -127,7 +127,7 @@ func TestHTTPPost_Success(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"key":"value"}}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)
@@ -161,7 +161,7 @@ func TestHTTPPost_ContentTypeSet(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `","json_body":{"a":1}}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -193,7 +193,7 @@ func TestHTTPPost_EmptyBody(t *testing.T) {
 		t,
 		postTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -222,7 +222,7 @@ func TestHTTPGet_HeadersApplied(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -249,7 +249,7 @@ func TestHTTPGet_ServerError(t *testing.T) {
 		t,
 		getTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeHTTPResult(t, c)

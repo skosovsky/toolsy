@@ -64,7 +64,7 @@ func TestMailSend_ArgsPassed(t *testing.T) {
 		t,
 		tools[0].Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"to":["a@b.com"],"subject":"Hi","body":"Hello"}`)},
 			func(toolsy.Chunk) error { return nil },
 		),
@@ -78,7 +78,7 @@ func TestMailSend_EmptyTo_ValidationToolError(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"to":[],"subject":"x","body":"y"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -103,7 +103,7 @@ func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
 		t,
 		searchTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"test","limit":5}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[searchResult](t, c)
@@ -124,7 +124,7 @@ func TestMailSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"   ","limit":5}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -148,7 +148,7 @@ func TestMailReadMessage_ReturnsBody(t *testing.T) {
 		t,
 		readTool.Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)
@@ -168,7 +168,7 @@ func TestMailRead_EmptyMessageID_ValidationToolError(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -186,7 +186,7 @@ func TestMailRead_WhitespaceOnlyMessageID_ValidationToolError(t *testing.T) {
 
 	err = tools[1].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"   \t"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -208,7 +208,7 @@ func TestMailRead_PlainTextWithAngleBrackets_NotConverted(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)
@@ -267,7 +267,7 @@ func TestMailSend_HandlerError_Wrapped(t *testing.T) {
 
 	err = tools[0].Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"to":["a@b.com"],"subject":"x","body":"y"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -291,7 +291,7 @@ func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
 		t,
 		tools[1].Execute(
 			context.Background(),
-			toolsy.NewRunEnv(),
+			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeMailChunk[readResult](t, c)

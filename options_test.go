@@ -25,7 +25,7 @@ func TestWithStrict(t *testing.T) {
 	var res R
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x":1}`)},
 		func(c Chunk) error { return json.Unmarshal(c.Data, &res) },
 	)
@@ -34,7 +34,7 @@ func TestWithStrict(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x":1,"extra":2}`)},
 		func(Chunk) error { return nil },
 	)
@@ -122,7 +122,7 @@ func TestToolOptions_Combined(t *testing.T) {
 	var res R
 	err = tool.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"n":21}`)},
 		func(c Chunk) error { return json.Unmarshal(c.Data, &res) },
 	)

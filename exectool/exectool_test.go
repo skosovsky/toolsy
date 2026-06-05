@@ -71,7 +71,7 @@ func TestNewSucceeds(t *testing.T) {
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"x"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -98,7 +98,7 @@ func TestExecuteSuccess(t *testing.T) {
 	var result RunResult
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{
 			ArgsJSON: []byte(`{"language":"python","code":"print(1)","env":{"A":"B"},"files":{"main.txt":"hello"}}`),
 		},
@@ -121,7 +121,7 @@ func TestExecuteEmptyCodeReturnsValidationToolError(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"   "}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -139,7 +139,7 @@ func TestExecuteRejectsUnsupportedLanguageBeforeSandbox(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"bash","code":"echo 1"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -160,7 +160,7 @@ func TestExecuteSucceedsWithinShortContextDeadline(t *testing.T) {
 
 	err = tool.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -177,7 +177,7 @@ func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 
 	err = tool.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -205,7 +205,7 @@ func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
 	start := time.Now()
 	err = tool.Execute(
 		ctx,
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -228,7 +228,7 @@ func TestExecutePreservesSandboxSentinels(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
@@ -274,7 +274,7 @@ func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 
 	err = tool.Execute(
 		context.Background(),
-		toolsy.NewRunEnv(),
+		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)

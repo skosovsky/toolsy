@@ -155,13 +155,13 @@ func TestManualIdempotencyWrapAsync_CachesAcceptedOnSyncPath(t *testing.T) {
 	input := ToolInput{ArgsJSON: []byte(`{}`)}
 
 	var sync1, sync2 string
-	require.NoError(t, tool.Execute(context.Background(), NewRunEnv(), input, func(c Chunk) error {
+	require.NoError(t, tool.Execute(context.Background(), NewRunEnv(nil), input, func(c Chunk) error {
 		sync1 = string(c.Data)
 		return nil
 	}))
 	require.Eventually(t, func() bool { return calls.Load() == 1 }, time.Second, 10*time.Millisecond)
 
-	require.NoError(t, tool.Execute(context.Background(), NewRunEnv(), input, func(c Chunk) error {
+	require.NoError(t, tool.Execute(context.Background(), NewRunEnv(nil), input, func(c Chunk) error {
 		sync2 = string(c.Data)
 		return nil
 	}))

@@ -39,10 +39,15 @@ func TestWithLogging(t *testing.T) {
 	wrapped := WithLogging(logger)(inner)
 
 	var out []byte
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(c Chunk) error {
-		out = c.Data
-		return nil
-	})
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c Chunk) error {
+			out = c.Data
+			return nil
+		},
+	)
 	require.NoError(t, err)
 	assert.Equal(t, []byte(`{"ok":true}`), out)
 
@@ -69,7 +74,7 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 	)
 	wrapped := WithLogging(logger)(inner)
 
-	err := wrapped.Execute(context.Background(), NewRunEnv(), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+	err := wrapped.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return nil
 	})
 	require.NoError(t, err)
@@ -92,7 +97,7 @@ func TestWithRecovery(t *testing.T) {
 
 	err := wrapped.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)
@@ -320,7 +325,7 @@ func TestAsAsyncTool_BackgroundYieldValidationInOnComplete(t *testing.T) {
 	}))
 	err := wrapped.Execute(
 		context.Background(),
-		NewRunEnv(),
+		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{}`)},
 		func(Chunk) error { return nil },
 	)

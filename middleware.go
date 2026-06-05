@@ -8,7 +8,15 @@ import (
 )
 
 // Middleware wraps a Tool with cross-cutting behavior (logging, recovery).
+// Wrappers applied manually before [RegistryBuilder.Add] must implement [ChainUnwrapper]
+// so [RegistryBuilder.Build] can detect invalid nested [AsAsyncTool] chains.
 type Middleware func(Tool) Tool
+
+// ChainUnwrapper is implemented by tool wrappers that delegate to an inner [Tool].
+// Required for nested-async detection when middleware is applied before [RegistryBuilder.Add].
+type ChainUnwrapper interface {
+	UnwrapNext() Tool
+}
 
 // WithLogging returns a middleware that logs start, end, duration, and errors.
 func WithLogging(logger *slog.Logger) Middleware {
@@ -36,6 +44,8 @@ func WithRecovery() Middleware {
 type toolBase struct{ next Tool }
 
 func (b *toolBase) Manifest() ToolManifest { return b.next.Manifest() }
+
+func (b *toolBase) UnwrapNext() Tool { return b.next }
 
 type middlewareTool struct {
 	toolBase
