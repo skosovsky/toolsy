@@ -939,3 +939,121 @@ func TestRegistry_ExecuteBatchStream_YieldIsSerialized(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, n, yieldCalls)
 }
+
+func TestRegistry_Shutdown_NoRaceWithConcurrentExecute(t *testing.T) {
+	type A struct{}
+	type R struct {
+		OK bool `json:"ok"`
+	}
+	block := make(chan struct{})
+	tool, err := NewTool("gate", "Gate", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
+		<-block
+		return R{OK: true}, nil
+	})
+	require.NoError(t, err)
+
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var (
+		shutdownErr error
+		lateErr     error
+		wg          sync.WaitGroup
+	)
+	wg.Go(func() {
+		shutdownErr = reg.Shutdown(context.Background())
+	})
+
+	time.Sleep(20 * time.Millisecond)
+	close(block)
+
+	lateErr = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "gate", Input: ToolInput{CallID: "late", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+
+	wg.Wait()
+	require.NoError(t, shutdownErr)
+	requireToolErrorCode(t, lateErr, CodeShutdown, ErrShutdown)
+}
+
+func TestRegistry_ExecuteBatchStream_AsyncToolsShutdownWaitsBackground(t *testing.T) {
+	block1 := make(chan struct{})
+	block2 := make(chan struct{})
+	var started1, started2 atomic.Bool
+
+	tool1 := newMiddlewareMinTool(
+		"async_batch_a",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			started1.Store(true)
+			<-block1
+			return nil
+		},
+	)
+	tool2 := newMiddlewareMinTool(
+		"async_batch_b",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			started2.Store(true)
+			<-block2
+			return nil
+		},
+	)
+	reg, err := NewRegistryBuilder().
+		Add(AsAsyncTool(tool1), AsAsyncTool(tool2)).
+		Build()
+	require.NoError(t, err)
+
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{
+			{ToolName: "async_batch_a", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+			{ToolName: "async_batch_b", Input: ToolInput{CallID: "c2", ArgsJSON: []byte(`{}`)}},
+		},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 2)
+	for _, c := range chunks {
+		var accepted AsyncAccepted
+		require.NoError(t, json.Unmarshal(c.Data, &accepted))
+		require.Equal(t, "accepted", accepted.Status)
+	}
+	require.Eventually(t, func() bool { return started1.Load() && started2.Load() }, time.Second, 10*time.Millisecond)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- reg.Shutdown(context.Background())
+	}()
+	select {
+	case <-time.After(50 * time.Millisecond):
+	case shutdownErr := <-done:
+		require.NoError(t, shutdownErr)
+		t.Fatal("shutdown returned before async batch backgrounds completed")
+	}
+	close(block1)
+	close(block2)
+	require.NoError(t, <-done)
+}
+
+func TestRegistry_ExecuteBatchStream_AfterShutdown_YieldsSoftError(t *testing.T) {
+	reg := mustBuildRegistry(t, nil)
+	require.NoError(t, reg.Shutdown(context.Background()))
+
+	var gotErrChunk bool
+	err := reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "noop", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}}},
+		func(c Chunk) error {
+			if c.IsError {
+				gotErrChunk = true
+			}
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, gotErrChunk)
+}

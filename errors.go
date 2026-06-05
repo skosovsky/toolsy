@@ -3,6 +3,7 @@ package toolsy
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Sentinel errors for toolsy. Use [errors.Is] to check.
@@ -30,6 +31,8 @@ const (
 	CodeMaxStepsExceeded     ErrorCode = "MAX_STEPS_EXCEEDED"
 	CodeRegistryNotReady     ErrorCode = "REGISTRY_NOT_READY"
 	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
+	// CodeToolExecutionFailed is used when background async work surfaces a soft error chunk.
+	CodeToolExecutionFailed ErrorCode = "TOOL_EXECUTION_FAILED"
 )
 
 // ToolError is the structured execution error envelope for orchestrator routing.
@@ -155,6 +158,21 @@ func NewRegistryStateError() *ToolError {
 		Reason:    ErrRegistryState.Error(),
 		Retryable: false,
 		Err:       ErrRegistryState,
+	}
+}
+
+// NewToolExecutionFailedError reports a terminal failure from background async execution
+// (for example budget deny or error-formatter soft chunk surfaced via onComplete).
+func NewToolExecutionFailedError(reason string) *ToolError {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "tool execution failed"
+	}
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeToolExecutionFailed,
+		Reason:    reason,
+		Retryable: true,
+		Err:       errors.New(reason),
 	}
 }
 

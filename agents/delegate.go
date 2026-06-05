@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/skosovsky/toolsy"
 )
@@ -15,6 +16,9 @@ const (
 	cancelTaskAuthToolName  = "agents.cancel_task"
 	streamStepsAuthToolName = "agents.stream_steps"
 )
+
+// cancelTaskTimeout bounds CancelTask after the stream context is canceled.
+const cancelTaskTimeout = 5 * time.Second
 
 // formatStepOutput builds a single Markdown string from step text and artifacts.
 // Artifacts with Data (base64) are rendered as ![FileName](data:MimeType;base64,Data) for multimodal models.
@@ -78,7 +82,8 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 			}
 			defer func() {
 				if ctx.Err() != nil {
-					cancelCtx := context.WithoutCancel(ctx)
+					cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cancelTaskTimeout)
+					defer cancel()
 					cancelAuth, cancelErr := resolveAuthHeader(cancelCtx, run, cancelTaskAuthToolName)
 					if cancelErr == nil {
 						_ = client.CancelTask(cancelCtx, task.TaskID, cancelAuth)

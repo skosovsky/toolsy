@@ -328,3 +328,92 @@ func TestAsAsyncTool_RegistryShutdownWaitsForBackground(t *testing.T) {
 	close(block)
 	require.NoError(t, <-done)
 }
+
+func TestAsAsyncTool_InputCloneRace(t *testing.T) {
+	const original = `{"v":1}`
+	var (
+		gotArgs string
+		done    sync.WaitGroup
+	)
+	done.Add(1)
+
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "race", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(_ context.Context, _ *toolsy.RunEnv, input toolsy.ToolInput, _ func(toolsy.Chunk) error) error {
+			gotArgs = string(input.ArgsJSON)
+			done.Done()
+			return nil
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(base)
+	input := toolsy.ToolInput{ArgsJSON: []byte(original)}
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(),
+		input,
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	input.ArgsJSON[0] = 'X'
+	done.Wait()
+	require.Equal(t, original, gotArgs)
+}
+
+func TestAsAsyncTool_BackgroundTimeout(t *testing.T) {
+	t.Run("live_parent", func(t *testing.T) {
+		testBackgroundTimeout(t, false)
+	})
+	t.Run("canceled_parent_after_accept", func(t *testing.T) {
+		testBackgroundTimeout(t, true)
+	})
+}
+
+func testBackgroundTimeout(t *testing.T, cancelParentAfterAccept bool) {
+	t.Helper()
+	block := make(chan struct{})
+	var (
+		done   sync.WaitGroup
+		gotErr error
+	)
+	done.Add(1)
+
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "slow", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(ctx context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, _ func(toolsy.Chunk) error) error {
+			select {
+			case <-block:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithBackgroundTimeout(30*time.Millisecond),
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
+	parentCtx := context.Background()
+	var cancel context.CancelFunc
+	if cancelParentAfterAccept {
+		parentCtx, cancel = context.WithCancel(parentCtx)
+	}
+	err := wrapped.Execute(
+		parentCtx,
+		toolsy.NewRunEnv(),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error {
+			if cancelParentAfterAccept {
+				cancel()
+			}
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.ErrorIs(t, gotErr, context.DeadlineExceeded)
+	close(block)
+}

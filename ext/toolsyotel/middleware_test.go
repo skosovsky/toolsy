@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -439,4 +441,48 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 	assert.Contains(t, output.AsString(), "... [truncated]")
 	assert.LessOrEqual(t, len(output.AsString()), 10+len("... [truncated]"))
 	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.result"))
+}
+
+func TestWithTracing_AsyncToolViaRegistry_SpanEndsAfterBackground(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	block := make(chan struct{})
+	var started atomic.Bool
+	base := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "async_traced"},
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			started.Store(true)
+			<-block
+			return yield(toolsy.Chunk{
+				Event:    toolsy.EventResult,
+				Data:     []byte(`{"ok":true}`),
+				MimeType: toolsy.MimeTypeJSON,
+			})
+		},
+	}
+
+	reg, err := toolsy.NewRegistryBuilder().
+		Use(WithTracing(WithTracerProvider(tp))).
+		Add(toolsy.AsAsyncTool(base)).
+		Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(
+		context.Background(),
+		toolsy.ToolCall{
+			ToolName: "async_traced",
+			Input:    toolsy.ToolInput{CallID: "async-1", ArgsJSON: []byte(`{}`)},
+		},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	assert.Empty(t, rec.Ended(), "tracing span must not end on sync AsyncAccepted path")
+
+	require.Eventually(t, started.Load, time.Second, 10*time.Millisecond)
+	close(block)
+	require.Eventually(t, func() bool { return len(rec.Ended()) == 1 }, time.Second, 10*time.Millisecond)
+
+	span := rec.Ended()[0]
+	assert.Equal(t, "tool.execute.async_traced", span.Name())
 }

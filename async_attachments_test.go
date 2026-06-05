@@ -71,3 +71,33 @@ func TestAsAsyncTool_BackgroundGetsAttachmentsFromToolInput(t *testing.T) {
 	done.Wait()
 	require.Equal(t, 1, bgCount)
 }
+
+func TestAsAsyncTool_CustomToolGetsAttachmentsFromClonedInput(t *testing.T) {
+	var (
+		bgCount int
+		done    sync.WaitGroup
+	)
+	done.Add(1)
+
+	base := minTool{
+		manifest: ToolManifest{Name: "att_custom", Parameters: map[string]any{"type": "object"}},
+		execute: func(_ context.Context, run *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			bgCount = len(run.Attachments())
+			done.Done()
+			return nil
+		},
+	}
+	wrapped := AsAsyncTool(base)
+	err := wrapped.Execute(
+		context.Background(),
+		NewRunEnv(),
+		ToolInput{
+			ArgsJSON:    []byte(`{}`),
+			Attachments: []Attachment{{MimeType: MimeTypeJSON, Data: []byte(`"y"`)}},
+		},
+		func(Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.Equal(t, 1, bgCount)
+}

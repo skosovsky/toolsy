@@ -83,6 +83,19 @@ type ToolInput struct {
 	Attachments []Attachment
 }
 
+// Clone returns a deep copy of in (ArgsJSON backing array and attachment bytes).
+func (in ToolInput) Clone() ToolInput {
+	out := ToolInput{ //nolint:exhaustruct // ArgsJSON and Attachments assigned below
+		CallID: in.CallID,
+	}
+	if len(in.ArgsJSON) > 0 {
+		out.ArgsJSON = make([]byte, len(in.ArgsJSON))
+		copy(out.ArgsJSON, in.ArgsJSON)
+	}
+	out.Attachments = cloneAttachments(in.Attachments)
+	return out
+}
+
 // ToolCall is a single execution request (as produced by the LLM).
 type ToolCall struct {
 	ToolName string

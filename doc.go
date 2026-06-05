@@ -19,6 +19,8 @@
 //   - ToolError: structured errors with Code and Retryable (replaces ClientError/SystemError).
 //   - CallParser + DecodeChunkAs for typed host integration (see docs/migration-task22.md).
 //   - Registry runtime is immutable; use RegistryBuilder for setup-time mutation.
+//   - AsAsyncTool: register via RegistryBuilder.Use(...).Add(AsAsyncTool(base)).Build()
+//     so global middleware runs inside the background goroutine (unwrap-wrap in Build).
 //
 // Use Extractor when you only need schema generation/validation. Use NewDynamicTool or
 // NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical

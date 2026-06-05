@@ -60,8 +60,19 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 			return nil, errors.New("toolsy: nil tool in registry builder")
 		}
 		t := raw
+		var asyncOpts *asyncOptions
+		if aw, ok := t.(*asyncTool); ok {
+			asyncOpts = &aw.opts
+			t = aw.next
+		}
 		for i := len(b.middlewares) - 1; i >= 0; i-- {
 			t = b.middlewares[i](t)
+		}
+		if asyncOpts != nil {
+			t = &asyncTool{
+				toolBase: toolBase{next: t},
+				opts:     *asyncOpts,
+			}
 		}
 		name := t.Manifest().Name
 		if name == "" {
@@ -81,6 +92,7 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 
 // registryRuntimeState is shared by a root registry and all Subset views derived from it.
 type registryRuntimeState struct {
+	mu       sync.Mutex
 	done     chan struct{}
 	running  sync.WaitGroup
 	closeMux sync.Once
@@ -88,9 +100,23 @@ type registryRuntimeState struct {
 
 func newRegistryRuntimeState() *registryRuntimeState {
 	return &registryRuntimeState{
+		mu:       sync.Mutex{},
 		done:     make(chan struct{}),
 		running:  sync.WaitGroup{},
 		closeMux: sync.Once{},
+	}
+}
+
+// tryStartExecution registers an in-flight execution unless the registry is shut down.
+func (s *registryRuntimeState) tryStartExecution() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	select {
+	case <-s.done:
+		return false
+	default:
+		s.running.Add(1)
+		return true
 	}
 }
 
@@ -280,16 +306,14 @@ func (r *Registry) executeWithSummary(
 	if stateErr != nil {
 		return summary, false, stateErr
 	}
-	select {
-	case <-state.done:
+	if !state.tryStartExecution() {
 		return summary, false, NewShutdownError()
-	default:
 	}
 	tool, ok := r.tools[call.ToolName]
 	if !ok {
+		state.running.Done()
 		return summary, false, NewToolNotFoundError()
 	}
-	state.running.Add(1)
 
 	var releaseOnce sync.Once
 	release := func() { releaseOnce.Do(func() { state.running.Done() }) }
@@ -507,8 +531,11 @@ func (r *Registry) runBatchStreamWorker(
 // ExecuteBatchStream runs all calls in parallel and streams chunks via yield. Each chunk is
 // tagged with CallID and ToolName. Non-suspend execution failures (including pre-tool dispatch
 // errors and tool/middleware failures) are sent as Chunk with IsError: true; the method returns
-// error only for critical failures (context canceled, stream aborted, suspend). The library
-// serializes calls to yield with a mutex so the caller's callback need not be thread-safe.
+// error only for critical failures (context canceled, stream aborted, suspend). After [Registry.Shutdown],
+// new calls receive a soft error chunk (IsError: true) per call, not [ErrShutdown] from ExecuteBatchStream itself.
+// For [AsAsyncTool], batch yields sync chunks (typically AsyncAccepted) and returns while background work
+// continues; [Registry.Shutdown] still waits for those background jobs via the async runtime tracker.
+// The library serializes calls to yield with a mutex so the caller's callback need not be thread-safe.
 func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yield func(Chunk) error) error {
 	if len(calls) == 0 {
 		return nil

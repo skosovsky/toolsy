@@ -381,7 +381,11 @@ Yield errors are converted to `ErrStreamAborted`.
 
 Use `AsAsyncTool(base, WithOnComplete(...))` for fire-and-forget execution with immediate accepted result (`AsyncAccepted` JSON payload in first result chunk).
 
-When async tool is executed via `Registry`, background jobs are tracked so `Shutdown` can wait for them to finish.
+When registered via `RegistryBuilder`, global middleware from `Use()` runs **inside the background goroutine** (not during the synchronous accept path). Use `WithBackgroundTimeout` on `AsAsyncTool` to cap background work independently of the caller context.
+
+When async tool is executed via `Registry`, background jobs are tracked so `Shutdown` can wait for them to finish. Registry hooks such as `WithOnAfterExecute` run when the synchronous `Execute` path returns (for async tools that is usually right after `AsyncAccepted`), not when background work finishes — use `WithOnComplete` for background completion.
+
+`WithOnComplete` receives every chunk yielded during background execution in an unbounded in-memory slice. Very chatty streaming tools can grow memory until the goroutine finishes; cap payload volume in the base tool or consume results via another channel if you stream many chunks.
 
 ### Note on resiliency with async tools
 
@@ -390,7 +394,7 @@ Background execution uses `context.WithoutCancel` on the parent context: cancell
 Implications for external executors such as [`routery.Timeout`](https://github.com/skosovsky/routery):
 
 - `routery.Timeout(toolsy.AsAsyncTool(tool), d)` limits how long the orchestrator waits for the tool to return the **accepted** response (enqueue is usually fast). It does **not** cap how long the **background** work runs.
-- To cap background work, wrap the **base** tool first, then make it async: `toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), ...)`.
+- To cap background work, use `WithBackgroundTimeout` on `AsAsyncTool`, or wrap the base tool: `toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), toolsy.WithBackgroundTimeout(d))`.
 - If you also need a short limit on the accept phase, compose both: e.g. `routery.Timeout(toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), ...), acceptBudget)`.
 
 ## MCP integration

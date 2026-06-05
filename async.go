@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync/atomic"
+	"time"
+	"unicode/utf8"
 )
 
 // AsyncAccepted is the payload returned immediately when an async tool is invoked.
@@ -23,6 +26,7 @@ type AsyncCallback func(ctx context.Context, taskID string, chunks []Chunk, err 
 // asyncOptions holds configuration for AsAsyncTool.
 type asyncOptions struct {
 	onComplete AsyncCallback
+	timeout    time.Duration
 }
 
 // AsyncOption configures AsAsyncTool.
@@ -35,11 +39,33 @@ func WithOnComplete(cb AsyncCallback) AsyncOption {
 	}
 }
 
-// AsAsyncTool wraps a tool so that Execute returns immediately with AsyncAccepted;
-// the base tool runs in a goroutine. If the client's yield returns an error (e.g. stream closed),
-// the goroutine is not started (yield-guard).
-// When executed via Registry, the registry injects an async tracker via *RunEnv; the background
-// job is tracked so Shutdown waits for it to finish.
+// WithBackgroundTimeout limits how long the background goroutine may run after the accepted
+// response is returned. Parent cancellation is stripped via [context.WithoutCancel]; this option
+// applies an independent deadline to background work only.
+func WithBackgroundTimeout(d time.Duration) AsyncOption {
+	return func(o *asyncOptions) {
+		o.timeout = d
+	}
+}
+
+// AsAsyncTool wraps a standard Tool to execute its core logic in a background goroutine,
+// immediately returning an AsyncAccepted chunk to the caller. If the client's yield returns
+// an error (e.g. stream closed), the goroutine is not started (yield-guard).
+//
+// WARNING: Do not manually wrap the result of AsAsyncTool with middleware
+// (e.g. WithBudget(AsAsyncTool(base))). Middleware applied that way runs only during the
+// synchronous accept path and does not observe background work.
+//
+// CORRECT USAGE: register async tools via [RegistryBuilder]:
+//
+//	builder.Use(WithBudget).Add(AsAsyncTool(base)).Build()
+//
+// [RegistryBuilder.Build] unwraps the tool, applies Use() middleware inside the background
+// goroutine, and re-wraps it safely. For direct Execute without a registry, wrap middleware
+// around the base tool before AsAsyncTool. Nested AsAsyncTool(AsAsyncTool(...)) is unsupported.
+//
+// When executed via [Registry], the registry injects an async tracker via [*RunEnv]; the
+// background job is tracked so [Registry.Shutdown] waits for it to finish.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 	var o asyncOptions
 	for _, opt := range opts {
@@ -47,14 +73,14 @@ func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
 	}
 	return &asyncTool{
 		toolBase: toolBase{next: baseTool},
-		opts:     &o,
+		opts:     o,
 	}
 }
 
 type asyncTool struct {
 	toolBase
 
-	opts *asyncOptions
+	opts asyncOptions
 }
 
 type asyncRuntime struct {
@@ -88,10 +114,26 @@ func (t *asyncTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, y
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	if env == nil {
+		env = NewRunEnv()
+	}
 	taskID, err := generateTaskID()
 	if err != nil {
 		return err
 	}
+	if err := t.yieldAsyncAccepted(ctx, taskID, yield); err != nil {
+		return err
+	}
+	clonedInput := input.Clone()
+	var bgDone func()
+	if env.async != nil {
+		bgDone = env.async.trackBackground()
+	}
+	go t.runBackground(ctx, env, clonedInput, taskID, bgDone)
+	return nil
+}
+
+func (t *asyncTool) yieldAsyncAccepted(ctx context.Context, taskID string, yield func(Chunk) error) error {
 	accepted, err := json.Marshal(AsyncAccepted{Status: "accepted", TaskID: taskID})
 	if err != nil {
 		return NewInternalError(fmt.Errorf("async: marshal accepted payload: %w", err))
@@ -110,39 +152,59 @@ func (t *asyncTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, y
 	if err := yield(chunk); err != nil {
 		return wrapYieldError(err)
 	}
-	var bgDone func()
-	if env.async != nil {
-		bgDone = env.async.trackBackground()
-	}
-	go func(parentCtx context.Context) {
-		if bgDone != nil {
-			defer bgDone()
-		}
-		var collected []Chunk
-		collectYield := func(c Chunk) error {
-			collected = append(collected, c)
-			return nil
-		}
-
-		baseCtx := context.WithoutCancel(parentCtx)
-		bgEnv := env.cloneForExecute(env.attachments, nil)
-
-		var executionErr error
-		defer func() {
-			if r := recover(); r != nil {
-				executionErr = NewInternalError(&panicError{p: r})
-			}
-			if t.opts.onComplete != nil {
-				func() {
-					defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
-					t.opts.onComplete(baseCtx, taskID, collected, executionErr)
-				}()
-			}
-		}()
-
-		executionErr = t.next.Execute(baseCtx, bgEnv, input, collectYield)
-	}(ctx)
 	return nil
+}
+
+func (t *asyncTool) runBackground(
+	parentCtx context.Context,
+	env *RunEnv,
+	input ToolInput,
+	taskID string,
+	bgDone func(),
+) {
+	if bgDone != nil {
+		defer bgDone()
+	}
+	var (
+		collected          []Chunk
+		backgroundYieldErr error
+	)
+	collectYield := func(c Chunk) error {
+		if err := validateChunk(c); err != nil && backgroundYieldErr == nil {
+			backgroundYieldErr = err
+		}
+		collected = append(collected, c)
+		return nil
+	}
+
+	baseCtx := context.WithoutCancel(parentCtx)
+	if t.opts.timeout > 0 {
+		var cancel context.CancelFunc
+		baseCtx, cancel = context.WithTimeout(baseCtx, t.opts.timeout)
+		defer cancel()
+	}
+	bgEnv := env.cloneForExecute(input.Attachments, env.async)
+
+	var executionErr error
+	defer func() {
+		if r := recover(); r != nil {
+			executionErr = NewInternalError(&panicError{p: r})
+		}
+		if t.opts.onComplete != nil {
+			func() {
+				defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
+				t.opts.onComplete(baseCtx, taskID, collected, executionErr)
+			}()
+		}
+	}()
+
+	executionErr = t.next.Execute(baseCtx, bgEnv, input, collectYield)
+	if executionErr == nil {
+		executionErr = backgroundYieldErr
+	}
+	if executionErr == nil {
+		executionErr = executionErrFromCollected(collected)
+	}
 }
 
 func generateTaskID() (string, error) {
@@ -151,4 +213,21 @@ func generateTaskID() (string, error) {
 		return "", fmt.Errorf("async: generate task_id: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func executionErrFromCollected(collected []Chunk) error {
+	for _, c := range collected {
+		if !c.IsError {
+			continue
+		}
+		msg := strings.TrimSpace(string(c.Data))
+		if msg == "" {
+			return NewToolExecutionFailedError("background tool returned error chunk")
+		}
+		if !utf8.ValidString(msg) {
+			msg = strings.ToValidUTF8(msg, "\uFFFD")
+		}
+		return NewToolExecutionFailedError(msg)
+	}
+	return nil
 }
