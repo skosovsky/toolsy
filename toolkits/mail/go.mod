@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.10.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -17,5 +17,3 @@ require (
 	golang.org/x/net v0.51.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..
