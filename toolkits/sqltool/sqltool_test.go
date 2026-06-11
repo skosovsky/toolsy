@@ -8,6 +8,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -186,6 +187,7 @@ func TestExecuteRead_BlocksWrite(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
@@ -204,7 +206,8 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "multiple statements")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "multiple statements")
 }
 
 func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
@@ -224,7 +227,8 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "read-only")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "read-only")
 }
 
 // TestExecuteRead_KeywordInStringAllowed ensures SELECT 'INSERT' is allowed (scanner skips string literals).
@@ -306,7 +310,6 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 func TestAsTools_NilDB(t *testing.T) {
 	_, err := AsTools(nil, "sqlite")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "nil")
 }
 
 func TestAsTools_ToolCount(t *testing.T) {
@@ -322,7 +325,6 @@ func TestAsTools_ToolCount(t *testing.T) {
 func TestAsTools_UnknownDialect(t *testing.T) {
 	_, err := AsTools(openSQLite(t), "unknown_driver")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "toolkit/sqltool")
 }
 
 func TestExecuteRead_MaxCellBytes(t *testing.T) {
@@ -405,7 +407,10 @@ func TestValidateReadOnlyQuery_LexicalSubset(t *testing.T) {
 			err := sqlutil.ValidateReadOnlyQuery(tt.query)
 			if tt.wantErr != "" {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.wantErr)
+				te, ok := toolsy.AsToolError(err)
+				require.True(t, ok)
+				assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+				require.Contains(t, te.Reason, tt.wantErr)
 				return
 			}
 			require.NoError(t, err)

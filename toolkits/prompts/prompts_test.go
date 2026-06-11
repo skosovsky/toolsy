@@ -86,14 +86,9 @@ func TestAsTool_ProviderError(t *testing.T) {
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	cause := err
-	for cause != nil {
-		if strings.Contains(cause.Error(), "toolkit/prompts:") {
-			return
-		}
-		cause = errors.Unwrap(cause)
-	}
-	t.Errorf("expected toolkit/prompts in error chain, got %q", err.Error())
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
 }
 
 func TestAsTool_WithNameAndDescription(t *testing.T) {

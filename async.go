@@ -6,10 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 )
 
 // AsyncAccepted is the payload returned immediately when an async tool is invoked.
@@ -220,12 +218,7 @@ func (t *asyncTool) runBackground(
 		if r := recover(); r != nil {
 			executionErr = NewInternalError(&panicError{p: r})
 		}
-		if t.opts.onComplete != nil {
-			func() {
-				defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
-				t.opts.onComplete(baseCtx, taskID, collected, executionErr)
-			}()
-		}
+		t.invokeOnComplete(baseCtx, taskID, collected, executionErr)
 	}()
 
 	executionErr = t.next.Execute(baseCtx, bgEnv, input, collectYield)
@@ -235,6 +228,20 @@ func (t *asyncTool) runBackground(
 	if executionErr == nil {
 		executionErr = executionErrFromCollected(collected)
 	}
+}
+
+func (t *asyncTool) invokeOnComplete(ctx context.Context, taskID string, collected []Chunk, executionErr error) {
+	if t.opts.onComplete == nil {
+		return
+	}
+	func() {
+		defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
+		err := executionErr
+		if err != nil {
+			err = toolErrorFromRunCall(err)
+		}
+		t.opts.onComplete(ctx, taskID, collected, err)
+	}()
 }
 
 func generateTaskID() (string, error) {
@@ -250,14 +257,7 @@ func executionErrFromCollected(collected []Chunk) error {
 		if !c.IsError {
 			continue
 		}
-		msg := strings.TrimSpace(string(c.Data))
-		if msg == "" {
-			return NewToolExecutionFailedError("background tool returned error chunk")
-		}
-		if !utf8.ValidString(msg) {
-			msg = strings.ToValidUTF8(msg, "\uFFFD")
-		}
-		return NewToolExecutionFailedError(msg)
+		return executionErrorFromChunk(c)
 	}
 	return nil
 }

@@ -17,6 +17,7 @@ var (
 	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
 	// ErrAsyncCollectedLimitExceeded is returned when background chunk collection exceeds WithMaxCollectedChunks.
 	ErrAsyncCollectedLimitExceeded = errors.New("toolsy: async collected chunks limit exceeded")
+	ErrBudgetExceeded              = errors.New("budget exceeded")
 )
 
 // ErrorCode is a machine-readable tool execution error category.
@@ -33,8 +34,7 @@ const (
 	CodeMaxStepsExceeded     ErrorCode = "MAX_STEPS_EXCEEDED"
 	CodeRegistryNotReady     ErrorCode = "REGISTRY_NOT_READY"
 	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
-	// CodeToolExecutionFailed is used when background async work surfaces a soft error chunk.
-	CodeToolExecutionFailed ErrorCode = "TOOL_EXECUTION_FAILED"
+	CodeBudgetExceeded       ErrorCode = "BUDGET_EXCEEDED"
 )
 
 // ToolError is the structured execution error envelope for orchestrator routing.
@@ -106,10 +106,12 @@ func WithSafeMessage(te *ToolError, safe string) *ToolError {
 
 // NewDependencyMissingError reports a missing or nil typed dependency.
 func NewDependencyMissingError(key string) *ToolError {
+	reason := fmt.Sprintf("dependency %q is missing or nil", key)
 	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
 		Code:      CodeDependencyMissing,
-		Reason:    fmt.Sprintf("dependency %q is missing or nil", key),
+		Reason:    reason,
 		Retryable: false,
+		Err:       errors.New(reason),
 	}
 }
 
@@ -163,28 +165,29 @@ func NewRegistryStateError() *ToolError {
 	}
 }
 
-// NewToolExecutionFailedError reports a terminal failure from background async execution
-// (for example budget deny or error-formatter soft chunk surfaced via onComplete).
-func NewToolExecutionFailedError(reason string) *ToolError {
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
-		reason = "tool execution failed"
-	}
+// NewToolsContractMissingError reports required tools missing from the registry contract.
+func NewToolsContractMissingError(required, missing []string) *ToolError {
+	reason := fmt.Sprintf("missing required tools: %v (contract requires %v)", missing, required)
 	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
-		Code:      CodeToolExecutionFailed,
-		Reason:    reason,
-		Retryable: true,
-		Err:       errors.New(reason),
+		Code:        CodeToolsContractMissing,
+		Reason:      reason,
+		Retryable:   false,
+		FixableArgs: append([]string(nil), missing...),
+		Err:         errors.New(reason),
 	}
 }
 
-// NewToolsContractMissingError reports required tools missing from the registry contract.
-func NewToolsContractMissingError(required, missing []string) *ToolError {
+// NewBudgetExceededError reports a token or execution budget denial.
+func NewBudgetExceededError(reason string) *ToolError {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = ErrBudgetExceeded.Error()
+	}
 	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
-		Code:        CodeToolsContractMissing,
-		Reason:      fmt.Sprintf("missing required tools: %v (contract requires %v)", missing, required),
-		Retryable:   false,
-		FixableArgs: append([]string(nil), missing...),
+		Code:      CodeBudgetExceeded,
+		Reason:    reason,
+		Retryable: true,
+		Err:       ErrBudgetExceeded,
 	}
 }
 

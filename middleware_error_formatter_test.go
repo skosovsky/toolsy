@@ -2,6 +2,7 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -31,7 +32,10 @@ func TestWithErrorFormatter_ValidationErrorBecomesErrorChunk(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type, not JSON payload
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeValidationFailed, te.Code)
 	assert.Contains(t, string(chunks[0].Data), "city is required")
 }
 
@@ -133,10 +137,14 @@ func TestWithErrorFormatter_PrefersSafeMessageOverReason(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	body := string(got.Data)
-	assert.Contains(t, body, "valid city name")
-	assert.NotContains(t, body, "api_key")
-	assert.NotContains(t, body, "secret internal")
+	require.Equal(t, MimeTypeToolErrorJSON, got.MimeType) //nolint:testifylint // mime type, not JSON payload
+	var wire struct {
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(got.Data, &wire))
+	assert.Contains(t, wire.Message, "valid city name")
+	assert.NotContains(t, wire.Message, "api_key")
+	assert.NotContains(t, wire.Message, "secret internal")
 }
 
 func TestWithErrorFormatter_BypassesSuspendAndStreamAborted(t *testing.T) {
@@ -229,7 +237,9 @@ func TestWithErrorFormatter_PlainErrorPreservesActionableMessage(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
-	assert.Contains(t, string(got.Data), "rate limit exceeded")
+	require.Equal(t, MimeTypeToolErrorJSON, got.MimeType) //nolint:testifylint // mime type
+	assert.Contains(t, string(got.Data), `"code":"INTERNAL"`)
+	assert.Contains(t, string(got.Data), "internal system error")
 }
 
 func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
@@ -253,7 +263,8 @@ func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
-	assert.Contains(t, string(got.Data), "database connection failed")
+	require.Equal(t, MimeTypeToolErrorJSON, got.MimeType) //nolint:testifylint // mime type
+	assert.Contains(t, string(got.Data), `"code":"INTERNAL"`)
 	assert.NotContains(t, string(got.Data), "stack line 1")
 }
 
@@ -311,7 +322,8 @@ func TestWithErrorFormatter_RegistryExecuteIter_EmitsSoftErrorChunk(t *testing.T
 	assert.Equal(t, "iter-1", chunks[0].CallID)
 	assert.Equal(t, "iter_fail", chunks[0].ToolName)
 	assert.True(t, chunks[0].IsError)
-	assert.Contains(t, string(chunks[0].Data), "iter failure")
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	assert.Contains(t, string(chunks[0].Data), `"code":"INTERNAL"`)
 }
 
 func TestWithErrorFormatter_RegistryExecuteBatchStream_NoDuplicateErrorChunk(t *testing.T) {
@@ -338,7 +350,8 @@ func TestWithErrorFormatter_RegistryExecuteBatchStream_NoDuplicateErrorChunk(t *
 	assert.Equal(t, "batch-1", chunks[0].CallID)
 	assert.Equal(t, "batch_fail", chunks[0].ToolName)
 	assert.True(t, chunks[0].IsError)
-	assert.Contains(t, string(chunks[0].Data), "batch failure")
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	assert.Contains(t, string(chunks[0].Data), `"code":"INTERNAL"`)
 }
 
 func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {

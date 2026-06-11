@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -136,7 +137,11 @@ func TestAsAsyncTool_BaseError(t *testing.T) {
 	)
 	require.NoError(t, err)
 	done.Wait()
-	require.ErrorIs(t, gotErr, wantErr)
+	require.Error(t, gotErr)
+	te, ok := toolsy.AsToolError(gotErr)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	require.ErrorIs(t, te.Unwrap(), wantErr)
 }
 
 func TestAsAsyncTool_YieldError_NoGoroutine(t *testing.T) {

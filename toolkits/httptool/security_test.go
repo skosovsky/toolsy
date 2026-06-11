@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -24,6 +25,7 @@ func TestValidateURL_DomainNotAllowed(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 	require.ErrorAs(t, err, &ce)
 	require.Contains(t, ce.Reason, "domain not allowed")
 }
@@ -34,7 +36,8 @@ func TestValidateURL_EmptyAllowedDomains(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "no allowed domains configured")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "no allowed domains configured")
 }
 
 func TestValidateURL_InvalidScheme(t *testing.T) {
@@ -43,7 +46,8 @@ func TestValidateURL_InvalidScheme(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "only http and https")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "only http and https")
 }
 
 func TestValidateURL_InvalidURL(t *testing.T) {
@@ -76,7 +80,8 @@ func TestValidateURL_WildcardDoesNotMatchBareDomain(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "domain not allowed")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "domain not allowed")
 }
 
 func TestValidateURL_WildcardDoesNotMatchSuffixOnly(t *testing.T) {
@@ -93,7 +98,8 @@ func TestValidateURL_LocalhostBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "private IP")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private IP")
 }
 
 func TestValidateURL_PrivateIPBlocked(t *testing.T) {
@@ -102,7 +108,8 @@ func TestValidateURL_PrivateIPBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "private IP")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private IP")
 }
 
 func TestValidateURL_AllowPrivateIPsForTests(t *testing.T) {

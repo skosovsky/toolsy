@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -38,7 +39,8 @@ func TestSanitizePath_PathNotFound(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "path not found")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "path not found")
 }
 
 func TestSanitizePath_PathTraversalBlocked(t *testing.T) {
@@ -49,7 +51,8 @@ func TestSanitizePath_PathTraversalBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "outside sandbox")
 }
 
 func TestSanitizePath_TraversalSegmentBlockedBeforeJoin(t *testing.T) {
@@ -60,7 +63,8 @@ func TestSanitizePath_TraversalSegmentBlockedBeforeJoin(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "outside sandbox")
 }
 
 func TestSanitizePath_AbsolutePathInterpretedAsRelative(t *testing.T) {
@@ -105,7 +109,8 @@ func TestSanitizePathForWrite_TraversalBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "outside sandbox")
 }
 
 func TestSanitizePathForWrite_TraversalSegmentBlocked(t *testing.T) {
@@ -115,5 +120,6 @@ func TestSanitizePathForWrite_TraversalSegmentBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "outside sandbox")
 }

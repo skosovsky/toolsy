@@ -3,8 +3,6 @@ package toolsy
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
-	"reflect"
 )
 
 // GetSessionState returns in-memory session state for key when present and non-nil.
@@ -31,36 +29,39 @@ func SetSessionState[T any](s *Session, key string, val T) {
 	s.state[key] = val
 }
 
-// Export returns a shallow copy of the session in-memory state map.
+// ExportSnapshot returns an opaque snapshot of in-memory session state.
 // Dependencies, attachments, and StateStore are not included.
-// Do not mutate the returned map in place; treat it as a snapshot.
-func (s *Session) Export() map[string]any {
+func (s *Session) ExportSnapshot() (SessionSnapshot, error) {
 	if s == nil {
-		return map[string]any{}
+		return SessionSnapshot{}, NewValidationError("session is nil")
 	}
-	s.stateMu.RLock()
-	defer s.stateMu.RUnlock()
-	if len(s.state) == 0 {
-		return map[string]any{}
+	payload, err := s.encodeStatePayload()
+	if err != nil {
+		return SessionSnapshot{}, err
 	}
-	out := make(map[string]any, len(s.state))
-	maps.Copy(out, s.state)
-	return out
+	if len(payload) == 0 {
+		payload = []byte("{}")
+	}
+	return SessionSnapshot{
+		version: sessionSnapshotVersion,
+		payload: payload,
+	}, nil
 }
 
-// Import atomically replaces in-memory session state from data.
-// Import(nil) clears all keys. On error the previous state is unchanged.
-func (s *Session) Import(data map[string]any) error {
+// ImportSnapshot atomically replaces in-memory session state from snap.
+// On error the previous state is unchanged.
+func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 	if s == nil {
 		return NewValidationError("session is nil")
 	}
-	if data == nil {
-		s.stateMu.Lock()
-		s.state = make(map[string]any)
-		s.stateMu.Unlock()
-		return nil
+	version, payload, err := snap.versionAndPayload()
+	if err != nil {
+		return err
 	}
-	newMap, err := s.buildImportedState(data)
+	if version != sessionSnapshotVersion {
+		return fmt.Errorf("toolsy: unsupported session snapshot version %d", version)
+	}
+	newMap, err := s.decodeStatePayload(payload)
 	if err != nil {
 		return err
 	}
@@ -70,35 +71,70 @@ func (s *Session) Import(data map[string]any) error {
 	return nil
 }
 
-func (s *Session) buildImportedState(data map[string]any) (map[string]any, error) {
-	reg := s.opts.typeRegistry
-	newMap := make(map[string]any, len(data))
-	for k, v := range data {
-		if reg != nil {
-			if typ, ok := reg.lookup(k); ok {
-				typed, err := importRegisteredValue(k, v, typ)
-				if err != nil {
-					return nil, err
-				}
-				newMap[k] = typed
-				continue
-			}
+func (s *Session) encodeStatePayload() ([]byte, error) {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	if len(s.state) == 0 {
+		return []byte("{}"), nil
+	}
+	wire := make(map[string]json.RawMessage, len(s.state))
+	for k, v := range s.state {
+		raw, err := s.encodeStateValue(k, v)
+		if err != nil {
+			return nil, fmt.Errorf("toolsy: export state key %q: %w", k, err)
 		}
-		newMap[k] = v
+		wire[k] = raw
+	}
+	return json.Marshal(wire)
+}
+
+func (s *Session) encodeStateValue(key string, v any) (json.RawMessage, error) {
+	if reg := s.opts.codecRegistry; reg != nil {
+		if entry, ok := reg.lookup(key); ok {
+			b, err := entry.encodeValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return json.RawMessage(b), nil
+		}
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &wire); err != nil {
+		return nil, fmt.Errorf("toolsy: invalid session snapshot payload: %w", err)
+	}
+	if wire == nil {
+		return make(map[string]any), nil
+	}
+	newMap := make(map[string]any, len(wire))
+	for k, raw := range wire {
+		val, err := s.decodeStateValue(k, raw)
+		if err != nil {
+			return nil, err
+		}
+		newMap[k] = val
 	}
 	return newMap, nil
 }
 
-func importRegisteredValue(key string, v any, typ reflect.Type) (any, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal registered state key %q: %w", key, err)
+func (s *Session) decodeStateValue(key string, raw json.RawMessage) (any, error) {
+	if reg := s.opts.codecRegistry; reg != nil {
+		if entry, ok := reg.lookup(key); ok {
+			return entry.decodeBytes(raw)
+		}
 	}
-	ptr := reflect.New(typ).Interface()
-	if err := json.Unmarshal(b, ptr); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal registered state key %q: %w", key, err)
+	var generic any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		return nil, fmt.Errorf("toolsy: failed to unmarshal state key %q: %w", key, err)
 	}
-	return reflect.ValueOf(ptr).Elem().Interface(), nil
+	return generic, nil
 }
 
 // ValidateRunEnvSession reports when env is not bound to session.

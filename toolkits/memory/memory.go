@@ -33,15 +33,29 @@ func NewScratchpad(opts ...Option) *Scratchpad {
 
 // AsTools returns the three memory tools (pin, read all, unpin).
 func (s *Scratchpad) AsTools() ([]toolsy.Tool, error) {
-	pinTool, err := toolsy.NewTool("memory_pin_fact", "Save a fact to session memory", s.pinHandler)
+	memRWReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct // Permissions host-defined
+		MemoryAccess: toolsy.MemoryAccessReadWrite,
+		NeedsSession: true,
+	})
+	memReadReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct // Permissions host-defined
+		MemoryAccess: toolsy.MemoryAccessRead,
+		NeedsSession: true,
+	})
+	pinTool, err := toolsy.NewTool("memory_pin_fact", "Save a fact to session memory", s.pinHandler, memRWReq)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: build pin tool: %w", err)
 	}
-	readTool, err := toolsy.NewTool("memory_read_all", "Read all stored facts", s.readHandler, toolsy.WithReadOnly())
+	readTool, err := toolsy.NewTool(
+		"memory_read_all",
+		"Read all stored facts",
+		s.readHandler,
+		toolsy.WithReadOnly(),
+		memReadReq,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: build read tool: %w", err)
 	}
-	unpinTool, err := toolsy.NewTool("memory_unpin_fact", "Remove a fact from session memory", s.unpinHandler)
+	unpinTool, err := toolsy.NewTool("memory_unpin_fact", "Remove a fact from session memory", s.unpinHandler, memRWReq)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/memory: build unpin tool: %w", err)
 	}

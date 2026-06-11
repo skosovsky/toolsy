@@ -29,7 +29,6 @@ func (m *MockTool) Manifest() toolsy.ToolManifest {
 		Parameters:  map[string]any{"type": "object"},
 		Tags:        nil,
 		Version:     "",
-		Metadata:    nil,
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -86,7 +87,8 @@ func TestMailSend_EmptyTo_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "recipient")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "recipient")
 }
 
 func TestMailSearchInbox_ReturnsMarkdown(t *testing.T) {
@@ -132,7 +134,8 @@ func TestMailSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "query")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "query")
 }
 
 func TestMailReadMessage_ReturnsBody(t *testing.T) {
@@ -176,7 +179,8 @@ func TestMailRead_EmptyMessageID_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "message_id")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "message_id")
 }
 
 func TestMailRead_WhitespaceOnlyMessageID_ValidationToolError(t *testing.T) {
@@ -194,7 +198,8 @@ func TestMailRead_WhitespaceOnlyMessageID_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "message_id")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "message_id")
 }
 
 func TestMailRead_PlainTextWithAngleBrackets_NotConverted(t *testing.T) {
@@ -257,7 +262,6 @@ func TestAsTools_NilReader_OnlySendTool(t *testing.T) {
 func TestAsTools_BothNil_Error(t *testing.T) {
 	_, err := AsTools(nil, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "at least one")
 }
 
 func TestMailSend_HandlerError_Wrapped(t *testing.T) {

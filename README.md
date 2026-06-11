@@ -80,7 +80,7 @@ func main() {
 - `Chunk.Event` values: `EventProgress`, `EventResult`, `EventControl`.
 - `Chunk.RawData` is removed.
 - Runtime `Registry` is immutable. Use `RegistryBuilder` to add tools and middleware before `Build()`.
-- Runtime-aware handlers are the only builders in v2 (`NewTool`, `NewStreamTool`, `NewDynamicTool`, `NewProxyTool`).
+- Runtime-aware handlers: `NewTool`, `NewTypedTool`, `NewStreamTool`, `NewDynamicToolFromSpec`, `NewProxyTool`.
 
 ## Architecture
 
@@ -105,24 +105,34 @@ The built registry is read-only for runtime calls (`Execute`, `ExecuteIter`, `Ex
 
 ### Contract scoping and validation
 
-Before starting an agent, narrow which tools the LLM can see and verify the prompt contract:
-
 ```go
+// Lightweight manifest-only check (no Registry.Build required):
+ms, err := toolsy.NewManifestSet(toolA, toolB)
+if err != nil {
+    return err
+}
+if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list_slots"}); err != nil {
+    return err
+}
+
 // Capability: static tool visibility (saves tokens; tools not in subset have no schema in the manifest).
 profileReg, err := reg.Subset("book_appointment", "list_slots")
 if err != nil {
     return err
 }
 
-// Fail-fast: ensure the prompt's required tools exist in this registry.
-if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list_slots"}); err != nil {
+ms, err := profileReg.ManifestSet()
+if err != nil {
+    return err
+}
+if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list_slots"}); err != nil {
     return err
 }
 ```
 
 - **`Subset`**: creates a capability view with only the named tools. Duplicate names are ignored. Unknown names return an error. Subset shares runtime state (shutdown and in-flight tracking) with the root registry.
-- **`ValidateContract`**: returns `*ToolError` with `CodeToolsContractMissing` when required tools are missing (`AsToolError` + `FixableArgs` lists missing names). Duplicate names in `requiredNames` are deduplicated. Requires a valid registry runtime state (`CodeRegistryNotReady` / `errors.Is(err, ErrRegistryState)`).
-- **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
+- **`ValidateManifestContract`**: returns `*ToolError` with `CodeToolsContractMissing` when required tools are missing (`AsToolError` + `FixableArgs` lists missing names). Duplicate names in `requiredNames` are deduplicated. Works with `NewManifestSet` or `reg.ManifestSet()` — no runtime readiness required.
+- **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateManifestContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
 
 **Capability vs runtime authorization:** use `Subset` for which tools a profile may use at all. Use middleware for per-call checks (tenant, role, payload) that depend on `context` or arguments.
 
@@ -134,11 +144,11 @@ if err := toolsy.ValidateContract(profileReg, []string{"book_appointment", "list
 
 - `Name`, `Description`, `Parameters`
 - `Tags`, `Version`
-- `Metadata map[string]any` (custom extension keys only — not for system policy)
+- `Requirements` (`ToolRequirements`: memory access, session need, permissions)
 - `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`
 - `CompletionPolicy` (`continue`, `silent_yield`, `halt`)
 
-Built-in `toolkits/*` set these fields on each tool (read tools → `ReadOnly`, mutating/external side-effect tools → `Dangerous` and often `RequiresConfirmation`). `exectool` marks `exec_code` as `Dangerous` by default. MCP proxy tools map server `annotations` hints into the same manifest fields; `read_mcp_resource` is `ReadOnly`.
+Built-in `toolkits/*` set policy flags (`ReadOnly`, `Dangerous`, …) on each tool; `toolkits/memory` declares `ToolRequirements` (session + read/write memory). Hosts should add `WithRequirements` to custom tools. `exectool` marks `exec_code` as `Dangerous` by default. MCP proxy tools map server `annotations` hints into the same manifest fields; `read_mcp_resource` is `ReadOnly`.
 
 Example:
 
@@ -150,8 +160,9 @@ tool, err := toolsy.NewTool(
 	toolsy.WithDangerous(),
 	toolsy.WithRequiresConfirmation(),
 	toolsy.WithCompletionPolicy(toolsy.CompletionHalt),
-	toolsy.WithMetadata(map[string]any{
-		"sensitivity": "critical",
+	toolsy.WithRequirements(toolsy.ToolRequirements{
+		MemoryAccess: toolsy.MemoryAccessReadWrite,
+		Permissions:  []toolsy.Permission{"admin"},
 	}),
 )
 if err != nil {
@@ -205,7 +216,7 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 
 ## Session state and RunEnv (DI)
 
-In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState`, `Export`, `Import`).
+In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState`, `ExportSnapshot`, `ImportSnapshot`).
 `*RunEnv` is shared via `ToolCall.Env` for DI and handler access:
 
 - `StateStore` — persisted key/value state (optional)
@@ -213,7 +224,9 @@ In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState
 - `SetState` / `GetState` — delegate to the bound `Session` when `NewRunEnv(session)` was used
 
 ```go
-sess, _ := toolsy.NewSession(reg, toolsy.WithStateTypeRegistry(types))
+codecs := toolsy.NewStateCodecRegistry()
+_ = toolsy.RegisterJSONCodec[MyState](codecs, "agent")
+sess, _ := toolsy.NewSession(reg, toolsy.WithStateCodecRegistry(codecs))
 env := toolsy.NewRunEnv(sess, toolsy.WithStateStore(store))
 toolsy.Put(env, "db", db)
 toolsy.SetSessionState(sess, "trace_id", traceID) // or SetState(env, ...)
@@ -224,7 +237,50 @@ sess.Execute(ctx, call, yield) // validates env is bound to sess
 
 Do not pass `Env: nil` on `Session.Execute` if tools use `SetState` — in-memory state will not persist.
 
-See [docs/migration-task23.md](docs/migration-task23.md) for breaking changes and checkpoint flow.
+### RunCall (sync agent loops)
+
+For synchronous tool calls, `Session.RunCall` aggregates chunks into a `ToolOutcome`:
+
+```go
+outcome, err := sess.RunCall(ctx, call)
+if err != nil {
+    // infrastructure — not found, shutdown, max steps, control signals (partial outcome preserved)
+    if toolsy.IsControlError(err) {
+        _ = outcome.Controls // Pause/Yield/Halt/UIAction collected before err
+    }
+    return err
+}
+if outcome.ExecutionError != nil {
+    // business failure — validation, handler errors (Error-as-Value)
+    te, _ := toolsy.AsToolError(outcome.ExecutionError)
+    _ = te.Code
+    return outcome.ExecutionError
+}
+result, err := toolsy.DecodeOutcomeAs[MyResult](outcome)
+```
+
+Business failures must be read from `outcome.ExecutionError`, not only `err != nil`, so progress chunks before the error are preserved.
+`WithErrorFormatter` emits structured `ToolError` JSON in error chunks; `RunCall` restores `Code` / `Retryable` / `FixableArgs`.
+
+See [docs/migration-task27.md](docs/migration-task27.md), [docs/adr/adr-task27-typed-contracts.md](docs/adr/adr-task27-typed-contracts.md), and `examples/run_call/main.go`.
+
+### StateCodecRegistry
+
+Register typed codecs for checkpoint roundtrips:
+
+```go
+codecs := toolsy.NewStateCodecRegistry()
+if err := toolsy.RegisterJSONCodec[MyState](codecs, "agent"); err != nil {
+    return err
+}
+sess, err := toolsy.NewSession(reg, toolsy.WithStateCodecRegistry(codecs))
+snap, _ := sess.ExportSnapshot()
+raw, _ := json.Marshal(snap)
+restored, _ := toolsy.NewSessionSnapshotFromJSON(raw)
+_ = sess.ImportSnapshot(restored)
+```
+
+See [docs/migration-task23.md](docs/migration-task23.md) for session/RunEnv basics and [docs/migration-task27.md](docs/migration-task27.md) for v1.0 breaking changes. Runnable snapshot example: `examples/session_snapshot/main.go`.
 
 `ToolInput.Attachments` are exposed to handlers as `env.Attachments()` (cloned per call).
 
@@ -290,7 +346,7 @@ func (t *rateLimitTool) Execute(
 	if !t.allow(ctx) {
 		return ErrRateLimit
 	}
-	return t.next.Execute(ctx, run, input, yield)
+	return t.next.Execute(ctx, env, input, yield)
 }
 
 func WithRateLimit(allow func(context.Context) bool) toolsy.Middleware {
@@ -425,7 +481,7 @@ defer client.Close()
 - Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
 - Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
 - Replace runtime `reg.Register(...)` / `reg.Use(...)` with `RegistryBuilder`.
-- Replace `ToolMetadata`-based logic with `tool.Manifest()`.
+- Replace `ToolManifest`-based logic with `tool.Manifest()` and `ToolRequirements`.
 - Replace `NewClient + Initialize` in `mcp` with `Connect`.
 - Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
 - `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).

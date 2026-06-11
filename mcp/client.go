@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"log/slog"
@@ -332,13 +333,19 @@ func (c *Client) handleToolCallResult(
 		chunkData = mapped.Data
 		chunkIsError = mapped.IsError
 	}
-	if err := yield(
-		toolsy.Chunk{Event: toolsy.EventResult, Data: chunkData, MimeType: toolsy.MimeTypeText, IsError: chunkIsError},
-	); err != nil {
+	chunk := mcpResultChunk(chunkData, chunkIsError)
+	if err := yield(chunk); err != nil {
 		c.notifyCancelledRequest(ctx, r.requestID)
 		return toolsy.ErrStreamAborted
 	}
 	return nil
+}
+
+func mcpResultChunk(data []byte, isError bool) toolsy.Chunk {
+	if isError {
+		return toolsy.NewErrorChunkFromErr(toolsy.NewInternalError(errors.New(string(data))))
+	}
+	return toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: toolsy.MimeTypeText}
 }
 
 func (c *Client) nextProgressToken() string {
@@ -368,12 +375,7 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 			chunkData = mapped.Data
 			chunkIsError = mapped.IsError
 		}
-		return yield(toolsy.Chunk{
-			Event:    toolsy.EventResult,
-			Data:     chunkData,
-			MimeType: toolsy.MimeTypeText,
-			IsError:  chunkIsError,
-		})
+		return yield(mcpResultChunk(chunkData, chunkIsError))
 	}
 	return toolsy.NewProxyTool(
 		"read_mcp_resource",

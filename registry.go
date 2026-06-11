@@ -8,7 +8,6 @@ import (
 	"slices"
 	"sync"
 	"time"
-	"unicode/utf8"
 )
 
 // RegistryBuilder is mutable setup API that produces an immutable Registry for runtime use.
@@ -200,7 +199,7 @@ func (r *Registry) GetTool(name string) (Tool, bool) {
 }
 
 // Has reports whether a tool with the given name is registered in this view's tool map.
-// It does not check runtime readiness; use [ValidateContract] or [Registry.Execute] for that.
+// It does not check runtime readiness; use [ValidateManifestContract] or [Registry.Execute] for that.
 // A nil receiver returns false.
 func (r *Registry) Has(name string) bool {
 	if r == nil {
@@ -208,6 +207,14 @@ func (r *Registry) Has(name string) bool {
 	}
 	_, ok := r.tools[name]
 	return ok
+}
+
+// ManifestSet returns a declarative manifest view of registered tools (no runtime state required).
+func (r *Registry) ManifestSet() (ManifestSet, error) {
+	if r == nil || len(r.tools) == 0 {
+		return ManifestSet{}, nil
+	}
+	return manifestSetFromToolMap(r.tools)
 }
 
 // ToolNames returns all registered tool names, sorted lexicographically.
@@ -255,9 +262,7 @@ func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
 func (r *Registry) accountDeliveredChunk(ctx context.Context, c Chunk, summary *ExecutionSummary) {
 	if c.IsError {
 		summary.ErrorChunks++
-		if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
-			summary.LastErrorText = string(c.Data)
-		}
+		summary.LastErrorText = errorChunkSummaryText(c, nil)
 		return
 	}
 	summary.ChunksDelivered++
@@ -267,9 +272,9 @@ func (r *Registry) accountDeliveredChunk(ctx context.Context, c Chunk, summary *
 	}
 }
 
-// wrapYieldWithMetadata fills CallID/ToolName, validates chunks, updates summary counters,
+// wrapYieldWithCallMeta fills CallID/ToolName, validates chunks, updates summary counters,
 // and invokes onChunk for delivered non-error chunks.
-func (r *Registry) wrapYieldWithMetadata(
+func (r *Registry) wrapYieldWithCallMeta(
 	ctx context.Context,
 	call ToolCall,
 	summary *ExecutionSummary,
@@ -379,7 +384,7 @@ func (r *Registry) executeWithSummary(
 		r.opts.onBefore(ctx, call)
 	}
 
-	toolYield := r.wrapYieldWithMetadata(ctx, call, &summary, yield)
+	toolYield := r.wrapYieldWithCallMeta(ctx, call, &summary, yield)
 	r.runToolWithValidationAndExecute(ctx, call, execEnv, tool, toolYield, &summary)
 	err = summary.Error
 	return summary, summaryReady, err
@@ -503,7 +508,7 @@ func (r *Registry) handleBatchToolError(
 		recordStreamAbort(execErr)
 	case errors.Is(execErr, context.Canceled):
 	default:
-		errChunk := newErrorChunk(execErr.Error())
+		errChunk := NewErrorChunkFromErr(execErr)
 		errChunk.CallID = call.Input.CallID
 		errChunk.ToolName = call.ToolName
 		yieldErr := safeYield(errChunk)
@@ -511,9 +516,7 @@ func (r *Registry) handleBatchToolError(
 			if summaryReady {
 				summary.Error = nil
 				summary.ErrorChunks++
-				if utf8.Valid(errChunk.Data) {
-					summary.LastErrorText = string(errChunk.Data)
-				}
+				summary.LastErrorText = errorChunkSummaryText(errChunk, execErr)
 			}
 			return
 		}

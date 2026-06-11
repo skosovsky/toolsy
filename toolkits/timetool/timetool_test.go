@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -88,7 +89,8 @@ func TestTimeCalculate_InvalidBaseDate_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "invalid base_date")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "invalid base_date")
 }
 
 func TestTimeCalculate_EmptyBaseDate_ValidationToolError(t *testing.T) {
@@ -106,7 +108,8 @@ func TestTimeCalculate_EmptyBaseDate_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "base_date")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "base_date")
 }
 
 func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {

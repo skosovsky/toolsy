@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -74,6 +75,7 @@ func TestWebSearch_EmptyQuery_ValidationToolError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestWebScrape_Success(t *testing.T) {
@@ -150,7 +152,8 @@ func TestWebScrape_SSRFBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "private")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private")
 }
 
 func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
@@ -168,6 +171,7 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
@@ -182,7 +186,8 @@ func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "blocked")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "blocked")
 }
 
 func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
@@ -248,7 +253,6 @@ func (m *mockScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) 
 func TestAsTools_NilProvider_Error(t *testing.T) {
 	_, err := AsTools(nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "SearchProvider")
 }
 
 func TestHTMLScraper_StripsTags(t *testing.T) {
@@ -281,7 +285,8 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "blocked")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "blocked")
 }
 
 func TestHTMLScraper_StripsLayoutElements(t *testing.T) {

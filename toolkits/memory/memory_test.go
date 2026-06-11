@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -74,6 +75,7 @@ func TestScratchpad_ReadToolManifestReadOnly(t *testing.T) {
 	}
 	require.NotNil(t, readTool)
 	require.True(t, readTool.Manifest().ReadOnly)
+	require.Equal(t, toolsy.MemoryAccessRead, readTool.Manifest().Requirements.MemoryAccess)
 }
 
 func TestScratchpad_PinRead(t *testing.T) {
@@ -236,6 +238,7 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestScratchpad_RequiresStateStore(t *testing.T) {
@@ -250,7 +253,8 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "run.StateStore is required")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "run.StateStore is required")
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 

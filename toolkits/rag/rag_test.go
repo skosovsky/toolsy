@@ -120,15 +120,9 @@ func TestAsSearchTool_RetrieverError(t *testing.T) {
 		func(toolsy.Chunk) error { return nil },
 	)
 	require.Error(t, err)
-	// Core wraps handler errors in ToolError; the underlying cause should contain our prefix
-	cause := err
-	for cause != nil {
-		if strings.Contains(cause.Error(), "toolkit/rag:") {
-			return
-		}
-		cause = errors.Unwrap(cause)
-	}
-	t.Errorf("expected toolkit/rag in error chain, got %q", err.Error())
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
 }
 
 func TestAsSearchTool_EmptyResult(t *testing.T) {

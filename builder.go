@@ -8,7 +8,7 @@ import (
 	"maps"
 )
 
-// tool is the internal implementation of Tool built by NewTool, NewStreamTool, NewDynamicTool, or NewProxyTool.
+// tool is the internal implementation of Tool built by NewTool, NewStreamTool, NewDynamicToolFromSpec, or NewProxyTool.
 type tool struct {
 	manifest ToolManifest
 	execute  func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error
@@ -86,7 +86,7 @@ func deepCopySchemaFromMap(schemaMap map[string]any) (map[string]any, error) {
 	return schemaCopy, nil
 }
 
-// rawArgsValidatedExecute builds the execute closure shared by NewDynamicTool and NewProxyTool:
+// rawArgsValidatedExecute builds the execute closure shared by NewProxyTool:
 // unmarshal args, validate against compiled schema, then run handler with yield wrapping.
 //
 //nolint:gocognit
@@ -183,46 +183,6 @@ func NewStreamTool[T any](
 	}, nil
 }
 
-// NewDynamicTool creates a Tool from a raw JSON Schema map and a streaming function that receives
-// validated JSON and yield func(Chunk) error. Useful for runtime API integration (e.g. OpenAPI/Swagger). Layer 1
-// (schema) validation only; handler receives raw []byte and may call yield zero or more times.
-// schemaMap and fn must be non-nil. Error handling matches NewTool; yield errors become ErrStreamAborted.
-// The provided schemaMap is not mutated; a defensive copy is made before any modifications (e.g. WithStrict).
-func NewDynamicTool(
-	name, description string,
-	schemaMap map[string]any,
-	fn func(ctx context.Context, env *RunEnv, argsJSON []byte, yield func(Chunk) error) error,
-	opts ...ToolOption,
-) (Tool, error) {
-	var cfg ToolConfig
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	if schemaMap == nil {
-		return nil, errors.New("dynamic schema map must not be nil")
-	}
-	if fn == nil {
-		return nil, errors.New("dynamic tool handler must not be nil")
-	}
-	schemaCopy, err := deepCopySchemaFromMap(schemaMap)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Schema.Strict {
-		applyStrictMode(schemaCopy)
-	}
-	stripSchemaIDs(schemaCopy)
-	compiled, err := compileRawSchema(schemaCopy)
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile dynamic schema: %w", err)
-	}
-	execute := rawArgsValidatedExecute(compiled, fn)
-	return &tool{
-		manifest: buildToolManifest(name, description, schemaCopy, cfg.Manifest),
-		execute:  execute,
-	}, nil
-}
-
 // NewProxyTool creates a Tool from a raw JSON Schema (e.g. from an MCP server) and a handler that receives
 // validated raw args and yield func(Chunk) error. No Go struct reflection; schema is used only for validation.
 // rawJSONSchema and handler must be non-nil.
@@ -267,7 +227,6 @@ func NewProxyTool(
 
 func buildToolManifest(name, description string, schema map[string]any, cfg ToolManifest) ToolManifest {
 	tags := append([]string(nil), cfg.Tags...)
-	metadata := cloneMetadata(cfg.Metadata)
 	return ToolManifest{
 		Name:                 name,
 		Description:          description,
@@ -275,7 +234,7 @@ func buildToolManifest(name, description string, schema map[string]any, cfg Tool
 		OutputSchema:         maps.Clone(cfg.OutputSchema),
 		Tags:                 tags,
 		Version:              cfg.Version,
-		Metadata:             metadata,
+		Requirements:         cloneRequirements(cfg.Requirements),
 		CompletionPolicy:     cfg.CompletionPolicy,
 		ReadOnly:             cfg.ReadOnly,
 		RequiresConfirmation: cfg.RequiresConfirmation,
@@ -284,21 +243,12 @@ func buildToolManifest(name, description string, schema map[string]any, cfg Tool
 	}
 }
 
-func cloneMetadata(m map[string]any) map[string]any {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(m))
-	maps.Copy(out, m)
-	return out
-}
-
 func (t *tool) Manifest() ToolManifest {
 	m := t.manifest
 	m.Tags = append([]string(nil), t.manifest.Tags...)
 	m.Parameters = maps.Clone(t.manifest.Parameters)
 	m.OutputSchema = maps.Clone(t.manifest.OutputSchema)
-	m.Metadata = cloneMetadata(t.manifest.Metadata)
+	m.Requirements = cloneRequirements(t.manifest.Requirements)
 	m.CompletionPolicy = t.manifest.CompletionPolicy
 	m.ReadOnly = t.manifest.ReadOnly
 	m.RequiresConfirmation = t.manifest.RequiresConfirmation

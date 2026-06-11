@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,7 +68,7 @@ func TestSession_EnforcesRequiredTools(t *testing.T) {
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 	}, func(Chunk) error { return nil })
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "required tools")
+	requireToolErrorCode(t, err, CodeValidationFailed)
 
 	err = sess.Execute(context.Background(), ToolCall{
 		ToolName: "a",
@@ -101,7 +100,7 @@ func TestSession_EnforcesRunPolicyAllowedTools(t *testing.T) {
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 	}, func(Chunk) error { return nil })
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not allowed")
+	requireToolErrorCode(t, err, CodeValidationFailed)
 
 	err = sess.Execute(context.Background(), ToolCall{
 		ToolName: "a",

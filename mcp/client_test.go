@@ -215,6 +215,34 @@ func TestConnect_InitializedNotifyFailureReturnsErrorAndClosesTransport(t *testi
 	require.Equal(t, 1, base.closeCalls)
 }
 
+func TestHandleToolCallResult_ErrorChunkUsesStructuredWire(t *testing.T) {
+	client := &Client{}
+	rawResult, err := json.Marshal(ToolsCallResult{
+		Content: []ContentItem{{Type: "text", Text: "permission denied"}},
+		IsError: true,
+	})
+	require.NoError(t, err)
+
+	var got toolsy.Chunk
+	err = client.handleToolCallResult(
+		context.Background(),
+		callResultWithErr{res: rawResult, requestID: "req-1"},
+		func(c toolsy.Chunk) error {
+			got = c
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.True(t, got.IsError)
+	require.Equal(t, toolsy.MimeTypeToolErrorJSON, got.MimeType)
+
+	var wire struct {
+		Code string `json:"code"`
+	}
+	require.NoError(t, json.Unmarshal(got.Data, &wire))
+	require.Equal(t, string(toolsy.CodeInternal), wire.Code)
+}
+
 func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
 	toolsList := ToolsListResult{
 		Tools: []MCPTool{

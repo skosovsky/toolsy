@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"time"
-	"unicode/utf8"
 )
 
 // Middleware wraps a Tool with cross-cutting behavior (logging, recovery).
@@ -62,8 +61,8 @@ func (m *middlewareTool) Execute(ctx context.Context, env *RunEnv, input ToolInp
 	yieldWrapped := func(c Chunk) error {
 		if c.IsError {
 			errorChunks++
-			if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
-				lastErrorText = string(c.Data)
+			if summary := errorChunkSummaryText(c, nil); summary != "" {
+				lastErrorText = summary
 			}
 			return yield(c)
 		}

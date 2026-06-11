@@ -47,7 +47,7 @@ func (t *budgetTool) Execute(
 	if msg == "" {
 		msg = "budget exceeded"
 	}
-	chunk := newErrorChunk(msg)
+	chunk := NewErrorChunkFromErr(NewBudgetExceededError(msg))
 	if chunkErr := validateChunk(chunk); chunkErr != nil {
 		return chunkErr
 	}

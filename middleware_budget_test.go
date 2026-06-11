@@ -99,8 +99,11 @@ func TestWithBudget_DeniedEmitsErrorChunkAndSkipsTool(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
-	assert.Contains(t, string(chunks[0].Data), "token budget exceeded")
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type, not JSON document
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeBudgetExceeded, te.Code)
+	assert.Contains(t, te.Reason, "token budget exceeded")
 	assert.False(t, executed.Load())
 	assert.Equal(t, int64(1), tracker.calls.Load())
 }
@@ -176,10 +179,12 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeTimeout, te.Code)
 	assert.Equal(t, int64(1), attempts.Load())
 	assert.Equal(t, int64(1), tracker.calls.Load())
-	assert.Contains(t, string(chunks[0].Data), "...")
 }
 
 func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
@@ -225,6 +230,11 @@ func TestMiddlewareStack_BudgetDenySkipsTool(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
+	assert.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeBudgetExceeded, te.Code)
+	assert.Contains(t, te.Reason, "budget exceeded")
 	assert.Equal(t, int64(0), attempts.Load())
 	assert.Equal(t, int64(1), tracker.calls.Load())
 }

@@ -20,7 +20,7 @@ type ToolManifest struct {
 	OutputSchema map[string]any
 	Tags         []string
 	Version      string
-	Metadata     map[string]any
+	Requirements ToolRequirements
 
 	CompletionPolicy     CompletionPolicy
 	ReadOnly             bool
@@ -96,20 +96,11 @@ func WithIdempotent() ToolOption {
 	}
 }
 
-// WithMetadata merges custom metadata into the tool manifest metadata.
-func WithMetadata(metadata map[string]any) ToolOption {
+// WithRequirements sets typed declarative requirements on the tool manifest.
+// Enforcement is the host's responsibility (see [ToolRequirements]).
+func WithRequirements(req ToolRequirements) ToolOption {
 	return func(c *ToolConfig) {
-		if len(metadata) == 0 {
-			return
-		}
-		ensureManifestMetadata(&c.Manifest)
-		maps.Copy(c.Manifest.Metadata, metadata)
-	}
-}
-
-func ensureManifestMetadata(m *ToolManifest) {
-	if m.Metadata == nil {
-		m.Metadata = make(map[string]any)
+		c.Manifest.Requirements = cloneRequirements(req)
 	}
 }
 
@@ -177,15 +168,15 @@ func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
-	maxSteps     int
-	policy       RunPolicy
-	typeRegistry *StateTypeRegistry
+	maxSteps      int
+	policy        RunPolicy
+	codecRegistry *StateCodecRegistry
 }
 
-// WithStateTypeRegistry configures typed deserialization for [Session.Import].
-func WithStateTypeRegistry(r *StateTypeRegistry) SessionOption {
+// WithStateCodecRegistry configures typed encode/decode for [Session.ExportSnapshot] and [Session.ImportSnapshot].
+func WithStateCodecRegistry(r *StateCodecRegistry) SessionOption {
 	return func(o *sessionOptions) {
-		o.typeRegistry = r
+		o.codecRegistry = r
 	}
 }
 

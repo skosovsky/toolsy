@@ -157,11 +157,15 @@ func buildWrappedTool(
 	reliable routery.Executor[execReq, httpGetResult],
 ) (toolsy.Tool, error) {
 	manifest := baseGet.Manifest()
-	return toolsy.NewDynamicTool(
-		manifest.Name+"_resilient",
-		manifest.Description+" (routery: timeout, retry, bulkhead)",
-		manifest.Parameters,
-		func(ctx context.Context, run *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+	return toolsy.NewDynamicToolFromSpec(toolsy.DynamicToolSpec{
+		Name:        manifest.Name + "_resilient",
+		Description: manifest.Description + " (routery: timeout, retry, bulkhead)",
+		Schema:      toolsy.MapSchemaProvider(manifest.Parameters),
+		Handler: func(ctx context.Context, run *toolsy.RunEnv, decoded map[string]any, yield func(toolsy.Chunk) error) error {
+			argsJSON, err := json.Marshal(decoded)
+			if err != nil {
+				return toolsy.NewJSONParseError(err)
+			}
 			var args httpGetArgs
 			if unmarshalArgsErr := json.Unmarshal(argsJSON, &args); unmarshalArgsErr != nil {
 				return toolsy.NewJSONParseError(unmarshalArgsErr)
@@ -180,5 +184,5 @@ func buildWrappedTool(
 				MimeType: toolsy.MimeTypeJSON,
 			})
 		},
-	)
+	})
 }

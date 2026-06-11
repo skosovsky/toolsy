@@ -38,13 +38,13 @@ func New(sandbox Sandbox, opts ...Option) (toolsy.Tool, error) {
 	}
 
 	handler := newExecHandler(sandbox, supported)
-	return toolsy.NewDynamicTool(
-		o.name,
-		o.description,
-		buildSchema(supported),
-		handler,
-		o.toolOptions...,
-	)
+	return toolsy.NewDynamicToolFromSpec(toolsy.DynamicToolSpec{ //nolint:exhaustruct // ValidateArgs optional
+		Name:        o.name,
+		Description: o.description,
+		Schema:      toolsy.MapSchemaProvider(buildSchema(supported)),
+		Handler:     handler,
+		Options:     o.toolOptions,
+	})
 }
 
 func resolveSupportedLanguages(sandbox Sandbox, o *options) ([]string, error) {
@@ -69,11 +69,11 @@ func resolveSupportedLanguages(sandbox Sandbox, o *options) ([]string, error) {
 func newExecHandler(
 	sandbox Sandbox,
 	supported []string,
-) func(context.Context, *toolsy.RunEnv, []byte, func(toolsy.Chunk) error) error {
-	return func(ctx context.Context, _ *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-		var args execArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return toolsy.NewJSONParseError(err)
+) func(context.Context, *toolsy.RunEnv, map[string]any, func(toolsy.Chunk) error) error {
+	return func(ctx context.Context, _ *toolsy.RunEnv, decoded map[string]any, yield func(toolsy.Chunk) error) error {
+		args, err := execArgsFromDecoded(decoded)
+		if err != nil {
+			return err
 		}
 
 		if strings.TrimSpace(args.Code) == "" {
@@ -87,8 +87,8 @@ func newExecHandler(
 			)
 		}
 
-		if err := ctx.Err(); err != nil {
-			return mapExecError(err)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return mapExecError(ctxErr)
 		}
 
 		req := RunRequest{
@@ -98,16 +98,68 @@ func newExecHandler(
 			Files:    encodeFiles(args.Files),
 		}
 
-		res, err := sandbox.Run(ctx, req)
-		if err != nil {
-			return mapExecError(err)
+		res, runErr := sandbox.Run(ctx, req)
+		if runErr != nil {
+			return mapExecError(runErr)
 		}
-		out, err := json.Marshal(res)
-		if err != nil {
-			return toolsy.NewInternalError(fmt.Errorf("exectool: marshal result: %w", err))
+		out, marshalErr := json.Marshal(res)
+		if marshalErr != nil {
+			return toolsy.NewInternalError(fmt.Errorf("exectool: marshal result: %w", marshalErr))
 		}
 		return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
 	}
+}
+
+func execArgsFromDecoded(decoded map[string]any) (execArgs, error) {
+	var args execArgs
+	language, ok := decodedString(decoded, "language")
+	if !ok {
+		return execArgs{}, toolsy.NewValidationError("language is required")
+	}
+	args.Language = language
+
+	code, ok := decodedString(decoded, "code")
+	if !ok {
+		return execArgs{}, toolsy.NewValidationError("code is required")
+	}
+	args.Code = code
+
+	if env, ok := decodedStringMap(decoded, "env"); ok {
+		args.Env = env
+	}
+	if files, ok := decodedStringMap(decoded, "files"); ok {
+		args.Files = files
+	}
+	return args, nil
+}
+
+func decodedString(m map[string]any, key string) (string, bool) {
+	v, ok := m[key]
+	if !ok {
+		return "", false
+	}
+	s, ok := v.(string)
+	return s, ok
+}
+
+func decodedStringMap(m map[string]any, key string) (map[string]string, bool) {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return nil, false
+	}
+	raw, ok := v.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	out := make(map[string]string, len(raw))
+	for k, val := range raw {
+		s, ok := val.(string)
+		if !ok {
+			return nil, false
+		}
+		out[k] = s
+	}
+	return out, true
 }
 
 func buildSchema(languages []string) map[string]any {

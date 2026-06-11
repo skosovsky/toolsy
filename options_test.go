@@ -90,20 +90,24 @@ func TestWithReadOnly(t *testing.T) {
 	assert.True(t, tool.Manifest().ReadOnly)
 }
 
-func TestWithMetadata(t *testing.T) {
+func TestWithRequirements(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
 	tool, err := NewTool("t", "d", func(_ context.Context, _ *RunEnv, _ A) (R, error) {
 		return R{}, nil
-	}, WithRequiresConfirmation(), WithMetadata(map[string]any{
-		"sensitivity": "high",
+	}, WithRequiresConfirmation(), WithRequirements(ToolRequirements{
+		MemoryAccess: MemoryAccessReadWrite,
+		NeedsSession: true,
+		Permissions:  []Permission{"admin"},
 	}))
 	require.NoError(t, err)
 
 	assert.True(t, tool.Manifest().RequiresConfirmation)
-	meta := tool.Manifest().Metadata
-	assert.Equal(t, "high", meta["sensitivity"])
+	req := tool.Manifest().Requirements
+	assert.Equal(t, MemoryAccessReadWrite, req.MemoryAccess)
+	assert.True(t, req.NeedsSession)
+	assert.Equal(t, []Permission{"admin"}, req.Permissions)
 }
 
 func TestToolOptions_Combined(t *testing.T) {

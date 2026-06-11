@@ -10,7 +10,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewDynamicTool_Success(t *testing.T) {
+func newDynamicTool(
+	name, description string,
+	schema map[string]any,
+	fn func(context.Context, *RunEnv, map[string]any, func(Chunk) error) error,
+	opts ...ToolOption,
+) (Tool, error) {
+	return NewDynamicToolFromSpec(DynamicToolSpec{
+		Name:        name,
+		Description: description,
+		Schema:      MapSchemaProvider(schema),
+		Handler:     fn,
+		Options:     opts,
+	})
+}
+
+func TestNewDynamicToolFromSpec_Success(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{
 		"type": "object",
@@ -19,12 +34,16 @@ func TestNewDynamicTool_Success(t *testing.T) {
 		},
 		"required": []any{"x"},
 	}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"dynamic",
 		"A dynamic tool",
 		schema,
-		func(_ context.Context, _ *RunEnv, argsJSON []byte, yield func(Chunk) error) error {
-			return yield(Chunk{Event: EventResult, Data: argsJSON, MimeType: MimeTypeJSON})
+		func(_ context.Context, _ *RunEnv, decoded map[string]any, yield func(Chunk) error) error {
+			data, err := json.Marshal(decoded)
+			if err != nil {
+				return err
+			}
+			return yield(Chunk{Event: EventResult, Data: data, MimeType: MimeTypeJSON})
 		},
 	)
 	require.NoError(t, err)
@@ -48,7 +67,7 @@ func TestNewDynamicTool_Success(t *testing.T) {
 	assert.InDelta(t, 42.0, out["x"].(float64), 1e-9)
 }
 
-func TestNewDynamicTool_ValidationError(t *testing.T) {
+func TestNewDynamicToolFromSpec_ValidationError(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{
 		"type": "object",
@@ -57,11 +76,11 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 		},
 		"required": []any{"unit"},
 	}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"weather",
 		"Weather",
 		schema,
-		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)
@@ -82,50 +101,53 @@ func TestNewDynamicTool_ValidationError(t *testing.T) {
 	requireClientCorrectable(t, err)
 }
 
-func TestNewDynamicTool_InvalidSchema(t *testing.T) {
+func TestNewDynamicToolFromSpec_InvalidSchema(t *testing.T) {
 	t.Parallel()
 	invalidSchema := map[string]any{"type": 123}
-	_, err := NewDynamicTool(
+	_, err := newDynamicTool(
 		"bad",
 		"Bad",
 		invalidSchema,
-		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, _ func(Chunk) error) error {
 			return nil
 		},
 	)
 	require.Error(t, err)
 
-	_, err = NewDynamicTool(
-		"nil",
-		"Nil",
-		nil,
-		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
-			return nil
-		},
-	)
+	_, err = NewDynamicToolFromSpec(DynamicToolSpec{
+		Name:        "nil",
+		Description: "Nil",
+		Schema:      nil,
+		Handler:     func(_ context.Context, _ *RunEnv, _ map[string]any, _ func(Chunk) error) error { return nil },
+	})
 	require.Error(t, err)
 }
 
-func TestNewDynamicTool_NilHandler(t *testing.T) {
+func TestNewDynamicToolFromSpec_NilHandler(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	_, err := NewDynamicTool("no_handler", "No handler", schema, nil)
+	_, err := NewDynamicToolFromSpec(DynamicToolSpec{
+		Name:        "no_handler",
+		Description: "No handler",
+		Schema:      MapSchemaProvider(schema),
+		Handler:     nil,
+	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "dynamic tool handler must not be nil")
 }
 
-func TestNewDynamicTool_ErrorClassification(t *testing.T) {
+func TestNewDynamicToolFromSpec_ErrorClassification(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{
 		"type":       "object",
 		"properties": map[string]any{"x": map[string]any{"type": "integer"}},
 	}
 	clientErr := NewValidationError("bad request")
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"classify",
 		"Classify",
 		schema,
-		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, _ func(Chunk) error) error {
 			return clientErr
 		},
 	)
@@ -143,11 +165,11 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 	require.ErrorAs(t, err, &ce)
 	assert.Equal(t, "bad request", ce.Reason)
 
-	tool2, err := NewDynamicTool(
+	tool2, err := newDynamicTool(
 		"sys",
 		"Sys",
 		schema,
-		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, _ func(Chunk) error) error {
 			return errors.New("internal failure")
 		},
 	)
@@ -162,19 +184,20 @@ func TestNewDynamicTool_ErrorClassification(t *testing.T) {
 	requireSystemToolError(t, err)
 }
 
-func TestNewDynamicTool_MetadataOptions(t *testing.T) {
+func TestNewDynamicToolFromSpec_RequirementsOptions(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"meta",
 		"Meta",
 		schema,
-		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithTags("a", "b"),
 		WithVersion("1.0"),
 		WithDangerous(),
+		WithRequirements(ToolRequirements{MemoryAccess: MemoryAccessRead}),
 	)
 	require.NoError(t, err)
 
@@ -182,9 +205,10 @@ func TestNewDynamicTool_MetadataOptions(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, m.Tags)
 	assert.Equal(t, "1.0", m.Version)
 	assert.True(t, m.Dangerous)
+	assert.Equal(t, MemoryAccessRead, m.Requirements.MemoryAccess)
 }
 
-func TestNewDynamicTool_StrictOption(t *testing.T) {
+func TestNewDynamicToolFromSpec_StrictOption(t *testing.T) {
 	t.Parallel()
 	schema := map[string]any{
 		"type": "object",
@@ -193,11 +217,11 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 			"b": map[string]any{"type": "integer"},
 		},
 	}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"strict_tool",
 		"Strict",
 		schema,
-		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
@@ -213,7 +237,7 @@ func TestNewDynamicTool_StrictOption(t *testing.T) {
 	assert.Len(t, required, 2)
 }
 
-func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
+func TestNewDynamicToolFromSpec_DoesNotMutateInputSchemaMap(t *testing.T) {
 	t.Parallel()
 	nestedObj := map[string]any{
 		"type":       "object",
@@ -229,11 +253,11 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 			"nested": nestedObj,
 		},
 	}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"no_mutate",
 		"No mutate",
 		schemaMap,
-		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 		WithStrict(),
@@ -251,7 +275,7 @@ func TestNewDynamicTool_DoesNotMutateInputSchemaMap(t *testing.T) {
 	assert.Nil(t, nestedObj["additionalProperties"])
 }
 
-func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *testing.T) {
+func TestNewDynamicToolFromSpec_PostConstructMutatingCallerDoesNotAffectToolSchema(t *testing.T) {
 	t.Parallel()
 	schemaMap := map[string]any{
 		"type": "object",
@@ -259,11 +283,11 @@ func TestNewDynamicTool_PostConstructMutatingCallerDoesNotAffectToolSchema(t *te
 			"x": map[string]any{"type": "integer"},
 		},
 	}
-	tool, err := NewDynamicTool(
+	tool, err := newDynamicTool(
 		"isolated",
 		"Isolated",
 		schemaMap,
-		func(_ context.Context, _ *RunEnv, _ []byte, yield func(Chunk) error) error {
+		func(_ context.Context, _ *RunEnv, _ map[string]any, yield func(Chunk) error) error {
 			return yield(Chunk{Event: EventResult, Data: []byte(`{}`), MimeType: MimeTypeJSON})
 		},
 	)

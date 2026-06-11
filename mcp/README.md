@@ -61,6 +61,29 @@ func main() {
 }
 ```
 
+## Contract validation at startup
+
+Before building the registry, verify required tool names against MCP (or other) manifests without `Registry.Build`:
+
+```go
+var mcpTools []toolsy.Tool
+for tool, err := range client.GetTools(ctx) {
+	if err != nil {
+		return err
+	}
+	mcpTools = append(mcpTools, tool)
+}
+ms, err := toolsy.NewManifestSet(mcpTools...)
+if err != nil {
+	return err
+}
+if err := toolsy.ValidateManifestContract(ms, []string{"query", "read_mcp_resource"}); err != nil {
+	return err
+}
+```
+
+See [docs/migration-task27.md](../docs/migration-task27.md) for v1.0 manifest and `RunCall` contracts.
+
 ## Transport interface
 
 The `Transport` interface provides `Call(ctx, method, params) (result []byte, requestID string, err error)`. The **requestID** is the JSON-RPC request id used for the call; it is returned so the client can send `notifications/cancelled` with that id when the request is aborted (e.g. context cancellation or yield error). Implementations are thread-safe.

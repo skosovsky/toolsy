@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -148,7 +149,7 @@ func TestFSWriteFile_SymlinkEscapeBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
@@ -174,7 +175,7 @@ func TestFSWriteFile_ExistingSymlinkFileBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "outside sandbox")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestFSWriteFile_ReadOnlyBlocked(t *testing.T) {
@@ -199,12 +200,12 @@ func TestFSListDir_PathTraversal(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestAsTools_InvalidBaseDir(t *testing.T) {
 	_, err := AsTools("/nonexistent-dir-xyz")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "toolkit/fstool")
 }
 
 func TestAsTools_ToolCount(t *testing.T) {

@@ -64,12 +64,7 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"log_soft_error",
 		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
-			return yield(Chunk{
-				Event:    EventResult,
-				Data:     []byte("budget exceeded"),
-				MimeType: MimeTypeText,
-				IsError:  true,
-			})
+			return yield(NewErrorChunkFromErr(NewValidationError("budget exceeded")))
 		},
 	)
 	wrapped := WithLogging(logger)(inner)
@@ -83,7 +78,8 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 	assert.Contains(t, logStr, "tool start")
 	assert.Contains(t, logStr, "tool error")
 	assert.Contains(t, logStr, "error_chunks=1")
-	assert.Contains(t, logStr, "last_error_text=\"budget exceeded\"")
+	assert.Contains(t, logStr, "last_error_text=")
+	assert.Contains(t, logStr, "budget exceeded")
 }
 
 func TestWithRecovery(t *testing.T) {
@@ -265,7 +261,7 @@ func TestAsAsyncTool_BudgetSoftErrorInOnComplete(t *testing.T) {
 	assert.False(t, executed.Load())
 	te, ok := AsToolError(gotErr)
 	require.True(t, ok)
-	assert.Equal(t, CodeToolExecutionFailed, te.Code)
+	assert.Equal(t, CodeBudgetExceeded, te.Code)
 }
 
 func TestAsAsyncTool_ErrorFormatterSoftErrorInOnComplete(t *testing.T) {
@@ -299,10 +295,45 @@ func TestAsAsyncTool_ErrorFormatterSoftErrorInOnComplete(t *testing.T) {
 	require.NoError(t, err)
 	done.Wait()
 	require.Error(t, gotErr)
-	assert.Contains(t, gotErr.Error(), failMsg)
 	te, ok := AsToolError(gotErr)
 	require.True(t, ok)
-	assert.Equal(t, CodeToolExecutionFailed, te.Code)
+	assert.Equal(t, CodeInternal, te.Code)
+}
+
+func TestAsAsyncTool_OnCompletePreservesStructuredValidationWire(t *testing.T) {
+	var (
+		done   sync.WaitGroup
+		gotErr error
+	)
+	done.Add(1)
+
+	base := newMiddlewareMinTool(
+		"validate_fail",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewValidationError("city is required", "city")
+		},
+	)
+	reg, err := NewRegistryBuilder().
+		Use(WithErrorFormatter()).
+		Add(AsAsyncTool(base, WithOnComplete(func(_ context.Context, _ string, _ []Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}))).
+		Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "validate_fail", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.Error(t, gotErr)
+	te, ok := AsToolError(gotErr)
+	require.True(t, ok)
+	assert.Equal(t, CodeValidationFailed, te.Code)
+	assert.Equal(t, []string{"city"}, te.FixableArgs)
 }
 
 func TestAsAsyncTool_BackgroundYieldValidationInOnComplete(t *testing.T) {

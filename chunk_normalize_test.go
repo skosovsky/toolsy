@@ -38,7 +38,19 @@ func TestValidateChunk_ErrorChunkMissingData(t *testing.T) {
 		Event:   EventResult,
 		IsError: true,
 	})
-	requireInternalErrorContains(t, err, "error chunks must include UTF-8 text in Data")
+	requireInternalErrorContains(t, err, "error chunks must include payload in Data")
+}
+
+func TestValidateChunk_ErrorChunkToolErrorJSON(t *testing.T) {
+	data, err := marshalToolErrorWire(NewValidationError("bad"), "Error executing tool: bad")
+	require.NoError(t, err)
+	err = validateChunk(Chunk{
+		Event:    EventResult,
+		IsError:  true,
+		Data:     data,
+		MimeType: MimeTypeToolErrorJSON,
+	})
+	require.NoError(t, err)
 }
 
 func TestValidateChunk_ErrorChunkWrongMime(t *testing.T) {

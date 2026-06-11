@@ -1,6 +1,7 @@
 package toolsy
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"unicode/utf8"
@@ -20,22 +21,36 @@ func validateChunk(c Chunk) error {
 		return nil
 	}
 	if c.IsError {
-		if len(c.Data) == 0 {
-			return NewInternalError(errors.New("toolsy: error chunks must include UTF-8 text in Data"))
-		}
-		if c.MimeType != MimeTypeText {
-			return NewInternalError(fmt.Errorf("toolsy: error chunks require mime type %q", MimeTypeText))
-		}
-		if !utf8.Valid(c.Data) {
-			return NewInternalError(errors.New("toolsy: error chunks must contain valid UTF-8 text"))
-		}
-		return nil
+		return validateErrorChunk(c)
 	}
 	if len(c.Data) > 0 && c.MimeType == "" {
 		return NewInternalError(fmt.Errorf("toolsy: chunk data requires mime type for event %q", c.Event))
 	}
 	if len(c.Data) == 0 && c.MimeType != "" {
 		return NewInternalError(errors.New("toolsy: chunk mime type without data is invalid"))
+	}
+	return nil
+}
+
+func validateErrorChunk(c Chunk) error {
+	if len(c.Data) == 0 {
+		return NewInternalError(errors.New("toolsy: error chunks must include payload in Data"))
+	}
+	switch c.MimeType {
+	case MimeTypeText:
+		if !utf8.Valid(c.Data) {
+			return NewInternalError(errors.New("toolsy: error chunks must contain valid UTF-8 text"))
+		}
+	case MimeTypeToolErrorJSON:
+		if !json.Valid(c.Data) {
+			return NewInternalError(errors.New("toolsy: tool error chunks must contain valid JSON"))
+		}
+	default:
+		return NewInternalError(fmt.Errorf(
+			"toolsy: error chunks require mime type %q or %q",
+			MimeTypeText,
+			MimeTypeToolErrorJSON,
+		))
 	}
 	return nil
 }

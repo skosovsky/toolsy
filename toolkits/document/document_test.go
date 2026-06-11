@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
@@ -96,7 +97,8 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "unsupported")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "unsupported")
 }
 
 func TestExtract_URLDisabled(t *testing.T) {
@@ -113,7 +115,8 @@ func TestExtract_URLDisabled(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "URL fetch is disabled")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "URL fetch is disabled")
 }
 
 func TestExtract_EmptyArgs(t *testing.T) {
@@ -130,6 +133,7 @@ func TestExtract_EmptyArgs(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
 func TestAsTool_ReturnsOneTool(t *testing.T) {
@@ -174,7 +178,8 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "too large")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "too large")
 }
 
 // minimalDOCX creates a minimal valid .docx (ZIP with word/document.xml containing one paragraph).
@@ -234,7 +239,8 @@ func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "private or loopback")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private or loopback")
 }
 
 func TestExtract_Remote_Success(t *testing.T) {
@@ -313,5 +319,6 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
-	require.Contains(t, err.Error(), "private or loopback")
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private or loopback")
 }

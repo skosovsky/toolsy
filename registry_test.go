@@ -9,7 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -328,9 +327,6 @@ func TestRegistry_InvalidRuntimeState(t *testing.T) {
 
 	err = reg.Shutdown(context.Background())
 	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
-
-	err = ValidateContract(&reg, []string{"x"})
-	requireToolErrorCode(t, err, CodeRegistryNotReady, ErrRegistryState)
 }
 
 func TestRegistry_Execute_ToolNotFound(t *testing.T) {
@@ -452,7 +448,7 @@ func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *t
 	assert.Equal(t, int32(1), afterCalls.Load())
 	require.NoError(t, lastSummary.Error)
 	assert.Equal(t, 1, lastSummary.ErrorChunks)
-	assert.Equal(t, "batch tool failed", lastSummary.LastErrorText)
+	assert.Contains(t, lastSummary.LastErrorText, "internal system error")
 	assert.Equal(t, 0, lastSummary.ChunksDelivered)
 	assert.Equal(t, int64(0), lastSummary.TotalBytes)
 }
@@ -595,7 +591,7 @@ func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
 		require.NotEmpty(t, c.ToolName)
 		if c.IsError {
 			errCount++
-			require.Equal(t, MimeTypeText, c.MimeType)
+			require.Equal(t, MimeTypeToolErrorJSON, c.MimeType) //nolint:testifylint // mime type
 		} else {
 			okCount++
 			assertChunkJSONMime(t, c.MimeType)
@@ -642,8 +638,53 @@ func TestRegistry_ExecuteBatchStream_MiddlewareErrorAsChunk(t *testing.T) {
 	assert.Equal(t, "c1", chunks[0].CallID)
 	assert.Equal(t, "guarded", chunks[0].ToolName)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
-	assert.Contains(t, string(chunks[0].Data), errRateLimit.Error())
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeInternal, te.Code)
+	assert.Contains(t, string(chunks[0].Data), `"code":"INTERNAL"`)
+}
+
+func TestRegistry_ExecuteBatchStream_StructuredErrorChunk(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"validate_fail",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewValidationError("city is required", "city")
+		},
+	)
+	reg, err := NewRegistryBuilder().Add(tool).Build()
+	require.NoError(t, err)
+
+	var chunks []Chunk
+	err = reg.ExecuteBatchStream(
+		context.Background(),
+		[]ToolCall{{ToolName: "validate_fail", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}}},
+		func(c Chunk) error {
+			chunks = append(chunks, c)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, chunks, 1)
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeValidationFailed, te.Code)
+	assert.Equal(t, []string{"city"}, te.FixableArgs)
+
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "validate_fail",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, outcome.ExecutionError)
+	te2, ok := AsToolError(outcome.ExecutionError)
+	require.True(t, ok)
+	assert.Equal(t, CodeValidationFailed, te2.Code)
 }
 
 func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesEmptyErrorText(t *testing.T) {
@@ -667,9 +708,10 @@ func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesEmptyErrorTex
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
-	assert.NotEmpty(t, string(chunks[0].Data))
-	assert.Equal(t, "Error executing tool.", string(chunks[0].Data))
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeInternal, te.Code)
 }
 
 func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesInvalidUTF8(t *testing.T) {
@@ -693,9 +735,12 @@ func TestRegistry_ExecuteBatchStream_SyntheticErrorChunk_NormalizesInvalidUTF8(t
 	require.NoError(t, err)
 	require.Len(t, chunks, 1)
 	assert.True(t, chunks[0].IsError)
-	assert.Equal(t, MimeTypeText, chunks[0].MimeType)
-	assert.True(t, utf8.Valid(chunks[0].Data))
-	assert.Contains(t, string(chunks[0].Data), "x")
+	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
+	te, err := unmarshalToolErrorWire(chunks[0].Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeInternal, te.Code)
+	require.Error(t, te.Unwrap())
+	assert.Contains(t, te.Unwrap().Error(), "x")
 }
 
 func TestRegistry_ExecuteBatchStream_ReturnsErrStreamAbortedOnYieldError(t *testing.T) {

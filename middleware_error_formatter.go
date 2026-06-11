@@ -38,7 +38,7 @@ func (t *errorFormatterTool) Execute(
 		return err
 	}
 
-	chunk := newErrorChunk(formatExecutionError(err))
+	chunk := NewErrorChunkFromErr(err)
 	if chunkErr := validateChunk(chunk); chunkErr != nil {
 		return chunkErr
 	}
@@ -95,24 +95,66 @@ func formatToolErrorMessage(te *ToolError) string {
 	if te.Code == CodeToolsContractMissing {
 		return "Error executing tool: required tools are not registered. Hint: Register missing tools or adjust the contract."
 	}
+	if te.Code == CodeBudgetExceeded {
+		return "Error executing tool: " + sanitizeErrorReason(te.Reason) +
+			". Hint: Narrow the query or reduce tool usage."
+	}
 	if reason == "" {
 		return ""
 	}
 	return "Error executing tool: " + sanitizeErrorReason(reason) + ". Hint: Retry later or refine the query."
 }
 
-func newErrorChunk(message string) Chunk {
-	msg := strings.TrimSpace(message)
-	if msg == "" {
-		msg = "Error executing tool."
+// NewErrorChunkFromErr builds a structured error result chunk with [MimeTypeToolErrorJSON].
+func NewErrorChunkFromErr(err error) Chunk {
+	te := toolErrorFromExecutionErr(err)
+	llmMessage := formatToolErrorMessage(te)
+	if llmMessage == "" {
+		llmMessage = formatExecutionError(err)
 	}
-	msg = strings.ToValidUTF8(msg, "\uFFFD")
+	data, marshalErr := marshalToolErrorWire(te, llmMessage)
+	if marshalErr != nil {
+		te = NewInternalError(marshalErr)
+		llmMessage = formatExecutionError(marshalErr)
+		data, _ = marshalToolErrorWire(te, llmMessage)
+	}
 	return Chunk{
 		Event:    EventResult,
-		Data:     []byte(msg),
-		MimeType: MimeTypeText,
+		Data:     data,
+		MimeType: MimeTypeToolErrorJSON,
 		IsError:  true,
 	}
+}
+
+func toolErrorFromExecutionErr(err error) *ToolError {
+	if err == nil {
+		return NewInternalError(errors.New("tool execution failed"))
+	}
+	if te, ok := AsToolError(err); ok {
+		return te
+	}
+	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return NewTimeoutError(true)
+	}
+	return NewInternalError(err)
+}
+
+func errorChunkSummaryText(c Chunk, execErr error) string {
+	if c.MimeType == MimeTypeToolErrorJSON {
+		if te, err := unmarshalToolErrorWire(c.Data); err == nil {
+			if msg := formatToolErrorMessage(te); msg != "" {
+				return msg
+			}
+			return te.Reason
+		}
+	}
+	if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
+		return string(c.Data)
+	}
+	if execErr != nil {
+		return formatExecutionError(execErr)
+	}
+	return ""
 }
 
 func sanitizeErrorReason(reason string) string {
