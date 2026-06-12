@@ -168,15 +168,24 @@ func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
-	maxSteps      int
-	policy        RunPolicy
-	codecRegistry *StateCodecRegistry
+	maxSteps          int
+	policy            RunPolicy
+	codecRegistry     *StateCodecRegistry
+	strictStateCodecs bool
 }
 
 // WithStateCodecRegistry configures typed encode/decode for [Session.ExportSnapshot] and [Session.ImportSnapshot].
 func WithStateCodecRegistry(r *StateCodecRegistry) SessionOption {
 	return func(o *sessionOptions) {
 		o.codecRegistry = r
+	}
+}
+
+// WithStrictStateCodecs requires every non-nil session state key to have a registered [StateCodec].
+// Empty snapshots and JSON null values clear keys without requiring codecs.
+func WithStrictStateCodecs(strict bool) SessionOption {
+	return func(o *sessionOptions) {
+		o.strictStateCodecs = strict
 	}
 }
 

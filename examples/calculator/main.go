@@ -1,9 +1,8 @@
-// Package main demonstrates a simple calculator tool with toolsy.
+// Package main demonstrates a simple calculator tool with Session.RunCall.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -49,26 +48,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("registry build: %v", err)
 	}
-	// Schema for LLM: pass add.Manifest().Parameters or sub.Manifest().Parameters to your provider (do not mutate)
+	sess, err := toolsy.NewSession(reg)
+	if err != nil {
+		log.Fatalf("session: %v", err)
+	}
 	_ = add.Manifest().Parameters
 
-	call := toolsy.ToolCall{
+	outcome, err := sess.RunCall(context.Background(), toolsy.ToolCall{
 		ToolName: "add",
 		Input: toolsy.ToolInput{
 			CallID:   "1",
 			ArgsJSON: []byte(`{"a": 3, "b": 5}`),
 		},
+		Env: toolsy.NewRunEnv(sess),
+	})
+	if err != nil {
+		log.Fatalf("run call: %v", err)
 	}
-	var result []byte
-	if err := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
-		result = c.Data
-		return nil
-	}); err != nil {
-		log.Fatalf("execute: %v", err)
+	if outcome.ExecutionError != nil {
+		log.Fatalf("execution error: %v", outcome.ExecutionError)
 	}
-	var out CalcResult
-	if err := json.Unmarshal(result, &out); err != nil {
-		log.Fatalf("unmarshal: %v", err)
+	out, err := toolsy.DecodeOutcomeAs[CalcResult](outcome)
+	if err != nil {
+		log.Fatalf("decode outcome: %v", err)
 	}
 	_, _ = fmt.Fprintf(os.Stdout, "3 + 5 = %d\n", out.Sum)
 }

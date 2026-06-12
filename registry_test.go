@@ -388,6 +388,7 @@ func TestRegistry_Execute_OnAfterSummaryTracksSoftErrorChunk(t *testing.T) {
 	)
 
 	var lastSummary ExecutionSummary
+	var deliveredErrorMime string
 	reg := mustBuildRegistry(
 		t,
 		[]Tool{tool},
@@ -399,14 +400,51 @@ func TestRegistry_Execute_OnAfterSummaryTracksSoftErrorChunk(t *testing.T) {
 	err := reg.Execute(
 		context.Background(),
 		ToolCall{ToolName: "soft_summary", Input: ToolInput{CallID: "s1", ArgsJSON: []byte(`{}`)}},
-		func(Chunk) error { return nil },
+		func(c Chunk) error {
+			if c.IsError {
+				deliveredErrorMime = c.MimeType
+			}
+			return nil
+		},
 	)
 	require.NoError(t, err)
-	assert.NoError(t, lastSummary.Error)
+	assert.Equal(t, MimeTypeToolErrorJSON, deliveredErrorMime) //nolint:testifylint // mime type, not JSON document
+	require.NoError(t, lastSummary.Error)
 	assert.Equal(t, 1, lastSummary.ErrorChunks)
-	assert.Equal(t, "budget exceeded", lastSummary.LastErrorText)
+	assert.Contains(t, lastSummary.LastErrorText, "malformed error chunk")
 	assert.Equal(t, 0, lastSummary.ChunksDelivered)
 	assert.Equal(t, int64(0), lastSummary.TotalBytes)
+}
+
+func TestPrepareChunk_EmptyToolErrorJSON_Rejects(t *testing.T) {
+	t.Parallel()
+	invalid := Chunk{Event: EventResult, IsError: true, MimeType: MimeTypeToolErrorJSON}
+	_, prepErr := prepareChunk(invalid)
+	require.Error(t, prepErr)
+
+	fallback, err := prepareChunk(NewErrorChunkFromErr(prepErr))
+	require.NoError(t, err)
+	assert.Equal(t, MimeTypeToolErrorJSON, fallback.MimeType) //nolint:testifylint // mime type, not JSON document
+}
+
+func TestHandleBatchToolError_YieldsStructuredErrorChunk(t *testing.T) {
+	t.Parallel()
+	var yielded Chunk
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		errors.New("batch tool failed"),
+		new(ExecutionSummary),
+		false,
+		func(c Chunk) error {
+			yielded = c
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	assert.Equal(t, MimeTypeToolErrorJSON, yielded.MimeType) //nolint:testifylint // mime type, not JSON document
 }
 
 func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *testing.T) {

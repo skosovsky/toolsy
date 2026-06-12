@@ -16,14 +16,14 @@
 //   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/UIAction).
 //   - ToolManifest SSOT: ReadOnly, RequiresConfirmation, Dangerous, Idempotent, CompletionPolicy.
 //   - Session: in-memory state via SetSessionState/GetSessionState; ExportSnapshot/ImportSnapshot;
-//     StateCodecRegistry for typed snapshot roundtrips (see docs/migration-task27.md and docs/adr/adr-task27-typed-contracts.md).
+//     StateCodecRegistry for typed snapshot roundtrips (see docs/migration-task28.md and docs/adr/adr-task28-hardening.md).
 //   - RunCall + ToolOutcome + DecodeOutcomeAs: sync aggregation; business errors in ExecutionError (Error-as-Value).
 //   - ValidateManifestContract + ManifestSet: declarative contract checks without Registry.Build.
 //   - NewTypedTool, NewDynamicToolFromSpec, ManifestSet, ToolRequirements (v1.0 clear break).
 //   - RunEnv: Put/Require/Lookup (deps); SetState/GetState delegate to bound Session;
 //     NewRunEnv(session, opts...); session may be nil for DI-only usage.
 //   - ToolError: structured errors with Code and Retryable (replaces ClientError/SystemError).
-//   - CallParser + DecodeChunkAs for typed host integration (see docs/migration-task22.md).
+//   - CallParser + DecodeChunkAs for typed host integration (see docs/migration-task28.md).
 //   - Registry runtime is immutable; use RegistryBuilder for setup-time mutation.
 //   - AsAsyncTool: register via RegistryBuilder.Use(...).Add(AsAsyncTool(base)).Build()
 //     so global middleware runs inside the background goroutine (unwrap-wrap in Build).
@@ -36,7 +36,9 @@
 // NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical
 // ToolCall/ToolResult wire format and textprocessor for standalone UTF-8 truncation.
 //
-// # Example
+// # Example (streaming / low-level)
+//
+// The Execute example below assembles chunks manually. For synchronous host loops, prefer RunCall (see block after Example).
 //
 //	type Args struct { City string `json:"city" jsonschema:"City name"` }
 //	type Out struct { Temp float64 `json:"temp"` }

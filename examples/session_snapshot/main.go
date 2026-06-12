@@ -65,7 +65,10 @@ func mustSession(reg *toolsy.Registry) *toolsy.Session {
 	if err := toolsy.RegisterJSONCodec[agentPrefs](codecs, stateKey); err != nil {
 		log.Fatal(err)
 	}
-	sess, err := toolsy.NewSession(reg, toolsy.WithStateCodecRegistry(codecs))
+	sess, err := toolsy.NewSession(reg,
+		toolsy.WithStateCodecRegistry(codecs),
+		toolsy.WithStrictStateCodecs(true),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

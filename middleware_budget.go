@@ -48,10 +48,11 @@ func (t *budgetTool) Execute(
 		msg = "budget exceeded"
 	}
 	chunk := NewErrorChunkFromErr(NewBudgetExceededError(msg))
-	if chunkErr := validateChunk(chunk); chunkErr != nil {
+	prepared, chunkErr := prepareChunk(chunk)
+	if chunkErr != nil {
 		return chunkErr
 	}
-	if yieldErr := yield(chunk); yieldErr != nil {
+	if yieldErr := yield(prepared); yieldErr != nil {
 		return wrapYieldError(yieldErr)
 	}
 	return nil

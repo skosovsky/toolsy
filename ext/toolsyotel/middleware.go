@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"unicode/utf8"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -65,8 +64,8 @@ func (s *softErrorState) recordFromChunk(c toolsy.Chunk) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.flag = true
-	if c.MimeType == toolsy.MimeTypeText && utf8.Valid(c.Data) {
-		s.text = string(c.Data)
+	if text := toolsy.ErrorChunkSummaryText(c, nil); text != "" {
+		s.text = text
 	}
 }
 
@@ -152,7 +151,11 @@ func (t *tracingTool) wrapYield(
 		}
 		soft.recordFromChunk(c)
 		if outAcc != nil {
-			outAcc.append(chunkPayloadText(c))
+			if c.IsError {
+				outAcc.append(toolsy.ErrorChunkSummaryText(c, nil))
+			} else {
+				outAcc.append(chunkPayloadText(c))
+			}
 		}
 		return nil
 	}

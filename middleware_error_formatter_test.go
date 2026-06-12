@@ -242,6 +242,18 @@ func TestWithErrorFormatter_PlainErrorPreservesActionableMessage(t *testing.T) {
 	assert.Contains(t, string(got.Data), "internal system error")
 }
 
+func TestErrorChunkSummaryText_LegacyTextNormalizes(t *testing.T) {
+	t.Parallel()
+	text := ErrorChunkSummaryText(Chunk{
+		Event:    EventResult,
+		Data:     []byte("budget exceeded"),
+		MimeType: MimeTypeText,
+		IsError:  true,
+	}, nil)
+	assert.Contains(t, text, "malformed error chunk")
+	assert.Contains(t, text, "budget exceeded")
+}
+
 func TestWithErrorFormatter_PlainErrorUsesFirstLineOnly(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"multiline_fail",

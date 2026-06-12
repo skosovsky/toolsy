@@ -67,6 +67,10 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	assert.True(t, cErr.IsError)
 	assert.Equal(t, []byte("fail"), cErr.Data)
 	assert.Equal(t, MimeTypeText, cErr.MimeType)
+
+	prepared, err := prepareChunk(cErr)
+	require.NoError(t, err)
+	assert.Equal(t, MimeTypeToolErrorJSON, prepared.MimeType) //nolint:testifylint // delivery contract
 }
 
 type minTool struct {

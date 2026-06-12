@@ -1,5 +1,5 @@
 // Package main shows wrapping a toolsy HTTP tool with routery policies (timeout, retry, bulkhead)
-// and registering the wrapped tool in a registry.
+// and calling it via Session.RunCall (toolsy v1.0 host-facing API).
 package main
 
 import (
@@ -74,14 +74,19 @@ func run() error {
 	}
 
 	reliable := buildReliableExecutor(baseGet)
-	wrapped, err := buildWrappedTool(baseGet, reliable)
+	wrapped, err := buildWrappedTool(reliable)
 	if err != nil {
 		return err
 	}
 
-	reg, err := toolsy.NewRegistryBuilder().Add(wrapped).Build()
+	reg, err := toolsy.NewRegistryBuilder().Add(wrapped).Use(toolsy.WithErrorFormatter()).Build()
 	if err != nil {
 		return fmt.Errorf("registry: %w", err)
+	}
+
+	sess, err := toolsy.NewSession(reg)
+	if err != nil {
+		return fmt.Errorf("session: %w", err)
 	}
 
 	call := toolsy.ToolCall{
@@ -90,18 +95,24 @@ func run() error {
 			CallID:   "demo",
 			ArgsJSON: fmt.Appendf(nil, `{"url":%q}`, srv.URL),
 		},
+		Env: toolsy.NewRunEnv(sess),
 	}
-	var resultChunk toolsy.Chunk
-	execErr := reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
-		resultChunk = c
-		return nil
-	})
-	if execErr != nil {
-		return fmt.Errorf("execute: %w", execErr)
+
+	outcome, err := sess.RunCall(context.Background(), call)
+	if err != nil {
+		return fmt.Errorf("infrastructure failure: %w", err)
 	}
-	out, decErr := toolsy.DecodeChunkAs[httpGetResult](resultChunk)
+	if outcome.ExecutionError != nil {
+		te, ok := toolsy.AsToolError(outcome.ExecutionError)
+		if ok {
+			return fmt.Errorf("tool failure [%s]: %s", te.Code, te.Reason)
+		}
+		return fmt.Errorf("tool failure: %w", outcome.ExecutionError)
+	}
+
+	out, decErr := toolsy.DecodeOutcomeAs[httpGetResult](outcome)
 	if decErr != nil {
-		return fmt.Errorf("decode result: %w", decErr)
+		return fmt.Errorf("decode outcome: %w", decErr)
 	}
 	_, err = fmt.Fprintf(os.Stdout, "status=%d body=%s\n", out.Status, out.Body)
 	return err
@@ -152,37 +163,12 @@ func retryOnNetTimeout(_ context.Context, _ execReq, execErr error) bool {
 	return errors.As(execErr, &ne) && ne.Timeout()
 }
 
-func buildWrappedTool(
-	baseGet toolsy.Tool,
-	reliable routery.Executor[execReq, httpGetResult],
-) (toolsy.Tool, error) {
-	manifest := baseGet.Manifest()
-	return toolsy.NewDynamicToolFromSpec(toolsy.DynamicToolSpec{
-		Name:        manifest.Name + "_resilient",
-		Description: manifest.Description + " (routery: timeout, retry, bulkhead)",
-		Schema:      toolsy.MapSchemaProvider(manifest.Parameters),
-		Handler: func(ctx context.Context, run *toolsy.RunEnv, decoded map[string]any, yield func(toolsy.Chunk) error) error {
-			argsJSON, err := json.Marshal(decoded)
-			if err != nil {
-				return toolsy.NewJSONParseError(err)
-			}
-			var args httpGetArgs
-			if unmarshalArgsErr := json.Unmarshal(argsJSON, &args); unmarshalArgsErr != nil {
-				return toolsy.NewJSONParseError(unmarshalArgsErr)
-			}
-			out, execReliableErr := reliable.Execute(ctx, execReq{Env: run, Args: args})
-			if execReliableErr != nil {
-				return execReliableErr
-			}
-			data, marshalOutErr := json.Marshal(out)
-			if marshalOutErr != nil {
-				return marshalOutErr
-			}
-			return yield(toolsy.Chunk{
-				Event:    toolsy.EventResult,
-				Data:     data,
-				MimeType: toolsy.MimeTypeJSON,
-			})
+func buildWrappedTool(reliable routery.Executor[execReq, httpGetResult]) (toolsy.Tool, error) {
+	return toolsy.NewTypedTool(toolsy.TypedToolSpec[httpGetArgs, httpGetResult]{
+		Name:        "http_get_resilient",
+		Description: "HTTP GET with routery timeout, retry, and bulkhead",
+		Handler: func(ctx context.Context, run *toolsy.RunEnv, args httpGetArgs) (httpGetResult, error) {
+			return reliable.Execute(ctx, execReq{Env: run, Args: args})
 		},
 	})
 }

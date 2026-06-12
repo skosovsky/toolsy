@@ -39,10 +39,11 @@ func (t *errorFormatterTool) Execute(
 	}
 
 	chunk := NewErrorChunkFromErr(err)
-	if chunkErr := validateChunk(chunk); chunkErr != nil {
+	prepared, chunkErr := prepareChunk(chunk)
+	if chunkErr != nil {
 		return chunkErr
 	}
-	if yieldErr := yield(chunk); yieldErr != nil {
+	if yieldErr := yield(prepared); yieldErr != nil {
 		return wrapYieldError(yieldErr)
 	}
 	return nil
@@ -140,14 +141,21 @@ func toolErrorFromExecutionErr(err error) *ToolError {
 }
 
 func errorChunkSummaryText(c Chunk, execErr error) string {
+	return ErrorChunkSummaryText(c, execErr)
+}
+
+// ErrorChunkSummaryText returns a short human-readable summary of an error result chunk.
+// Error chunks are normalized first so callers (logging, otel) see the same text as delivered wire.
+func ErrorChunkSummaryText(c Chunk, execErr error) string {
+	if c.IsError {
+		c = normalizeErrorChunk(c)
+	}
 	if c.MimeType == MimeTypeToolErrorJSON {
-		if te, err := unmarshalToolErrorWire(c.Data); err == nil {
-			if msg := formatToolErrorMessage(te); msg != "" {
-				return msg
-			}
-			return te.Reason
+		if text := toolErrorWireSummaryText(c.Data); text != "" {
+			return text
 		}
 	}
+	// Defensive: non-error text chunks or direct Execute without registry normalization.
 	if c.MimeType == MimeTypeText && utf8.Valid(c.Data) {
 		return string(c.Data)
 	}
@@ -155,6 +163,20 @@ func errorChunkSummaryText(c Chunk, execErr error) string {
 		return formatExecutionError(execErr)
 	}
 	return ""
+}
+
+func toolErrorWireSummaryText(data []byte) string {
+	te, err := unmarshalToolErrorWire(data)
+	if err != nil {
+		return ""
+	}
+	if te.Code == CodeInternal && strings.Contains(te.Reason, "malformed error chunk") {
+		return sanitizeErrorReason(te.Reason)
+	}
+	if msg := formatToolErrorMessage(te); msg != "" {
+		return msg
+	}
+	return te.Reason
 }
 
 func sanitizeErrorReason(reason string) string {

@@ -3,6 +3,7 @@ package toolsy
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -35,8 +36,9 @@ func TestValidateChunk_UnsupportedEvent(t *testing.T) {
 
 func TestValidateChunk_ErrorChunkMissingData(t *testing.T) {
 	err := validateChunk(Chunk{
-		Event:   EventResult,
-		IsError: true,
+		Event:    EventResult,
+		IsError:  true,
+		MimeType: MimeTypeToolErrorJSON,
 	})
 	requireInternalErrorContains(t, err, "error chunks must include payload in Data")
 }
@@ -63,14 +65,61 @@ func TestValidateChunk_ErrorChunkWrongMime(t *testing.T) {
 	requireInternalErrorContains(t, err, "error chunks require mime type")
 }
 
-func TestValidateChunk_ErrorChunkInvalidUTF8(t *testing.T) {
+func TestValidateChunk_ErrorChunkRejectsPlainText(t *testing.T) {
 	err := validateChunk(Chunk{
 		Event:    EventResult,
 		IsError:  true,
-		Data:     []byte{0xff, 0xfe},
+		Data:     []byte("oops"),
 		MimeType: MimeTypeText,
 	})
-	requireInternalErrorContains(t, err, "error chunks must contain valid UTF-8 text")
+	requireInternalErrorContains(t, err, "error chunks require mime type")
+}
+
+func TestNormalizeErrorChunk_TextBecomesToolErrorJSON(t *testing.T) {
+	normalized := normalizeErrorChunk(Chunk{
+		Event:    EventResult,
+		Data:     []byte("budget exceeded"),
+		MimeType: MimeTypeText,
+		IsError:  true,
+	})
+	require.True(t, normalized.IsError)
+	require.Equal(t, MimeTypeToolErrorJSON, normalized.MimeType) //nolint:testifylint // mime type, not JSON document
+	te, err := unmarshalToolErrorWire(normalized.Data)
+	require.NoError(t, err)
+	require.Equal(t, CodeInternal, te.Code)
+	assert.Contains(t, te.Reason, "malformed error chunk")
+	assert.Contains(t, te.Reason, "budget exceeded")
+}
+
+func TestPrepareChunk_NormalizesLegacyTextError(t *testing.T) {
+	prepared, err := prepareChunk(Chunk{
+		Event:    EventResult,
+		Data:     []byte("soft fail"),
+		MimeType: MimeTypeText,
+		IsError:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, MimeTypeToolErrorJSON, prepared.MimeType) //nolint:testifylint // mime type, not JSON document
+}
+
+func TestPrepareChunk_WrongMimeJSONError(t *testing.T) {
+	prepared, err := prepareChunk(Chunk{
+		Event:    EventResult,
+		Data:     []byte(`{"code":"validation_failed"}`),
+		MimeType: MimeTypeJSON,
+		IsError:  true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, MimeTypeToolErrorJSON, prepared.MimeType) //nolint:testifylint // mime type, not JSON document
+}
+
+func TestPrepareChunk_EmptyDataError(t *testing.T) {
+	_, err := prepareChunk(Chunk{
+		Event:    EventResult,
+		IsError:  true,
+		MimeType: MimeTypeToolErrorJSON,
+	})
+	requireInternalErrorContains(t, err, "error chunks must include payload in Data")
 }
 
 func TestValidateChunk_DataWithoutMime(t *testing.T) {

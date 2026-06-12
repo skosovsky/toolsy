@@ -1,4 +1,5 @@
 // Package main demonstrates NewStreamTool and chunk-by-chunk streaming with toolsy.
+// Legacy chunk API demo: host loops should prefer Session.RunCall (see examples/run_call).
 package main
 
 import (

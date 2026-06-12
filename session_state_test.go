@@ -107,7 +107,10 @@ func TestSessionState_ImportSnapshotRegisteredKey_InvalidPayloadPreservesState(t
 	require.NoError(t, err)
 
 	err = sess.ImportSnapshot(snap)
-	require.Error(t, err)
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.False(t, te.Retryable)
 
 	got, ok := GetSessionState[sessionStatePayload](sess, "payload")
 	require.True(t, ok)
@@ -149,6 +152,84 @@ func TestSessionState_ImportSnapshotUnregisteredStructRemainsGenericMap(t *testi
 	generic, ok := GetSessionState[map[string]any](sess2, "payload")
 	require.True(t, ok)
 	require.Equal(t, "raw", generic["name"])
+}
+
+func TestImportSnapshot_StrictMode_UnregisteredKeyFails(t *testing.T) {
+	t.Parallel()
+	sess := newTestSession(t)
+	SetSessionState(sess, "payload", sessionStatePayload{Name: "raw"})
+
+	snap, err := sess.ExportSnapshot()
+	require.NoError(t, err)
+
+	sess2 := newTestSession(t, WithStrictStateCodecs(true))
+	err = sess2.ImportSnapshot(snap)
+	require.Error(t, err)
+	requireToolErrorCode(t, err, CodeStateCodecMissing)
+}
+
+func TestImportSnapshot_StrictMode_EmptySnapshotClears(t *testing.T) {
+	t.Parallel()
+	codecs := NewStateCodecRegistry()
+	require.NoError(t, RegisterJSONCodec[sessionStatePayload](codecs, "payload"))
+	sess := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true))
+	SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"})
+
+	empty, err := newTestSession(t, WithStrictStateCodecs(true)).ExportSnapshot()
+	require.NoError(t, err)
+	require.NoError(t, sess.ImportSnapshot(empty))
+
+	_, ok := GetSessionState[sessionStatePayload](sess, "payload")
+	require.False(t, ok)
+}
+
+func TestImportSnapshot_StrictMode_NullKeyClearsWithoutCodec(t *testing.T) {
+	t.Parallel()
+	sess := newTestSession(t, WithStrictStateCodecs(true))
+	SetSessionState(sess, "orphan", "value")
+
+	raw, err := json.Marshal(sessionSnapshotWire{
+		Version: sessionSnapshotVersion,
+		Payload: json.RawMessage(`{"orphan":null}`),
+	})
+	require.NoError(t, err)
+	snap, err := NewSessionSnapshotFromJSON(raw)
+	require.NoError(t, err)
+
+	require.NoError(t, sess.ImportSnapshot(snap))
+	_, ok := GetSessionState[string](sess, "orphan")
+	require.False(t, ok)
+}
+
+func TestExportSnapshot_StrictMode_UnregisteredKeyFails(t *testing.T) {
+	t.Parallel()
+	sess := newTestSession(t, WithStrictStateCodecs(true))
+	SetSessionState(sess, "payload", sessionStatePayload{Name: "x"})
+
+	_, err := sess.ExportSnapshot()
+	require.Error(t, err)
+	requireToolErrorCode(t, err, CodeStateCodecMissing)
+}
+
+func TestExportImportSnapshot_StrictMode_Roundtrip(t *testing.T) {
+	t.Parallel()
+	codecs := NewStateCodecRegistry()
+	require.NoError(t, RegisterJSONCodec[sessionStatePayload](codecs, "payload"))
+	opts := []SessionOption{WithStateCodecRegistry(codecs), WithStrictStateCodecs(true)}
+
+	sess := newTestSession(t, opts...)
+	want := sessionStatePayload{Name: "strict", Count: 2}
+	SetSessionState(sess, "payload", want)
+
+	snap, err := sess.ExportSnapshot()
+	require.NoError(t, err)
+
+	sess2 := newTestSession(t, opts...)
+	require.NoError(t, sess2.ImportSnapshot(snap))
+
+	got, ok := GetSessionState[sessionStatePayload](sess2, "payload")
+	require.True(t, ok)
+	require.Equal(t, want, got)
 }
 
 func TestSessionState_ConcurrentSetAndExportSnapshot(t *testing.T) {
@@ -240,14 +321,40 @@ func TestSessionExecute_NilEnv_SetStateNoOp(t *testing.T) {
 
 func TestNewSessionSnapshotFromJSON_InvalidWire(t *testing.T) {
 	t.Parallel()
-	_, err := NewSessionSnapshotFromJSON([]byte(`not json`))
-	require.Error(t, err)
+	cases := []struct {
+		name string
+		raw  []byte
+	}{
+		{name: "not json", raw: []byte(`not json`)},
+		{name: "zero version", raw: []byte(`{"version":0,"payload":{}}`)},
+		{name: "missing payload", raw: []byte(`{"version":1}`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := NewSessionSnapshotFromJSON(tc.raw)
+			requireToolErrorCode(t, err, CodeInternal)
+			te, ok := AsToolError(err)
+			require.True(t, ok)
+			assert.False(t, te.Retryable)
+		})
+	}
+}
 
-	_, err = NewSessionSnapshotFromJSON([]byte(`{"version":0,"payload":{}}`))
-	require.Error(t, err)
+func TestImportSnapshot_EmptySnapshot(t *testing.T) {
+	t.Parallel()
+	sess := newTestSession(t)
+	SetSessionState(sess, "keep", "original")
 
-	_, err = NewSessionSnapshotFromJSON([]byte(`{"version":1}`))
-	require.Error(t, err)
+	err := sess.ImportSnapshot(SessionSnapshot{})
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.False(t, te.Retryable)
+
+	got, ok := GetSessionState[string](sess, "keep")
+	require.True(t, ok)
+	require.Equal(t, "original", got)
 }
 
 func TestImportSnapshot_UnsupportedVersion(t *testing.T) {
@@ -264,7 +371,7 @@ func TestImportSnapshot_UnsupportedVersion(t *testing.T) {
 	SetSessionState(sess, "keep", "original")
 	err = sess.ImportSnapshot(snap)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported session snapshot version")
+	requireToolErrorCode(t, err, CodeInternal)
 
 	got, ok := GetSessionState[string](sess, "keep")
 	require.True(t, ok)
@@ -338,8 +445,35 @@ func TestSessionExportSnapshot_StateCodecTypeMismatch(t *testing.T) {
 	sess.stateMu.Unlock()
 
 	_, err := sess.ExportSnapshot()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "type mismatch")
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.False(t, te.Retryable)
+	assert.Contains(t, te.Reason, "type mismatch")
+}
+
+func TestSessionExportSnapshot_MarshalFailure(t *testing.T) {
+	t.Parallel()
+	sess := newTestSession(t)
+	sess.stateMu.Lock()
+	sess.state["bad"] = make(chan int)
+	sess.stateMu.Unlock()
+
+	_, err := sess.ExportSnapshot()
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.False(t, te.Retryable)
+	assert.Contains(t, te.Reason, "export state key")
+}
+
+func TestNewSessionSnapshotFromJSON_CorruptPayload(t *testing.T) {
+	t.Parallel()
+	_, err := NewSessionSnapshotFromJSON([]byte(`not json`))
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.False(t, te.Retryable)
 }
 
 type stringStateCodec struct{}

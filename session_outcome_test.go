@@ -163,6 +163,7 @@ func TestRunCallInfraError_Classification(t *testing.T) {
 		{name: "stream_aborted", err: ErrStreamAborted},
 		{name: "dependency_missing", err: NewDependencyMissingError("db")},
 		{name: "contract_missing", err: NewToolsContractMissingError([]string{"a"}, []string{"a"})},
+		{name: "internal", err: NewInternalError(errors.New("malformed chunk"))},
 		{name: "plain", err: assert.AnError},
 	}
 	for _, tc := range infraCases {
@@ -364,6 +365,59 @@ func TestSession_RunCall_ErrorChunkClearsPriorResult(t *testing.T) {
 	require.NotNil(t, outcome.ExecutionError)
 	assert.Nil(t, outcome.Result)
 	assert.Empty(t, outcome.ResultMimeType)
+}
+
+func TestSession_RunCall_LegacyTextErrorChunk_NormalizedToInfraError(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"legacy_text_error",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{
+				Event:    EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: MimeTypeText,
+				IsError:  true,
+			})
+		},
+	)
+	reg, err := NewRegistryBuilder().Add(tool).Build()
+	require.NoError(t, err)
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "legacy_text_error",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	requireToolErrorCode(t, err, CodeInternal)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	assert.Contains(t, te.Reason, "malformed error chunk")
+	_ = outcome
+}
+
+func TestSession_RunCall_StructuredBusinessErrorChunk_ToOutcome(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"validation_error",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
+			return yield(NewErrorChunkFromErr(NewValidationError("bad input")))
+		},
+	)
+	reg, err := NewRegistryBuilder().Add(tool).Build()
+	require.NoError(t, err)
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "validation_error",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	require.NoError(t, err)
+	requireToolErrorCode(t, outcome.ExecutionError, CodeValidationFailed)
+	assert.NoError(t, err)
 }
 
 func TestSession_RunCall_InfraInternal_WithFormatter(t *testing.T) {

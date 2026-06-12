@@ -82,6 +82,70 @@ func TestWithLogging_SoftErrorChunkLogsToolError(t *testing.T) {
 	assert.Contains(t, logStr, "budget exceeded")
 }
 
+func TestWithLogging_SoftErrorChunkMarksSpan(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	inner := newMiddlewareMinTool(
+		"log_legacy_text_soft_error",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{
+				Event:    EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: MimeTypeText,
+				IsError:  true,
+			})
+		},
+	)
+	wrapped := WithLogging(logger)(inner)
+
+	err := wrapped.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
+		return nil
+	})
+	require.NoError(t, err)
+
+	logStr := buf.String()
+	assert.Contains(t, logStr, "tool error")
+	assert.Contains(t, logStr, "last_error_text=")
+	assert.Contains(t, logStr, "malformed error chunk")
+	assert.Contains(t, logStr, "budget exceeded")
+}
+
+func TestWithLogging_SoftErrorChunkViaRegistry(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	tool := newMiddlewareMinTool(
+		"log_registry_soft_error",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
+			return yield(Chunk{
+				Event:    EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: MimeTypeText,
+				IsError:  true,
+			})
+		},
+	)
+	reg, err := NewRegistryBuilder().
+		Add(tool).
+		Use(WithLogging(logger)).
+		Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(
+		context.Background(),
+		ToolCall{ToolName: "log_registry_soft_error", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
+		func(Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+
+	logStr := buf.String()
+	assert.Contains(t, logStr, "tool error")
+	assert.Contains(t, logStr, "last_error_text=")
+	assert.Contains(t, logStr, "malformed error chunk")
+	assert.Contains(t, logStr, "budget exceeded")
+}
+
 func TestWithRecovery(t *testing.T) {
 	inner := newMiddlewareMinTool(
 		"panic_me",

@@ -35,6 +35,7 @@ const (
 	CodeRegistryNotReady     ErrorCode = "REGISTRY_NOT_READY"
 	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
 	CodeBudgetExceeded       ErrorCode = "BUDGET_EXCEEDED"
+	CodeStateCodecMissing    ErrorCode = "STATE_CODEC_MISSING"
 )
 
 // ToolError is the structured execution error envelope for orchestrator routing.
@@ -177,6 +178,35 @@ func NewToolsContractMissingError(required, missing []string) *ToolError {
 	}
 }
 
+// NewStateCodecMissingError reports a session state key without a registered codec in strict mode.
+func NewStateCodecMissingError(key string) *ToolError {
+	reason := fmt.Sprintf("no state codec registered for key %q", key)
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:        CodeStateCodecMissing,
+		Reason:      reason,
+		Retryable:   false,
+		FixableArgs: []string{key},
+		Err:         errors.New(reason),
+	}
+}
+
+// NewSnapshotHydrationError reports a fatal snapshot import/export failure (version mismatch, corrupt payload).
+func NewSnapshotHydrationError(reason string, err error) *ToolError {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "session snapshot hydration failed"
+	}
+	if err == nil {
+		err = errors.New(reason)
+	}
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeInternal,
+		Reason:    reason,
+		Retryable: false,
+		Err:       err,
+	}
+}
+
 // NewBudgetExceededError reports a token or execution budget denial.
 func NewBudgetExceededError(reason string) *ToolError {
 	reason = strings.TrimSpace(reason)
@@ -256,7 +286,7 @@ func ClientCorrectable(code ErrorCode) bool {
 
 func orchestratorSystemCode(code ErrorCode) bool {
 	switch code {
-	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady:
+	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady, CodeStateCodecMissing:
 		return true
 	default:
 		return false

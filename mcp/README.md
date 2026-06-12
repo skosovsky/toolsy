@@ -82,7 +82,7 @@ if err := toolsy.ValidateManifestContract(ms, []string{"query", "read_mcp_resour
 }
 ```
 
-See [docs/migration-task27.md](../docs/migration-task27.md) for v1.0 manifest and `RunCall` contracts.
+See [docs/migration-task28.md](../docs/migration-task28.md) for v1.0 manifest, `RunCall`, and error chunk contracts.
 
 ## Transport interface
 

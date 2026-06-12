@@ -164,10 +164,11 @@ func (t *asyncTool) yieldAsyncAccepted(ctx context.Context, taskID string, yield
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if err := validateChunk(chunk); err != nil {
+	prepared, err := prepareChunk(chunk)
+	if err != nil {
 		return err
 	}
-	if err := yield(chunk); err != nil {
+	if err := yield(prepared); err != nil {
 		return wrapYieldError(err)
 	}
 	return nil
@@ -195,13 +196,14 @@ func (t *asyncTool) runBackground(
 			}
 			return err
 		}
-		if err := validateChunk(c); err != nil {
+		prepared, err := prepareChunk(c)
+		if err != nil {
 			if backgroundYieldErr == nil {
 				backgroundYieldErr = err
 			}
 			return err
 		}
-		collected = append(collected, c)
+		collected = append(collected, prepared)
 		return nil
 	}
 

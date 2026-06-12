@@ -42,7 +42,10 @@ type typedStateCodecEntry[T any] struct {
 func (e typedStateCodecEntry[T]) encodeValue(v any) ([]byte, error) {
 	typed, ok := v.(T)
 	if !ok {
-		return nil, errors.New("toolsy: state value type mismatch for key")
+		return nil, NewSnapshotHydrationError(
+			"state value type mismatch",
+			errors.New("toolsy: state value type mismatch for key"),
+		)
 	}
 	return e.codec.Encode(typed)
 }
@@ -136,7 +139,10 @@ func (c reflectJSONCodec) encodeValue(v any) ([]byte, error) {
 		typ = typ.Elem()
 	}
 	if typ != c.typ {
-		return nil, errors.New("toolsy: state value type mismatch for key")
+		return nil, NewSnapshotHydrationError(
+			"state value type mismatch",
+			errors.New("toolsy: state value type mismatch for key"),
+		)
 	}
 	return json.Marshal(v)
 }
@@ -176,13 +182,22 @@ type sessionSnapshotWire struct {
 func NewSessionSnapshotFromJSON(data []byte) (SessionSnapshot, error) {
 	var wire sessionSnapshotWire
 	if err := json.Unmarshal(data, &wire); err != nil {
-		return SessionSnapshot{}, fmt.Errorf("toolsy: invalid session snapshot: %w", err)
+		return SessionSnapshot{}, NewSnapshotHydrationError(
+			"invalid session snapshot",
+			fmt.Errorf("toolsy: invalid session snapshot: %w", err),
+		)
 	}
 	if wire.Version <= 0 {
-		return SessionSnapshot{}, errors.New("toolsy: session snapshot version is required")
+		return SessionSnapshot{}, NewSnapshotHydrationError(
+			"session snapshot version is required",
+			errors.New("toolsy: session snapshot version is required"),
+		)
 	}
 	if len(wire.Payload) == 0 {
-		return SessionSnapshot{}, errors.New("toolsy: session snapshot payload is required")
+		return SessionSnapshot{}, NewSnapshotHydrationError(
+			"session snapshot payload is required",
+			errors.New("toolsy: session snapshot payload is required"),
+		)
 	}
 	return SessionSnapshot{version: wire.Version, payload: append([]byte(nil), wire.Payload...)}, nil
 }
@@ -190,7 +205,10 @@ func NewSessionSnapshotFromJSON(data []byte) (SessionSnapshot, error) {
 // MarshalJSON serializes the snapshot for persistence.
 func (s SessionSnapshot) MarshalJSON() ([]byte, error) {
 	if s.version <= 0 || len(s.payload) == 0 {
-		return nil, errors.New("toolsy: empty session snapshot")
+		return nil, NewSnapshotHydrationError(
+			"empty session snapshot",
+			errors.New("toolsy: empty session snapshot"),
+		)
 	}
 	return json.Marshal(sessionSnapshotWire{
 		Version: s.version,
@@ -211,7 +229,10 @@ func (s *SessionSnapshot) UnmarshalJSON(data []byte) error {
 
 func (s SessionSnapshot) versionAndPayload() (int, []byte, error) {
 	if s.version <= 0 || len(s.payload) == 0 {
-		return 0, nil, errors.New("toolsy: empty session snapshot")
+		return 0, nil, NewSnapshotHydrationError(
+			"empty session snapshot",
+			errors.New("toolsy: empty session snapshot"),
+		)
 	}
 	return s.version, append([]byte(nil), s.payload...), nil
 }

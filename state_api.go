@@ -1,6 +1,7 @@
 package toolsy
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -59,7 +60,10 @@ func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 		return err
 	}
 	if version != sessionSnapshotVersion {
-		return fmt.Errorf("toolsy: unsupported session snapshot version %d", version)
+		return NewSnapshotHydrationError(
+			fmt.Sprintf("unsupported session snapshot version %d", version),
+			fmt.Errorf("toolsy: unsupported session snapshot version %d", version),
+		)
 	}
 	newMap, err := s.decodeStatePayload(payload)
 	if err != nil {
@@ -79,9 +83,18 @@ func (s *Session) encodeStatePayload() ([]byte, error) {
 	}
 	wire := make(map[string]json.RawMessage, len(s.state))
 	for k, v := range s.state {
+		if v == nil {
+			continue
+		}
 		raw, err := s.encodeStateValue(k, v)
 		if err != nil {
-			return nil, fmt.Errorf("toolsy: export state key %q: %w", k, err)
+			if te, ok := AsToolError(err); ok {
+				return nil, te
+			}
+			return nil, NewSnapshotHydrationError(
+				fmt.Sprintf("export state key %q", k),
+				fmt.Errorf("toolsy: export state key %q: %w", k, err),
+			)
 		}
 		wire[k] = raw
 	}
@@ -98,6 +111,9 @@ func (s *Session) encodeStateValue(key string, v any) (json.RawMessage, error) {
 			return json.RawMessage(b), nil
 		}
 	}
+	if s.opts.strictStateCodecs {
+		return nil, NewStateCodecMissingError(key)
+	}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -108,13 +124,19 @@ func (s *Session) encodeStateValue(key string, v any) (json.RawMessage, error) {
 func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 	var wire map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &wire); err != nil {
-		return nil, fmt.Errorf("toolsy: invalid session snapshot payload: %w", err)
+		return nil, NewSnapshotHydrationError(
+			"invalid session snapshot payload",
+			fmt.Errorf("toolsy: invalid session snapshot payload: %w", err),
+		)
 	}
 	if wire == nil {
 		return make(map[string]any), nil
 	}
 	newMap := make(map[string]any, len(wire))
 	for k, raw := range wire {
+		if isStateClearRaw(raw) {
+			continue
+		}
 		val, err := s.decodeStateValue(k, raw)
 		if err != nil {
 			return nil, err
@@ -124,15 +146,33 @@ func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 	return newMap, nil
 }
 
+func isStateClearRaw(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null"))
+}
+
 func (s *Session) decodeStateValue(key string, raw json.RawMessage) (any, error) {
 	if reg := s.opts.codecRegistry; reg != nil {
 		if entry, ok := reg.lookup(key); ok {
-			return entry.decodeBytes(raw)
+			val, err := entry.decodeBytes(raw)
+			if err != nil {
+				return nil, NewSnapshotHydrationError(
+					fmt.Sprintf("failed to decode state key %q", key),
+					fmt.Errorf("toolsy: failed to decode state key %q: %w", key, err),
+				)
+			}
+			return val, nil
 		}
+	}
+	if s.opts.strictStateCodecs {
+		return nil, NewStateCodecMissingError(key)
 	}
 	var generic any
 	if err := json.Unmarshal(raw, &generic); err != nil {
-		return nil, fmt.Errorf("toolsy: failed to unmarshal state key %q: %w", key, err)
+		return nil, NewSnapshotHydrationError(
+			fmt.Sprintf("failed to unmarshal state key %q", key),
+			fmt.Errorf("toolsy: failed to unmarshal state key %q: %w", key, err),
+		)
 	}
 	return generic, nil
 }

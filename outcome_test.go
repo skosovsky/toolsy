@@ -24,6 +24,20 @@ func TestExecutionErrorFromChunk_ToolErrorJSON(t *testing.T) {
 	assert.Equal(t, []string{"city"}, te.FixableArgs)
 }
 
+func TestExecutionErrorFromChunk_LegacyTextNormalizesToMalformedWire(t *testing.T) {
+	t.Parallel()
+	te := executionErrorFromChunk(Chunk{
+		Event:    EventResult,
+		Data:     []byte("budget exceeded"),
+		MimeType: MimeTypeText,
+		IsError:  true,
+	})
+	require.NotNil(t, te)
+	assert.Equal(t, CodeInternal, te.Code)
+	assert.Contains(t, te.Reason, "malformed error chunk")
+	assert.Contains(t, te.Reason, "budget exceeded")
+}
+
 func TestExecutionErrorFromChunk_PlainTextJSONBody(t *testing.T) {
 	t.Parallel()
 	body := []byte(`{"code":"VALIDATION_FAILED","retryable":false,"reason":"ignored"}`)
@@ -35,6 +49,7 @@ func TestExecutionErrorFromChunk_PlainTextJSONBody(t *testing.T) {
 	})
 	require.NotNil(t, te)
 	assert.Equal(t, CodeInternal, te.Code)
+	assert.Contains(t, te.Reason, "malformed error chunk")
 }
 
 func TestExecutionErrorFromChunk_CorruptToolErrorJSON(t *testing.T) {

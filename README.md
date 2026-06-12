@@ -70,7 +70,22 @@ func main() {
 }
 ```
 
-## v2 API contracts
+### Sync agent loop
+
+For synchronous host loops, prefer `Session.RunCall` + `DecodeOutcomeAs` instead of manual chunk assembly:
+
+```go
+sess, _ := toolsy.NewSession(reg)
+call.Env = toolsy.NewRunEnv(sess)
+outcome, err := sess.RunCall(ctx, call)
+if err != nil { /* infrastructure */ }
+if outcome.ExecutionError != nil { /* business — toolsy.AsToolError */ }
+result, _ := toolsy.DecodeOutcomeAs[Out](outcome)
+```
+
+See `examples/run_call/main.go`. The quick start above uses low-level `Registry.Execute` for streaming adapters.
+
+## v1.0 API contracts
 
 - `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, env, input, yield)`.
 - `ToolCall` carries `Input toolsy.ToolInput`; old `ToolCall.Args` is removed.
@@ -89,7 +104,7 @@ vNext core is a **stateless tool execution engine**: typed manifests, middleware
 ## Registry setup
 
 Timeouts, retries, and concurrency limits are **not** configured on the registry.
-Apply them outside `toolsy` (for example with [`github.com/skosovsky/routery`](https://github.com/skosovsky/routery)) by wrapping tool execution; see `examples/resiliency/main.go`.
+Apply them outside `toolsy` (for example with [`github.com/skosovsky/routery`](https://github.com/skosovsky/routery)) by wrapping tool execution; see `examples/resiliency/main.go` (host loop uses `Session.RunCall`).
 
 The registry recovers panics from tools by default; avoid `WithRecovery()` in `Use()` (it runs before the registry hook and is deprecated for registry stacks).
 
@@ -260,9 +275,10 @@ result, err := toolsy.DecodeOutcomeAs[MyResult](outcome)
 ```
 
 Business failures must be read from `outcome.ExecutionError`, not only `err != nil`, so progress chunks before the error are preserved.
+Legacy text error chunks (`MimeTypeText` + `IsError`) are normalized to structured wire with `CodeInternal`; `RunCall` returns them as **infrastructure** `error`, not `outcome.ExecutionError` (see migration guide).
 `WithErrorFormatter` emits structured `ToolError` JSON in error chunks; `RunCall` restores `Code` / `Retryable` / `FixableArgs`.
 
-See [docs/migration-task27.md](docs/migration-task27.md), [docs/adr/adr-task27-typed-contracts.md](docs/adr/adr-task27-typed-contracts.md), and `examples/run_call/main.go`.
+See [docs/migration-task28.md](docs/migration-task28.md), [docs/adr/adr-task28-hardening.md](docs/adr/adr-task28-hardening.md), and `examples/run_call/main.go`.
 
 ### StateCodecRegistry
 
@@ -273,14 +289,17 @@ codecs := toolsy.NewStateCodecRegistry()
 if err := toolsy.RegisterJSONCodec[MyState](codecs, "agent"); err != nil {
     return err
 }
-sess, err := toolsy.NewSession(reg, toolsy.WithStateCodecRegistry(codecs))
+sess, err := toolsy.NewSession(reg,
+    toolsy.WithStateCodecRegistry(codecs),
+    toolsy.WithStrictStateCodecs(true),
+)
 snap, _ := sess.ExportSnapshot()
 raw, _ := json.Marshal(snap)
 restored, _ := toolsy.NewSessionSnapshotFromJSON(raw)
 _ = sess.ImportSnapshot(restored)
 ```
 
-See [docs/migration-task23.md](docs/migration-task23.md) for session/RunEnv basics and [docs/migration-task27.md](docs/migration-task27.md) for v1.0 breaking changes. Runnable snapshot example: `examples/session_snapshot/main.go`.
+See [docs/migration-task28.md](docs/migration-task28.md) for strict codecs, error chunk normalization, and snapshot hydration. Runnable snapshot example: `examples/session_snapshot/main.go`.
 
 `ToolInput.Attachments` are exposed to handlers as `env.Attachments()` (cloned per call).
 
@@ -360,7 +379,7 @@ Error propagation differs by execution path:
 
 - `Registry.Execute(...)` returns middleware/tool error directly.
 - `Registry.ExecuteIter(...)` emits the error as iterator error.
-- `Registry.ExecuteBatchStream(...)` converts non-suspend execution failures (including pre-tool failures like missing tool, validator rejection, and shutdown, plus tool/middleware failures) to `Chunk{IsError: true, MimeType: MimeTypeText}`, while `ErrStreamAborted` and context cancellation are returned as errors.
+- `Registry.ExecuteBatchStream(...)` converts non-suspend execution failures (including pre-tool failures like missing tool, validator rejection, and shutdown, plus tool/middleware failures) to `Chunk{IsError: true, MimeType: MimeTypeToolErrorJSON}`, while `ErrStreamAborted` and context cancellation are returned as errors.
 
 Recommended stack for enterprise policies (outer -> inner):
 
@@ -495,7 +514,7 @@ defer client.Close()
 - `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
 - `RunContext` → `*RunEnv` on `ToolCall.Env`; `BindEnv` → `Put` / `Require` / `Lookup`.
 - `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
-- See [docs/migration-task22.md](docs/migration-task22.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
+- See [docs/migration-task28.md](docs/migration-task28.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
 
 ## Zero-resiliency core (post v2)
 

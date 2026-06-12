@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"unicode/utf8"
 )
 
 // ToolOutcome aggregates a synchronous tool call result without manual chunk glue.
@@ -99,6 +97,9 @@ func finalizeRunCallOutcome(outcome ToolOutcome) (ToolOutcome, error) {
 }
 
 func executionErrorFromChunk(c Chunk) *ToolError {
+	if c.IsError {
+		c = normalizeErrorChunk(c)
+	}
 	if c.MimeType == MimeTypeToolErrorJSON {
 		te, err := unmarshalToolErrorWire(c.Data)
 		if err != nil {
@@ -106,14 +107,7 @@ func executionErrorFromChunk(c Chunk) *ToolError {
 		}
 		return te
 	}
-	msg := strings.TrimSpace(string(c.Data))
-	if msg == "" {
-		return NewInternalError(errors.New("tool returned empty error chunk"))
-	}
-	if !utf8.ValidString(msg) {
-		msg = strings.ToValidUTF8(msg, "\uFFFD")
-	}
-	return NewInternalError(errors.New(msg))
+	return NewInternalError(errors.New("tool returned empty error chunk"))
 }
 
 func toolErrorFromRunCall(err error) *ToolError {

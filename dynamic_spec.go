@@ -35,7 +35,7 @@ type DynamicToolSpec struct {
 
 // NewDynamicToolFromSpec creates a [Tool] from [DynamicToolSpec].
 //
-//nolint:gocognit // schema compile + validated handler pipeline
+//nolint:gocognit,funlen // schema compile + validated handler pipeline
 func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	if spec.Schema == nil {
 		return nil, errors.New("dynamic tool schema provider must not be nil")
@@ -88,10 +88,11 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 			}
 		}
 		yieldWrapped := func(c Chunk) error {
-			if err := validateChunk(c); err != nil {
+			prepared, err := prepareChunk(c)
+			if err != nil {
 				return err
 			}
-			if err := yield(c); err != nil {
+			if err := yield(prepared); err != nil {
 				return wrapYieldError(err)
 			}
 			return nil

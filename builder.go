@@ -54,10 +54,11 @@ func NewTool[T any, R any](
 			Data:     data,
 			MimeType: MimeTypeJSON,
 		}
-		if err := validateChunk(chunk); err != nil {
+		prepared, err := prepareChunk(chunk)
+		if err != nil {
 			return err
 		}
-		if err := yield(chunk); err != nil {
+		if err := yield(prepared); err != nil {
 			return wrapYieldError(err)
 		}
 		return nil
@@ -103,10 +104,11 @@ func rawArgsValidatedExecute(
 			return err
 		}
 		yieldWrapped := func(c Chunk) error {
-			if err := validateChunk(c); err != nil {
+			prepared, err := prepareChunk(c)
+			if err != nil {
 				return err
 			}
-			if err := yield(c); err != nil {
+			if err := yield(prepared); err != nil {
 				return wrapYieldError(err)
 			}
 			return nil
@@ -151,10 +153,11 @@ func NewStreamTool[T any](
 	}
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		yieldWrapped := func(c Chunk) error {
-			if err := validateChunk(c); err != nil {
+			prepared, err := prepareChunk(c)
+			if err != nil {
 				return err
 			}
-			if err := yield(c); err != nil {
+			if err := yield(prepared); err != nil {
 				return wrapYieldError(err)
 			}
 			return nil

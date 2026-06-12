@@ -290,9 +290,11 @@ func (r *Registry) wrapYieldWithCallMeta(
 		if c.ToolName == "" {
 			c.ToolName = call.ToolName
 		}
-		if err := validateChunk(c); err != nil {
+		prepared, err := prepareChunk(c)
+		if err != nil {
 			return err
 		}
+		c = prepared
 		yieldErr := yield(c)
 		if yieldErr != nil {
 			return yieldErr
@@ -509,6 +511,13 @@ func (r *Registry) handleBatchToolError(
 	case errors.Is(execErr, context.Canceled):
 	default:
 		errChunk := NewErrorChunkFromErr(execErr)
+		prepared, prepErr := prepareChunk(errChunk)
+		// Defensive: NewErrorChunkFromErr always marshals recoverable wire today; prepErr guards future validate changes.
+		if prepErr != nil {
+			_ = safeYield(NewErrorChunkFromErr(prepErr))
+			return
+		}
+		errChunk = prepared
 		errChunk.CallID = call.Input.CallID
 		errChunk.ToolName = call.ToolName
 		yieldErr := safeYield(errChunk)

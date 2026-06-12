@@ -213,7 +213,87 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 
 	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
 	require.True(t, ok)
-	assert.Equal(t, "budget exceeded", softText.AsString())
+	assert.Contains(t, softText.AsString(), "malformed error chunk")
+	assert.Contains(t, softText.AsString(), "budget exceeded")
+}
+
+func TestWithTracing_SoftErrorChunkViaRegistry(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "registry_soft_error"},
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			return yield(toolsy.Chunk{
+				Event:    toolsy.EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: toolsy.MimeTypeText,
+				IsError:  true,
+			})
+		},
+	}
+	reg, err := toolsy.NewRegistryBuilder().
+		Add(tool).
+		Use(WithTracing(WithTracerProvider(tp))).
+		Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(context.Background(), toolsy.ToolCall{
+		ToolName: "registry_soft_error",
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
+	}, func(toolsy.Chunk) error { return nil })
+	require.NoError(t, err)
+
+	spans := rec.Ended()
+	require.Len(t, spans, 1)
+	span := spans[0]
+	assert.Equal(t, codes.Error, span.Status().Code)
+
+	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
+	require.True(t, ok)
+	assert.Contains(t, softText.AsString(), "malformed error chunk")
+	assert.Contains(t, softText.AsString(), "budget exceeded")
+}
+
+func TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry(t *testing.T) {
+	tp, rec := newSpanRecorder()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	tool := &stubTool{
+		manifest: toolsy.ToolManifest{Name: "capture_registry_soft_error"},
+		execute: func(_ context.Context, _ *toolsy.RunEnv, _ toolsy.ToolInput, yield func(toolsy.Chunk) error) error {
+			return yield(toolsy.Chunk{
+				Event:    toolsy.EventResult,
+				Data:     []byte("budget exceeded"),
+				MimeType: toolsy.MimeTypeText,
+				IsError:  true,
+			})
+		},
+	}
+	reg, err := toolsy.NewRegistryBuilder().
+		Add(tool).
+		Use(WithTracing(
+			WithTracerProvider(tp),
+			WithContentCapture(true),
+		)).
+		Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(context.Background(), toolsy.ToolCall{
+		ToolName: "capture_registry_soft_error",
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
+	}, func(toolsy.Chunk) error { return nil })
+	require.NoError(t, err)
+
+	span := rec.Ended()[0]
+	output, ok := attrValue(span, "langfuse.observation.output")
+	require.True(t, ok)
+	assert.Contains(t, output.AsString(), "malformed error chunk")
+	assert.Contains(t, output.AsString(), "budget exceeded")
+
+	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
+	require.True(t, ok)
+	assert.Equal(t, output.AsString(), softText.AsString())
 }
 
 func TestMiddleware_ContentCapture_DisabledDefault_ErrorPath(t *testing.T) {

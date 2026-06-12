@@ -1,10 +1,26 @@
 # Changelog
 
+## v1.0 (task28 hardening)
+
+### Breaking
+
+- **`WithStrictStateCodecs(true)`** — export/import requires registered codecs for non-nil state keys; use `CodeStateCodecMissing` on violation.
+- **Error chunks** — `validateErrorChunk` accepts only `MimeTypeToolErrorJSON`; legacy text error chunks are normalized to structured wire with `CodeInternal` at delivery time.
+- **`ImportSnapshot`** — unsupported version and corrupt payload return `*ToolError` with `CodeInternal` (`Retryable: false`) instead of plain `fmt.Errorf`.
+
+### Added
+
+- `WithStrictStateCodecs`, `CodeStateCodecMissing`, `NewStateCodecMissingError`, `NewSnapshotHydrationError`.
+- `normalizeErrorChunk`, `prepareChunk` in chunk delivery pipeline.
+- `examples/resiliency` migrated to `Session.RunCall` + `NewTypedTool`.
+
+See [docs/migration-task28.md](docs/migration-task28.md) and [docs/adr/adr-task28-hardening.md](docs/adr/adr-task28-hardening.md).
+
 ## v0.9.0
 
 ### Breaking
 
-- **`NewRunEnv(session *Session, opts ...)`** — first argument binds in-memory state. Use `nil` for DI-only environments. See [docs/migration-task23.md](docs/migration-task23.md).
+- **`NewRunEnv(session *Session, opts ...)`** — first argument binds in-memory state. Use `nil` for DI-only environments. See [docs/migration-task28.md](docs/migration-task28.md).
 - **In-memory state moved to `Session`** — `runEnvStore` no longer holds a `state` map. Use `SetSessionState` / `GetSessionState` on `*Session`, or `SetState` / `GetState` on a `RunEnv` created with that session.
 
 ### Added
