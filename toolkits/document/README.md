@@ -6,22 +6,25 @@
 
 This toolkit is intended for use within the toolsy monorepo (see root `go.mod` and `replace` in this module). From the repo root, depend on the root module; do not publish or use this package as a standalone module.
 
-**Dependencies:** `github.com/skosovsky/toolsy` (core), `github.com/ledongthuc/pdf` (PDF). CSV and DOCX use stdlib only.
+**Dependencies:** `github.com/skosovsky/toolsy` (core), `github.com/skosovsky/toolsy/toolkits/httptool` (remote URL fetch), `github.com/ledongthuc/pdf` (PDF). CSV and DOCX use stdlib only.
 
 ## Available tools
 
-| Tool                   | Description                                  | Input                                              |
-|------------------------|----------------------------------------------|----------------------------------------------------|
-| `document_extract_text`| Extract text from a document (PDF, CSV, DOCX)| `{"file_path": "string"}` or `{"url": "string"}`   |
+| Tool                    | Description                                   | Input                                            |
+| ----------------------- | --------------------------------------------- | ------------------------------------------------ |
+| `document_extract_text` | Extract text from a document (PDF, CSV, DOCX) | `{"file_path": "string"}` or `{"url": "string"}` |
 
-Result: `{"text": "..."}`. Text is truncated to `maxBytes` (default 2 MB) with `[Truncated]` suffix when longer.
+Result: `{"text": "..."}`. `WithMaxBytes` is the **final wire JSON** budget; parser content is pre-capped without `\n[Truncated]` and wire truncation adds the suffix once via `format.CapWireJSON`.
 
 ## Configuration & Security
 
-> **Warning:** When `WithAllowRemote(true)` is used, the toolkit downloads from URLs. Built-in SSRF protection blocks loopback, link-local, and private IPs; use `WithAllowPrivateIPs(true)` only for tests (e.g. httptest). Redirects are validated: redirect to private/loopback is always rejected (even when `WithAllowPrivateIPs(true)` is set). You can tighten policy further with a custom `http.Client` via `WithHTTPClient` (e.g. allowed domains).
+> **Warning:** When `WithAllowRemote(true)` is used, the toolkit downloads from URLs. Remote fetch uses `httptool.NewSafeHTTPClient` with DNS-rebinding pin and `ValidateRemoteURL` / `IsBlockedIP` (IP-only — not `ValidateRemoteURLWithBlacklist`). Use `WithAllowPrivateIPs(true)` only for tests (e.g. httptest). Redirect validation uses the same `allowPrivateIPs` flag as the initial request. `WithHTTPClient` merges only `Timeout`.
 
-- **Max bytes:** Use `WithMaxBytes(n)` to limit file size and output (default 2 MB). Download and DOCX unpacking are limited at I/O level to avoid zip bombs and OOM.
+Unlike `web`, remote fetch in `document` is **IP-only**: there is no host blacklist (`WithBlockedDomains` is not supported). Any public URL is allowed subject to private/loopback IP guards. Use `web` when domain blocklists are required.
+
+- **Max bytes:** Use `WithMaxBytes(n)` as the wire JSON budget (default 2 MB). File stat and remote download use the same limit; parser content uses `maxBytes - envelopeOverhead` without a truncation suffix. Download and DOCX unpacking are limited at I/O level to avoid zip bombs and OOM.
 - **Allow remote:** Use `WithAllowRemote(true)` to allow `url` input. When false, only `file_path` is accepted.
+- **IoC:** `WithResultFormatter` / `WithHostResultValidator` validate the default `ExtractWireResult` envelope when no custom formatter is set.
 - **Supported formats:** `.csv`, `.pdf`, `.docx` (by path/URL path or Content-Type for URL; query strings are ignored for extension).
 
 ## Quick start

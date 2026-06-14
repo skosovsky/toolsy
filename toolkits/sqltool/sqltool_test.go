@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -13,6 +16,7 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/internal/sqlutil"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func openSQLite(t *testing.T) *sql.DB {
@@ -40,7 +44,7 @@ func TestInspectSchema_Success(t *testing.T) {
 	require.NoError(t, err)
 	inspectTool := tools[0]
 
-	var result inspectResult
+	var result InspectResult
 	require.NoError(
 		t,
 		inspectTool.Execute(
@@ -48,7 +52,7 @@ func TestInspectSchema_Success(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[inspectResult](t, c)
+				result = decodeSQLChunk[InspectResult](t, c)
 				return nil
 			},
 		),
@@ -69,7 +73,7 @@ func TestInspectSchema_AllowedTables(t *testing.T) {
 	require.NoError(t, err)
 	inspectTool := tools[0]
 
-	var result inspectResult
+	var result InspectResult
 	require.NoError(
 		t,
 		inspectTool.Execute(
@@ -77,7 +81,7 @@ func TestInspectSchema_AllowedTables(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[inspectResult](t, c)
+				result = decodeSQLChunk[InspectResult](t, c)
 				return nil
 			},
 		),
@@ -95,7 +99,7 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 	require.NoError(t, err)
 	inspectTool := tools[0]
 
-	var result inspectResult
+	var result InspectResult
 	require.NoError(
 		t,
 		inspectTool.Execute(
@@ -103,7 +107,7 @@ func TestInspectSchema_MissingTable(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["users","nonexistent_table_xyz"]}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[inspectResult](t, c)
+				result = decodeSQLChunk[InspectResult](t, c)
 				return nil
 			},
 		),
@@ -124,7 +128,7 @@ func TestExecuteRead_Success(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	require.NoError(
 		t,
 		executeTool.Execute(
@@ -132,7 +136,7 @@ func TestExecuteRead_Success(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[executeResult](t, c)
+				result = decodeSQLChunk[ExecuteResult](t, c)
 				return nil
 			},
 		),
@@ -154,7 +158,7 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	require.NoError(
 		t,
 		executeTool.Execute(
@@ -162,7 +166,7 @@ func TestExecuteRead_MaxRows(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[executeResult](t, c)
+				result = decodeSQLChunk[ExecuteResult](t, c)
 				return nil
 			},
 		),
@@ -243,13 +247,13 @@ func TestExecuteRead_KeywordInStringAllowed(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, label FROM t WHERE label = 'INSERT'"}`)},
 		func(c toolsy.Chunk) error {
-			result = decodeSQLChunk[executeResult](t, c)
+			result = decodeSQLChunk[ExecuteResult](t, c)
 			return nil
 		},
 	)
@@ -265,13 +269,13 @@ func TestExecuteRead_KeywordInCommentAllowed(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	err = executeTool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT 1 AS x -- INSERT here"}`)},
 		func(c toolsy.Chunk) error {
-			result = decodeSQLChunk[executeResult](t, c)
+			result = decodeSQLChunk[ExecuteResult](t, c)
 			return nil
 		},
 	)
@@ -290,7 +294,7 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	require.NoError(
 		t,
 		executeTool.Execute(
@@ -298,7 +302,7 @@ func TestExecuteRead_MarkdownEscape(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[executeResult](t, c)
+				result = decodeSQLChunk[ExecuteResult](t, c)
 				return nil
 			},
 		),
@@ -338,7 +342,7 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 	require.NoError(t, err)
 	executeTool := tools[1]
 
-	var result executeResult
+	var result ExecuteResult
 	require.NoError(
 		t,
 		executeTool.Execute(
@@ -346,7 +350,7 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, long_text FROM t"}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeSQLChunk[executeResult](t, c)
+				result = decodeSQLChunk[ExecuteResult](t, c)
 				return nil
 			},
 		),
@@ -416,4 +420,409 @@ func TestValidateReadOnlyQuery_LexicalSubset(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestSQLInspect_WithInspectResultFormatter(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite", WithInspectResultFormatter(func(_ InspectResult) (any, error) {
+		return map[string]int{"tables": 1}, nil
+	}))
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+			func(c toolsy.Chunk) error {
+				require.NoError(t, json.Unmarshal(c.Data, &payload))
+				return nil
+			},
+		),
+	)
+	require.Equal(t, 1, payload["tables"])
+}
+
+func TestSQLExecute_WithExecuteResultFormatter(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite", WithExecuteResultFormatter(func(res ExecuteResult) (any, error) {
+		return map[string]int{"rows": res.RowCount}, nil
+	}))
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+			func(c toolsy.Chunk) error {
+				require.NoError(t, json.Unmarshal(c.Data, &payload))
+				return nil
+			},
+		),
+	)
+	require.Equal(t, 1, payload["rows"])
+}
+
+func TestSQLInspect_WithHostResultValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite", WithHostResultValidator(func(v any) error {
+		_, ok := v.(InspectResult)
+		if !ok {
+			return assert.AnError
+		}
+		return nil
+	}))
+	require.NoError(t, err)
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+}
+
+func TestSQLInspect_WithHostResultValidator_Reject(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite", WithHostResultValidator(func(_ any) error {
+		return assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+}
+
+func TestSQLExecute_WithHostResultValidator_Reject(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite", WithHostResultValidator(func(_ any) error {
+		return assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tools[1].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+}
+
+func TestSQLExecute_WithHostResultValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithHostResultValidator(func(v any) error {
+			_, ok := v.(ExecuteResult)
+			if !ok {
+				return assert.AnError
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	execTool := tools[1]
+	require.NoError(
+		t,
+		execTool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+}
+
+func TestSQLInspect_FormatterAndValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithInspectResultFormatter(func(_ InspectResult) (any, error) {
+			return map[string]string{"kind": "schema"}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]string)
+			if !ok {
+				return errors.New("expected formatter output map")
+			}
+			if payload["kind"] != "schema" {
+				return errors.New("unexpected kind")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]string
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Equal(t, "schema", payload["kind"])
+}
+
+func TestSQLExecute_FormatterAndValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithExecuteResultFormatter(func(res ExecuteResult) (any, error) {
+			return map[string]int{"rows": res.RowCount}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]int)
+			if !ok {
+				return errors.New("expected formatter output map")
+			}
+			if payload["rows"] < 1 {
+				return errors.New("expected rows")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Equal(t, 1, payload["rows"])
+}
+
+func TestSQLInspect_WithMaxSchemaBytes_WithResultFormatter(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithMaxSchemaBytes(80),
+		WithInspectResultFormatter(func(_ InspectResult) (any, error) {
+			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
+		}),
+	)
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestSQLExecute_WithMaxRows_WithResultFormatter(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithMaxRows(10),
+		WithMaxCellBytes(50),
+		WithExecuteResultFormatter(func(_ ExecuteResult) (any, error) {
+			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
+		}),
+	)
+	require.NoError(t, err)
+	budget := executeWireByteBudget(
+		&options{maxRows: 10, maxCellBytes: 50},
+		ExecuteResult{Result: "id | name\n--- | ---\n1 | alice"},
+	)
+	var wire []byte
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), budget+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestInspectSchema_DefaultAndIoCWireSymmetry(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE wide (id INTEGER PRIMARY KEY, payload TEXT)")
+	require.NoError(t, err)
+	for i := range 40 {
+		col := fmt.Sprintf("col_%d_%s", i, strings.Repeat("x", 8))
+		_, err = db.Exec("ALTER TABLE wide ADD COLUMN " + col + " TEXT")
+		require.NoError(t, err)
+	}
+
+	const capBytes = 900
+	runInspect := func(tools []toolsy.Tool) []byte {
+		t.Helper()
+		var wire []byte
+		require.NoError(
+			t,
+			tools[0].Execute(
+				context.Background(),
+				toolsy.NewRunEnv(nil),
+				toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["wide"]}`)},
+				func(c toolsy.Chunk) error {
+					wire = append([]byte(nil), c.Data...)
+					return nil
+				},
+			),
+		)
+		return wire
+	}
+
+	defaultTools, err := AsTools(db, "sqlite", WithMaxSchemaBytes(capBytes))
+	require.NoError(t, err)
+	iocTools, err := AsTools(db, "sqlite",
+		WithMaxSchemaBytes(capBytes),
+		WithInspectResultFormatter(func(res InspectResult) (any, error) {
+			return res, nil
+		}),
+	)
+	require.NoError(t, err)
+
+	defaultWire := runInspect(defaultTools)
+	iocWire := runInspect(iocTools)
+	require.LessOrEqual(t, len(defaultWire), capBytes+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, len(iocWire), capBytes+len(textprocessor.TruncationSuffix)+2)
+	require.Equal(t, 1, strings.Count(string(defaultWire), "[Truncated]"))
+	require.Equal(t, 1, strings.Count(string(iocWire), "[Truncated]"))
+}
+
+func TestSQLInspect_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithMaxSchemaBytes(80),
+		WithInspectResultFormatter(func(_ InspectResult) (any, error) {
+			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]string)
+			if !ok || payload["blob"] == "" {
+				return errors.New("invalid payload")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"table_names":["t"]}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestSQLExecute_TripleIoC_MaxRowsFormatterValidator(t *testing.T) {
+	db := openSQLite(t)
+	_, err := db.Exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO t (name) VALUES ('alice')")
+	require.NoError(t, err)
+
+	tools, err := AsTools(db, "sqlite",
+		WithMaxRows(10),
+		WithMaxCellBytes(50),
+		WithExecuteResultFormatter(func(res ExecuteResult) (any, error) {
+			return map[string]int{"rows": res.RowCount}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]int)
+			if !ok || payload["rows"] < 1 {
+				return errors.New("expected rows")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"SELECT id, name FROM t"}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Equal(t, 1, payload["rows"])
 }

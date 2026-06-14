@@ -112,6 +112,9 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 					return yieldErr
 				}
 			}
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("agents: stream canceled: %w", err)
+			}
 			// If the stream ends without a step with IsLast, we exit without a final chunk
 			// (server-dependent behavior; orchestrator gets no final result in that case).
 			return nil

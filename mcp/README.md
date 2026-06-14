@@ -90,12 +90,24 @@ The `Transport` interface provides `Call(ctx, method, params) (result []byte, re
 
 ## Stdio transport
 
+| Limit               | Default | Option                               |
+| ------------------- | ------- | ------------------------------------ |
+| Per JSON line       | 1 MiB   | fixed (`rpcJSONLineScannerMaxBytes`) |
+| Total stdout stream | 16 MiB  | `WithStdioMaxStreamBytes`            |
+| First line wait     | 30s     | `WithStdioFirstLineTimeout`          |
+
 - `NewStdioTransport(executable string, args []string, opts ...StdioTransportOption)` — executable, **args as a slice** (convenient for programmatic command building, e.g. conditionally appending `--debug` or `--path`), and optional options. The spec document may show a variadic example; the implementation uses a slice and options (WithLogger, WithStdioFirstLineTimeout) for consistency and programmatic use.
-- Options: `mcp.WithLogger(logger *slog.Logger)` (stderr forwarded to logger; default `slog.Default()`); `mcp.WithStdioFirstLineTimeout(d time.Duration)` (max wait for first stdout line after start; default 30s).
+- Options: `mcp.WithLogger(logger *slog.Logger)` (stderr forwarded to logger; default `slog.Default()`); `mcp.WithStdioFirstLineTimeout(d time.Duration)` (max wait for first stdout line after start; default 30s); `mcp.WithStdioMaxStreamBytes(n)`.
+- Stderr lines are scanned with the same 1 MiB line cap; read loops honor context cancellation via `readCtx`.
 
 ## SSE transport
 
-- `NewSSETransport(initialURL string)` — only the initial URL (e.g. `http://localhost:3001/sse`) is fixed. The server must send an event with type `endpoint` first; the `data` field is the URL used for POST (Call/Notify). All JSON-RPC requests are sent to that URL.
+| Limit             | Default | Option                  |
+| ----------------- | ------- | ----------------------- |
+| Per SSE data line | 1 MiB   | fixed                   |
+| Total GET stream  | 16 MiB  | `WithSSEMaxStreamBytes` |
+
+- `NewSSETransport(initialURL string, opts ...SSETransportOption)` — only the initial URL (e.g. `http://localhost:3001/sse`) is fixed. Default HTTP client uses `httptool.NewSafeHTTPClient` (SSRF-safe dial). Override with `mcp.WithSSEHTTPClient(client *http.Client)` when needed. The server must send an event with type `endpoint` first; the `data` field is the URL used for POST (Call/Notify). GET must return HTTP 2xx; POST/notify responses must be 2xx before body drain.
 
 ## Content formatting
 

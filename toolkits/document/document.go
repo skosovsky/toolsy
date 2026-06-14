@@ -4,27 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
-
-const maxRedirects = 10
 
 type extractArgs struct {
 	FilePath string `json:"file_path,omitempty"`
 	URL      string `json:"url,omitempty"`
 }
 
-type extractResult struct {
+type ExtractWireResult struct {
 	Text string `json:"text"`
 }
 
@@ -41,11 +38,44 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 		toolOpts = append(toolOpts, toolsy.WithReadOnly())
 	}
 
-	tool, err := toolsy.NewTool[extractArgs, extractResult](
+	if o.resultFormatter != nil || o.hostResultValidator != nil {
+		tool, err := toolsy.NewTool[extractArgs, format.JSONResult](
+			o.toolName,
+			o.toolDesc,
+			func(ctx context.Context, _ *toolsy.RunEnv, args extractArgs) (format.JSONResult, error) {
+				res, extractErr := doExtract(ctx, &o, args.FilePath, args.URL)
+				if extractErr != nil {
+					return format.JSONResult{}, extractErr
+				}
+				raw, applyErr := format.ApplyWithEnvelope(
+					res,
+					func(v ExtractWireResult) ExtractWireResult { return v },
+					o.resultFormatter,
+					o.hostResultValidator,
+					o.maxBytes,
+				)
+				if applyErr != nil {
+					return format.JSONResult{}, applyErr
+				}
+				return format.JSONResult{Raw: raw}, nil
+			},
+			toolOpts...,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("toolkit/document: build tool: %w", err)
+		}
+		return tool, nil
+	}
+
+	tool, err := toolsy.NewTool[extractArgs, format.JSONResult](
 		o.toolName,
 		o.toolDesc,
-		func(ctx context.Context, _ *toolsy.RunEnv, args extractArgs) (extractResult, error) {
-			return doExtract(ctx, &o, args.FilePath, args.URL)
+		func(ctx context.Context, _ *toolsy.RunEnv, args extractArgs) (format.JSONResult, error) {
+			res, extractErr := doExtract(ctx, &o, args.FilePath, args.URL)
+			if extractErr != nil {
+				return format.JSONResult{}, extractErr
+			}
+			return format.ToJSONResult(res, o.maxBytes)
 		},
 		toolOpts...,
 	)
@@ -55,15 +85,15 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 	return tool, nil
 }
 
-func doExtract(ctx context.Context, o *options, filePath, url string) (extractResult, error) {
+func doExtract(ctx context.Context, o *options, filePath, url string) (ExtractWireResult, error) {
 	if filePath == "" && url == "" {
-		return extractResult{}, toolsy.NewValidationError("file_path or url is required")
+		return ExtractWireResult{}, toolsy.NewValidationError("file_path or url is required")
 	}
 	if filePath != "" && url != "" {
-		return extractResult{}, toolsy.NewValidationError("provide either file_path or url, not both")
+		return ExtractWireResult{}, toolsy.NewValidationError("provide either file_path or url, not both")
 	}
 	if url != "" && !o.allowRemote {
-		return extractResult{}, toolsy.NewValidationError("URL fetch is disabled (use WithAllowRemote(true))")
+		return ExtractWireResult{}, toolsy.NewValidationError("URL fetch is disabled (use WithAllowRemote(true))")
 	}
 
 	var path string
@@ -72,7 +102,7 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (extractRe
 	if url != "" {
 		path, format, err = fetchRemoteToTemp(ctx, o, url)
 		if err != nil {
-			return extractResult{}, err
+			return ExtractWireResult{}, err
 		}
 		defer func() { _ = os.Remove(path) }()
 	} else {
@@ -80,28 +110,24 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (extractRe
 		var info os.FileInfo
 		info, err = os.Stat(path)
 		if err != nil {
-			return extractResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat: %w", err))
+			return ExtractWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat: %w", err))
 		}
 		if info.Size() > int64(o.maxBytes) {
-			return extractResult{}, toolsy.NewValidationError("file too large")
+			return ExtractWireResult{}, toolsy.NewValidationError("file too large")
 		}
 		format = formatFromURL(path)
 	}
 
 	format = strings.ToLower(strings.TrimPrefix(format, "."))
-	text, err := extractTextByFormat(path, format, o)
+	text, err := extractTextByFormat(ctx, path, format, o)
 	if err != nil {
-		return extractResult{}, err
+		return ExtractWireResult{}, err
 	}
-	// Final truncation (UTF-8 safe)
-	if len(text) > o.maxBytes {
-		text = textprocessor.TruncateStringUTF8(text, o.maxBytes, truncateSuffix)
-	}
-	return extractResult{Text: text}, nil
+	return ExtractWireResult{Text: text}, nil
 }
 
 // extractTextByFormat parses the file at path according to format (csv, pdf, docx).
-func extractTextByFormat(path, format string, o *options) (string, error) {
+func extractTextByFormat(ctx context.Context, path, format string, o *options) (string, error) {
 	switch format {
 	case "csv":
 		f, openErr := os.Open(path) // #nosec G703 -- path from args; size checked above
@@ -109,13 +135,13 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 			return "", openErr
 		}
 		defer func() { _ = f.Close() }()
-		text, err := parseCSV(f, o.maxBytes)
+		text, err := parseCSV(ctx, f, contentByteCap(o.maxBytes))
 		if err != nil {
 			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
 		return text, nil
 	case "pdf":
-		text, err := parsePDF(path, o.maxBytes)
+		text, err := parsePDF(ctx, path, contentByteCap(o.maxBytes))
 		if err != nil {
 			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
@@ -130,7 +156,7 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 		if statErr != nil {
 			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat docx file: %w", statErr))
 		}
-		text, err := parseDOCX(f, info.Size(), o.maxBytes)
+		text, err := parseDOCX(ctx, f, info.Size(), contentByteCap(o.maxBytes))
 		if err != nil {
 			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
 		}
@@ -140,30 +166,39 @@ func extractTextByFormat(path, format string, o *options) (string, error) {
 	}
 }
 
-// copyRemoteResponseToTemp writes resp.Body to a temp file (caller must defer resp.Body.Close).
-func copyRemoteResponseToTemp(resp *http.Response, rawURL string, o *options) (string, string, error) {
-	if resp.StatusCode != http.StatusOK {
+// copyRemoteResponseToTemp writes resp.Body to a temp file after status check.
+func copyRemoteResponseToTemp(
+	ctx context.Context,
+	resp *http.Response,
+	rawURL string,
+	o *options,
+) (string, string, error) {
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return "", "", toolsy.NewValidationError("remote file fetch failed: " + resp.Status)
 	}
 	format := formatFromURL(rawURL)
 	if format == "" {
 		format = formatFromContentType(resp.Header.Get("Content-Type"))
 	}
+	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, o.maxBytes)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", "", err
+		}
+		if strings.Contains(err.Error(), "read exceeds") {
+			return "", "", toolsy.NewValidationError("remote file too large")
+		}
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: read remote body: %w", err))
+	}
 	tmp, createErr := os.CreateTemp("", "document-*")
 	if createErr != nil {
 		return "", "", createErr
 	}
 	tmpPath := tmp.Name()
-	n, copyErr := io.Copy(tmp, io.LimitReader(resp.Body, int64(o.maxBytes)+1))
-	if copyErr != nil {
+	if _, writeErr := tmp.Write(data); writeErr != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-		return "", "", copyErr
-	}
-	if n > int64(o.maxBytes) {
-		_ = tmp.Close()
-		_ = os.Remove(tmpPath)
-		return "", "", toolsy.NewValidationError("remote file too large")
+		return "", "", writeErr
 	}
 	if closeErr := tmp.Close(); closeErr != nil {
 		_ = os.Remove(tmpPath)
@@ -174,54 +209,42 @@ func copyRemoteResponseToTemp(resp *http.Response, rawURL string, o *options) (s
 
 // fetchRemoteToTemp downloads a remote document to a temp file and returns path and detected format.
 func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, string, error) {
-	if err := validateRemoteURL(ctx, rawURL, o.allowPrivateIPs); err != nil {
+	u, err := httptool.ValidateRemoteURLWithBlacklist(ctx, rawURL, o.allowPrivateIPs, nil)
+	if err != nil {
 		return "", "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: request: %w", err))
 	}
-	hc := o.httpClient
-	if hc == nil {
-		hc = http.DefaultClient
+	client, err := documentHTTPClient(o)
+	if err != nil {
+		return "", "", err
 	}
-	checkRedirect := func(redirectReq *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return toolsy.NewValidationError("too many redirects")
-		}
-		if verr := validateRemoteURL(redirectReq.Context(), redirectReq.URL.String(), false); verr != nil {
-			return verr
-		}
-		return nil
-	}
-	std, isConcreteClient := hc.(*http.Client)
-	if !isConcreteClient {
-		if !o.allowPrivateIPs {
-			return "", "", errors.New(
-				"toolkit/document: default SSRF protection requires *http.Client for URL fetch; pass WithHTTPClient(&http.Client{...}) or use WithAllowPrivateIPs(true) for tests only",
-			)
-		}
-		resp, doErr := hc.Do(req) // #nosec G704
-		if doErr != nil {
-			if toolErrorClientCorrectable(doErr) {
-				return "", "", doErr
-			}
-			return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: fetch: %w", doErr))
-		}
-		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-		return copyRemoteResponseToTemp(resp, rawURL, o)
-	}
-	client := *std
-	client.CheckRedirect = checkRedirect
-	resp, doErr := client.Do(req) // #nosec G704 -- URL validated; redirects validated in CheckRedirect
+	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
 		if toolErrorClientCorrectable(doErr) {
 			return "", "", doErr
 		}
 		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: fetch: %w", doErr))
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-	return copyRemoteResponseToTemp(resp, rawURL, o)
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	return copyRemoteResponseToTemp(ctx, resp, rawURL, o)
+}
+
+func documentHTTPClient(o *options) (*http.Client, error) {
+	if o.httpClient != nil {
+		if _, ok := o.httpClient.(*http.Client); !ok {
+			return nil, errors.New(
+				"toolkit/document: default SSRF protection requires *http.Client; pass WithHTTPClient(&http.Client{...})",
+			)
+		}
+	}
+	safe := httptool.NewSafeHTTPClient(
+		httptool.SafeDialOptions{AllowPrivateIPs: o.allowPrivateIPs}, //nolint:exhaustruct // IP-only blacklist mode
+		httptool.CheckRedirectRemote(o.allowPrivateIPs, nil),
+	)
+	return httptool.MergeHTTPClient(safe, o.httpClient), nil
 }
 
 func toolErrorClientCorrectable(err error) bool {
@@ -252,35 +275,4 @@ func formatFromContentType(ct string) string {
 		return "docx"
 	}
 	return ""
-}
-
-// validateRemoteURL checks scheme (http/https), host presence, and blocks private/loopback IPs unless allowPrivateIPs.
-func validateRemoteURL(ctx context.Context, rawURL string, allowPrivateIPs bool) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return toolsy.NewValidationError("invalid URL: " + err.Error())
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return toolsy.NewValidationError("only http and https schemes are allowed")
-	}
-	host := strings.TrimSpace(u.Hostname())
-	if host == "" {
-		return toolsy.NewValidationError("URL host is missing")
-	}
-	if allowPrivateIPs {
-		return nil
-	}
-	addrs, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return toolsy.NewValidationError("SSRF: host lookup failed: " + err.Error())
-	}
-	if slices.ContainsFunc(addrs, func(a net.IPAddr) bool { return isPrivateIP(a.IP) }) {
-		return toolsy.NewValidationError("SSRF: private or loopback IP not allowed")
-	}
-	return nil
-}
-
-func isPrivateIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate()
 }

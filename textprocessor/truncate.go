@@ -1,10 +1,61 @@
 package textprocessor
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
 )
+
+// TruncationSuffix is appended when toolkit output is truncated at a byte limit.
+const TruncationSuffix = "\n[Truncated]"
+
+// ContractsTruncationSuffix is used by OpenAPI/GraphQL/gRPC contract tools.
+const ContractsTruncationSuffix = "\n[Truncated. Use pagination or filters.]"
+
+// SQLRowsTruncationSuffix is appended when sqltool row output hits max rows.
+const SQLRowsTruncationSuffix = "\n[Truncated: max rows reached]"
+
+// SQLCellTruncationSuffix is appended when a single sqltool cell is truncated.
+const SQLCellTruncationSuffix = "..."
+
+// SearchResultsTruncationSuffix is appended when web search markdown hits maxSearchResultsDisplayed.
+const SearchResultsTruncationSuffix = "... [truncated]\n"
+
+// ReadLimited reads up to maxBytes from r with UTF-8 safe truncation; respects ctx cancellation.
+func ReadLimited(ctx context.Context, r io.Reader, maxBytes int, suffix string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	text, err := ReadAndTruncateValidUTF8(io.LimitReader(r, int64(maxBytes)+1), maxBytes, suffix)
+	if err != nil {
+		return "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return text, nil
+}
+
+// ReadLimitedBytes reads up to maxBytes from r; returns error when more data is available.
+func ReadLimitedBytes(ctx context.Context, r io.Reader, maxBytes int) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	limited := io.LimitReader(r, int64(maxBytes)+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(data) > maxBytes {
+		return nil, fmt.Errorf("read exceeds %d bytes", maxBytes)
+	}
+	return data, nil
+}
 
 // TruncateStringUTF8 truncates s to at most maxBytes at a rune boundary and appends suffix.
 func TruncateStringUTF8(s string, maxBytes int, suffix string) string {
@@ -46,6 +97,15 @@ func truncateStringToBytes(s string, maxBytes int) string {
 		n += rn
 	}
 	return s
+}
+
+// TruncateStringUTF8NoSuffix truncates s to at most maxBytes at a rune boundary without appending a suffix.
+// Use for content pre-caps before wire JSON envelope truncation.
+func TruncateStringUTF8NoSuffix(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+	return truncateStringToBytes(s, maxBytes)
 }
 
 // TruncateBytesToValidUTF8String truncates data to maxBytes, normalizes to valid UTF-8, and appends suffix when truncated.

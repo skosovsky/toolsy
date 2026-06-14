@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -307,4 +308,12 @@ func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
 	require.Contains(t, result.Body, "world")
 	require.NotContains(t, result.Body, "<p>")
 	require.NotContains(t, result.Body, "<strong>")
+}
+
+func TestNormalizeBody_ContextCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	html := "<p>" + strings.Repeat("x", 200) + "</p>"
+	got := normalizeBody(ctx, html)
+	require.Equal(t, html, got)
 }

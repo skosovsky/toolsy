@@ -7,17 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/skosovsky/toolsy"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return fn(req)
-}
 
 type limitReadCloser struct {
 	data        []byte
@@ -76,6 +71,7 @@ func TestExecuteTruncatesOversizedResponse(t *testing.T) {
 			BaseURL:          server.URL,
 			HTTPClient:       server.Client(),
 			MaxResponseBytes: 5,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -117,6 +113,7 @@ func TestExecuteTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 			BaseURL:          server.URL,
 			HTTPClient:       server.Client(),
 			MaxResponseBytes: 5,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -139,18 +136,13 @@ func TestExecuteTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 func TestExecuteReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	const maxBytes = 5
 	body := []byte("abcdefghijklmnopqrstuvwxyz")
-	client := &http.Client{
-		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body: &limitReadCloser{
-					data:        body,
-					maxReturned: maxBytes + 1,
-				},
-				Header: make(http.Header),
-			}, nil
-		}),
-	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.Copy(w, &limitReadCloser{
+			data:        body,
+			maxReturned: maxBytes + 1,
+		})
+	}))
+	defer server.Close()
 
 	var got toolsy.Chunk
 	err := execute(
@@ -164,9 +156,10 @@ func TestExecuteReadsAtMostMaxBytesPlusOne(t *testing.T) {
 		nil,
 		[]byte(`{}`),
 		&Options{
-			BaseURL:          "https://example.com",
-			HTTPClient:       client,
+			BaseURL:          server.URL,
+			HTTPClient:       server.Client(),
 			MaxResponseBytes: maxBytes,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -180,5 +173,36 @@ func TestExecuteReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	expected := []byte("abcde" + truncationSuffix)
 	if !bytes.Equal(got.Data, expected) {
 		t.Fatalf("unexpected body: got %q want %q", got.Data, expected)
+	}
+}
+
+func TestExecute_Non2xxStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "missing", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	err := execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		"list_items",
+		http.MethodGet,
+		"/items",
+		nil,
+		nil,
+		nil,
+		[]byte(`{}`),
+		&Options{
+			BaseURL:         server.URL,
+			HTTPClient:      server.Client(),
+			AllowPrivateIPs: true,
+		},
+		func(toolsy.Chunk) error { return nil },
+	)
+	if err == nil {
+		t.Fatal("expected error for 404 response")
+	}
+	if !strings.Contains(err.Error(), "404") {
+		t.Fatalf("expected 404 in error, got: %v", err)
 	}
 }

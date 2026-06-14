@@ -45,7 +45,7 @@ func NewTool[T any, R any](
 		if err != nil {
 			return wrapHandlerError(err)
 		}
-		data, err := json.Marshal(res)
+		data, err := marshalToolResult(res)
 		if err != nil {
 			return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
 		}
@@ -67,6 +67,25 @@ func NewTool[T any, R any](
 		manifest: buildToolManifest(name, description, ext.Schema(), cfg.Manifest),
 		execute:  execute,
 	}, nil
+}
+
+// WireJSONResult is implemented by tool handler results that are already JSON-encoded for the wire.
+// Used by toolkit IoC formatters after CapWireJSON; bytes may be truncated and not valid JSON.
+type WireJSONResult interface {
+	WireJSON() json.RawMessage
+}
+
+func marshalToolResult(res any) ([]byte, error) {
+	if wr, ok := res.(WireJSONResult); ok {
+		raw := wr.WireJSON()
+		if raw == nil {
+			return []byte("null"), nil
+		}
+		out := make([]byte, len(raw))
+		copy(out, raw)
+		return out, nil
+	}
+	return json.Marshal(res)
 }
 
 func generateOutputSchema[R any](cfg SchemaConfig) (map[string]any, error) {

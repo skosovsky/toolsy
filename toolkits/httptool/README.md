@@ -12,22 +12,49 @@ go get github.com/skosovsky/toolsy/toolkits/httptool
 
 ## Available tools
 
-| Tool       | Description                          | Input                                                    |
-|------------|--------------------------------------|----------------------------------------------------------|
-| `http_get` | Perform an HTTP GET request          | `{"url": "string"}`                                      |
-| `http_post`| Perform an HTTP POST with JSON body  | `{"url": "string", "json_body": {"key": "value", ...}}`  |
+| Tool        | Description                         | Input                                                   |
+| ----------- | ----------------------------------- | ------------------------------------------------------- |
+| `http_get`  | Perform an HTTP GET request         | `{"url": "string"}`                                     |
+| `http_post` | Perform an HTTP POST with JSON body | `{"url": "string", "json_body": {"key": "value", ...}}` |
 
-Result: `{"status": 200, "body": "..."}`. Body is truncated to `maxResponseBody` (default 512KB) with `[Truncated]` suffix if longer.
+Result: `{"status": 200, "body": "..."}`. Body is truncated to `maxResponseBody` (default 512KB) with `[Truncated]` suffix if longer. This is a **probe-tool tier**: suffix lives in the `body` field before JSON marshal, not the toolkit wire-cap path (`format.CapWireJSON`).
 
-## Configuration & Security
+## Library mode (without tools)
+
+Use exported primitives in host infrastructure:
+
+```go
+import (
+	"net/http"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+)
+
+func newSafeClient(allowed []string) *http.Client {
+	return httptool.NewSafeHTTPClient(httptool.SafeDialOptions{
+		AllowedHosts: allowed,
+	}, httptool.CheckRedirectAllowed(allowed, false))
+}
+
+// Read response bodies with UTF-8 safe truncation:
+body, err := httptool.ReadBodyLimited(ctx, resp.Body, 512*1024)
+```
+
+**SafeDialOptions host policy:**
+- `AllowedHosts` non-empty → strict whitelist (only listed hosts; fail-closed on Allowed+Blocked overlap).
+- `AllowedHosts` empty → blacklist via `BlockedHosts` plus always `IsBlockedIP` at dial time.
+
+See `IsBlockedIP` (preferred for SSRF dial/resolve) and `IsPrivateIP` (legacy alias) in godoc for details.
+
+## Tool mode
 
 > **Warning:** You must call `WithAllowedDomains(...)` with a non-empty list. Without it, all requests are rejected with a client error.
 
 - **Allowed domains:** Use exact hostnames (e.g. `api.example.com`) or prefix with `.` for subdomains: `.slack.com` allows `api.slack.com`, `hooks.slack.com`, but not `slack.com` or `evil-slack.com`.
 
-- **SSRF protection:** The toolkit validates scheme (http/https only), host against the whitelist, and optionally resolves the host and blocks private IP ranges (127.0.0.0/8, 10/8, 172.16/12, 192.168/16, 169.254/16, ::1, fe80::/10). This is a defense-in-depth layer.
+- **SSRF protection:** `AsTools` uses `SafeDialTransport` with DNS-rebinding pin and `CheckRedirect` validation by default. URL checks use the same `LookupIPAddr` + `IsBlockedIP` path as dial time. Use `WithAllowPrivateIPs(true)` only in tests (e.g. httptest on 127.0.0.1).
 
-> **Warning (DNS Rebinding):** The built-in private IP check is a basic defense-in-depth layer. For strict SSRF protection against DNS rebinding attacks, provide a custom `http.Client` with a secured `DialContext` via `WithHTTPClient`.
+- **Custom client:** `WithHTTPClient` merges only `Timeout` onto the safe client; Transport and CheckRedirect from a custom client are ignored.
 
 - **Response size:** Use `WithMaxResponseBody(n)` to cap response body size (default 512KB). Truncation is UTF-8 safe.
 

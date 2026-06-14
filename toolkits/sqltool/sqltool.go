@@ -11,13 +11,14 @@ import (
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/internal/sqlutil"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
 
 type inspectArgs struct {
 	TableNames []string `json:"table_names,omitempty"`
 }
 
-type inspectResult struct {
+type InspectResult struct {
 	Schema string `json:"schema"`
 }
 
@@ -25,14 +26,14 @@ type executeArgs struct {
 	Query string `json:"query"`
 }
 
-type executeResult struct {
+type ExecuteResult struct {
 	Result   string `json:"result"`
 	RowCount int    `json:"row_count"`
 }
 
 const (
-	truncationSuffix     = "\n[Truncated: max rows reached]"
-	cellTruncationSuffix = "..."
+	truncationSuffix     = textprocessor.SQLRowsTruncationSuffix
+	cellTruncationSuffix = textprocessor.SQLCellTruncationSuffix
 )
 
 // AsTools returns sql_inspect_schema and sql_execute_read tools. db must use a read-only user in production.
@@ -50,30 +51,116 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 	}
 	applyDefaults(&o)
 
-	inspectTool, err := toolsy.NewTool[inspectArgs, inspectResult](
-		o.inspectName,
-		o.inspectDesc,
-		func(ctx context.Context, _ *toolsy.RunEnv, args inspectArgs) (inspectResult, error) {
-			return doInspectSchema(ctx, db, driverName, d, &o, args.TableNames)
-		},
-		toolsy.WithReadOnly(),
-	)
+	inspectTool, err := buildInspectTool(db, driverName, d, &o)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/sqltool: build inspect tool: %w", err)
 	}
 
-	executeTool, err := toolsy.NewTool[executeArgs, executeResult](
-		o.executeName,
-		o.executeDesc,
-		func(ctx context.Context, _ *toolsy.RunEnv, args executeArgs) (executeResult, error) {
-			return doExecuteRead(ctx, db, &o, args.Query)
-		},
-		toolsy.WithReadOnly(),
-	)
+	executeTool, err := buildExecuteTool(db, &o)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/sqltool: build execute tool: %w", err)
 	}
 	return []toolsy.Tool{inspectTool, executeTool}, nil
+}
+
+// executeWireByteBudget estimates worst-case execute wire JSON from row/cell limits.
+func executeWireByteBudget(o *options, res ExecuteResult) int {
+	const (
+		jsonFieldOverhead = 4
+		wireJSONOverhead  = 256
+	)
+	colCount := max(maxColsFromResult(res.Result), 1)
+	perRow := colCount * (o.maxCellBytes + jsonFieldOverhead)
+	return o.maxRows*perRow + len(truncationSuffix) + wireJSONOverhead
+}
+
+func maxColsFromResult(result string) int {
+	for line := range strings.SplitSeq(result, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		return strings.Count(line, "|") + 1
+	}
+	return 0
+}
+
+func buildInspectTool(db *sql.DB, driverName string, d dialect, o *options) (toolsy.Tool, error) {
+	if o.inspectFormatter != nil || o.hostResultValidator != nil {
+		return toolsy.NewTool[inspectArgs, format.JSONResult](
+			o.inspectName,
+			o.inspectDesc,
+			func(ctx context.Context, _ *toolsy.RunEnv, args inspectArgs) (format.JSONResult, error) {
+				res, err := doInspectSchema(ctx, db, driverName, d, o, args.TableNames)
+				if err != nil {
+					return format.JSONResult{}, err
+				}
+				raw, applyErr := format.ApplyWithEnvelope(
+					res,
+					func(v InspectResult) InspectResult { return v },
+					o.inspectFormatter,
+					o.hostResultValidator,
+					o.maxSchemaBytes,
+				)
+				if applyErr != nil {
+					return format.JSONResult{}, applyErr
+				}
+				return format.JSONResult{Raw: raw}, nil
+			},
+			toolsy.WithReadOnly(),
+		)
+	}
+	return toolsy.NewTool[inspectArgs, format.JSONResult](
+		o.inspectName,
+		o.inspectDesc,
+		func(ctx context.Context, _ *toolsy.RunEnv, args inspectArgs) (format.JSONResult, error) {
+			res, err := doInspectSchema(ctx, db, driverName, d, o, args.TableNames)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			return format.ToJSONResult(res, o.maxSchemaBytes)
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func buildExecuteTool(db *sql.DB, o *options) (toolsy.Tool, error) {
+	if o.executeFormatter != nil || o.hostResultValidator != nil {
+		return toolsy.NewTool[executeArgs, format.JSONResult](
+			o.executeName,
+			o.executeDesc,
+			func(ctx context.Context, _ *toolsy.RunEnv, args executeArgs) (format.JSONResult, error) {
+				res, err := doExecuteRead(ctx, db, o, args.Query)
+				if err != nil {
+					return format.JSONResult{}, err
+				}
+				raw, applyErr := format.ApplyWithEnvelope(
+					res,
+					func(v ExecuteResult) ExecuteResult { return v },
+					o.executeFormatter,
+					o.hostResultValidator,
+					executeWireByteBudget(o, res),
+				)
+				if applyErr != nil {
+					return format.JSONResult{}, applyErr
+				}
+				return format.JSONResult{Raw: raw}, nil
+			},
+			toolsy.WithReadOnly(),
+		)
+	}
+	return toolsy.NewTool[executeArgs, format.JSONResult](
+		o.executeName,
+		o.executeDesc,
+		func(ctx context.Context, _ *toolsy.RunEnv, args executeArgs) (format.JSONResult, error) {
+			res, err := doExecuteRead(ctx, db, o, args.Query)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			return format.ToJSONResult(res, executeWireByteBudget(o, res))
+		},
+		toolsy.WithReadOnly(),
+	)
 }
 
 func doInspectSchema(
@@ -83,13 +170,13 @@ func doInspectSchema(
 	d dialect,
 	o *options,
 	tableNames []string,
-) (inspectResult, error) {
+) (InspectResult, error) {
 	tables := tableNames
 	var err error
 	if len(tables) == 0 {
 		tables, err = fetchTableNamesFromDB(ctx, db, d, o)
 		if err != nil {
-			return inspectResult{}, err
+			return InspectResult{}, err
 		}
 	} else if len(o.allowedTables) > 0 {
 		tables = filterTablesByAllowlist(tables, o.allowedTables)
@@ -97,20 +184,15 @@ func doInspectSchema(
 
 	var b strings.Builder
 	driverLower := strings.ToLower(driverName)
-	const schemaTruncatedSuffix = "\n\n[Truncated: schema output limit reached]"
 	for _, table := range tables {
-		if b.Len() >= o.maxSchemaBytes {
-			b.WriteString(schemaTruncatedSuffix)
-			break
-		}
 		if err := ctx.Err(); err != nil {
-			return inspectResult{}, fmt.Errorf("toolkit/sqltool: %w", err)
+			return InspectResult{}, fmt.Errorf("toolkit/sqltool: %w", err)
 		}
-		if err := appendColumnsToSchema(ctx, db, driverLower, d, o, table, &b); err != nil {
-			return inspectResult{}, err
+		if err := appendColumnsToSchema(ctx, db, driverLower, d, table, &b); err != nil {
+			return InspectResult{}, err
 		}
 	}
-	return inspectResult{Schema: strings.TrimSpace(b.String())}, nil
+	return InspectResult{Schema: strings.TrimSpace(b.String())}, nil
 }
 
 func fetchTableNamesFromDB(ctx context.Context, db *sql.DB, d dialect, o *options) ([]string, error) {
@@ -151,7 +233,6 @@ func appendColumnsToSchema(
 	db *sql.DB,
 	driverLower string,
 	d dialect,
-	o *options,
 	table string,
 	b *strings.Builder,
 ) error {
@@ -176,9 +257,7 @@ func appendColumnsToSchema(
 			)
 		}
 		rowCount++
-		if b.Len() < o.maxSchemaBytes {
-			fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
-		}
+		fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -219,21 +298,21 @@ func scanColumnRow(rows *sql.Rows, driverLower string) (string, string, string, 
 	return name, dataType, nullableStr, defaultVal, nil
 }
 
-func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (executeResult, error) {
+func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (ExecuteResult, error) {
 	query = strings.TrimSpace(query)
 	if err := sqlutil.ValidateReadOnlyQuery(query); err != nil {
-		return executeResult{}, err
+		return ExecuteResult{}, err
 	}
 
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		return executeResult{}, fmt.Errorf("toolkit/sqltool: query: %w", err)
+		return ExecuteResult{}, fmt.Errorf("toolkit/sqltool: query: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	cols, err := rows.Columns()
 	if err != nil {
-		return executeResult{}, err
+		return ExecuteResult{}, err
 	}
 	var b strings.Builder
 	writeMarkdownTableHeader(&b, cols)
@@ -250,16 +329,16 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (e
 			break
 		}
 		if err := rows.Scan(scanDest...); err != nil {
-			return executeResult{}, err
+			return ExecuteResult{}, err
 		}
 		appendMarkdownDataRow(&b, vals, o.maxCellBytes)
 		b.WriteString("\n")
 		rowCount++
 	}
 	if err := rows.Err(); err != nil {
-		return executeResult{}, err
+		return ExecuteResult{}, err
 	}
-	return executeResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount}, nil
+	return ExecuteResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount}, nil
 }
 
 func writeMarkdownTableHeader(b *strings.Builder, cols []string) {

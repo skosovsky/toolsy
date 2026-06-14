@@ -13,7 +13,7 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
-const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
+const truncationSuffix = textprocessor.ContractsTruncationSuffix
 
 func invokeRPC(
 	ctx context.Context,

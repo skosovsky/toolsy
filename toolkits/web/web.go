@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
 
 // maxSearchResultsDisplayed is the maximum number of search hits included in the markdown list (before truncation).
@@ -30,7 +32,7 @@ type searchArgs struct {
 	Query string `json:"query"`
 }
 
-type searchResult struct {
+type SearchWireResult struct {
 	Results string `json:"results"`
 }
 
@@ -38,7 +40,7 @@ type scrapeArgs struct {
 	URL string `json:"url"`
 }
 
-type scrapeResult struct {
+type ScrapeWireResult struct {
 	Markdown string `json:"markdown"`
 }
 
@@ -53,26 +55,12 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 	}
 	applyDefaults(&o)
 
-	searchTool, err := toolsy.NewTool[searchArgs, searchResult](
-		o.searchName,
-		o.searchDesc,
-		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (searchResult, error) {
-			return doSearch(ctx, provider, args.Query)
-		},
-		toolsy.WithReadOnly(),
-	)
+	searchTool, err := buildSearchTool(provider, &o)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/web: build search tool: %w", err)
 	}
 
-	scrapeTool, err := toolsy.NewTool[scrapeArgs, scrapeResult](
-		o.scrapeName,
-		o.scrapeDesc,
-		func(ctx context.Context, _ *toolsy.RunEnv, args scrapeArgs) (scrapeResult, error) {
-			return doScrape(ctx, &o, args.URL)
-		},
-		toolsy.WithReadOnly(),
-	)
+	scrapeTool, err := buildScrapeTool(&o)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/web: build scrape tool: %w", err)
 	}
@@ -80,111 +68,142 @@ func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
 	return []toolsy.Tool{searchTool, scrapeTool}, nil
 }
 
-func doSearch(ctx context.Context, provider SearchProvider, query string) (searchResult, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return searchResult{}, toolsy.NewValidationError("query is required")
+func buildSearchTool(provider SearchProvider, o *options) (toolsy.Tool, error) {
+	if o.searchFormatter != nil || o.hostResultValidator != nil {
+		return toolsy.NewTool[searchArgs, format.JSONResult](
+			o.searchName,
+			o.searchDesc,
+			func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
+				results, err := SearchStructured(ctx, provider, args.Query)
+				if err != nil {
+					return format.JSONResult{}, err
+				}
+				raw, applyErr := format.ApplyWithEnvelope(
+					results,
+					func(r []SearchResult) SearchWireResult {
+						return SearchWireResult{Results: FormatSearchMarkdown(r)}
+					},
+					o.searchFormatter,
+					o.hostResultValidator,
+					o.maxSearchBytes,
+				)
+				if applyErr != nil {
+					return format.JSONResult{}, applyErr
+				}
+				return format.JSONResult{Raw: raw}, nil
+			},
+			toolsy.WithReadOnly(),
+		)
 	}
-	results, err := provider.Search(ctx, query)
+	return toolsy.NewTool[searchArgs, format.JSONResult](
+		o.searchName,
+		o.searchDesc,
+		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
+			res, err := doSearch(ctx, provider, args.Query)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			return format.ToJSONResult(res, o.maxSearchBytes)
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func buildScrapeTool(o *options) (toolsy.Tool, error) {
+	if o.scrapeFormatter != nil || o.hostResultValidator != nil {
+		return toolsy.NewTool[scrapeArgs, format.JSONResult](
+			o.scrapeName,
+			o.scrapeDesc,
+			func(ctx context.Context, _ *toolsy.RunEnv, args scrapeArgs) (format.JSONResult, error) {
+				res, err := doScrape(ctx, o, args.URL)
+				if err != nil {
+					return format.JSONResult{}, err
+				}
+				var scrapeFmt func(ScrapeWireResult) (any, error)
+				if o.scrapeFormatter != nil {
+					scrapeFmt = func(sr ScrapeWireResult) (any, error) {
+						return o.scrapeFormatter(sr.Markdown)
+					}
+				}
+				raw, applyErr := format.ApplyWithEnvelope(
+					res,
+					func(sr ScrapeWireResult) ScrapeWireResult { return sr },
+					scrapeFmt,
+					o.hostResultValidator,
+					o.maxPageBytes,
+				)
+				if applyErr != nil {
+					return format.JSONResult{}, applyErr
+				}
+				return format.JSONResult{Raw: raw}, nil
+			},
+			toolsy.WithReadOnly(),
+		)
+	}
+	return toolsy.NewTool[scrapeArgs, format.JSONResult](
+		o.scrapeName,
+		o.scrapeDesc,
+		func(ctx context.Context, _ *toolsy.RunEnv, args scrapeArgs) (format.JSONResult, error) {
+			res, err := doScrape(ctx, o, args.URL)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			return format.ToJSONResult(res, o.maxPageBytes)
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func doSearch(ctx context.Context, provider SearchProvider, query string) (SearchWireResult, error) {
+	results, err := SearchStructured(ctx, provider, query)
 	if err != nil {
-		return searchResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: search: %w", err))
+		return SearchWireResult{}, err
 	}
-	var b strings.Builder
-	for i, r := range results {
-		b.WriteString("- **")
-		b.WriteString(escapeMarkdown(r.Title))
-		b.WriteString("**: ")
-		b.WriteString(r.URL)
-		if r.Snippet != "" {
-			b.WriteString(" — ")
-			b.WriteString(escapeMarkdown(r.Snippet))
-		}
-		b.WriteString("\n")
-		if i+1 == maxSearchResultsDisplayed {
-			b.WriteString("... [truncated]\n")
-			break
-		}
-	}
-	return searchResult{Results: strings.TrimSuffix(b.String(), "\n")}, nil
+	return SearchWireResult{Results: FormatSearchMarkdown(results)}, nil
 }
 
-// parseScrapeResponse reads resp.Body; the caller must defer resp.Body.Close() (or equivalent) after a successful Do.
-func parseScrapeResponse(resp *http.Response, o *options) (scrapeResult, error) {
-	if resp.StatusCode != http.StatusOK {
-		return scrapeResult{}, toolsy.NewValidationError("fetch failed: " + resp.Status)
+// parseScrapeResponse reads resp.Body after status check; caller must close the body via httptool.CloseResponseBody.
+func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (ScrapeWireResult, error) {
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		return ScrapeWireResult{}, toolsy.NewValidationError("fetch failed: " + resp.Status)
 	}
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, int64(o.maxPageBytes)+1))
+	body, readErr := textprocessor.ReadLimited(ctx, resp.Body, scrapeContentByteCap(o.maxPageBytes), "")
 	if readErr != nil {
-		return scrapeResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: read body: %w", readErr))
+		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: read body: %w", readErr))
 	}
-	if len(body) > o.maxPageBytes {
-		return scrapeResult{}, toolsy.NewValidationError("page too large")
-	}
-	markdown, convErr := o.scraper.HTMLToMarkdown(string(body), o.maxPageBytes)
+	markdown, convErr := scrapeHTMLToMarkdown(ctx, o.scraper, body, 0)
 	if convErr != nil {
-		return scrapeResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
+		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
 	}
-	return scrapeResult{Markdown: markdown}, nil
+	return ScrapeWireResult{Markdown: markdown}, nil
 }
 
-func doScrape(ctx context.Context, o *options, rawURL string) (scrapeResult, error) {
+func doScrape(ctx context.Context, o *options, rawURL string) (ScrapeWireResult, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
-		return scrapeResult{}, toolsy.NewValidationError("url is required")
+		return ScrapeWireResult{}, toolsy.NewValidationError("url is required")
 	}
 	u, err := validateScrapeURL(ctx, rawURL, o.allowPrivateIPs, o.blockedDomains)
 	if err != nil {
-		return scrapeResult{}, err
+		return ScrapeWireResult{}, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
-		return scrapeResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: new request: %w", err))
+		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: new request: %w", err))
 	}
-	hc := o.httpClient
-	if hc == nil {
-		hc = http.DefaultClient
+	client, err := scrapeHTTPClient(o)
+	if err != nil {
+		return ScrapeWireResult{}, err
 	}
-	std, isConcreteClient := hc.(*http.Client)
-	if !isConcreteClient {
-		if !o.allowPrivateIPs {
-			return scrapeResult{}, errors.New(
-				"toolkit/web: default SSRF protection requires *http.Client; pass WithHTTPClient(&http.Client{...}) or use WithAllowPrivateIPs(true) for tests only",
-			)
-		}
-		resp, doErr := hc.Do(req) // #nosec G704
-		if doErr != nil {
-			if toolErrorClientCorrectable(doErr) {
-				return scrapeResult{}, doErr
-			}
-			return scrapeResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: fetch: %w", doErr))
-		}
-		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-		return parseScrapeResponse(resp, o)
-	}
-	client := *std
-	client.CheckRedirect = checkRedirect(o.allowPrivateIPs, o.blockedDomains)
-	if !o.allowPrivateIPs {
-		// Pin to resolved IP per request to prevent DNS rebinding
-		if client.Transport == nil {
-			client.Transport = &http.Transport{DialContext: rebindingSafeDialContext}
-		} else if t, ok := client.Transport.(*http.Transport); ok {
-			t2 := t.Clone()
-			t2.DialContext = rebindingSafeDialContext
-			client.Transport = t2
-		} else {
-			client.Transport = &http.Transport{DialContext: rebindingSafeDialContext}
-		}
-	}
-	// URL validated by validateScrapeURL; redirects validated by CheckRedirect with same blockedDomains
-	resp, doErr := client.Do(req) // #nosec G704
+	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
 		if toolErrorClientCorrectable(doErr) {
-			return scrapeResult{}, doErr
+			return ScrapeWireResult{}, doErr
 		}
-		return scrapeResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: fetch: %w", doErr))
+		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: fetch: %w", doErr))
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-	return parseScrapeResponse(resp, o)
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	return parseScrapeResponse(ctx, resp, o)
 }
 
 func escapeMarkdown(s string) string {

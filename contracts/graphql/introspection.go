@@ -6,15 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
+const truncationSuffix = textprocessor.ContractsTruncationSuffix
 
 // introspectionQuery uses fragment TypeRef for full type depth (e.g. [String!] -> NON_NULL(LIST(NON_NULL(SCALAR)))).
 const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
@@ -121,17 +121,19 @@ func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]by
 	if opts.IntrospectionAuthHeader != "" {
 		req.Header.Set("Authorization", opts.IntrospectionAuthHeader)
 	}
-	resp, err := client.Do(req) // #nosec G704 -- endpoint from caller config, not user input
+	// #nosec G704 -- endpoint from caller config, not user input
+	resp, err := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return nil, fmt.Errorf("graphql: introspect: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	data, err := io.ReadAll(resp.Body)
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		return nil, fmt.Errorf("graphql: introspection HTTP %d", resp.StatusCode)
+	}
+	maxBytes := opts.maxResponseBytes()
+	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, maxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("graphql: read: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("graphql: introspection HTTP %d: %s", resp.StatusCode, string(data))
 	}
 	return data, nil
 }
@@ -242,12 +244,16 @@ func executeGraphQL(
 			req.Header.Set("Authorization", authHeader)
 		}
 	}
-	resp, err := opts.httpClient().Do(req) // #nosec G704 -- endpoint from caller config, not user input
+	// #nosec G704 -- endpoint from caller config, not user input
+	resp, err := opts.httpClient().Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return fmt.Errorf("graphql: do: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	data, err := textprocessor.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		return fmt.Errorf("graphql: response status %d", resp.StatusCode)
+	}
+	data, err := textprocessor.ReadLimited(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("graphql: read: %w", err)
 	}

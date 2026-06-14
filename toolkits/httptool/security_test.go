@@ -2,6 +2,7 @@ package httptool
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,7 +100,21 @@ func TestValidateURL_LocalhostBlocked(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "private IP")
+	require.Contains(t, te.Reason, "private or loopback IP")
+}
+
+func TestValidateURL_ZeroIPBlocked(t *testing.T) {
+	addrs := []net.IPAddr{{IP: net.ParseIP("0.0.0.0")}}
+	err := ValidateResolvedIPs(addrs, false)
+	require.Error(t, err)
+}
+
+func TestValidateURL_MulticastBlocked(t *testing.T) {
+	_, err := validateURL(context.Background(), "http://224.0.0.1/", []string{"224.0.0.1"}, false)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Contains(t, te.Reason, "private or loopback IP")
 }
 
 func TestValidateURL_PrivateIPBlocked(t *testing.T) {
@@ -109,11 +124,22 @@ func TestValidateURL_PrivateIPBlocked(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "private IP")
+	require.Contains(t, te.Reason, "private or loopback IP")
 }
 
 func TestValidateURL_AllowPrivateIPsForTests(t *testing.T) {
 	u, err := validateURL(context.Background(), "http://127.0.0.1/", []string{"127.0.0.1"}, true)
 	require.NoError(t, err)
 	require.Equal(t, "127.0.0.1", u.Hostname())
+}
+
+func TestIsPrivateIP_ExportedMatchesValidateURL(t *testing.T) {
+	require.True(t, IsPrivateIP(net.ParseIP("10.0.0.1")))
+	require.False(t, IsPrivateIP(net.ParseIP("8.8.8.8")))
+}
+
+func TestIsBlockedIP_Exported(t *testing.T) {
+	require.True(t, IsBlockedIP(net.ParseIP("127.0.0.1")))
+	require.True(t, IsBlockedIP(net.ParseIP("224.0.0.1")))
+	require.False(t, IsBlockedIP(net.ParseIP("8.8.8.8")))
 }

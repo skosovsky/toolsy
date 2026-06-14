@@ -4,7 +4,8 @@ import (
 	"net/http"
 )
 
-// HTTPClient is the minimal HTTP surface used for remote document fetch. [*http.Client] and [http.DefaultClient] satisfy it.
+// HTTPClient is the minimal HTTP surface used for remote document fetch. Pass [*http.Client] with Timeout only;
+// Transport is always merged from the default SSRF-safe client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -13,12 +14,14 @@ type HTTPClient interface {
 type Option func(*options)
 
 type options struct {
-	maxBytes        int
-	allowRemote     bool
-	allowPrivateIPs bool // for tests (e.g. httptest on 127.0.0.1); default false for SSRF safety
-	httpClient      HTTPClient
-	toolName        string
-	toolDesc        string
+	maxBytes            int
+	allowRemote         bool
+	allowPrivateIPs     bool
+	httpClient          HTTPClient
+	toolName            string
+	toolDesc            string
+	resultFormatter     func(ExtractWireResult) (any, error)
+	hostResultValidator func(any) error
 }
 
 const (
@@ -31,9 +34,6 @@ func applyDefaults(o *options) {
 	if o.maxBytes <= 0 {
 		o.maxBytes = defaultMaxBytes
 	}
-	if o.httpClient == nil {
-		o.httpClient = http.DefaultClient
-	}
 	if o.toolName == "" {
 		o.toolName = defaultToolName
 	}
@@ -42,7 +42,8 @@ func applyDefaults(o *options) {
 	}
 }
 
-// WithMaxBytes sets the maximum file size to process and output truncation limit (default 2 MB).
+// WithMaxBytes sets the wire JSON byte budget (default 2 MB). File stat and remote download use the same limit;
+// parser content uses contentByteCap(maxBytes) without a truncation suffix; wire suffix applies via format.CapWireJSON.
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n
@@ -64,7 +65,7 @@ func WithAllowPrivateIPs(allow bool) Option {
 	}
 }
 
-// WithHTTPClient sets the HTTP client for URL downloads (e.g. for SSRF-safe transport).
+// WithHTTPClient sets the HTTP client for URL downloads. Only Timeout is merged onto the default SSRF-safe client.
 func WithHTTPClient(c HTTPClient) Option {
 	return func(o *options) {
 		o.httpClient = c
@@ -82,5 +83,19 @@ func WithToolName(name string) Option {
 func WithToolDescription(desc string) Option {
 	return func(o *options) {
 		o.toolDesc = desc
+	}
+}
+
+// WithResultFormatter overrides JSON output for document extraction.
+func WithResultFormatter(f func(ExtractWireResult) (any, error)) Option {
+	return func(o *options) {
+		o.resultFormatter = f
+	}
+}
+
+// WithHostResultValidator validates formatted tool output before JSON marshal.
+func WithHostResultValidator(v func(any) error) Option {
+	return func(o *options) {
+		o.hostResultValidator = v
 	}
 }

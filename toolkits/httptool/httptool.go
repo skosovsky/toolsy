@@ -10,10 +10,7 @@ import (
 	"net/http"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
-
-const truncationSuffix = "\n[Truncated]"
 
 type getArgs struct {
 	URL string `json:"url"`
@@ -36,6 +33,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		opt(&o)
 	}
 	applyDefaults(&o)
+	o.httpClient = defaultHTTPClient(&o)
 	if hasForbiddenHeaders(o.headers) {
 		return nil, errors.New(
 			"toolkit/httptool: static Authorization headers are not allowed; use toolsy.CredentialsProvider",
@@ -96,13 +94,13 @@ func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options,
 	}
 
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
-	resp, err := o.httpClient.Do(req) // #nosec G704
+	resp, err := o.httpClient.Do(req) //nolint:bodyclose // closed via CloseResponseBody
 	if err != nil {
 		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	defer CloseResponseBody(ctx, resp.Body)
 
-	body, err := readAndTruncate(resp.Body, o.maxResponseBody)
+	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
 	if err != nil {
 		return httpResult{}, err
 	}
@@ -150,25 +148,15 @@ func doPOST(
 	}
 
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
-	resp, err := o.httpClient.Do(req) // #nosec G704
+	resp, err := o.httpClient.Do(req) //nolint:bodyclose // closed via CloseResponseBody
 	if err != nil {
 		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	defer CloseResponseBody(ctx, resp.Body)
 
-	body, err := readAndTruncate(resp.Body, o.maxResponseBody)
+	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
 	if err != nil {
 		return httpResult{}, err
 	}
 	return httpResult{Status: resp.StatusCode, Body: body}, nil
-}
-
-// readAndTruncate reads up to maxBytes from r. If more than maxBytes are available, returns
-// UTF-8 safe truncation plus truncationSuffix. Caller must drain r after return (e.g. via defer).
-func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
-	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
-	if err != nil {
-		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
-	}
-	return text, nil
 }

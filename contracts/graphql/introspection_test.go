@@ -7,17 +7,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/skosovsky/toolsy"
 )
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return fn(req)
-}
 
 type limitReadCloser struct {
 	data        []byte
@@ -72,6 +67,7 @@ func TestExecuteGraphQLTruncatesOversizedResponse(t *testing.T) {
 		&Options{
 			HTTPClient:       server.Client(),
 			MaxResponseBytes: 10,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -113,6 +109,7 @@ func TestExecuteGraphQLTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 		&Options{
 			HTTPClient:       server.Client(),
 			MaxResponseBytes: 5,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -136,33 +133,29 @@ func TestExecuteGraphQLTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 func TestExecuteGraphQLReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	const maxBytes = 5
 	body := []byte("abcdefghijklmnopqrstuvwxyz")
-	client := &http.Client{
-		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			if _, err := io.ReadAll(r.Body); err != nil {
-				return nil, err
-			}
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Body: &limitReadCloser{
-					data:        body,
-					maxReturned: maxBytes + 1,
-				},
-				Header: make(http.Header),
-			}, nil
-		}),
-	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(r.Body); err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		_, _ = io.Copy(w, &limitReadCloser{
+			data:        body,
+			maxReturned: maxBytes + 1,
+		})
+	}))
+	defer server.Close()
 
 	var got toolsy.Chunk
 	err := executeGraphQL(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		"graphql_demo",
-		"https://example.com/graphql",
+		server.URL,
 		"query { demo }",
 		[]byte(`{"id":1}`),
 		&Options{
-			HTTPClient:       client,
+			HTTPClient:       server.Client(),
 			MaxResponseBytes: maxBytes,
+			AllowPrivateIPs:  true,
 		},
 		func(c toolsy.Chunk) error {
 			got = c
@@ -177,5 +170,51 @@ func TestExecuteGraphQLReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	expected := []byte("abcde" + suffix)
 	if !bytes.Equal(got.Data, expected) {
 		t.Fatalf("unexpected body: got %q want %q", got.Data, expected)
+	}
+}
+
+func TestPostIntrospection_Non2xxStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "fail", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	_, err := postIntrospection(
+		context.Background(),
+		server.URL,
+		Options{HTTPClient: server.Client(), AllowPrivateIPs: true},
+	)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Fatalf("expected 500 in error, got: %v", err)
+	}
+}
+
+func TestExecuteGraphQL_Non2xxStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, readErr := io.ReadAll(r.Body); readErr != nil {
+			t.Fatalf("read body: %v", readErr)
+		}
+		http.Error(w, "fail", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	err := executeGraphQL(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		"graphql_demo",
+		server.URL,
+		"query { demo }",
+		nil,
+		&Options{HTTPClient: server.Client(), AllowPrivateIPs: true},
+		func(toolsy.Chunk) error { return nil },
+	)
+	if err == nil {
+		t.Fatal("expected error for 502 response")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Fatalf("expected 502 in error, got: %v", err)
 	}
 }

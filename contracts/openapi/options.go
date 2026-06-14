@@ -4,7 +4,8 @@ import "net/http"
 
 const defaultMaxResponseBytes = 512 * 1024
 
-// HTTPClient is the minimal HTTP surface used by the OpenAPI executor. [*http.Client] and [http.DefaultClient] satisfy it.
+// HTTPClient is the minimal HTTP surface used by the OpenAPI executor. Pass [*http.Client] with Timeout only;
+// Transport is always merged from the default SSRF-safe client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -16,13 +17,19 @@ type Options struct {
 	AllowedTags      []string
 	AllowedMethods   []string
 	MaxResponseBytes int
+	// AllowPrivateIPs relaxes SSRF IP blocking for tests and private networks (e.g. httptest on 127.0.0.1).
+	AllowPrivateIPs bool
 }
 
 func (o *Options) httpClient() HTTPClient {
-	if o != nil && o.HTTPClient != nil {
-		return o.HTTPClient
+	allowPrivate := false
+	if o != nil {
+		allowPrivate = o.AllowPrivateIPs
+		if o.HTTPClient != nil {
+			return resolveHTTPClient(o.HTTPClient, allowPrivate)
+		}
 	}
-	return http.DefaultClient
+	return defaultHTTPClient(allowPrivate)
 }
 
 func (o *Options) maxResponseBytes() int {

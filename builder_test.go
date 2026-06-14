@@ -271,3 +271,71 @@ func TestNewProxyTool(t *testing.T) {
 	require.Error(t, err)
 	requireClientCorrectable(t, err)
 }
+
+func TestMarshalToolResult_WireJSONResult(t *testing.T) {
+	truncated := json.RawMessage(`{"broken`)
+	res := wireJSONStub{raw: truncated}
+	data, err := marshalToolResult(res)
+	require.NoError(t, err)
+	require.Equal(t, string(truncated), string(data))
+}
+
+type wireJSONStub struct {
+	raw json.RawMessage
+}
+
+func (w wireJSONStub) WireJSON() json.RawMessage {
+	return w.raw
+}
+
+func TestNewTool_JSONResultWirePassthrough(t *testing.T) {
+	type args struct {
+		X int `json:"x"`
+	}
+	truncated := json.RawMessage(`{"n":1,"tail":"`)
+	tool, err := NewTool(
+		"json_result",
+		"JSON result passthrough",
+		func(_ context.Context, _ *RunEnv, a args) (jsonResultStub, error) {
+			_ = a
+			return jsonResultStub{raw: truncated}, nil
+		},
+	)
+	require.NoError(t, err)
+
+	var wire []byte
+	require.NoError(t, tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{"x":1}`)},
+		func(c Chunk) error {
+			wire = append([]byte(nil), c.Data...)
+			return nil
+		},
+	))
+	require.Equal(t, string(truncated), string(wire))
+}
+
+type jsonResultStub struct {
+	raw json.RawMessage
+}
+
+func (j jsonResultStub) WireJSON() json.RawMessage {
+	return j.raw
+}
+
+func TestMarshalToolResult_WireJSONResult_Nil(t *testing.T) {
+	res := wireJSONStub{raw: nil}
+	data, err := marshalToolResult(res)
+	require.NoError(t, err)
+	require.Equal(t, "null", string(data))
+}
+
+func TestMarshalToolResult_StandardMarshal(t *testing.T) {
+	type payload struct {
+		N int `json:"n"`
+	}
+	data, err := marshalToolResult(payload{N: 7})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"n":7}`, string(data))
+}

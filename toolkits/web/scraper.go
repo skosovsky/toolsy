@@ -1,6 +1,8 @@
 package web
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -10,6 +12,7 @@ import (
 
 // Scraper converts a raw HTML string to clean Markdown (e.g. for LLM context).
 // Default implementation strips script/style/noscript/iframe and uses html-to-markdown.
+// Custom implementations should respect caller context and bound CPU when used from tool paths.
 type Scraper interface {
 	HTMLToMarkdown(html string, maxBytes int) (string, error)
 }
@@ -32,23 +35,58 @@ func newHTMLScraper() *htmlScraper {
 	return &htmlScraper{}
 }
 
-func (d *htmlScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) {
-	// Remove script, style, noscript, iframe to avoid blowing LLM context
+func stripLayoutHTML(html string) string {
 	html = stripScript.ReplaceAllString(html, "")
 	html = stripStyle.ReplaceAllString(html, "")
 	html = stripNoscript.ReplaceAllString(html, "")
 	html = stripIframe.ReplaceAllString(html, "")
-	// Remove layout clutter so LLM gets main content
 	html = stripNav.ReplaceAllString(html, "")
 	html = stripHeader.ReplaceAllString(html, "")
 	html = stripFooter.ReplaceAllString(html, "")
 	html = stripAside.ReplaceAllString(html, "")
+	return html
+}
 
-	markdown, err := htmltomarkdown.ConvertString(html)
+type convertResult struct {
+	markdown string
+	err      error
+}
+
+// convertHTMLString runs html-to-markdown conversion with ctx cancellation (best-effort).
+func convertHTMLString(ctx context.Context, html string) (string, error) {
+	done := make(chan convertResult, 1)
+	go func() {
+		md, err := htmltomarkdown.ConvertString(html)
+		done <- convertResult{markdown: md, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", fmt.Errorf("toolkit/web: %w", ctx.Err())
+	case res := <-done:
+		return res.markdown, res.err
+	}
+}
+
+func (d *htmlScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) {
+	return d.htmlToMarkdown(context.Background(), html, maxBytes)
+}
+
+func (d *htmlScraper) htmlToMarkdown(ctx context.Context, html string, maxBytes int) (string, error) {
+	html = stripLayoutHTML(html)
+	markdown, err := convertHTMLString(ctx, html)
 	if err != nil {
 		return "", err
 	}
-	return textprocessor.TruncateStringUTF8(markdown, maxBytes, truncateSuffix), nil
+	if maxBytes <= 0 {
+		return markdown, nil
+	}
+	return textprocessor.TruncateStringUTF8NoSuffix(markdown, maxBytes), nil
 }
 
-const truncateSuffix = "\n[Truncated]"
+// scrapeHTMLToMarkdown converts HTML via scraper; default htmlScraper respects ctx on conversion.
+func scrapeHTMLToMarkdown(ctx context.Context, scraper Scraper, html string, maxBytes int) (string, error) {
+	if hs, ok := scraper.(*htmlScraper); ok {
+		return hs.htmlToMarkdown(ctx, html, maxBytes)
+	}
+	return scraper.HTMLToMarkdown(html, maxBytes)
+}

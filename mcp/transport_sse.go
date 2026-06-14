@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 const (
@@ -29,8 +31,11 @@ type SSETransport struct {
 }
 
 type sseTransportImpl struct {
-	initialURL string
-	client     *http.Client
+	initialURL      string
+	client          *http.Client
+	allowPrivateIPs bool
+	maxStreamBytes  int
+	readCtx         context.Context
 
 	startMu   sync.Mutex
 	started   bool
@@ -44,8 +49,9 @@ type sseTransportImpl struct {
 	requestID atomic.Uint64
 	pending   sync.Map // id string -> chan *sseCallResult
 
-	readerDone chan struct{}
-	bodyCloser io.Closer
+	readerDone    chan struct{}
+	bodyCloser    io.ReadCloser
+	bodyCloseOnce sync.Once
 
 	notifyMu       sync.Mutex
 	notifyHandlers map[string]func(params []byte)
@@ -59,12 +65,11 @@ type sseCallResult struct {
 
 // NewSSETransport creates an SSE transport. initialURL is the URL for the GET request (e.g. http://localhost:3001/sse).
 // The server must send an event with type "endpoint" first; the "data" field contains the URL for POST (Call/Notify).
-func NewSSETransport(initialURL string) *SSETransport {
-	impl := &sseTransportImpl{
-		initialURL: initialURL,
-		// Timeout 0: no per-request cap on the client; long-lived GET stream and
-		// per-call timeouts are handled at the transport layer (e.g. sseCallResponseTimeout).
-		client:         &http.Client{Timeout: 0},
+func NewSSETransport(initialURL string, opts ...SSETransportOption) *SSETransport {
+	impl := &sseTransportImpl{ //nolint:exhaustruct // allowPrivateIPs/readCtx set via options or at start
+		initialURL:     initialURL,
+		client:         defaultSSEHTTPClient(false),
+		maxStreamBytes: httptool.DefaultMaxSSEStreamBytes,
 		startMu:        sync.Mutex{},
 		started:        false,
 		startErr:       nil,
@@ -79,6 +84,9 @@ func NewSSETransport(initialURL string) *SSETransport {
 		bodyCloser:     nil,
 		notifyMu:       sync.Mutex{},
 		notifyHandlers: make(map[string]func(params []byte)),
+	}
+	for _, opt := range opts {
+		opt(impl)
 	}
 	return &SSETransport{impl: impl}
 }
@@ -102,6 +110,11 @@ func (t *sseTransportImpl) start(ctx context.Context) error {
 	t.started = true
 	t.startMu.Unlock()
 
+	if err := httptool.ValidateRemoteURL(ctx, t.initialURL, t.allowPrivateIPs); err != nil {
+		t.startErr = err
+		return err
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, t.initialURL, nil)
 	if err != nil {
 		t.startErr = err
@@ -110,27 +123,37 @@ func (t *sseTransportImpl) start(ctx context.Context) error {
 	req.Header.Set("Accept", "text/event-stream")
 
 	// #nosec G704 -- URL is from user config (initialURL) or server endpoint event; caller is responsible for trust.
-	resp, err := t.client.Do(req)
+	resp, err := t.client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		t.startErr = err
 		return err
 	}
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		httptool.CloseResponseBody(ctx, resp.Body)
 		t.startErr = fmt.Errorf("sse GET %s: status %d", t.initialURL, resp.StatusCode)
 		return t.startErr
 	}
 	t.bodyCloser = resp.Body
+	t.readCtx = ctx
 
-	go t.readLoop(resp.Body)
+	go t.readLoop(httptool.LimitStreamReader(resp.Body, t.maxStreamBytes))
 	select {
 	case <-ctx.Done():
-		_ = resp.Body.Close()
+		t.closeBody(resp.Body)
 		t.startErr = ctx.Err()
 		return ctx.Err()
 	case <-t.ready:
 		return nil
 	}
+}
+
+func (t *sseTransportImpl) closeBody(body io.ReadCloser) {
+	if body == nil {
+		return
+	}
+	t.bodyCloseOnce.Do(func() {
+		httptool.CloseResponseBody(context.Background(), body)
+	})
 }
 
 // readLoop parses SSE events. First event must be "endpoint" with data = POST URL.
@@ -141,6 +164,17 @@ func (t *sseTransportImpl) readLoop(body io.Reader) {
 	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	var eventType, data string
 	for scanner.Scan() {
+		if t.readCtx != nil && t.readCtx.Err() != nil {
+			err := t.readCtx.Err()
+			t.unblockAllPending(err)
+			t.postURLMu.Lock()
+			if t.postURL == "" {
+				t.streamErr = err
+			}
+			t.postURLMu.Unlock()
+			t.readyOnce.Do(func() { close(t.ready) })
+			return
+		}
 		line := scanner.Text()
 		if line == "" {
 			if eventType != "" {
@@ -251,6 +285,18 @@ func (t *sseTransportImpl) unblockAllPending(err error) {
 	})
 }
 
+func (t *sseTransportImpl) resolvePostURL(postURL string) (*url.URL, error) {
+	base, err := url.Parse(t.initialURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid initial URL: %w", err)
+	}
+	resolved, err := base.Parse(postURL)
+	if err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
 func (t *sseTransportImpl) getPostURL() (string, error) {
 	select {
 	case <-t.ready:
@@ -310,21 +356,24 @@ func (t *sseTransportImpl) call(ctx context.Context, method string, params any) 
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	// Resolve relative POST URL against initial URL base.
-	base, err := url.Parse(t.initialURL)
-	if err != nil {
-		return nil, "", fmt.Errorf("invalid initial URL: %w", err)
-	}
-	if postU, parseErr := base.Parse(postURL); parseErr == nil {
-		httpReq.URL = postU
-	}
-
-	// #nosec G704 -- POST URL is from user config or server endpoint event; caller is responsible for trust.
-	resp, err := t.client.Do(httpReq)
+	resolved, err := t.resolvePostURL(postURL)
 	if err != nil {
 		return nil, "", err
 	}
-	_ = resp.Body.Close()
+	httpReq.URL = resolved
+	if validateErr := httptool.ValidateRemoteURL(ctx, resolved.String(), t.allowPrivateIPs); validateErr != nil {
+		return nil, "", validateErr
+	}
+
+	resp, err := t.client.Do(httpReq) //nolint:bodyclose // closed via httptool.CloseResponseBody
+	if err != nil {
+		return nil, "", err
+	}
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		httptool.CloseResponseBody(ctx, resp.Body)
+		return nil, "", fmt.Errorf("mcp sse: POST status %d", resp.StatusCode)
+	}
+	httptool.CloseResponseBody(ctx, resp.Body)
 
 	timer := time.NewTimer(sseCallResponseTimeout)
 	defer timer.Stop()
@@ -373,20 +422,23 @@ func (t *sseTransportImpl) notify(ctx context.Context, method string, params any
 		return err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	base, err := url.Parse(t.initialURL)
-	if err != nil {
-		return fmt.Errorf("invalid initial URL: %w", err)
-	}
-	postU, _ := base.Parse(postURL)
-	if postU != nil {
-		httpReq.URL = postU
-	}
-	// #nosec G704 -- POST URL is from user config or server endpoint event; caller is responsible for trust.
-	resp, err := t.client.Do(httpReq)
+	resolved, err := t.resolvePostURL(postURL)
 	if err != nil {
 		return err
 	}
-	_ = resp.Body.Close()
+	httpReq.URL = resolved
+	if validateErr := httptool.ValidateRemoteURL(ctx, resolved.String(), t.allowPrivateIPs); validateErr != nil {
+		return validateErr
+	}
+	resp, err := t.client.Do(httpReq) //nolint:bodyclose // closed via httptool.CloseResponseBody
+	if err != nil {
+		return err
+	}
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		httptool.CloseResponseBody(ctx, resp.Body)
+		return fmt.Errorf("mcp sse: notify status %d", resp.StatusCode)
+	}
+	httptool.CloseResponseBody(ctx, resp.Body)
 	return nil
 }
 
@@ -410,9 +462,7 @@ func (t *sseTransportImpl) close() error {
 	}
 	t.started = false
 	t.startMu.Unlock()
-	if t.bodyCloser != nil {
-		_ = t.bodyCloser.Close()
-	}
+	t.closeBody(t.bodyCloser)
 	<-t.readerDone
 	t.unblockAllPending(errors.New("transport closed"))
 	return nil

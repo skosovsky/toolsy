@@ -7,15 +7,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 // ClientOptions configures the Agent Protocol HTTP client.
 type ClientOptions struct {
-	HTTPClient *http.Client
+	HTTPClient      *http.Client
+	allowPrivateIPs bool
+}
+
+// WithAllowPrivateIPs relaxes SSRF IP blocking on the default safe transport (tests and private networks).
+func WithAllowPrivateIPs(allow bool) func(*ClientOptions) {
+	return func(o *ClientOptions) {
+		o.allowPrivateIPs = allow
+	}
 }
 
 // Client is the REST client for the Agent Protocol API.
@@ -24,7 +35,8 @@ type Client struct {
 	opts    ClientOptions
 }
 
-// WithHTTPClient sets a custom HTTP client (e.g. for TLS). If nil, [http.DefaultClient] is used.
+// WithHTTPClient sets a custom HTTP client (e.g. for TLS timeout). Only Timeout is merged onto
+// the default SSRF-safe client; custom Transport is ignored.
 func WithHTTPClient(client *http.Client) func(*ClientOptions) {
 	return func(o *ClientOptions) {
 		o.HTTPClient = client
@@ -42,10 +54,7 @@ func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
 }
 
 func (c *Client) httpClient() *http.Client {
-	if c.opts.HTTPClient != nil {
-		return c.opts.HTTPClient
-	}
-	return http.DefaultClient
+	return httptool.MergeHTTPClient(defaultHTTPClient(c.opts.allowPrivateIPs), c.opts.HTTPClient)
 }
 
 // CreateTask sends POST /ap/v1/agent/tasks with body {"input": args}. Returns the created task or error.
@@ -64,16 +73,19 @@ func (c *Client) CreateTask(ctx context.Context, args json.RawMessage, authHeade
 		req.Header.Set("Authorization", authHeader)
 	}
 	// #nosec G704 -- baseURL is from caller config; caller is responsible for trust.
-	resp, err := c.httpClient().Do(req)
+	resp, err := c.httpClient().Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return nil, fmt.Errorf("agents: create task: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return nil, fmt.Errorf("agents: create task: status %d", resp.StatusCode)
 	}
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, defaultMaxResponseBytes)
 	if err != nil {
+		if strings.Contains(err.Error(), "read exceeds") {
+			return nil, toolsy.NewValidationError("response body too large")
+		}
 		return nil, fmt.Errorf("agents: read create task response: %w", err)
 	}
 	// Try wrapped response {"task": {...}} first.
@@ -101,14 +113,12 @@ func (c *Client) CancelTask(ctx context.Context, taskID string, authHeader strin
 		req.Header.Set("Authorization", authHeader)
 	}
 	// #nosec G704 -- baseURL is from caller config; caller is responsible for trust.
-	resp, err := c.httpClient().Do(req)
+	resp, err := c.httpClient().Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return fmt.Errorf("agents: cancel task: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	// Drain body so the connection can be returned to the pool (Keep-Alive).
-	_, _ = io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return fmt.Errorf("agents: cancel task: status %d", resp.StatusCode)
 	}
 	return nil

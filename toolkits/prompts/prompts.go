@@ -38,7 +38,7 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 			return getResult{}, fmt.Errorf("toolkit/prompts: get failed: %w", err)
 		}
 		if o.maxBytes > 0 && len(text) > o.maxBytes {
-			text = textprocessor.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
+			text = textprocessor.TruncateStringUTF8(text, o.maxBytes, textprocessor.TruncationSuffix)
 		}
 		return getResult{Instructions: text}, nil
 	}

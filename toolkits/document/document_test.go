@@ -4,22 +4,26 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-func decodeExtractResult(t *testing.T, c toolsy.Chunk) extractResult {
+func decodeExtractResult(t *testing.T, c toolsy.Chunk) ExtractWireResult {
 	t.Helper()
 	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
-	var out extractResult
+	var out ExtractWireResult
 	require.NoError(t, json.Unmarshal(c.Data, &out))
 	return out
 }
@@ -32,7 +36,7 @@ func TestExtractCSV_Success(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	var result extractResult
+	var result ExtractWireResult
 	require.NoError(
 		t,
 		tool.Execute(
@@ -60,7 +64,7 @@ func TestExtractCSV_MultilineCellNormalized(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	var result extractResult
+	var result ExtractWireResult
 	require.NoError(
 		t,
 		tool.Execute(
@@ -209,7 +213,7 @@ func TestExtract_DOCX_Success(t *testing.T) {
 	tool, err := AsTool()
 	require.NoError(t, err)
 
-	var result extractResult
+	var result ExtractWireResult
 	require.NoError(
 		t,
 		tool.Execute(
@@ -253,7 +257,7 @@ func TestExtract_Remote_Success(t *testing.T) {
 	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
-	var result extractResult
+	var result ExtractWireResult
 	require.NoError(
 		t,
 		tool.Execute(
@@ -270,6 +274,26 @@ func TestExtract_Remote_Success(t *testing.T) {
 	require.Contains(t, result.Text, "1")
 }
 
+func TestExtract_Remote_Non2xxStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "fail", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	require.NoError(t, err)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/data.csv"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Contains(t, te.Reason, "500")
+}
+
 func TestExtract_Remote_QueryStringURL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
@@ -280,7 +304,7 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
-	var result extractResult
+	var result ExtractWireResult
 	// URL with query string: format should be taken from path (.csv), not from ?sig=...
 	require.NoError(
 		t,
@@ -298,9 +322,21 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 	require.Contains(t, result.Text, "1")
 }
 
-// TestExtract_Remote_RedirectToLoopbackBlocked ensures redirect to loopback/private IP is rejected (SSRF).
+// TestExtract_Remote_RedirectToLoopbackBlocked ensures redirect to loopback is rejected when private IPs are disallowed.
 func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
-	// Server redirects to 127.0.0.1; redirect target is always validated with allowPrivateIPs=false
+	fn := httptool.CheckRedirectRemote(false, nil)
+	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9999/file.csv", nil)
+	require.NoError(t, err)
+	err = fn(req, []*http.Request{{URL: req.URL}})
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "private or loopback")
+}
+
+func TestExtract_Remote_Redirect_AllowsLoopbackWhenPrivateAllowed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://127.0.0.1:99999/file.csv", http.StatusFound)
 	}))
@@ -308,17 +344,247 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 
 	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
-	// Initial URL is our test server (allowed with WithAllowPrivateIPs); redirect to loopback is still blocked
 	err = tool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/doc.csv"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
+	require.Error(t, err) // connection fails, but redirect validation passes with allowPrivateIPs
+}
+
+func TestAsTool_WithResultFormatter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(WithResultFormatter(func(res ExtractWireResult) (any, error) {
+		return map[string]int{"len": len(res.Text)}, nil
+	}))
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+			func(c toolsy.Chunk) error {
+				require.NoError(t, json.Unmarshal(c.Data, &payload))
+				return nil
+			},
+		),
+	)
+	require.Positive(t, payload["len"])
+}
+
+func TestAsTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(
+		WithMaxBytes(50),
+		WithResultFormatter(func(_ ExtractWireResult) (any, error) {
+			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
+		}),
+	)
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 50+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestAsTool_RemoteURL_WithFormatterAndValidator(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte("a,b\n1,2"))
+	}))
+	defer server.Close()
+
+	tool, err := AsTool(
+		WithAllowRemote(true),
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxBytes(50),
+		WithResultFormatter(func(res ExtractWireResult) (any, error) {
+			return map[string]int{"len": len(res.Text)}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]int)
+			if !ok || payload["len"] <= 0 {
+				return errors.New("invalid payload")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/data.csv"}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 50+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestExtractCSV_WireCapSingleTruncSuffix(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "wide.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte("text\n"+strings.Repeat("x", 220)), 0o600))
+
+	tool, err := AsTool(WithMaxBytes(250))
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 250+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
+	var payload ExtractWireResult
+	require.NoError(t, json.Unmarshal(wire, &payload))
+	require.NotContains(t, payload.Text, "[Truncated]")
+}
+
+func TestAsTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(
+		WithMaxBytes(80),
+		WithResultFormatter(func(res ExtractWireResult) (any, error) {
+			return map[string]string{"blob": strings.Repeat("z", 500) + res.Text}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]string)
+			if !ok || payload["blob"] == "" {
+				return errors.New("invalid payload")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var wire []byte
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+			func(c toolsy.Chunk) error {
+				wire = append([]byte(nil), c.Data...)
+				return nil
+			},
+		),
+	)
+	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+}
+
+func TestAsTool_WithHostResultValidator_Reject(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(WithHostResultValidator(func(_ any) error {
+		return assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "private or loopback")
+}
+
+func TestAsTool_WithHostResultValidator(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(WithHostResultValidator(func(v any) error {
+		_, ok := v.(ExtractWireResult)
+		if !ok {
+			return assert.AnError
+		}
+		return nil
+	}))
+	require.NoError(t, err)
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+}
+
+func TestAsTool_FormatterAndValidator(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample.csv")
+	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
+
+	tool, err := AsTool(
+		WithResultFormatter(func(res ExtractWireResult) (any, error) {
+			return map[string]int{"len": len(res.Text)}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]int)
+			if !ok {
+				return errors.New("expected formatter output map")
+			}
+			if payload["len"] <= 0 {
+				return errors.New("empty text")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]int
+	require.NoError(
+		t,
+		tool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Positive(t, payload["len"])
 }

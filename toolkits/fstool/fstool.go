@@ -12,7 +12,7 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
-const truncationSuffix = "\n[Truncated]"
+const truncationSuffix = textprocessor.TruncationSuffix
 
 type listArgs struct {
 	Path string `json:"path"`
@@ -139,7 +139,7 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 	return listResult{Entries: infos}, nil
 }
 
-func doReadFile(_ context.Context, baseDir string, o *options, path string) (readResult, error) {
+func doReadFile(ctx context.Context, baseDir string, o *options, path string) (readResult, error) {
 	resolved, err := sanitizePath(baseDir, path)
 	if err != nil {
 		return readResult{}, err
@@ -156,7 +156,7 @@ func doReadFile(_ context.Context, baseDir string, o *options, path string) (rea
 	if info.IsDir() {
 		return readResult{}, toolsy.NewValidationError("path is a directory, not a file")
 	}
-	content, err := readAndTruncate(f, o.maxBytes)
+	content, err := readFileLimited(ctx, f, o.maxBytes)
 	if err != nil {
 		return readResult{}, err
 	}
@@ -224,10 +224,13 @@ func checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath string) error {
 	return pathUnderBase(baseCanon, checkPath)
 }
 
-// readAndTruncate reads up to maxBytes from r. If more is available, returns UTF-8 safe truncation + suffix.
-func readAndTruncate(r io.Reader, maxBytes int) (string, error) {
-	text, err := textprocessor.ReadAndTruncateValidUTF8(r, maxBytes, truncationSuffix)
+// readFileLimited reads up to maxBytes from r with UTF-8 safe truncation; respects ctx cancellation.
+func readFileLimited(ctx context.Context, r io.Reader, maxBytes int) (string, error) {
+	text, err := textprocessor.ReadLimited(ctx, r, maxBytes, textprocessor.TruncationSuffix)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: context: %w", ctxErr))
+		}
 		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: read: %w", err))
 	}
 	return text, nil

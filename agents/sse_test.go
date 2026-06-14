@@ -1,8 +1,13 @@
 package agents
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 func TestParseSSESteps_MultiLineData(t *testing.T) {
@@ -17,7 +22,7 @@ func TestParseSSESteps_MultiLineData(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, done, yieldedAny, err := parseSSESteps(r, yield)
+	lastID, done, yieldedAny, err := parseSSESteps(context.Background(), r, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -53,7 +58,7 @@ func TestParseSSESteps_LastEventID(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, done, _, err := parseSSESteps(r, yield)
+	lastID, done, _, err := parseSSESteps(context.Background(), r, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -79,7 +84,7 @@ func TestParseSSESteps_EventTypeIgnored(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, _, _, err := parseSSESteps(r, yield)
+	lastID, _, _, err := parseSSESteps(context.Background(), r, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -89,4 +94,16 @@ func TestParseSSESteps_EventTypeIgnored(t *testing.T) {
 	if lastID != "ev1" {
 		t.Errorf("lastID = %q, want ev1", lastID)
 	}
+}
+
+func TestParseSSESteps_StreamExceedsMaxBytes(t *testing.T) {
+	t.Parallel()
+	// Valid JSON large enough to exceed the stream byte cap while reading.
+	payload := strings.Repeat("x", 3000)
+	raw := "id: ev1\n" +
+		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
+	limited := httptool.LimitStreamReader(strings.NewReader(raw), 2048)
+	_, _, _, err := parseSSESteps(context.Background(), limited, func(Step, error) bool { return true })
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stream exceeds")
 }

@@ -285,3 +285,23 @@ func TestAsTools_CustomToolNames(t *testing.T) {
 	require.Equal(t, "fetch", tools[0].Manifest().Name)
 	require.Equal(t, "push", tools[1].Manifest().Name)
 }
+
+func TestHTTPGet_BlocksPrivateIPWithoutAllow(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tools, err := AsTools(WithAllowedDomains([]string{"127.0.0.1"}))
+	require.NoError(t, err)
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.True(t, toolsy.ClientCorrectable(te.Code))
+}

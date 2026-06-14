@@ -2,6 +2,7 @@ package document
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -15,13 +16,16 @@ import (
 const wordDocXML = "word/document.xml"
 
 // parseDOCX extracts text from a DOCX (ZIP with word/document.xml). Reads from r with size limit (zip bomb protection).
-func parseDOCX(r io.ReaderAt, size int64, maxBytes int) (string, error) {
+func parseDOCX(ctx context.Context, r io.ReaderAt, size int64, maxBytes int) (string, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
 		return "", toolsy.NewInternalError(fmt.Errorf("document: docx zip: %w", err))
 	}
 	var docFile *zip.File
 	for _, f := range zr.File {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", fmt.Errorf("toolkit/document: %w", ctxErr)
+		}
 		if f.Name == wordDocXML {
 			docFile = f
 			break
@@ -41,18 +45,25 @@ func parseDOCX(r io.ReaderAt, size int64, maxBytes int) (string, error) {
 	}
 	defer func() { _ = rc.Close() }()
 	limited := io.LimitReader(rc, int64(maxBytes)+1)
-	raw, err := io.ReadAll(limited)
+	rawStr, err := textprocessor.ReadLimited(ctx, limited, maxBytes, "")
 	if err != nil {
 		return "", err
 	}
-	return extractTextFromWordXML(raw, maxBytes)
+	return extractTextFromWordXML(ctx, []byte(rawStr), maxBytes)
 }
 
 // extractTextFromWordXML parses word/document.xml and extracts text from w:t elements.
-func extractTextFromWordXML(raw []byte, maxBytes int) (string, error) {
+func extractTextFromWordXML(ctx context.Context, raw []byte, maxBytes int) (string, error) {
 	var b strings.Builder
 	dec := xml.NewDecoder(strings.NewReader(string(raw)))
+	tokens := 0
 	for {
+		if tokens%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return "", fmt.Errorf("toolkit/document: %w", err)
+			}
+		}
+		tokens++
 		tok, err := dec.Token()
 		if errors.Is(err, io.EOF) {
 			break
@@ -66,10 +77,10 @@ func extractTextFromWordXML(raw []byte, maxBytes int) (string, error) {
 		}
 		appendWordMLFromStartElement(t, dec, &b)
 		if b.Len() > maxBytes {
-			return textprocessor.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
+			return textprocessor.TruncateStringUTF8NoSuffix(b.String(), maxBytes), nil
 		}
 	}
-	return textprocessor.TruncateStringUTF8(b.String(), maxBytes, truncateSuffix), nil
+	return textprocessor.TruncateStringUTF8NoSuffix(b.String(), maxBytes), nil
 }
 
 func appendWordMLFromStartElement(t xml.StartElement, dec *xml.Decoder, b *strings.Builder) {

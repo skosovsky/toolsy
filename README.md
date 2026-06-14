@@ -520,7 +520,7 @@ defer client.Close()
 
 The registry no longer applies default execution timeouts, concurrency limits, built-in retry middleware, or per-tool `WithTimeout` manifest deadlines. Removed APIs include `WithDefaultTimeout`, `WithMaxConcurrency`, `WithTimeoutMiddleware`, `WithIdempotentRetry`, `ToolOption` `WithTimeout`, and `ToolManifest.Timeout`. Use `context` deadlines and wrap execution with [`routery`](https://github.com/skosovsky/routery) (or your own middleware) instead; see `examples/resiliency/main.go`. Sandbox adapters honor only the `context` passed to `Run` (no separate `RunRequest` timeout field); limit `exec_code` runtime via the execution `ctx` or wrappers like `routery.Timeout` around the tool.
 
-gRPC reflection helpers take an injected `grpc.ClientConnInterface` (no dial inside `toolsy`). HTTP toolkits default to `http.DefaultClient` without forced timeouts.
+gRPC reflection helpers take an injected `grpc.ClientConnInterface` (no dial inside `toolsy`). HTTP toolkits (`httptool`, `web`, `document`) use `httptool.SafeDialTransport` by default; pass `WithHTTPClient` to merge only `Timeout`. See [docs/migration-task29.md](docs/migration-task29.md) for enterprise toolkit IoC and SSRF unification.
 
 ## Contracts modules
 

@@ -3,6 +3,7 @@ package timetool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"regexp"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 	require.NoError(t, err)
 	currentTool := tools[0]
 
-	var result currentResult
+	var result CurrentResult
 	require.NoError(
 		t,
 		currentTool.Execute(
@@ -36,7 +37,7 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[currentResult](t, c)
+				result = decodeTimeChunk[CurrentResult](t, c)
 				return nil
 			},
 		),
@@ -53,7 +54,7 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 	require.NoError(t, err)
 	calculateTool := tools[1]
 
-	var result calculateResult
+	var result CalculateResult
 	require.NoError(
 		t,
 		calculateTool.Execute(
@@ -61,7 +62,7 @@ func TestTimeCalculate_AddDaysAndHours(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2026-03-11T12:00:00Z","add_days":3,"add_hours":2}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[calculateResult](t, c)
+				result = decodeTimeChunk[CalculateResult](t, c)
 				return nil
 			},
 		),
@@ -122,7 +123,7 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 
 	// 2026-03-08 02:00 EST -> add 1 day -> 2026-03-09 (DST starts March 8 2026 in US)
 	base := "2026-03-08T07:00:00Z" // 02:00 EST
-	var result calculateResult
+	var result CalculateResult
 	require.NoError(
 		t,
 		calculateTool.Execute(
@@ -130,7 +131,7 @@ func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[calculateResult](t, c)
+				result = decodeTimeChunk[CalculateResult](t, c)
 				return nil
 			},
 		),
@@ -151,7 +152,7 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 
 	// 2026-11-01 00:30 EDT (UTC 04:30) -> add 1 calendar day in NY -> 2026-11-02 00:30 EST (wall clock)
 	base := "2026-11-01T04:30:00Z"
-	var result calculateResult
+	var result CalculateResult
 	require.NoError(
 		t,
 		calculateTool.Execute(
@@ -159,7 +160,7 @@ func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[calculateResult](t, c)
+				result = decodeTimeChunk[CalculateResult](t, c)
 				return nil
 			},
 		),
@@ -184,7 +185,7 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 	calculateTool := tools[1]
 
 	base := "2026-03-08T07:00:00Z" // 02:00 EST
-	var result calculateResult
+	var result CalculateResult
 	require.NoError(
 		t,
 		calculateTool.Execute(
@@ -192,7 +193,7 @@ func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[calculateResult](t, c)
+				result = decodeTimeChunk[CalculateResult](t, c)
 				return nil
 			},
 		),
@@ -222,4 +223,228 @@ func TestAsTools_CustomNames(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "now", tools[0].Manifest().Name)
 	require.Equal(t, "add_time", tools[1].Manifest().Name)
+}
+
+func TestTimeCurrent_WithLocationProvider(t *testing.T) {
+	loc := time.FixedZone("Custom", 5*3600)
+	tools, err := AsTools(WithLocationProvider(func(_ context.Context, _ *toolsy.RunEnv) (*time.Location, error) {
+		return loc, nil
+	}))
+	require.NoError(t, err)
+
+	var result CurrentResult
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeTimeChunk[CurrentResult](t, c)
+				return nil
+			},
+		),
+	)
+	parsedLocal, err := time.Parse(time.RFC3339, result.Local)
+	require.NoError(t, err)
+	_, off := parsedLocal.Zone()
+	require.Equal(t, 5*3600, off)
+}
+
+func TestTimeCurrent_WithResultFormatter(t *testing.T) {
+	tools, err := AsTools(WithResultFormatter(func(_ CurrentResult) (any, error) {
+		return map[string]string{"custom": "ok"}, nil
+	}))
+	require.NoError(t, err)
+
+	var raw map[string]string
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				require.NoError(t, json.Unmarshal(c.Data, &raw))
+				return nil
+			},
+		),
+	)
+	require.Equal(t, "ok", raw["custom"])
+}
+
+func TestTimeCalculate_WithCalculateResultFormatter(t *testing.T) {
+	tools, err := AsTools(WithCalculateResultFormatter(func(_ CalculateResult) (any, error) {
+		return map[string]string{"fmt": "custom"}, nil
+	}))
+	require.NoError(t, err)
+	var payload map[string]string
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2024-06-01T12:00:00Z","add_days":1,"add_hours":0}`)},
+			func(c toolsy.Chunk) error {
+				require.NoError(t, json.Unmarshal(c.Data, &payload))
+				return nil
+			},
+		),
+	)
+	require.Equal(t, "custom", payload["fmt"])
+}
+
+func TestTimeCurrent_FormatterAndValidator(t *testing.T) {
+	tools, err := AsTools(
+		WithResultFormatter(func(_ CurrentResult) (any, error) {
+			return map[string]string{"k": "v"}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]string)
+			if !ok {
+				return errors.New("expected formatter output map")
+			}
+			if payload["k"] != "v" {
+				return errors.New("unexpected value")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]string
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Equal(t, "v", payload["k"])
+}
+
+func TestTimeCurrent_FormatterError_CodeInternal(t *testing.T) {
+	tools, err := AsTools(WithResultFormatter(func(_ CurrentResult) (any, error) {
+		return nil, assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+func TestTimeCalculate_WithHostResultValidator(t *testing.T) {
+	tools, err := AsTools(WithHostResultValidator(func(v any) error {
+		_, ok := v.(CalculateResult)
+		if !ok {
+			return assert.AnError
+		}
+		return nil
+	}))
+	require.NoError(t, err)
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2024-06-01T12:00:00Z","add_days":1,"add_hours":0}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+}
+
+func TestTimeCalculate_WithHostResultValidator_Reject(t *testing.T) {
+	tools, err := AsTools(WithHostResultValidator(func(_ any) error {
+		return assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tools[1].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2024-06-01T12:00:00Z","add_days":1,"add_hours":0}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+}
+
+func TestTimeCurrent_WithHostResultValidator_Reject(t *testing.T) {
+	tools, err := AsTools(WithHostResultValidator(func(_ any) error {
+		return assert.AnError
+	}))
+	require.NoError(t, err)
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+}
+
+func TestTimeCurrent_WithHostResultValidator(t *testing.T) {
+	tools, err := AsTools(WithHostResultValidator(func(v any) error {
+		_, ok := v.(CurrentResult)
+		if !ok {
+			return assert.AnError
+		}
+		return nil
+	}))
+	require.NoError(t, err)
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+}
+
+func TestTimeCalculate_FormatterAndValidator(t *testing.T) {
+	tools, err := AsTools(
+		WithCalculateResultFormatter(func(_ CalculateResult) (any, error) {
+			return map[string]string{"fmt": "calc"}, nil
+		}),
+		WithHostResultValidator(func(v any) error {
+			payload, ok := v.(map[string]string)
+			if !ok {
+				return errors.New("expected formatter output map")
+			}
+			if payload["fmt"] != "calc" {
+				return errors.New("unexpected fmt")
+			}
+			return nil
+		}),
+	)
+	require.NoError(t, err)
+	var payload map[string]string
+	require.NoError(
+		t,
+		tools[1].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2024-06-01T12:00:00Z","add_days":1,"add_hours":0}`)},
+			func(c toolsy.Chunk) error {
+				return json.Unmarshal(c.Data, &payload)
+			},
+		),
+	)
+	require.Equal(t, "calc", payload["fmt"])
 }

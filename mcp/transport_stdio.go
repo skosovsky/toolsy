@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 // StdioTransportOption configures StdioTransport.
@@ -36,6 +38,15 @@ func WithStdioFirstLineTimeout(d time.Duration) StdioTransportOption {
 	}
 }
 
+// WithStdioMaxStreamBytes sets the total byte budget for stdout JSON-RPC (default 16 MiB).
+func WithStdioMaxStreamBytes(n int) StdioTransportOption {
+	return func(t *stdioTransport) {
+		if n > 0 {
+			t.maxStreamBytes = n
+		}
+	}
+}
+
 const stdioFirstLineTimeout = 30 * time.Second
 
 var errStdioFirstLineTimeout = errors.New("mcp stdio: timeout waiting for first line from process stdout")
@@ -52,6 +63,7 @@ type stdioTransport struct {
 	logger     *slog.Logger
 
 	firstLineTimeout time.Duration
+	maxStreamBytes   int
 	firstLineSeen    chan struct{}
 	firstLineOnce    sync.Once
 
@@ -60,6 +72,7 @@ type stdioTransport struct {
 	startErr  error
 	cmd       *exec.Cmd
 	cmdCancel context.CancelFunc
+	readCtx   context.Context
 	stdin     io.WriteCloser
 	stdout    io.ReadCloser
 
@@ -86,6 +99,7 @@ func NewStdioTransport(executable string, args []string, opts ...StdioTransportO
 		args:             args,
 		logger:           slog.Default(),
 		firstLineTimeout: stdioFirstLineTimeout,
+		maxStreamBytes:   httptool.DefaultMaxSSEStreamBytes,
 		firstLineSeen:    make(chan struct{}),
 		firstLineOnce:    sync.Once{},
 		startMu:          sync.Mutex{},
@@ -93,6 +107,7 @@ func NewStdioTransport(executable string, args []string, opts ...StdioTransportO
 		startErr:         nil,
 		cmd:              nil,
 		cmdCancel:        nil,
+		readCtx:          nil,
 		stdin:            nil,
 		stdout:           nil,
 		requestID:        atomic.Uint64{},
@@ -126,6 +141,7 @@ func (t *stdioTransport) start(ctx context.Context) error {
 
 	ctxCmd, cancel := context.WithCancel(ctx)
 	t.cmdCancel = cancel
+	t.readCtx = ctx
 	// #nosec G204 -- executable and args come from caller (NewStdioTransport); caller is responsible for trust.
 	t.cmd = exec.CommandContext(ctxCmd, t.executable, t.args...)
 
@@ -142,7 +158,7 @@ func (t *stdioTransport) start(ctx context.Context) error {
 		t.startErr = err
 		return err
 	}
-	t.stdout = stdoutPipe
+	t.stdout = httptool.LimitStreamReadCloser(stdoutPipe, t.maxStreamBytes)
 
 	stderrPipe, err := t.cmd.StderrPipe()
 	if err != nil {
@@ -192,6 +208,7 @@ func (t *stdioTransport) start(ctx context.Context) error {
 
 func (t *stdioTransport) forwardStderr(r io.Reader) {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
 		t.logger.Info("mcp stderr", "line", scanner.Text())
 	}
@@ -206,6 +223,9 @@ func (t *stdioTransport) readLoop() {
 	scanner := bufio.NewScanner(t.stdout)
 	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
+		if t.readCtx != nil && t.readCtx.Err() != nil {
+			return
+		}
 		line := scanner.Bytes()
 		t.firstLineOnce.Do(func() { close(t.firstLineSeen) })
 		if len(line) == 0 {

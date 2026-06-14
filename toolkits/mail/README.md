@@ -18,7 +18,7 @@ go get github.com/skosovsky/toolsy/toolkits/mail
 | `mail_search_inbox` | Search inbox by query       | `{"query": "string", "limit": int}`                         |
 | `mail_read_message` | Read a single message by ID | `{"message_id": "string"}`                                  |
 
-Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. Body in `mail_read_message` is converted to Markdown only when it looks like HTML (tag-like patterns); plain text with `<` (e.g. "x < 5") is left as-is. `message_id` is trimmed; whitespace-only is rejected with `CodeValidationFailed` ([`ToolError`](../../errors.go)).
+Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. Body in `mail_read_message` is converted to Markdown only when it looks like HTML (tag-like patterns); plain text with `<` (e.g. "x < 5") is left as-is. HTML conversion is best-effort cancellable when the tool context is done (raw HTML is returned on cancel). `message_id` is trimmed; whitespace-only is rejected with `CodeValidationFailed` ([`ToolError`](../../errors.go)).
 
 ## Configuration & Security
 

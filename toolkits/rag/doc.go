@@ -1,3 +1,4 @@
-// Package rag provides a toolkit to expose a retriever (e.g. vector search) as a
-// toolsy tool: search the knowledge base and return formatted results for the LLM.
+// Package rag exposes vector/knowledge retrievers as toolsy tools with structured [Document] results,
+// composable retriever routing (Aggregate, Dedup, Fallback), and host IoC via [WithResultFormatter]
+// and [WithHostResultValidator].
 package rag

@@ -145,7 +145,7 @@ func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes 
 	}
 	body := args.Body
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, "\n[Truncated]")
+		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, textprocessor.TruncationSuffix)
 	}
 	err := sender.Send(ctx, OutgoingMessage{To: args.To, Subject: args.Subject, Body: body})
 	if err != nil {
@@ -195,9 +195,9 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes 
 	if err != nil {
 		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: read: %w", err))
 	}
-	body := normalizeBody(msg.Body)
+	body := normalizeBody(ctx, msg.Body)
 	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, "\n[Truncated]")
+		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, textprocessor.TruncationSuffix)
 	}
 	var b strings.Builder
 	b.WriteString("From: ")
@@ -237,7 +237,8 @@ func looksLikeHTML(body string) bool {
 
 // normalizeBody converts HTML body to readable Markdown/text so the agent does not see raw tags.
 // Only runs conversion when body looks like HTML (contains tag-like patterns); plain text with < is left as-is.
-func normalizeBody(body string) string {
+// HTML conversion is best-effort cancellable via ctx.
+func normalizeBody(ctx context.Context, body string) string {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return ""
@@ -245,9 +246,22 @@ func normalizeBody(body string) string {
 	if !looksLikeHTML(body) {
 		return body
 	}
-	md, err := htmltomarkdown.ConvertString(body)
-	if err != nil {
-		return body
+	type convertResult struct {
+		markdown string
+		err      error
 	}
-	return strings.TrimSpace(md)
+	done := make(chan convertResult, 1)
+	go func() {
+		md, err := htmltomarkdown.ConvertString(body)
+		done <- convertResult{markdown: md, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		return body
+	case res := <-done:
+		if res.err != nil {
+			return body
+		}
+		return strings.TrimSpace(res.markdown)
+	}
 }

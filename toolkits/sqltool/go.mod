@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy/toolkits/internal/format v0.0.0
 	github.com/stretchr/testify v1.11.1
 	modernc.org/sqlite v1.34.2
 )
@@ -30,4 +31,7 @@ require (
 	modernc.org/token v1.1.0 // indirect
 )
 
-replace github.com/skosovsky/toolsy => ../..
+replace (
+	github.com/skosovsky/toolsy => ../..
+	github.com/skosovsky/toolsy/toolkits/internal/format => ../internal/format
+)

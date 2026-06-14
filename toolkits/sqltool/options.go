@@ -4,14 +4,17 @@ package sqltool
 type Option func(*options)
 
 type options struct {
-	maxRows        int
-	maxCellBytes   int
-	maxSchemaBytes int
-	allowedTables  []string
-	inspectName    string
-	inspectDesc    string
-	executeName    string
-	executeDesc    string
+	maxRows             int
+	maxCellBytes        int
+	maxSchemaBytes      int
+	allowedTables       []string
+	inspectName         string
+	inspectDesc         string
+	executeName         string
+	executeDesc         string
+	inspectFormatter    func(InspectResult) (any, error)
+	executeFormatter    func(ExecuteResult) (any, error)
+	hostResultValidator func(any) error
 }
 
 const (
@@ -62,7 +65,8 @@ func WithMaxCellBytes(n int) Option {
 	}
 }
 
-// WithMaxSchemaBytes sets the maximum schema output size for sql_inspect_schema (default 512 KB). Output is truncated with a note.
+// WithMaxSchemaBytes sets the final wire JSON byte budget for sql_inspect_schema (default 512 KB).
+// Schema builder output is not suffix-truncated; wire suffix applies via format.CapWireJSON only.
 func WithMaxSchemaBytes(n int) Option {
 	return func(o *options) {
 		o.maxSchemaBytes = n
@@ -101,5 +105,26 @@ func WithExecuteName(name string) Option {
 func WithExecuteDescription(desc string) Option {
 	return func(o *options) {
 		o.executeDesc = desc
+	}
+}
+
+// WithInspectResultFormatter overrides JSON output for sql_inspect_schema.
+func WithInspectResultFormatter(f func(InspectResult) (any, error)) Option {
+	return func(o *options) {
+		o.inspectFormatter = f
+	}
+}
+
+// WithExecuteResultFormatter overrides JSON output for sql_execute_read.
+func WithExecuteResultFormatter(f func(ExecuteResult) (any, error)) Option {
+	return func(o *options) {
+		o.executeFormatter = f
+	}
+}
+
+// WithHostResultValidator validates formatted tool output before JSON marshal.
+func WithHostResultValidator(v func(any) error) Option {
+	return func(o *options) {
+		o.hostResultValidator = v
 	}
 }

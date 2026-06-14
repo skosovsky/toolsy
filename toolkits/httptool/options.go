@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// HTTPClient is the minimal HTTP surface used by httptool. [*http.Client] and [http.DefaultClient] satisfy it.
+// HTTPClient is the minimal HTTP surface used by httptool. Pass [*http.Client] with Timeout only;
+// Transport is always merged from the default SSRF-safe client.
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
@@ -28,9 +29,6 @@ type options struct {
 const defaultMaxResponseBody = 512 * 1024
 
 func applyDefaults(o *options) {
-	if o.httpClient == nil {
-		o.httpClient = http.DefaultClient
-	}
 	if o.maxResponseBody <= 0 {
 		o.maxResponseBody = defaultMaxResponseBody
 	}
@@ -48,7 +46,8 @@ func applyDefaults(o *options) {
 	}
 }
 
-// WithHTTPClient sets the HTTP client (e.g. for custom DialContext to mitigate DNS rebinding).
+// WithHTTPClient sets a custom [http.Client]. Only Timeout is merged onto the default SafeDialTransport
+// client; Transport and CheckRedirect from the custom client are ignored for SSRF safety.
 func WithHTTPClient(c HTTPClient) Option {
 	return func(o *options) {
 		o.httpClient = c

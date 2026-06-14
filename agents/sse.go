@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 const (
@@ -42,15 +44,16 @@ func (c *Client) streamStepsOnce(
 		req.Header.Set("Authorization", authHeader)
 	}
 	// #nosec G704 -- baseURL is from caller config; caller is responsible for trust.
-	resp, err := c.httpClient().Do(req)
+	resp, err := c.httpClient().Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return "", false, false, fmt.Errorf("agents: stream steps: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return "", false, false, fmt.Errorf("agents: stream steps: status %d", resp.StatusCode)
 	}
-	lastID, done, yieldedAny, err := parseSSESteps(resp.Body, yield)
+	limitedBody := httptool.LimitStreamReader(resp.Body, httptool.DefaultMaxSSEStreamBytes)
+	lastID, done, yieldedAny, err := parseSSESteps(ctx, limitedBody, yield)
 	if err != nil {
 		return lastID, done, yieldedAny, err
 	}
@@ -112,13 +115,16 @@ func consumeSSELine(line string, data, id *string) {
 // parseSSESteps reads SSE from r, parses each event's data as Step, and calls yield(step, nil).
 // Yields at most one error (and then stops). Returns last event id, whether a step had IsLast,
 // whether at least one step was yielded, and any parse/read error.
-func parseSSESteps(r io.Reader, yield func(Step, error) bool) (string, bool, bool, error) {
+func parseSSESteps(ctx context.Context, r io.Reader, yield func(Step, error) bool) (string, bool, bool, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(nil, maxSSEScanBytes)
 	var data, id string
 	var lastID string
 	var done, yieldedAny bool
 	for scanner.Scan() {
+		if ctx.Err() != nil {
+			return lastID, done, yieldedAny, ctx.Err()
+		}
 		line := scanner.Text()
 		if line != "" {
 			consumeSSELine(line, &data, &id)

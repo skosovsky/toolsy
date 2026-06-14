@@ -13,9 +13,10 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-const truncationSuffix = "\n[Truncated. Use pagination or filters.]"
+const truncationSuffix = textprocessor.ContractsTruncationSuffix
 
 // execute runs the HTTP request for one operation: path params in path, query params in query string, body params in body only.
 func execute(
@@ -77,13 +78,17 @@ func execute(
 		}
 	}
 
-	resp, err := client.Do(req) // #nosec G704 -- URL from Options/spec, not user input
+	// #nosec G704 -- URL from Options/spec, not user input
+	resp, err := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return fmt.Errorf("openapi: do request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
+		return fmt.Errorf("openapi: response status %d", resp.StatusCode)
+	}
 
-	text, err := textprocessor.ReadAndTruncateValidUTF8(resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	text, err := textprocessor.ReadLimited(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("openapi: read response: %w", err)
 	}

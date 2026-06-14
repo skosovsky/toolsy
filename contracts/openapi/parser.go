@@ -3,33 +3,32 @@ package openapi
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 // ParseURL fetches the OpenAPI spec from specURL, parses it, filters by opts, and returns one toolsy.Tool per operation.
 func ParseURL(ctx context.Context, specURL string, opts Options) ([]toolsy.Tool, error) {
-	if opts.HTTPClient == nil {
-		opts.HTTPClient = http.DefaultClient
-	}
+	client := opts.httpClient()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, specURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("openapi: request: %w", err)
 	}
-	resp, err := opts.HTTPClient.Do(req) // #nosec G704 -- specURL from caller config, not user input
+	resp, err := client.Do(req) //nolint:bodyclose // drained and closed via httptool.CloseResponseBody
 	if err != nil {
 		return nil, fmt.Errorf("openapi: fetch spec: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	defer httptool.CloseResponseBody(ctx, resp.Body)
+	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return nil, fmt.Errorf("openapi: spec status %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(resp.Body)
+	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, defaultMaxSpecBytes)
 	if err != nil {
 		return nil, fmt.Errorf("openapi: read spec: %w", err)
 	}

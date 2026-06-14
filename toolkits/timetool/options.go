@@ -1,16 +1,28 @@
 package timetool
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/skosovsky/toolsy"
+)
+
+// LocationProvider resolves timezone dynamically from request context (e.g. user session).
+type LocationProvider func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error)
 
 // Option configures AsTools (location for local time, tool names and descriptions).
 type Option func(*options)
 
 type options struct {
-	location      *time.Location
-	currentName   string
-	currentDesc   string
-	calculateName string
-	calculateDesc string
+	location            *time.Location
+	locationProvider    LocationProvider
+	resultFormatter     func(CurrentResult) (any, error)
+	calculateFormatter  func(CalculateResult) (any, error)
+	hostResultValidator func(any) error
+	currentName         string
+	currentDesc         string
+	calculateName       string
+	calculateDesc       string
 }
 
 const (
@@ -42,9 +54,38 @@ func applyDefaults(o *options) {
 }
 
 // WithLocation sets the timezone for "local" in time_current (default: system local, fallback UTC).
+// Overridden by [WithLocationProvider] when set.
 func WithLocation(loc *time.Location) Option {
 	return func(o *options) {
 		o.location = loc
+	}
+}
+
+// WithLocationProvider sets a dynamic timezone resolver with priority over [WithLocation].
+func WithLocationProvider(p LocationProvider) Option {
+	return func(o *options) {
+		o.locationProvider = p
+	}
+}
+
+// WithResultFormatter overrides the JSON shape returned by time_current (host DTO via any).
+func WithResultFormatter(f func(CurrentResult) (any, error)) Option {
+	return func(o *options) {
+		o.resultFormatter = f
+	}
+}
+
+// WithCalculateResultFormatter overrides the JSON shape returned by time_calculate.
+func WithCalculateResultFormatter(f func(CalculateResult) (any, error)) Option {
+	return func(o *options) {
+		o.calculateFormatter = f
+	}
+}
+
+// WithHostResultValidator validates formatted output before JSON marshal (PII/injection checks).
+func WithHostResultValidator(v func(any) error) Option {
+	return func(o *options) {
+		o.hostResultValidator = v
 	}
 }
 

@@ -2,57 +2,143 @@ package rag
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
-
-// Retriever is the interface the toolkit expects. Implement it with any backend
-// (vector DB, ragy, etc.); the toolkit only needs query -> []string.
-type Retriever interface {
-	Retrieve(ctx context.Context, query string) ([]string, error)
-}
 
 type searchArgs struct {
 	Query string `json:"query"`
 }
 
-type searchResult struct {
+type SearchMarkdownWire struct {
 	Results string `json:"results"`
 }
 
-// AsSearchTool builds a single toolsy.Tool that calls r.Retrieve, formats results
-// as numbered Markdown, and optionally truncates by maxBytes (UTF-8 safe).
-func AsSearchTool(r Retriever, opts ...Option) (toolsy.Tool, error) {
+type SearchDocumentsWire struct {
+	Documents []Document `json:"documents"`
+}
+
+// AsSearchTool builds a toolsy.Tool that calls r.Retrieve and formats results per options.
+func AsSearchTool(r DocumentRetriever, opts ...Option) (toolsy.Tool, error) {
+	if r == nil {
+		return nil, errors.New("toolkit/rag: DocumentRetriever is nil")
+	}
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	o.applyDefaults()
 
-	handler := func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (searchResult, error) {
-		results, err := r.Retrieve(ctx, args.Query)
-		if err != nil {
-			return searchResult{}, fmt.Errorf("toolkit/rag: retrieve failed: %w", err)
-		}
-		if len(results) == 0 {
-			return searchResult{Results: "No results found."}, nil
-		}
-		if o.maxResults > 0 && len(results) > o.maxResults {
-			results = results[:o.maxResults]
-		}
-		var b strings.Builder
-		for i, s := range results {
-			_, _ = fmt.Fprintf(&b, "%d. %s\n", i+1, s)
-		}
-		text := strings.TrimSuffix(b.String(), "\n")
-		if o.maxBytes > 0 && len(text) > o.maxBytes {
-			text = textprocessor.TruncateStringUTF8(text, o.maxBytes, "\n[Truncated]")
-		}
-		return searchResult{Results: text}, nil
+	if wantsJSONTool(&o) {
+		return buildJSONSearchTool(r, &o)
 	}
+	if wantsMarkdownIoCTool(&o) {
+		return buildMarkdownIoCTool(r, &o)
+	}
+	return buildMarkdownSearchTool(r, &o)
+}
 
-	return toolsy.NewTool(o.name, o.description, handler, toolsy.WithReadOnly())
+func wantsJSONTool(o *options) bool {
+	return o.resultFormatter != nil || o.resultShape == ShapeDocumentsJSON
+}
+
+func wantsMarkdownIoCTool(o *options) bool {
+	return o.hostResultValidator != nil
+}
+
+func buildJSONSearchTool(r DocumentRetriever, o *options) (toolsy.Tool, error) {
+	return toolsy.NewTool[searchArgs, format.JSONResult](
+		o.name,
+		o.description,
+		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
+			docs, err := retrieveAndFilter(ctx, r, o, args.Query)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			raw, applyErr := encodeSearchJSON(docs, o)
+			if applyErr != nil {
+				return format.JSONResult{}, applyErr
+			}
+			return format.JSONResult{Raw: raw}, nil
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func encodeSearchJSON(docs []Document, o *options) (json.RawMessage, error) {
+	return format.ApplyWithEnvelope(
+		docs,
+		func(d []Document) SearchDocumentsWire { return SearchDocumentsWire{Documents: d} },
+		o.resultFormatter,
+		o.hostResultValidator,
+		o.maxBytes,
+	)
+}
+
+func buildMarkdownIoCTool(r DocumentRetriever, o *options) (toolsy.Tool, error) {
+	return toolsy.NewTool[searchArgs, format.JSONResult](
+		o.name,
+		o.description,
+		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
+			docs, err := retrieveAndFilter(ctx, r, o, args.Query)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			raw, applyErr := format.ApplyWithEnvelope(
+				docs,
+				func(d []Document) SearchMarkdownWire {
+					return SearchMarkdownWire{Results: FormatDocumentsMarkdown(d)}
+				},
+				o.resultFormatter,
+				o.hostResultValidator,
+				o.maxBytes,
+			)
+			if applyErr != nil {
+				return format.JSONResult{}, applyErr
+			}
+			return format.JSONResult{Raw: raw}, nil
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func buildMarkdownSearchTool(r DocumentRetriever, o *options) (toolsy.Tool, error) {
+	return toolsy.NewTool[searchArgs, format.JSONResult](
+		o.name,
+		o.description,
+		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
+			docs, err := retrieveAndFilter(ctx, r, o, args.Query)
+			if err != nil {
+				return format.JSONResult{}, err
+			}
+			return format.ToJSONResult(SearchMarkdownWire{Results: FormatDocumentsMarkdown(docs)}, o.maxBytes)
+		},
+		toolsy.WithReadOnly(),
+	)
+}
+
+func retrieveAndFilter(
+	ctx context.Context,
+	r DocumentRetriever,
+	o *options,
+	query string,
+) ([]Document, error) {
+	docs, err := r.Retrieve(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("toolkit/rag: retrieve failed: %w", err)
+	}
+	if o.scopeFilter != nil {
+		docs = o.scopeFilter(ctx, docs)
+	}
+	if o.maxResults > 0 && len(docs) > o.maxResults {
+		docs = docs[:o.maxResults]
+	}
+	if wantsJSONTool(o) {
+		docs = capDocumentsForWire(docs, o)
+	}
+	return docs, nil
 }
