@@ -2,6 +2,7 @@ package textprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -38,6 +39,9 @@ func ReadLimited(ctx context.Context, r io.Reader, maxBytes int, suffix string) 
 	return text, nil
 }
 
+// ErrReadExceeds is returned when ReadLimitedBytes reads more than maxBytes.
+var ErrReadExceeds = errors.New("read exceeds byte limit")
+
 // ReadLimitedBytes reads up to maxBytes from r; returns error when more data is available.
 func ReadLimitedBytes(ctx context.Context, r io.Reader, maxBytes int) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
@@ -52,7 +56,7 @@ func ReadLimitedBytes(ctx context.Context, r io.Reader, maxBytes int) ([]byte, e
 		return nil, err
 	}
 	if len(data) > maxBytes {
-		return nil, fmt.Errorf("read exceeds %d bytes", maxBytes)
+		return nil, fmt.Errorf("%w: %d bytes", ErrReadExceeds, maxBytes)
 	}
 	return data, nil
 }

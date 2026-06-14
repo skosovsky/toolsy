@@ -35,6 +35,17 @@ func newHTMLScraper() *htmlScraper {
 	return &htmlScraper{}
 }
 
+// NewHTMLScraper returns the default HTML-to-Markdown scraper (library mode).
+func NewHTMLScraper() Scraper {
+	return newHTMLScraper()
+}
+
+// HTMLToMarkdown converts HTML to Markdown using the default scraper (library mode).
+// HTTP fetch is the caller's responsibility; use [ScrapePage] for fetch+convert.
+func HTMLToMarkdown(ctx context.Context, html string, maxBytes int) (string, error) {
+	return scrapeHTMLToMarkdown(ctx, newHTMLScraper(), html, maxBytes)
+}
+
 func stripLayoutHTML(html string) string {
 	html = stripScript.ReplaceAllString(html, "")
 	html = stripStyle.ReplaceAllString(html, "")
