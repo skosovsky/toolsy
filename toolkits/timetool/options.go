@@ -1,16 +1,24 @@
 package timetool
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/skosovsky/toolsy"
+)
 
 // Option configures AsTools (location for local time, tool names and descriptions).
 type Option func(*options)
 
+type LocationProvider func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error)
+
 type options struct {
-	location      *time.Location
-	currentName   string
-	currentDesc   string
-	calculateName string
-	calculateDesc string
+	location         *time.Location
+	locationProvider LocationProvider
+	currentName      string
+	currentDesc      string
+	calculateName    string
+	calculateDesc    string
 }
 
 const (
@@ -45,6 +53,13 @@ func applyDefaults(o *options) {
 func WithLocation(loc *time.Location) Option {
 	return func(o *options) {
 		o.location = loc
+	}
+}
+
+// WithLocationProvider resolves the timezone per tool call (overrides WithLocation when set).
+func WithLocationProvider(p LocationProvider) Option {
+	return func(o *options) {
+		o.locationProvider = p
 	}
 }
 

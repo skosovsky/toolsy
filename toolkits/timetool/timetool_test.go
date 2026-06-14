@@ -28,7 +28,7 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 	require.NoError(t, err)
 	currentTool := tools[0]
 
-	var result currentResult
+	var result CurrentResult
 	require.NoError(
 		t,
 		currentTool.Execute(
@@ -36,7 +36,7 @@ func TestTimeCurrent_ReturnsValidRFC3339(t *testing.T) {
 			toolsy.NewRunEnv(nil),
 			toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 			func(c toolsy.Chunk) error {
-				result = decodeTimeChunk[currentResult](t, c)
+				result = decodeTimeChunk[CurrentResult](t, c)
 				return nil
 			},
 		),
@@ -222,4 +222,29 @@ func TestAsTools_CustomNames(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "now", tools[0].Manifest().Name)
 	require.Equal(t, "add_time", tools[1].Manifest().Name)
+}
+
+func TestAsTools_WithLocationProvider(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Moscow")
+	require.NoError(t, err)
+	tools, err := AsTools(WithLocationProvider(func(context.Context, *toolsy.RunEnv) (*time.Location, error) {
+		return loc, nil
+	}))
+	require.NoError(t, err)
+
+	var result CurrentResult
+	require.NoError(t, tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(c toolsy.Chunk) error {
+			result = decodeTimeChunk[CurrentResult](t, c)
+			return nil
+		},
+	))
+	parsed, err := time.Parse(time.RFC3339, result.Local)
+	require.NoError(t, err)
+	nowInLoc := time.Now().In(loc)
+	require.WithinDuration(t, nowInLoc, parsed, 2*time.Second)
+	require.Equal(t, nowInLoc.Format("2006-01-02"), parsed.Format("2006-01-02"))
 }

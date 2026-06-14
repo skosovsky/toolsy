@@ -82,3 +82,8 @@ func hostMatchesAllowedDomains(hostLower string, allowedDomains []string) bool {
 func isPrivateIP(ip net.IP) bool {
 	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate()
 }
+
+// IsPrivateIP reports whether ip is loopback, link-local, or private (SSRF defense-in-depth).
+func IsPrivateIP(ip net.IP) bool {
+	return isPrivateIP(ip)
+}

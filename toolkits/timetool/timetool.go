@@ -10,7 +10,8 @@ import (
 
 type currentArgs struct{}
 
-type currentResult struct {
+// CurrentResult is the wire shape for time_current toolkit output.
+type CurrentResult struct {
 	UTC     string `json:"utc"`
 	Local   string `json:"local"`
 	Weekday string `json:"weekday"`
@@ -36,11 +37,11 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	}
 	applyDefaults(&o)
 
-	currentTool, err := toolsy.NewTool[currentArgs, currentResult](
+	currentTool, err := toolsy.NewTool[currentArgs, CurrentResult](
 		o.currentName,
 		o.currentDesc,
-		func(_ context.Context, _ *toolsy.RunEnv, _ currentArgs) (currentResult, error) {
-			return doCurrent(&o)
+		func(ctx context.Context, env *toolsy.RunEnv, _ currentArgs) (CurrentResult, error) {
+			return doCurrent(ctx, env, &o)
 		},
 		toolsy.WithReadOnly(),
 	)
@@ -63,15 +64,41 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	return []toolsy.Tool{currentTool, calculateTool}, nil
 }
 
-func doCurrent(o *options) (currentResult, error) {
+func doCurrent(ctx context.Context, env *toolsy.RunEnv, o *options) (CurrentResult, error) {
+	loc, err := resolveLocation(ctx, env, o)
+	if err != nil {
+		return CurrentResult{}, err
+	}
+	return ComputeCurrent(loc), nil
+}
+
+// ComputeCurrent returns UTC/local/weekday/unix for the given location.
+func ComputeCurrent(loc *time.Location) CurrentResult {
+	if loc == nil {
+		loc = time.UTC
+	}
 	now := time.Now().UTC()
-	local := now.In(o.location)
-	return currentResult{
+	local := now.In(loc)
+	return CurrentResult{
 		UTC:     now.Format(time.RFC3339),
 		Local:   local.Format(time.RFC3339),
 		Weekday: local.Weekday().String(),
 		Unix:    now.Unix(),
-	}, nil
+	}
+}
+
+func resolveLocation(ctx context.Context, env *toolsy.RunEnv, o *options) (*time.Location, error) {
+	if o.locationProvider != nil {
+		return o.locationProvider(ctx, env)
+	}
+	if o.location != nil {
+		return o.location, nil
+	}
+	loc := time.Local
+	if loc == nil {
+		loc = time.UTC
+	}
+	return loc, nil
 }
 
 func doCalculate(o *options, args calculateArgs) (calculateResult, error) {
