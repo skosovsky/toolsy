@@ -38,6 +38,7 @@ type sseTransportImpl struct {
 	allowPrivateIPs bool
 	maxStreamBytes  int
 	readCtx         context.Context
+	readCancel      context.CancelFunc
 
 	startMu   sync.Mutex
 	started   bool
@@ -150,11 +151,15 @@ func (t *sseTransportImpl) start(ctx context.Context) error {
 		return t.startErr
 	}
 	t.bodyCloser = resp.Body
-	t.readCtx = ctx
+	readCtx, readCancel := context.WithCancel(ctx)
+	t.readCtx = readCtx
+	t.readCancel = readCancel
 
-	go t.readLoop(httptool.LimitStreamReaderWithContext(ctx, resp.Body, t.maxStreamBytes))
+	go t.readLoop(httptool.LimitStreamReaderWithContext(readCtx, resp.Body, t.maxStreamBytes))
 	select {
 	case <-ctx.Done():
+		readCancel()
+		<-t.readerDone
 		t.closeBody(resp.Body)
 		t.startErr = ctx.Err()
 		return ctx.Err()
@@ -541,8 +546,11 @@ func (t *sseTransportImpl) close() error {
 	}
 	t.started = false
 	t.startMu.Unlock()
-	t.closeBody(t.bodyCloser)
+	if t.readCancel != nil {
+		t.readCancel()
+	}
 	<-t.readerDone
+	t.closeBody(t.bodyCloser)
 	t.unblockAllPending(errors.New("transport closed"))
 	return nil
 }

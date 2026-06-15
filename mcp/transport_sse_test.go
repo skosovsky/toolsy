@@ -150,16 +150,31 @@ func TestSSETransport_Start_CancelBeforeEndpoint(t *testing.T) {
 
 func TestSSETransport_Call_CancelUnblocksPending(t *testing.T) {
 	t.Parallel()
+	postAccepted := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = fmt.Fprint(w, "event: endpoint\ndata: /messages\n\n")
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
+			fl, _ := w.(http.Flusher)
+			if fl != nil {
+				fl.Flush()
 			}
-			return
+			ticker := time.NewTicker(25 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-r.Context().Done():
+					return
+				case <-ticker.C:
+					_, _ = fmt.Fprint(w, ": keepalive\n\n")
+					if fl != nil {
+						fl.Flush()
+					}
+				}
+			}
 		}
 		w.WriteHeader(http.StatusAccepted)
+		close(postAccepted)
 	}))
 	t.Cleanup(srv.Close)
 
@@ -169,7 +184,13 @@ func TestSSETransport_Call_CancelUnblocksPending(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-postAccepted:
+		case <-time.After(2 * time.Second):
+			cancel()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 		cancel()
 	}()
 	_, _, err := tr.Call(ctx, "tools/list", nil)
