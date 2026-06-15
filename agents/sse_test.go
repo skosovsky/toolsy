@@ -2,11 +2,15 @@ package agents
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
@@ -22,7 +26,7 @@ func TestParseSSESteps_MultiLineData(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, done, yieldedAny, err := parseSSESteps(context.Background(), r, yield)
+	lastID, done, yieldedAny, err := parseSSESteps(context.Background(), r, httptool.DefaultMaxSSEStreamBytes, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -58,7 +62,7 @@ func TestParseSSESteps_LastEventID(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, done, _, err := parseSSESteps(context.Background(), r, yield)
+	lastID, done, _, err := parseSSESteps(context.Background(), r, httptool.DefaultMaxSSEStreamBytes, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -84,7 +88,7 @@ func TestParseSSESteps_EventTypeIgnored(t *testing.T) {
 		steps = append(steps, s)
 		return true
 	}
-	lastID, _, _, err := parseSSESteps(context.Background(), r, yield)
+	lastID, _, _, err := parseSSESteps(context.Background(), r, httptool.DefaultMaxSSEStreamBytes, yield)
 	if err != nil {
 		t.Fatalf("parseSSESteps: %v", err)
 	}
@@ -102,8 +106,46 @@ func TestParseSSESteps_StreamExceedsMaxBytes(t *testing.T) {
 	payload := strings.Repeat("x", 3000)
 	raw := "id: ev1\n" +
 		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
-	limited := httptool.LimitStreamReader(strings.NewReader(raw), 2048)
-	_, _, _, err := parseSSESteps(context.Background(), limited, func(Step, error) bool { return true })
+	const streamCap = 2048
+	limited := httptool.LimitStreamReaderWithContext(context.Background(), strings.NewReader(raw), streamCap)
+	_, _, _, err := parseSSESteps(context.Background(), limited, streamCap, func(Step, error) bool { return true })
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "stream exceeds")
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "2048")
+}
+
+func TestParseSSESteps_CancelOverStreamLimit(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	payload := strings.Repeat("x", 3000)
+	raw := "id: ev1\n" +
+		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
+	const streamCap = 2048
+	limited := httptool.LimitStreamReaderWithContext(ctx, strings.NewReader(raw), streamCap)
+	cancel()
+	_, _, _, err := parseSSESteps(ctx, limited, streamCap, func(Step, error) bool { return true })
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestParseSSESteps_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf(
+		"agents: stream: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	raw := "id: ev1\n" +
+		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"x\",\"status\":\"running\",\"is_last\":true}\n\n"
+	stream := io.MultiReader(strings.NewReader(raw), &instantErrReader{err: composite})
+	_, _, _, err := parseSSESteps(context.Background(), stream, 1<<20, func(Step, error) bool { return true })
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+type instantErrReader struct {
+	err error
+}
+
+func (r *instantErrReader) Read([]byte) (int, error) {
+	return 0, r.err
 }

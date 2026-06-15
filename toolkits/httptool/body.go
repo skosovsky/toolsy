@@ -2,19 +2,16 @@ package httptool
 
 import (
 	"context"
-	"fmt"
 	"io"
 
-	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
-
-const truncationSuffix = textprocessor.TruncationSuffix
 
 // DefaultMaxDrainBytes is the cap for draining unread HTTP response body tails (keep-alive reuse).
 const DefaultMaxDrainBytes = 64 * 1024
 
-// DrainResponseBody reads up to maxBytes from r so the connection can be reused; respects ctx cancellation.
+// DrainResponseBody reads up to maxBytes from r so the connection can be reused.
+// Cancellation is checked before and during the read via textprocessor.ReaderWithContext.
 func DrainResponseBody(ctx context.Context, r io.Reader, maxBytes int) error {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxDrainBytes
@@ -23,7 +20,7 @@ func DrainResponseBody(ctx context.Context, r io.Reader, maxBytes int) error {
 		return err
 	}
 	limited := io.LimitReader(r, int64(maxBytes)+1)
-	n, err := io.Copy(io.Discard, limited)
+	n, err := io.Copy(io.Discard, textprocessor.ReaderWithContext(ctx, limited))
 	if err != nil {
 		return err
 	}
@@ -31,7 +28,7 @@ func DrainResponseBody(ctx context.Context, r io.Reader, maxBytes int) error {
 		return err
 	}
 	if n > int64(maxBytes) {
-		return fmt.Errorf("toolkit/httptool: response drain exceeds %d bytes", maxBytes)
+		return textprocessor.ErrReadLimitExceeded
 	}
 	return nil
 }
@@ -39,6 +36,8 @@ func DrainResponseBody(ctx context.Context, r io.Reader, maxBytes int) error {
 // DefaultMaxSSEStreamBytes is the default total byte budget for long-lived SSE/stdio JSON-RPC streams.
 const DefaultMaxSSEStreamBytes = 16 * 1024 * 1024
 
+// limitedStreamReader enforces a byte budget on long-lived streams (SSE, stdio JSON-RPC).
+// Unlike ReadLimitedBytes, Read may return partial data together with ErrReadLimitExceeded.
 type limitedStreamReader struct {
 	r   io.Reader
 	n   int64
@@ -47,7 +46,7 @@ type limitedStreamReader struct {
 
 func (l *limitedStreamReader) Read(p []byte) (int, error) {
 	if l.n >= l.max {
-		return 0, fmt.Errorf("toolkit/httptool: stream exceeds %d bytes", l.max)
+		return 0, textprocessor.ErrReadLimitExceeded
 	}
 	remaining := l.max - l.n
 	if int64(len(p)) > remaining {
@@ -56,17 +55,17 @@ func (l *limitedStreamReader) Read(p []byte) (int, error) {
 	n, err := l.r.Read(p)
 	l.n += int64(n)
 	if l.n > l.max {
-		return n, fmt.Errorf("toolkit/httptool: stream exceeds %d bytes", l.max)
+		return n, textprocessor.ErrReadLimitExceeded
 	}
 	return n, err
 }
 
-// LimitStreamReader wraps r with a total byte budget for long-lived streams (SSE, stdio JSON-RPC).
-func LimitStreamReader(r io.Reader, maxBytes int) io.Reader {
+// LimitStreamReaderWithContext wraps r with a byte budget and honors ctx cancellation during Read.
+func LimitStreamReaderWithContext(ctx context.Context, r io.Reader, maxBytes int) io.Reader {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxSSEStreamBytes
 	}
-	return &limitedStreamReader{r: r, n: 0, max: int64(maxBytes)}
+	return &limitedStreamReader{r: textprocessor.ReaderWithContext(ctx, r), n: 0, max: int64(maxBytes)}
 }
 
 type limitedReadCloser struct {
@@ -82,15 +81,17 @@ func (l limitedReadCloser) Close() error {
 	return l.closer.Close()
 }
 
-// LimitStreamReadCloser wraps r with LimitStreamReader and preserves Close.
-func LimitStreamReadCloser(r io.ReadCloser, maxBytes int) io.ReadCloser {
+// LimitStreamReadCloserWithContext wraps r with LimitStreamReaderWithContext and preserves Close.
+func LimitStreamReadCloserWithContext(ctx context.Context, r io.ReadCloser, maxBytes int) io.ReadCloser {
 	if r == nil {
 		return nil
 	}
-	return limitedReadCloser{Reader: LimitStreamReader(r, maxBytes), closer: r}
+	return limitedReadCloser{Reader: LimitStreamReaderWithContext(ctx, r, maxBytes), closer: r}
 }
 
-// CloseResponseBody drains up to DefaultMaxDrainBytes then closes the body.
+// CloseResponseBody drains up to DefaultMaxDrainBytes from body so the connection can be reused, then closes it.
+// Drain errors (including ErrReadLimitExceeded when the unread tail exceeds the drain cap) are ignored because
+// the caller has already consumed the response; use DrainResponseBody when the drain result matters.
 func CloseResponseBody(ctx context.Context, body io.ReadCloser) {
 	if body == nil {
 		return
@@ -104,15 +105,8 @@ func IsSuccessStatus(code int) bool {
 	return code >= 200 && code < 300
 }
 
-// ReadBodyLimited reads up to maxBytes from r with UTF-8 safe truncation and [textprocessor.TruncationSuffix].
-// Respects ctx cancellation before and after read.
-func ReadBodyLimited(ctx context.Context, r io.Reader, maxBytes int) (string, error) {
-	text, err := textprocessor.ReadLimited(ctx, r, maxBytes, textprocessor.TruncationSuffix)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: context: %w", ctxErr))
-		}
-		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
-	}
-	return text, nil
+// ReadBodyLimited reads at most maxBytes from r (fail-closed).
+// Returns nil, textprocessor.ErrReadLimitExceeded when more data is available.
+func ReadBodyLimited(ctx context.Context, r io.Reader, maxBytes int) ([]byte, error) {
+	return textprocessor.ReadLimitedBytes(ctx, r, maxBytes)
 }

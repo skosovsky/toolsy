@@ -1,16 +1,19 @@
 package wazero
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/internal/sandboxfs"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 //go:embed testdata/interpreter.wasm
@@ -66,9 +69,9 @@ func TestRunUsesEngineReportedDuration(t *testing.T) {
 	require.NoError(t, err)
 
 	sb.engine = fakeEngine(
-		func(_ context.Context, _ []byte, _ string, _ map[string]string, stdout, _ *bytes.Buffer) (time.Duration, error) {
+		func(_ context.Context, _ []byte, _ string, _ map[string]string, stdout, _ io.Writer) (time.Duration, error) {
 			time.Sleep(40 * time.Millisecond)
-			stdout.WriteString("ok")
+			_, _ = io.WriteString(stdout, "ok")
 			return 25 * time.Millisecond, nil
 		},
 	)
@@ -88,7 +91,7 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 
 	invoked := false
 	sb.engine = fakeEngine(
-		func(_ context.Context, _ []byte, _ string, _ map[string]string, _ *bytes.Buffer, _ *bytes.Buffer) (time.Duration, error) {
+		func(_ context.Context, _ []byte, _ string, _ map[string]string, _, _ io.Writer) (time.Duration, error) {
 			invoked = true
 			return 0, nil
 		},
@@ -162,7 +165,7 @@ func TestRunPropagatesEngineTimeoutPath(t *testing.T) {
 	sb, err := NewInterpreter("jq", interpreterWasm)
 	require.NoError(t, err)
 	sb.engine = fakeEngine(
-		func(ctx context.Context, _ []byte, _ string, _ map[string]string, _ *bytes.Buffer, _ *bytes.Buffer) (time.Duration, error) {
+		func(ctx context.Context, _ []byte, _ string, _ map[string]string, _, _ io.Writer) (time.Duration, error) {
 			<-ctx.Done()
 			return 0, ctx.Err()
 		},
@@ -190,11 +193,54 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
 }
 
+func TestRunRejectsOversizedStdout(t *testing.T) {
+	sb, err := NewInterpreter("jq", interpreterWasm)
+	require.NoError(t, err)
+	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
+	sb.engine = fakeEngine(
+		func(_ context.Context, _ []byte, _ string, _ map[string]string, stdout, _ io.Writer) (time.Duration, error) {
+			_, writeErr := stdout.Write([]byte(big))
+			return 0, writeErr
+		},
+	)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "jq",
+		Code:     "noop",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestRunRejectsOversizedStdoutWithExitError(t *testing.T) {
+	sb, err := NewInterpreter("jq", interpreterWasm)
+	require.NoError(t, err)
+	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
+	sb.engine = fakeEngine(
+		func(_ context.Context, _ []byte, _ string, _ map[string]string, stdout, _ io.Writer) (time.Duration, error) {
+			_, writeErr := stdout.Write([]byte(big))
+			if writeErr != nil {
+				return 0, writeErr
+			}
+			return 0, errors.New("module closed with exit_code(7)")
+		},
+	)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "jq",
+		Code:     "noop",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
 func TestRunWrapsEngineFailures(t *testing.T) {
 	sb, err := NewInterpreter("jq", interpreterWasm)
 	require.NoError(t, err)
 	sb.engine = fakeEngine(
-		func(_ context.Context, _ []byte, _ string, _ map[string]string, _ *bytes.Buffer, _ *bytes.Buffer) (time.Duration, error) {
+		func(_ context.Context, _ []byte, _ string, _ map[string]string, _, _ io.Writer) (time.Duration, error) {
 			return 0, errors.New("compile failed")
 		},
 	)
@@ -207,14 +253,14 @@ func TestRunWrapsEngineFailures(t *testing.T) {
 	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
 }
 
-type fakeEngine func(ctx context.Context, module []byte, workspaceDir string, env map[string]string, stdout, stderr *bytes.Buffer) (time.Duration, error)
+type fakeEngine func(ctx context.Context, module []byte, workspaceDir string, env map[string]string, stdout, stderr io.Writer) (time.Duration, error)
 
 func (f fakeEngine) Run(
 	ctx context.Context,
 	module []byte,
 	workspaceDir string,
 	env map[string]string,
-	stdout, stderr *bytes.Buffer,
+	stdout, stderr io.Writer,
 ) (time.Duration, error) {
 	return f(ctx, module, workspaceDir, env, stdout, stderr)
 }

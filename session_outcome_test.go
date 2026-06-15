@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestSession_RunCall_Success(t *testing.T) {
@@ -165,12 +168,114 @@ func TestRunCallInfraError_Classification(t *testing.T) {
 		{name: "contract_missing", err: NewToolsContractMissingError([]string{"a"}, []string{"a"})},
 		{name: "internal", err: NewInternalError(errors.New("malformed chunk"))},
 		{name: "plain", err: assert.AnError},
+		{name: "context_canceled", err: context.Canceled},
+		{name: "wrapped_cancel", err: NewInternalError(fmt.Errorf("tool failed: %w", context.Canceled))},
+		{name: "timeout_from_deadline", err: NewTimeoutErrorFrom(context.DeadlineExceeded, true)},
+		{name: "bare_deadline", err: context.DeadlineExceeded},
 	}
 	for _, tc := range infraCases {
 		t.Run("infra_"+tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.True(t, runCallInfraError(tc.err))
 		})
+	}
+}
+
+func TestSession_RunCall_ContextCancel_IsInfraNotBusiness(t *testing.T) {
+	t.Parallel()
+
+	runCancelCase := func(t *testing.T, withFormatter bool) {
+		t.Helper()
+		tool, err := NewTool("cancel_tool", "Cancel", func(_ context.Context, _ *RunEnv, _ struct{}) (struct{}, error) {
+			return struct{}{}, NewInternalError(fmt.Errorf("tool failed: %w", context.Canceled))
+		})
+		require.NoError(t, err)
+
+		b := NewRegistryBuilder().Add(tool)
+		if withFormatter {
+			b = b.Use(WithErrorFormatter())
+		}
+		reg, err := b.Build()
+		require.NoError(t, err)
+		sess, err := NewSession(reg)
+		require.NoError(t, err)
+
+		outcome, err := sess.RunCall(context.Background(), ToolCall{
+			ToolName: "cancel_tool",
+			Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+			Env:      NewRunEnv(sess),
+		})
+		require.Error(t, err)
+		require.ErrorIs(t, err, context.Canceled)
+		require.True(t, runCallInfraError(err))
+		require.Nil(t, outcome.ExecutionError)
+		require.Empty(t, outcome.Result)
+	}
+
+	t.Run("with_formatter", func(t *testing.T) {
+		t.Parallel()
+		runCancelCase(t, true)
+	})
+	t.Run("without_formatter", func(t *testing.T) {
+		t.Parallel()
+		runCancelCase(t, false)
+	})
+}
+
+func TestSession_RunCall_CancelOverReadLimit_IsInfra(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	cancelWrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	tool, err := NewTool(
+		"cancel_limit_tool",
+		"CancelLimit",
+		func(_ context.Context, _ *RunEnv, _ struct{}) (struct{}, error) {
+			return struct{}{}, NewInternalError(fmt.Errorf("tool: %w", cancelWrapped))
+		},
+	)
+	require.NoError(t, err)
+	_ = composite
+
+	reg, err := NewRegistryBuilder().Add(tool).Use(WithErrorFormatter()).Build()
+	require.NoError(t, err)
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "cancel_limit_tool",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, runCallInfraError(err))
+	require.Nil(t, outcome.ExecutionError)
+}
+
+func TestSession_RunCall_DeadlineExceeded_IsInfraWithChain(t *testing.T) {
+	t.Parallel()
+	tool, err := NewTool("deadline_tool", "Deadline", func(_ context.Context, _ *RunEnv, _ struct{}) (struct{}, error) {
+		return struct{}{}, NewInternalError(fmt.Errorf("tool failed: %w", context.DeadlineExceeded))
+	})
+	require.NoError(t, err)
+
+	reg, err := NewRegistryBuilder().Add(tool).Use(WithErrorFormatter()).Build()
+	require.NoError(t, err)
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "deadline_tool",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.True(t, runCallInfraError(err))
+	require.Nil(t, outcome.ExecutionError)
+	te, ok := AsToolError(err)
+	if ok {
+		require.Equal(t, CodeTimeout, te.Code)
 	}
 }
 
@@ -498,6 +603,38 @@ func TestSession_RunCall_InfraToolNotFound(t *testing.T) {
 	te, ok := AsToolError(err)
 	require.True(t, ok)
 	assert.Equal(t, CodeToolNotFound, te.Code)
+}
+
+func TestSession_RunCall_SandboxStdoutReadLimit_BusinessOutcome(t *testing.T) {
+	t.Parallel()
+	const maxOut = 256 * 1024
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxOut,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	tool := newMiddlewareMinTool(
+		"exec_sandbox",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return MapSandboxReadLimitError(capErr)
+		},
+	)
+	reg, err := NewRegistryBuilder().Add(tool).Use(WithErrorFormatter()).Build()
+	require.NoError(t, err)
+	sess, err := NewSession(reg)
+	require.NoError(t, err)
+
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
+		ToolName: "exec_sandbox",
+		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
+		Env:      NewRunEnv(sess),
+	})
+	require.NoError(t, err)
+	requireToolErrorCode(t, outcome.ExecutionError, CodeValidationFailed)
+	te, ok := AsToolError(outcome.ExecutionError)
+	require.True(t, ok)
+	assert.Contains(t, te.Reason, "stdout")
+	assert.False(t, runCallInfraError(outcome.ExecutionError))
 }
 
 func TestNewTypedTool_Validators(t *testing.T) {

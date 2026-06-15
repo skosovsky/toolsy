@@ -1,7 +1,6 @@
 package host
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -111,42 +110,31 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), encodeEnv(req.Env)...)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	var stdout = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
+	var stderr = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	start := time.Now()
 	err = cmd.Run()
 	duration := time.Since(start)
 
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return exectool.RunResult{}, exectool.ErrTimeout
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return exectool.RunResult{}, ctx.Err()
-		}
-
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return exectool.RunResult{
-				Stdout:   stdout.String(),
-				Stderr:   stderr.String(),
-				ExitCode: exitErr.ExitCode(),
-				Duration: duration,
-			}, nil
+			return sandboxfs.FinalizeOrInterrupt(
+				ctx, err, stdout, stderr, exitErr.ExitCode(), duration, true, false,
+			)
 		}
 
-		return exectool.RunResult{}, fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, err)
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, err),
+			stdout, stderr, 0, duration, false, false,
+		)
 	}
 
-	return exectool.RunResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
-		ExitCode: 0,
-		Duration: duration,
-	}, nil
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, stderr, 0, duration, true, false)
 }
 
 func encodeEnv(env map[string]string) []string {

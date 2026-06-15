@@ -3,6 +3,7 @@ package exectool
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type mockSandbox struct {
@@ -28,6 +30,9 @@ func (m *mockSandbox) Run(ctx context.Context, req RunRequest) (RunResult, error
 	m.lastReq = req
 	if m.runFn != nil {
 		return m.runFn(ctx, req)
+	}
+	if err := ctx.Err(); err != nil {
+		return RunResult{}, err
 	}
 	if m.err != nil {
 		return RunResult{}, m.err
@@ -187,6 +192,25 @@ func TestExecuteReturnsTimeoutWhenContextExpired(t *testing.T) {
 	require.Equal(t, toolsy.CodeTimeout, te.Code)
 	require.True(t, te.Retryable)
 	require.ErrorIs(t, err, toolsy.ErrTimeout)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestExecuteReturnsCanceledBeforeRun(t *testing.T) {
+	sb := &mockSandbox{languages: []string{"python"}}
+	tool, err := New(sb)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = tool.Execute(
+		ctx,
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestExecuteEnforcesTimeoutViaContext(t *testing.T) {
@@ -284,4 +308,65 @@ func TestExecuteWrapsSandboxErrorChain(t *testing.T) {
 	require.True(t, te.Code == toolsy.CodeInternal || te.Code == toolsy.CodeTimeout)
 	require.ErrorIs(t, err, ErrSandboxFailure)
 	require.NotErrorIs(t, err, ErrUnsupportedLanguage)
+}
+
+func TestMapExecError_ReadLimitMapsValidationWithStdoutSubject(t *testing.T) {
+	const maxOut = 256 * 1024
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxOut,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	mapped := mapExecError(capErr)
+	te, ok := toolsy.AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "stdout")
+}
+
+func TestMapExecError_CancelOverTimeout_Composite(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("slow: %w", context.DeadlineExceeded)
+	wrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	inner := fmt.Errorf("run: %w", errors.Join(wrapped, composite))
+	mapped := mapExecError(inner)
+	require.ErrorIs(t, mapped, context.Canceled)
+}
+
+func TestMapExecError_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	const maxOut = 256 * 1024
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxOut,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	wrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	inner := fmt.Errorf("run: %w", errors.Join(wrapped, capErr))
+	mapped := mapExecError(inner)
+	require.ErrorIs(t, mapped, context.Canceled)
+}
+
+func TestExecute_SandboxOutputCap_CodeValidationFailed(t *testing.T) {
+	const maxOut = 256 * 1024
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxOut,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	sb := &mockSandbox{languages: []string{"python"}, err: capErr}
+	tool, err := New(sb)
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"python","code":"print(1)"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "stdout")
 }

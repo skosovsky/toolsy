@@ -2,11 +2,58 @@ package textprocessor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
+
+// ErrReadLimitExceeded is returned when a fail-closed read exceeds the configured byte limit.
+// On limit errors callers receive nil data — never partial bytes alongside the error.
+var ErrReadLimitExceeded = errors.New("read operation exceeded configured byte limit")
+
+// ReadLimitError carries structured read-limit metadata. Prefer this over regex parsing of Error().
+type ReadLimitError struct {
+	Subject  string
+	MaxBytes int
+	Cause    error
+}
+
+func (e *ReadLimitError) Error() string {
+	cause := e.Cause
+	if cause == nil {
+		cause = ErrReadLimitExceeded
+	}
+	if e.Subject != "" && e.MaxBytes > 0 {
+		return fmt.Sprintf("%s exceeds %d byte limit: %v", e.Subject, e.MaxBytes, cause)
+	}
+	if e.MaxBytes > 0 {
+		return fmt.Sprintf("exceeds %d byte limit: %v", e.MaxBytes, cause)
+	}
+	return cause.Error()
+}
+
+func (e *ReadLimitError) Unwrap() error {
+	if e.Cause != nil {
+		return e.Cause
+	}
+	return ErrReadLimitExceeded
+}
+
+// NewReadLimitError builds a typed read-limit error with subject and cap.
+func NewReadLimitError(subject string, maxBytes int, cause error) error {
+	if cause == nil {
+		cause = ErrReadLimitExceeded
+	}
+	return &ReadLimitError{Subject: subject, MaxBytes: maxBytes, Cause: cause}
+}
+
+// IsReadLimitExceeded reports whether err is or wraps ErrReadLimitExceeded.
+func IsReadLimitExceeded(err error) bool {
+	return errors.Is(err, ErrReadLimitExceeded)
+}
 
 // TruncationSuffix is appended when toolkit output is truncated at a byte limit.
 const TruncationSuffix = "\n[Truncated]"
@@ -23,12 +70,17 @@ const SQLCellTruncationSuffix = "..."
 // SearchResultsTruncationSuffix is appended when web search markdown hits maxSearchResultsDisplayed.
 const SearchResultsTruncationSuffix = "... [truncated]\n"
 
-// ReadLimited reads up to maxBytes from r with UTF-8 safe truncation; respects ctx cancellation.
-func ReadLimited(ctx context.Context, r io.Reader, maxBytes int, suffix string) (string, error) {
+// ReadAndTruncate reads up to maxBytes from r with UTF-8 safe truncation and suffix (explicit opt-in).
+// Use for LLM/display tiers only — not for transport or security-sensitive reads.
+func ReadAndTruncate(ctx context.Context, r io.Reader, maxBytes int, suffix string) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	text, err := ReadAndTruncateValidUTF8(io.LimitReader(r, int64(maxBytes)+1), maxBytes, suffix)
+	text, err := ReadAndTruncateValidUTF8(
+		ReaderWithContext(ctx, io.LimitReader(r, int64(maxBytes)+1)),
+		maxBytes,
+		suffix,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -38,13 +90,15 @@ func ReadLimited(ctx context.Context, r io.Reader, maxBytes int, suffix string) 
 	return text, nil
 }
 
-// ReadLimitedBytes reads up to maxBytes from r; returns error when more data is available.
+// ReadLimitedBytes reads at most maxBytes from r (fail-closed).
+// If more data is available, returns nil, ErrReadLimitExceeded.
+// When maxBytes <= 0, any non-empty input is treated as exceeding the limit.
 func ReadLimitedBytes(ctx context.Context, r io.Reader, maxBytes int) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	limited := io.LimitReader(r, int64(maxBytes)+1)
-	data, err := io.ReadAll(limited)
+	data, err := io.ReadAll(ReaderWithContext(ctx, limited))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +106,7 @@ func ReadLimitedBytes(ctx context.Context, r io.Reader, maxBytes int) ([]byte, e
 		return nil, err
 	}
 	if len(data) > maxBytes {
-		return nil, fmt.Errorf("read exceeds %d bytes", maxBytes)
+		return nil, ErrReadLimitExceeded
 	}
 	return data, nil
 }
@@ -99,32 +153,24 @@ func truncateStringToBytes(s string, maxBytes int) string {
 	return s
 }
 
-// TruncateStringUTF8NoSuffix truncates s to at most maxBytes at a rune boundary without appending a suffix.
-// Use for content pre-caps before wire JSON envelope truncation.
-func TruncateStringUTF8NoSuffix(s string, maxBytes int) string {
-	if maxBytes <= 0 || len(s) <= maxBytes {
-		return s
-	}
-	return truncateStringToBytes(s, maxBytes)
-}
-
-// TruncateBytesToValidUTF8String truncates data to maxBytes, normalizes to valid UTF-8, and appends suffix when truncated.
+// TruncateBytesToValidUTF8String truncates data to maxBytes at a UTF-8 rune boundary and appends suffix when truncated.
+// Suffix is appended after the prefix cap (display/wire tier); total length may exceed maxBytes.
 func TruncateBytesToValidUTF8String(data []byte, maxBytes int, suffix string) string {
 	if maxBytes <= 0 {
 		return ""
 	}
-	if len(data) <= maxBytes {
-		return strings.ToValidUTF8(string(data), "")
+	s := strings.ToValidUTF8(string(data), "")
+	if len(s) <= maxBytes {
+		return s
 	}
-	trunc := data[:maxBytes]
-	trunc = []byte(strings.ToValidUTF8(string(trunc), ""))
-	return string(trunc) + suffix
+	return truncateStringToBytes(s, maxBytes) + suffix
 }
 
-// ReadAndTruncateValidUTF8 reads up to maxBytes+1 from r and returns a valid UTF-8 string with suffix when truncated.
+// ReadAndTruncateValidUTF8 reads up to maxBytes+1 from r and returns a UTF-8 string truncated at a rune boundary.
+// Display-only helper without context cancellation; prefer ReadAndTruncate(ctx, r, maxBytes, suffix) for I/O paths.
 func ReadAndTruncateValidUTF8(r io.Reader, maxBytes int, suffix string) (string, error) {
 	if maxBytes <= 0 {
-		return "", nil
+		return "", errors.New("maxBytes must be positive")
 	}
 	limited := io.LimitReader(r, int64(maxBytes)+1)
 	data, err := io.ReadAll(limited)
@@ -168,4 +214,57 @@ func TruncateBytesByRunes(data []byte, maxRunes int, suffix string) []byte {
 	}
 	prefixRunes := maxRunes - len(suffixRunes)
 	return []byte(string(contentRunes[:prefixRunes]) + suffix)
+}
+
+var (
+	readLimitSubjectLinePattern = regexp.MustCompile(`: (.+?) exceeds (\d+) byte limit`)
+	readLimitBytePattern        = regexp.MustCompile(`exceeds (\d+) byte limit`)
+)
+
+const (
+	readLimitSubjectMatchIndex  = 1
+	readLimitMaxBytesMatchIndex = 2
+	readLimitMinSubmatchCount   = 3
+)
+
+// ReadLimitSubject extracts the capped stream or domain name from a read-limit error chain.
+func ReadLimitSubject(err error) string {
+	var rl *ReadLimitError
+	if errors.As(err, &rl) && strings.TrimSpace(rl.Subject) != "" {
+		return strings.TrimSpace(rl.Subject)
+	}
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		matches := readLimitSubjectLinePattern.FindStringSubmatch(e.Error())
+		if len(matches) >= readLimitSubjectMatchIndex+1 {
+			return strings.TrimSpace(matches[readLimitSubjectMatchIndex])
+		}
+	}
+	return ""
+}
+
+// ReadLimitMaxBytes extracts the byte cap from a read-limit error chain.
+func ReadLimitMaxBytes(err error) int {
+	var rl *ReadLimitError
+	if errors.As(err, &rl) && rl.MaxBytes > 0 {
+		return rl.MaxBytes
+	}
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		matches := readLimitSubjectLinePattern.FindStringSubmatch(e.Error())
+		if len(matches) >= readLimitMinSubmatchCount {
+			var n int
+			_, scanErr := fmt.Sscanf(matches[readLimitMaxBytesMatchIndex], "%d", &n)
+			if scanErr == nil && n > 0 {
+				return n
+			}
+		}
+		matches = readLimitBytePattern.FindStringSubmatch(e.Error())
+		if len(matches) >= 2 {
+			var n int
+			_, scanErr := fmt.Sscanf(matches[1], "%d", &n)
+			if scanErr == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	return 0
 }

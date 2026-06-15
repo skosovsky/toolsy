@@ -2,15 +2,19 @@ package httptool
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func decodeHTTPResult(t *testing.T, c toolsy.Chunk) httpResult {
@@ -69,7 +73,7 @@ func TestHTTPGet_DomainBlocked(t *testing.T) {
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
-func TestHTTPGet_Truncation(t *testing.T) {
+func TestHTTPGet_ExceedsLimitReturnsValidationError(t *testing.T) {
 	largeBody := make([]byte, 100)
 	for i := range largeBody {
 		largeBody[i] = 'x'
@@ -88,22 +92,97 @@ func TestHTTPGet_Truncation(t *testing.T) {
 	require.NoError(t, err)
 	getTool := tools[0]
 
-	var result httpResult
-	require.NoError(
-		t,
-		getTool.Execute(
-			context.Background(),
-			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
-			func(c toolsy.Chunk) error {
-				result = decodeHTTPResult(t, c)
-				return nil
-			},
-		),
+	err = getTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
+		func(_ toolsy.Chunk) error {
+			return nil
+		},
 	)
-	require.Equal(t, 200, result.Status)
-	require.Contains(t, result.Body, "[Truncated]")
-	require.LessOrEqual(t, len(result.Body), 20+len(truncationSuffix)+2)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "20")
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestHTTPPost_ExceedsLimitReturnsValidationError(t *testing.T) {
+	largeBody := make([]byte, 100)
+	for i := range largeBody {
+		largeBody[i] = 'x'
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(largeBody)
+	}))
+	defer srv.Close()
+
+	tools, err := AsTools(
+		WithAllowedDomains([]string{"127.0.0.1"}),
+		WithAllowPrivateIPs(true),
+		WithMaxResponseBody(20),
+	)
+	require.NoError(t, err)
+	postTool := tools[1]
+
+	err = postTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
+		func(_ toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "20")
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestReadBodyLimited_CancelMidRead_MapsInternal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	slow := &slowStreamReader{ctx: ctx}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+	_, err := ReadBodyLimited(ctx, slow, 1<<20)
+	mapped := toolsy.MapToolkitReadError(ctx, err, "toolkit/httptool: read body", 1<<20, "response body", "")
+	if mapped != nil {
+		err = mapped
+	} else if err != nil {
+		err = toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
+	}
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestReadBodyLimited_InterruptInChainOverReadLimit_MapsInternal(t *testing.T) {
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	mapped := toolsy.MapToolkitReadError(
+		context.Background(),
+		composite,
+		"toolkit/httptool: read body",
+		1<<20,
+		"response body",
+		"",
+	)
+	require.Error(t, mapped)
+	require.ErrorIs(t, mapped, context.Canceled)
+	te, ok := toolsy.AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
 }
 
 func TestHTTPPost_Success(t *testing.T) {
@@ -304,4 +383,67 @@ func TestHTTPGet_BlocksPrivateIPWithoutAllow(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
+}
+
+func TestHTTPGet_CancelDuringDo(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	tools, err := AsTools(
+		WithAllowedDomains([]string{"127.0.0.1"}),
+		WithAllowPrivateIPs(true),
+		WithHTTPClient(srv.Client()),
+	)
+	require.NoError(t, err)
+	getTool := tools[0]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- getTool.Execute(
+			ctx,
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
+			func(toolsy.Chunk) error { return nil },
+		)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	err = <-done
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+type cancelCredentials struct{}
+
+func (cancelCredentials) GetAuth(context.Context, string) (string, error) {
+	return "", context.Canceled
+}
+
+func TestHTTPGet_CancelDuringGetAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	tools, err := AsTools(
+		WithAllowedDomains([]string{"127.0.0.1"}),
+		WithAllowPrivateIPs(true),
+		WithHTTPClient(srv.Client()),
+	)
+	require.NoError(t, err)
+
+	err = tools[0].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil, toolsy.WithCredentials(cancelCredentials{})),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + srv.URL + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }

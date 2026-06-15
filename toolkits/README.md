@@ -29,20 +29,33 @@ timetool.AsTools(
 )
 ```
 
-Supported in: `timetool` (`WithResultFormatter`, `WithCalculateResultFormatter`), `web`, `rag`, `sqltool` (`WithExecuteResultFormatter`, `WithInspectResultFormatter`), `document`.
+Supported in: `timetool` (`WithResultFormatter`, `WithCalculateResultFormatter`), `web` (`WithSearchFormatter`, `WithScrapeFormatter`), `rag`, `sqltool` (`WithExecuteResultFormatter`, `WithInspectResultFormatter`), `document`. `fstool` is tool-mode only (no library exports).
 
-When a byte budget option is set (`WithMaxBytes`, `WithMaxPageBytes`, `WithMaxSearchBytes`, `WithMaxSchemaBytes`, sqltool row/cell limits), it applies to **final wire JSON** (`format.MarshalWireCap` / `format.ApplyWithEnvelope` + `CapWireJSON`), including default tool paths without a formatter.
+When a byte budget option is set (`WithMaxBytes`, `WithMaxPageBytes`, `WithMaxSearchBytes`, `WithMaxSchemaBytes`, sqltool row/cell limits), it applies to **final wire JSON** (`github.com/skosovsky/toolsy/internal/format` — `MarshalWireCap` / `ApplyWithEnvelope` + `CapWireJSON`), including default tool paths without a formatter. **Exception:** `httptool` probe (`http_get` / `http_post`) caps only the **body field** via `ReadBodyLimited`, not `CapWireJSON` — see Probe tier below.
 
 ### Byte budget and suffix taxonomy
 
-| Tier           | Where                                        | Suffix                                                                                | Notes                                                      |
-| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| **Wire**       | `format.CapWireJSON` on tool paths           | `\n[Truncated]` (`textprocessor.TruncationSuffix`)                                    | One user-visible suffix per tool response                  |
-| **Semantic**   | sqltool rows/cells, web search hit list      | `SQLRowsTruncationSuffix`, `SQLCellTruncationSuffix`, `SearchResultsTruncationSuffix` | Domain limits (rows, cells, hits); independent of wire cap |
-| **DoS / read** | HTML scrape read, httptool probe body | no suffix on scrape (`ReadLimited(..., "")`); suffix in httptool probe `body` field | Memory safety; scrape follows document/agents pattern |
-| **Probe**      | `httptool.AsTools` DTO                       | suffix in `body` field                                                                | Status in JSON; separate from toolkit wire cap             |
+| Tier           | Where                                                   | Suffix                                                                                    | Notes                                                                            |
+| -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Wire**       | `internal/format.CapWireJSON` on tool paths             | `\n[Truncated]` (`textprocessor.TruncationSuffix`)                                        | One user-visible suffix per tool response                                        |
+| **Semantic**   | sqltool rows/cells, web search hit list                 | `SQLRowsTruncationSuffix`, `SQLCellTruncationSuffix`, `SearchResultsTruncationSuffix`     | Domain limits (rows, cells, hits); independent of wire cap                       |
+| **DoS / read** | HTML scrape, httptool probe, document/fstool wire tools | fail-closed (`ReadLimitedBytes` / `ReadBodyLimited`); display tier uses `ReadAndTruncate` | Memory safety; probe tier uses body-field budget; envelope tools use content cap |
+| **Probe**      | `httptool.AsTools` DTO                                  | limit → validation error in tool mode                                                     | Status in JSON; separate from toolkit wire cap                                   |
 
-Content pre-cap in parsers (`document`, `rag` JSON shape) uses hard UTF-8 chop **without** `\n[Truncated]`; only wire marshal adds the suffix.
+Content pre-cap: `document` parsers and `rag` JSON shape (`capDocumentsForWire`) fail-closed when results cannot fit the byte budget; wire marshal may still add `\n[Truncated]` via `internal/format.CapWireJSON`.
+
+### Default transport read budgets (toolkits)
+
+| Package                          | Default         | API                                                                |
+| -------------------------------- | --------------- | ------------------------------------------------------------------ |
+| `document` / `web` scrape        | 2 MB            | `WithMaxBytes` / `WithMaxPageBytes`                                |
+| `fstool` read                    | 1 MB            | `WithMaxBytes`                                                     |
+| `httptool` probe                 | 512 KB          | `defaultMaxResponseBody` (body field; wire JSON slightly larger)   |
+| `mail` body                      | 256 KB          | `defaultMaxBodyBytes` (display/wire truncate after fetch)          |
+| `prompts` output                 | toolkit default | display/wire truncate after template render                        |
+| `agents` REST (`agents` package) | 4 MB            | `defaultMaxResponseBytes` — library client, not a toolkit wire DTO |
+
+These are independent of contracts spec/introspection budgets (see [`contracts/README.md`](../contracts/README.md)). The `agents` REST client uses fail-closed `ReadLimitedBytes`; see [`agents/README.md`](../agents/README.md).
 
 Cross-package validators can type-assert exported wire DTOs (`CalculateResult`, `SearchWireResult`, `SearchMarkdownWire`, etc.).
 

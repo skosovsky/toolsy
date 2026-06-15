@@ -35,7 +35,7 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 	handler := func(ctx context.Context, _ *toolsy.RunEnv, args getArgs) (getResult, error) {
 		text, err := p.Get(ctx, args.RoleID, args.Variables)
 		if err != nil {
-			return getResult{}, fmt.Errorf("toolkit/prompts: get failed: %w", err)
+			return getResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/prompts: get failed: %w", err))
 		}
 		if o.maxBytes > 0 && len(text) > o.maxBytes {
 			text = textprocessor.TruncateStringUTF8(text, o.maxBytes, textprocessor.TruncationSuffix)

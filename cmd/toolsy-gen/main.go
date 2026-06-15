@@ -45,7 +45,10 @@ func run(argv []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	result, err := toolsygen.Generate(ctx, toolsygen.Config{Inputs: fs.Args()})
+	result, err := toolsygen.Generate(ctx, toolsygen.Config{
+		Inputs:       fs.Args(),
+		MaxFileBytes: 0,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "toolsy-gen: %v\n", err)
 		return 1

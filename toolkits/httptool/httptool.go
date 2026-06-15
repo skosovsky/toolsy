@@ -101,10 +101,15 @@ func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options,
 	defer CloseResponseBody(ctx, resp.Body)
 
 	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
-	if err != nil {
-		return httpResult{}, err
+	if mapped := toolsy.MapToolkitReadError(
+		ctx, err, "toolkit/httptool: read body", o.maxResponseBody, "response body", "",
+	); mapped != nil {
+		return httpResult{}, mapped
 	}
-	return httpResult{Status: resp.StatusCode, Body: body}, nil
+	if err != nil {
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
+	}
+	return httpResult{Status: resp.StatusCode, Body: string(body)}, nil
 }
 
 func doPOST(
@@ -155,8 +160,13 @@ func doPOST(
 	defer CloseResponseBody(ctx, resp.Body)
 
 	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
-	if err != nil {
-		return httpResult{}, err
+	if mapped := toolsy.MapToolkitReadError(
+		ctx, err, "toolkit/httptool: read body", o.maxResponseBody, "response body", "",
+	); mapped != nil {
+		return httpResult{}, mapped
 	}
-	return httpResult{Status: resp.StatusCode, Body: body}, nil
+	if err != nil {
+		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
+	}
+	return httpResult{Status: resp.StatusCode, Body: string(body)}, nil
 }

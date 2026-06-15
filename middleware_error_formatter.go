@@ -2,9 +2,13 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // WithErrorFormatter converts terminal execution errors from the wrapped tool/middleware
@@ -52,18 +56,43 @@ func (t *errorFormatterTool) Execute(
 func shouldBypassErrorFormatting(err error) bool {
 	return IsControlError(err) ||
 		errors.Is(err, ErrStreamAborted) ||
-		errors.Is(err, context.Canceled)
+		isContextInterrupt(err)
+}
+
+func unwrapInterruptErr(err error) error {
+	if te, ok := AsToolError(err); ok && te.Code == CodeInternal && isContextInterrupt(te.Err) {
+		return te.Err
+	}
+	return err
 }
 
 func formatExecutionError(err error) string {
+	err = unwrapInterruptErr(err)
+	if errors.Is(err, context.Canceled) {
+		reason := sanitizeErrorReason(err.Error())
+		if reason == "" {
+			reason = "execution canceled"
+		}
+		return "Error executing tool: " + reason + ". Hint: Retry later or refine the query."
+	}
+	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return "Error executing tool: execution timed out. Hint: Narrow the query or retry later."
+	}
+
+	if textprocessor.IsReadLimitExceeded(err) {
+		if n := textprocessor.ReadLimitMaxBytes(err); n > 0 {
+			return fmt.Sprintf(
+				"Error executing tool: response exceeds %d byte limit. Hint: Narrow the query, reduce payload size, or raise the read budget.",
+				n,
+			)
+		}
+		return "Error executing tool: response exceeds byte limit. Hint: Narrow the query, reduce payload size, or raise the read budget."
+	}
+
 	if te, ok := AsToolError(err); ok {
 		if msg := formatToolErrorMessage(te); msg != "" {
 			return msg
 		}
-	}
-
-	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return "Error executing tool: execution timed out. Hint: Narrow the query or retry later."
 	}
 
 	reason := sanitizeErrorReason(err.Error())
@@ -109,10 +138,23 @@ func formatToolErrorMessage(te *ToolError) string {
 // NewErrorChunkFromErr builds a structured error result chunk with [MimeTypeToolErrorJSON].
 func NewErrorChunkFromErr(err error) Chunk {
 	te := toolErrorFromExecutionErr(err)
-	llmMessage := formatToolErrorMessage(te)
-	if llmMessage == "" {
-		llmMessage = formatExecutionError(err)
+	if te == nil {
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			te = NewTimeoutErrorFrom(err, true)
+		case errors.Is(err, context.Canceled):
+			te = NewInternalError(fmt.Errorf("execution canceled: %w", err))
+		case isContextInterrupt(err):
+			if errors.Is(err, context.DeadlineExceeded) {
+				te = NewTimeoutErrorFrom(err, true)
+			} else {
+				te = NewInternalError(fmt.Errorf("execution canceled: %w", err))
+			}
+		default:
+			te = NewInternalError(errors.New("tool execution failed"))
+		}
 	}
+	llmMessage := errorChunkLLMMessage(te, err)
 	data, marshalErr := marshalToolErrorWire(te, llmMessage)
 	if marshalErr != nil {
 		te = NewInternalError(marshalErr)
@@ -131,13 +173,66 @@ func toolErrorFromExecutionErr(err error) *ToolError {
 	if err == nil {
 		return NewInternalError(errors.New("tool execution failed"))
 	}
-	if te, ok := AsToolError(err); ok {
+	err = unwrapInterruptErr(err)
+	if errors.Is(err, context.Canceled) {
+		return nil
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return NewTimeoutErrorFrom(err, true)
+	}
+	if errors.Is(err, ErrTimeout) {
+		return NewTimeoutErrorFrom(ErrTimeout, true)
+	}
+	if isContextInterrupt(err) {
+		return nil
+	}
+	if te := mapReadLimitForWire(err); te != nil {
 		return te
 	}
-	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return NewTimeoutError(true)
+	if te, ok := AsToolError(err); ok {
+		return toolErrorFromExistingToolError(te, err)
 	}
 	return NewInternalError(err)
+}
+
+func mapReadLimitForWire(err error) *ToolError {
+	if !textprocessor.IsReadLimitExceeded(err) {
+		return nil
+	}
+	if mapped := MapSandboxReadLimitError(err); mapped != nil {
+		te, _ := AsToolError(mapped)
+		return te
+	}
+	te, _ := AsToolError(MapReadLimitError(err, 0))
+	return te
+}
+
+func readLimitToolError(err error) *ToolError {
+	return mapReadLimitForWire(err)
+}
+
+func errorChunkLLMMessage(te *ToolError, err error) string {
+	if te != nil && te.Code == CodeInternal && isContextInterrupt(te.Err) {
+		return formatExecutionError(unwrapInterruptErr(te))
+	}
+	if msg := formatToolErrorMessage(te); msg != "" {
+		return msg
+	}
+	return formatExecutionError(err)
+}
+
+func toolErrorFromExistingToolError(te *ToolError, err error) *ToolError {
+	err = unwrapInterruptErr(err)
+	if isContextInterrupt(err) {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrTimeout) {
+			return NewTimeoutErrorFrom(err, true)
+		}
+		return nil
+	}
+	if mapped := mapReadLimitForWire(err); mapped != nil {
+		return mapped
+	}
+	return te
 }
 
 func errorChunkSummaryText(c Chunk, execErr error) string {
@@ -166,6 +261,16 @@ func ErrorChunkSummaryText(c Chunk, execErr error) string {
 }
 
 func toolErrorWireSummaryText(data []byte) string {
+	var wire toolErrorWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return ""
+	}
+	if strings.Contains(wire.Reason, "malformed error chunk") {
+		return "Error executing tool: " + sanitizeErrorReason(wire.Reason) + ". Hint: Retry later or refine the query."
+	}
+	if wire.Message != "" {
+		return wire.Message
+	}
 	te, err := unmarshalToolErrorWire(data)
 	if err != nil {
 		return ""
@@ -173,7 +278,7 @@ func toolErrorWireSummaryText(data []byte) string {
 	if te.Code == CodeInternal && strings.Contains(te.Reason, "malformed error chunk") {
 		return sanitizeErrorReason(te.Reason)
 	}
-	if msg := formatToolErrorMessage(te); msg != "" {
+	if msg := errorChunkLLMMessage(te, te.Err); msg != "" {
 		return msg
 	}
 	return te.Reason

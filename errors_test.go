@@ -1,11 +1,16 @@
 package toolsy
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestToolError_Error(t *testing.T) {
@@ -79,6 +84,67 @@ func TestNewToolNotFoundInSubsetError(t *testing.T) {
 	assert.Contains(t, te.Reason, "missing")
 }
 
+func TestMapReadLimitError(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, MapReadLimitError(io.EOF, 4096), io.EOF)
+
+	withLimit := MapReadLimitError(textprocessor.ErrReadLimitExceeded, 4096)
+	te, ok := AsToolError(withLimit)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "4096 byte limit")
+
+	generic := MapReadLimitError(textprocessor.ErrReadLimitExceeded, 0)
+	te, ok = AsToolError(generic)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+}
+
+func TestMapReadLimitError_ExtractsLimitFromCause(t *testing.T) {
+	t.Parallel()
+	const byteCap = 2048
+	wrapped := fmt.Errorf("agents: stream exceeds %d byte limit: %w", byteCap, textprocessor.ErrReadLimitExceeded)
+	mapped := MapReadLimitError(wrapped, 0)
+	te, ok := AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", byteCap))
+}
+
+func TestMapReadLimitErrorFor(t *testing.T) {
+	t.Parallel()
+	mapped := MapReadLimitErrorFor(textprocessor.ErrReadLimitExceeded, 4096, "page", "use WithMaxPageBytes")
+	te, ok := AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "page exceeds 4096 byte limit")
+	require.Contains(t, te.Reason, "use WithMaxPageBytes")
+
+	passThrough := MapReadLimitErrorFor(io.EOF, 4096, "page", "")
+	require.Equal(t, io.EOF, passThrough)
+}
+
+func TestMapSandboxReadLimitError(t *testing.T) {
+	t.Parallel()
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		4096,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	mapped := MapSandboxReadLimitError(capErr)
+	te, ok := AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "stdout exceeds 4096 byte limit")
+	require.NoError(t, MapSandboxReadLimitError(io.EOF))
+}
+
+func TestMapSandboxReadLimitError_BareSentinel_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	require.NoError(t, MapSandboxReadLimitError(textprocessor.ErrReadLimitExceeded))
+}
+
 func TestClientCorrectable(t *testing.T) {
 	require.True(t, ClientCorrectable(CodeValidationFailed))
 	require.False(t, ClientCorrectable(CodeInternal))
@@ -128,3 +194,14 @@ func (e wrapError) Error() string {
 	return "wrap: " + e.err.Error()
 }
 func (e wrapError) Unwrap() error { return e.err }
+
+func TestNewTimeoutErrorFrom_PreservesDeadlineChain(t *testing.T) {
+	t.Parallel()
+	err := NewTimeoutErrorFrom(context.DeadlineExceeded, true)
+	require.ErrorIs(t, err, ErrTimeout)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+}

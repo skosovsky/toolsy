@@ -274,8 +274,54 @@ func TestAsSearchTool_ValidatorOnly_Reject(t *testing.T) {
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
-func TestAsSearchTool_WithMaxBytes_ShapeDocumentsJSON(t *testing.T) {
+func TestAsSearchTool_WithMaxBytes_ShapeDocumentsJSON_ExceedsWireBudget(t *testing.T) {
 	r := &mockRetriever{docs: docsFromStrings(strings.Repeat("x", 200), strings.Repeat("y", 200))}
+	tool, err := AsSearchTool(r, WithResultShape(ShapeDocumentsJSON), WithMaxBytes(80))
+	require.NoError(t, err)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "80")
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestCapDocumentsForWire_CanceledReturnsInternal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := capDocumentsForWire(ctx, docsFromStrings(strings.Repeat("x", 100)), &options{maxBytes: 50})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestCapDocumentsForWire_ExceedsWireBudget(t *testing.T) {
+	_, err := capDocumentsForWire(
+		context.Background(),
+		docsFromStrings(strings.Repeat("x", 100)),
+		&options{maxBytes: 50},
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "search results exceeds")
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestAsSearchTool_ShapeDocumentsJSON_SingleWireTruncSuffix(t *testing.T) {
+	r := &mockRetriever{docs: docsFromStrings(strings.Repeat("x", 45))}
 	tool, err := AsSearchTool(r, WithResultShape(ShapeDocumentsJSON), WithMaxBytes(80))
 	require.NoError(t, err)
 	var wire []byte
@@ -291,27 +337,7 @@ func TestAsSearchTool_WithMaxBytes_ShapeDocumentsJSON(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80)
-}
-
-func TestAsSearchTool_ShapeDocumentsJSON_SingleWireTruncSuffix(t *testing.T) {
-	r := &mockRetriever{docs: docsFromStrings(strings.Repeat("x", 500))}
-	tool, err := AsSearchTool(r, WithResultShape(ShapeDocumentsJSON), WithMaxBytes(60))
-	require.NoError(t, err)
-	var wire []byte
-	require.NoError(
-		t,
-		tool.Execute(
-			context.Background(),
-			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
-			func(c toolsy.Chunk) error {
-				wire = append([]byte(nil), c.Data...)
-				return nil
-			},
-		),
-	)
-	require.LessOrEqual(t, len(wire), 60+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
 	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
 	var payload SearchDocumentsWire
 	require.NoError(t, json.Unmarshal(wire, &payload))

@@ -25,3 +25,9 @@ type Transport interface {
 	// Close shuts down the transport and releases resources. Unblocks any pending Call.
 	Close() error
 }
+
+// StreamByteCapTransport reports the total byte budget for JSON-RPC stream reads.
+// Optional: when not implemented, [Client] falls back to httptool.DefaultMaxSSEStreamBytes.
+type StreamByteCapTransport interface {
+	MaxStreamBytes() int
+}

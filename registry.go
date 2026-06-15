@@ -416,9 +416,23 @@ func (r *Registry) runToolWithValidationAndExecute(
 		}
 	}
 	summary.Error = tool.Execute(ctx, env, call.Input, toolYield)
-	if errors.Is(summary.Error, context.DeadlineExceeded) {
-		summary.Error = NewTimeoutError(true)
+	summary.Error = normalizeExecutionInterrupt(summary.Error)
+}
+
+func normalizeExecutionInterrupt(err error) error {
+	if err == nil {
+		return nil
 	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	if !isContextInterrupt(err) {
+		return err
+	}
+	if te, ok := AsToolError(err); ok && te.Code == CodeTimeout {
+		return err
+	}
+	return NewTimeoutErrorFrom(err, true)
 }
 
 // ExecuteIter runs one tool call and returns an iterator over (Chunk, error) pairs.
@@ -444,7 +458,7 @@ func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chu
 			return nil
 		})
 
-		if !consumerStopped && err != nil && !errors.Is(err, context.Canceled) {
+		if !consumerStopped && err != nil && !isContextInterrupt(err) {
 			yield(Chunk{}, err)
 		}
 	}
@@ -508,7 +522,7 @@ func (r *Registry) handleBatchToolError(
 		suspendMu.Unlock()
 	case errors.Is(execErr, ErrStreamAborted):
 		recordStreamAbort(execErr)
-	case errors.Is(execErr, context.Canceled):
+	case isContextInterrupt(execErr):
 	default:
 		errChunk := NewErrorChunkFromErr(execErr)
 		prepared, prepErr := prepareChunk(errChunk)

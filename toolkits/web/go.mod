@@ -6,7 +6,6 @@ require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.0
 	github.com/skosovsky/toolsy v0.0.0
 	github.com/skosovsky/toolsy/toolkits/httptool v0.0.0
-	github.com/skosovsky/toolsy/toolkits/internal/format v0.0.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -22,5 +21,4 @@ require (
 replace (
 	github.com/skosovsky/toolsy => ../..
 	github.com/skosovsky/toolsy/toolkits/httptool => ../httptool
-	github.com/skosovsky/toolsy/toolkits/internal/format => ../internal/format
 )

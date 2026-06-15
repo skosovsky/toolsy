@@ -87,10 +87,6 @@ func newExecHandler(
 			)
 		}
 
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return mapExecError(ctxErr)
-		}
-
 		req := RunRequest{
 			Language: language,
 			Code:     args.Code,
@@ -247,11 +243,14 @@ func mapExecError(err error) error {
 	if errors.Is(err, ErrUnsupportedLanguage) {
 		return toolsy.NewValidationError(err.Error())
 	}
-	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return toolsy.NewTimeoutError(true)
-	}
 	if errors.Is(err, context.Canceled) {
 		return err
+	}
+	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
+		return toolsy.NewTimeoutErrorFrom(err, true)
+	}
+	if mapped := toolsy.MapSandboxReadLimitError(err); mapped != nil {
+		return mapped
 	}
 	return fmt.Errorf("exectool: sandbox run: %w", err)
 }

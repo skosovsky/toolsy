@@ -26,7 +26,7 @@ Tools are generated only when the corresponding interface is provided: nil sende
 
 - **Nil-safe:** Pass `nil` for sender to get only search/read tools; pass `nil` for reader to get only send. At least one must be non-nil.
 - **WithReadOnly(true):** Disables mail_send even when sender is non-nil.
-- **WithMaxBodyBytes(n):** Limits body size for send and read (default 256KB).
+- **WithMaxBodyBytes(n):** Limits body size for send and read (default 256KB). **Display/wire tier:** bodies are truncated with `TruncateStringUTF8` after fetch — not fail-closed transport reads (see [migration-task30.md](../../docs/migration-task30.md)).
 - **Query required:** Empty or whitespace-only `query` in mail_search_inbox returns validation `ToolError` (avoids dumping entire inbox). Same for `message_id` in mail_read_message.
 
 ## Quick start

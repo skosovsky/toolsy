@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/toolkits/internal/format"
+	"github.com/skosovsky/toolsy/internal/format"
 )
 
 // CurrentResult holds current time in UTC and local timezone.

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func quietStdioTransport(executable string, args []string, opts ...StdioTransportOption) *StdioTransport {
@@ -66,6 +69,24 @@ func TestStdioTransport_StdoutExceedsMaxStreamBytes(t *testing.T) {
 	defer callCancel()
 	_, _, err := transport.Call(callCtx, "tools/list", nil)
 	require.Error(t, err)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestStdioTransport_Call_CancelUnblocksPending(t *testing.T) {
+	t.Parallel()
+	script := `echo '{"jsonrpc":"2.0","method":"notifications/initialized"}' && sleep 30`
+	transport := quietStdioTransport("/bin/sh", []string{"-c", script}, WithStdioFirstLineTimeout(5*time.Second))
+	require.NoError(t, transport.Start(context.Background()))
+	t.Cleanup(func() { _ = transport.Close() })
+
+	callCtx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+	_, _, err := transport.Call(callCtx, "tools/list", nil)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestStdioTransport_CallAfterStartContextCanceled(t *testing.T) {
@@ -78,8 +99,77 @@ func TestStdioTransport_CallAfterStartContextCanceled(t *testing.T) {
 	cancel()
 	t.Cleanup(func() { _ = transport.Close() })
 
-	callCtx, callCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer callCancel()
+	callCtx, callCancel := context.WithCancel(context.Background())
+	callCancel()
 	_, _, err := transport.Call(callCtx, "tools/list", nil)
 	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStdioTransport_finishStdioCallResponse_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	transport := &stdioTransport{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := transport.finishStdioCallResponse(ctx, &callResult{Err: textprocessor.ErrReadLimitExceeded})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStdioTransport_call_CancelOverStreamLimit(t *testing.T) {
+	t.Parallel()
+	script := `echo '{"jsonrpc":"2.0","method":"notifications/initialized"}' && sleep 30`
+	transport := quietStdioTransport("/bin/sh", []string{"-c", script}, WithStdioFirstLineTimeout(5*time.Second))
+	require.NoError(t, transport.Start(context.Background()))
+	t.Cleanup(func() { _ = transport.Close() })
+
+	transport.impl.streamMu.Lock()
+	transport.impl.streamErr = textprocessor.ErrReadLimitExceeded
+	transport.impl.streamMu.Unlock()
+
+	callCtx, callCancel := context.WithCancel(context.Background())
+	callCancel()
+	_, _, err := transport.Call(callCtx, "tools/list", nil)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStdioTransport_finishStdioCallResponse_CancelOverStaleStream(t *testing.T) {
+	t.Parallel()
+	transport := &stdioTransport{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := transport.finishStdioCallResponse(ctx, &callResult{Err: errors.New("stdio stream closed")})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStdioTransport_finishStdioCallResponse_LimitWithoutCancel(t *testing.T) {
+	t.Parallel()
+	transport := &stdioTransport{}
+	_, err := transport.finishStdioCallResponse(
+		context.Background(),
+		&callResult{Err: textprocessor.ErrReadLimitExceeded},
+	)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestStdioTransport_finishStdioCallResponse_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	transport := &stdioTransport{}
+	composite := fmt.Errorf(
+		"stream: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	_, err := transport.finishStdioCallResponse(context.Background(), &callResult{Err: composite})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestStdioTransport_streamLimitErr_InterruptOverReadLimit(t *testing.T) {
+	t.Parallel()
+	transport := &stdioTransport{}
+	transport.streamErr = fmt.Errorf(
+		"stream: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	err := transport.streamLimitErr()
+	require.ErrorIs(t, err, context.Canceled)
 }

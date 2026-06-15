@@ -11,15 +11,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type mockSender struct {
-	err error
+	err      error
+	lastBody string
 }
 
 func (m *mockSender) Send(ctx context.Context, msg OutgoingMessage) error {
 	_ = ctx
-	_ = msg
+	m.lastBody = msg.Body
 	return m.err
 }
 
@@ -163,6 +165,53 @@ func TestMailReadMessage_ReturnsBody(t *testing.T) {
 	require.Contains(t, result.Body, "Body text")
 	require.Contains(t, result.Body, "x@y.com")
 	require.Contains(t, result.Body, "Subj")
+}
+
+func TestMailReadMessage_TruncatesOversizedBody(t *testing.T) {
+	const limit = 64
+	bigBody := strings.Repeat("x", limit+200)
+	reader := &mockReader{
+		read: MessageBody{ID: "1", From: "a@b.com", Subject: "Subj", Body: bigBody, Date: "2026-03-11"},
+	}
+	tools, err := AsTools(nil, reader, WithMaxBodyBytes(limit))
+	require.NoError(t, err)
+	readTool := tools[1]
+
+	var result readResult
+	require.NoError(
+		t,
+		readTool.Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"message_id":"1"}`)},
+			func(c toolsy.Chunk) error {
+				result = decodeMailChunk[readResult](t, c)
+				return nil
+			},
+		),
+	)
+	require.Contains(t, result.Body, textprocessor.TruncationSuffix)
+	require.NotContains(t, result.Body, strings.Repeat("x", limit+50))
+}
+
+func TestMailSend_TruncatesOversizedBody(t *testing.T) {
+	const limit = 32
+	bigBody := strings.Repeat("y", limit+100)
+	sender := &mockSender{}
+	tools, err := AsTools(sender, nil, WithReadOnly(false), WithMaxBodyBytes(limit))
+	require.NoError(t, err)
+
+	require.NoError(
+		t,
+		tools[0].Execute(
+			context.Background(),
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"to":["a@b.com"],"subject":"Hi","body":"` + bigBody + `"}`)},
+			func(toolsy.Chunk) error { return nil },
+		),
+	)
+	require.Contains(t, sender.lastBody, textprocessor.TruncationSuffix)
+	require.LessOrEqual(t, len(sender.lastBody), limit+len(textprocessor.TruncationSuffix)+8)
 }
 
 func TestMailRead_EmptyMessageID_ValidationToolError(t *testing.T) {

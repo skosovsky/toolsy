@@ -133,6 +133,15 @@ func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]by
 	maxBytes := opts.maxResponseBytes()
 	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, maxBytes)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if toolsy.IsContextInterrupt(err) {
+			return nil, err
+		}
+		if textprocessor.IsReadLimitExceeded(err) {
+			return nil, fmt.Errorf("graphql: introspection exceeds %d byte limit: %w", maxBytes, err)
+		}
 		return nil, fmt.Errorf("graphql: read: %w", err)
 	}
 	return data, nil
@@ -253,7 +262,7 @@ func executeGraphQL(
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return fmt.Errorf("graphql: response status %d", resp.StatusCode)
 	}
-	data, err := textprocessor.ReadLimited(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	data, err := textprocessor.ReadAndTruncate(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("graphql: read: %w", err)
 	}

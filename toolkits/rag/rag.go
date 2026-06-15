@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/toolkits/internal/format"
+	"github.com/skosovsky/toolsy/internal/format"
 )
 
 type searchArgs struct {
@@ -129,7 +129,7 @@ func retrieveAndFilter(
 ) ([]Document, error) {
 	docs, err := r.Retrieve(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/rag: retrieve failed: %w", err)
+		return nil, toolsy.NewInternalError(fmt.Errorf("toolkit/rag: retrieve failed: %w", err))
 	}
 	if o.scopeFilter != nil {
 		docs = o.scopeFilter(ctx, docs)
@@ -138,7 +138,10 @@ func retrieveAndFilter(
 		docs = docs[:o.maxResults]
 	}
 	if wantsJSONTool(o) {
-		docs = capDocumentsForWire(docs, o)
+		docs, err = capDocumentsForWire(ctx, docs, o)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return docs, nil
 }

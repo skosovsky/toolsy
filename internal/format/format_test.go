@@ -86,6 +86,12 @@ func TestApplyWithEnvelope_ValidatorReject_CodeValidationFailed(t *testing.T) {
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 }
 
+func TestWireContentCap(t *testing.T) {
+	require.Equal(t, 984, WireContentCap(1000, 16))
+	require.Equal(t, 1000, WireContentCap(1000, 0))
+	require.Equal(t, 5, WireContentCap(20, 15))
+}
+
 func TestCapWireJSON_TruncatesOversizedWire(t *testing.T) {
 	raw := json.RawMessage(`{"payload":"` + strings.Repeat("x", 200) + `"}`)
 	capped := CapWireJSON(raw, 50, textprocessor.TruncationSuffix)

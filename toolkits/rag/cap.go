@@ -1,34 +1,30 @@
 package rag
 
 import (
+	"context"
 	"encoding/json"
 
-	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy"
 )
 
-func capDocumentsForWire(docs []Document, o *options) []Document {
+func capDocumentsForWire(ctx context.Context, docs []Document, o *options) ([]Document, error) {
 	if o.maxBytes <= 0 || len(docs) == 0 {
-		return docs
+		return docs, nil
 	}
 	out := cloneDocuments(docs)
 	for len(out) > 1 && wireByteSize(out, o) > o.maxBytes {
 		out = out[:len(out)-1]
 	}
-	for len(out) > 0 && wireByteSize(out, o) > o.maxBytes {
-		last := len(out) - 1
-		content := out[last].Content
-		if content == "" {
-			out = out[:last]
-			continue
-		}
-		nextLen := len(content) - 1
-		if nextLen < 1 {
-			out = out[:last]
-			continue
-		}
-		out[last].Content = textprocessor.TruncateStringUTF8NoSuffix(content, nextLen)
+	if len(out) > 0 && wireByteSize(out, o) > o.maxBytes {
+		return nil, toolsy.MapToolkitCapError(
+			ctx,
+			"toolkit/rag: wire cap",
+			o.maxBytes,
+			"search results",
+			"reduce result count or raise wire budget",
+		)
 	}
-	return out
+	return out, nil
 }
 
 func wireByteSize(docs []Document, o *options) int {

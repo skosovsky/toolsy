@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -183,7 +186,61 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "too large")
+	require.Contains(t, te.Reason, strconv.Itoa(contentByteCap(1024*1024)))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestExtract_CSVTableExceedsCap(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "wide.csv")
+	body := "col1,col2,col3,col4,col5,col6,col7,col8\nv1,v2,v3,v4,v5,v6,v7,v8"
+	require.NoError(t, os.WriteFile(csvPath, []byte(body), 0o600))
+
+	const maxBytes = 40
+	contentCap := contentByteCap(maxBytes)
+	tool, err := AsTool(WithMaxBytes(maxBytes))
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestExtract_LocalFileBetweenWireAndContentCap(t *testing.T) {
+	const wireMax = 1000
+	contentCap := contentByteCap(wireMax)
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "edge.csv")
+	// Size between content cap and wire max would pass old wire-only stat check.
+	require.NoError(t, os.WriteFile(csvPath, []byte(strings.Repeat("x", contentCap+1)), 0o600))
+
+	tool, err := AsTool(WithMaxBytes(wireMax))
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
 // minimalDOCX creates a minimal valid .docx (ZIP with word/document.xml containing one paragraph).
@@ -229,6 +286,60 @@ func TestExtract_DOCX_Success(t *testing.T) {
 	require.Contains(t, result.Text, "Hello DOCX")
 }
 
+func TestExtract_DOCX_UncompressedExceeds(t *testing.T) {
+	dir := t.TempDir()
+	docxPath := minimalDOCX(t, dir)
+
+	zr, err := zip.OpenReader(docxPath)
+	require.NoError(t, err)
+	defer func() { _ = zr.Close() }()
+	var uncompressed uint64
+	for _, f := range zr.File {
+		if f.Name == wordDocXML {
+			uncompressed = f.UncompressedSize64
+			break
+		}
+	}
+	require.Positive(t, uncompressed)
+
+	f, err := os.Open(docxPath)
+	require.NoError(t, err)
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	require.NoError(t, err)
+
+	_, err = parseDOCX(context.Background(), f, info.Size(), int(uncompressed-1))
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "docx uncompressed")
+}
+
+func TestExtract_CancelDuringParse(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "data.csv")
+	require.NoError(t, os.WriteFile(csvPath, []byte("a,b\n1,2\n3,4"), 0o600))
+
+	tool, err := AsTool()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err = tool.Execute(
+		ctx,
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + csvPath + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	if te, ok := toolsy.AsToolError(err); ok {
+		require.NotEqual(t, toolsy.CodeInternal, te.Code)
+	}
+}
+
 func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 	tool, err := AsTool(WithAllowRemote(true))
 	require.NoError(t, err)
@@ -245,6 +356,137 @@ func TestExtract_Remote_SSRFBlocked(t *testing.T) {
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
 	require.Contains(t, te.Reason, "private or loopback")
+}
+
+func TestExtract_Remote_ExceedsMaxBytes(t *testing.T) {
+	const maxBytes = 1024
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte("a\n" + strings.Repeat("x", maxBytes+100)))
+	}))
+	defer server.Close()
+
+	tool, err := AsTool(
+		WithAllowRemote(true),
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxBytes(maxBytes),
+	)
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/big.csv"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentByteCap(maxBytes)))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestExtract_Remote_BetweenWireAndContentCap(t *testing.T) {
+	const wireMax = 1000
+	contentCap := contentByteCap(wireMax)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte(strings.Repeat("x", contentCap+1)))
+	}))
+	defer server.Close()
+
+	tool, err := AsTool(
+		WithAllowRemote(true),
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxBytes(wireMax),
+	)
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/edge.csv"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestLocalFilePathForExtract_CanceledBeforeStat_ReturnsInternal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
+	_, _, err := localFilePathForExtract(ctx, path, &options{maxBytes: 1024})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+func TestCopyRemote_CancelOverReadLimit_InterruptWins(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	o := &options{maxBytes: 64, allowRemote: true}
+	applyDefaults(o)
+	contentCap := contentByteCap(o.maxBytes)
+	huge := strings.Repeat("x", contentCap+128)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader(huge)),
+		Header:     http.Header{"Content-Type": []string{"text/csv"}},
+	}
+	_, _, err := copyRemoteResponseToTemp(ctx, resp, "http://example.com/file.csv", o)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestExtract_Remote_CancelDuringDo(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.Header().Set("Content-Type", "text/csv")
+		_, _ = w.Write([]byte("a,b\n1,2"))
+	}))
+	defer server.Close()
+
+	tool, err := AsTool(
+		WithAllowRemote(true),
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- tool.Execute(
+			ctx,
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
+			func(toolsy.Chunk) error { return nil },
+		)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	err = <-done
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestExtract_Remote_Success(t *testing.T) {

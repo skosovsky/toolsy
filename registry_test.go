@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func mustBuildRegistry(t *testing.T, tools []Tool, opts ...RegistryOption) *Registry {
@@ -447,6 +449,184 @@ func TestHandleBatchToolError_YieldsStructuredErrorChunk(t *testing.T) {
 	assert.Equal(t, MimeTypeToolErrorJSON, yielded.MimeType) //nolint:testifylint // mime type, not JSON document
 }
 
+func TestHandleBatchToolError_WrappedCancel_NoErrorChunk(t *testing.T) {
+	t.Parallel()
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		NewInternalError(fmt.Errorf("batch: %w", context.Canceled)),
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+}
+
+func TestHandleBatchToolError_BareCancel_NoErrorChunk(t *testing.T) {
+	t.Parallel()
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		context.Canceled,
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+}
+
+func TestHandleBatchToolError_BareDeadlineExceeded_NoErrorChunk(t *testing.T) {
+	t.Parallel()
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		context.DeadlineExceeded,
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+}
+
+func TestHandleBatchToolError_DeadlineExceeded_NoErrorChunk(t *testing.T) {
+	t.Parallel()
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		NewInternalError(fmt.Errorf("batch: %w", context.DeadlineExceeded)),
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+}
+
+func TestHandleBatchToolError_ReadLimit_YieldsValidationChunk(t *testing.T) {
+	t.Parallel()
+	var yielded Chunk
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		NewInternalError(fmt.Errorf("batch: %w", textprocessor.ErrReadLimitExceeded)),
+		new(ExecutionSummary),
+		false,
+		func(c Chunk) error {
+			yielded = c
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.Equal(t, MimeTypeToolErrorJSON, yielded.MimeType) //nolint:testifylint // mime type, not JSON document
+	te, err := unmarshalToolErrorWire(yielded.Data)
+	require.NoError(t, err)
+	require.Equal(t, CodeValidationFailed, te.Code)
+}
+
+func TestHandleBatchToolError_InterruptOverReadLimit_NoChunk(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	cancelWrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	execErr := NewInternalError(fmt.Errorf("batch: %w", cancelWrapped))
+	_ = composite
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		execErr,
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+	require.ErrorIs(t, execErr, context.Canceled)
+}
+
+func TestHandleBatchToolError_DeadlineOverReadLimit_NoChunk(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	deadlineWrapped := fmt.Errorf("slow: %w", context.DeadlineExceeded)
+	execErr := NewInternalError(fmt.Errorf("batch: %w", deadlineWrapped))
+	_ = composite
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		execErr,
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+	require.ErrorIs(t, execErr, context.DeadlineExceeded)
+}
+
+func TestHandleBatchToolError_TimeoutOverReadLimit_NoChunk(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	timeoutWrapped := fmt.Errorf("slow: %w", ErrTimeout)
+	execErr := NewInternalError(fmt.Errorf("batch: %w", timeoutWrapped))
+	_ = composite
+	var yielded bool
+	reg := mustBuildRegistry(t, nil)
+	reg.handleBatchToolError(
+		ToolCall{ToolName: "x", Input: ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)}},
+		execErr,
+		new(ExecutionSummary),
+		false,
+		func(Chunk) error {
+			yielded = true
+			return nil
+		},
+		func(error) {},
+		new(error),
+		&sync.Mutex{},
+	)
+	require.False(t, yielded)
+	require.ErrorIs(t, execErr, ErrTimeout)
+}
+
 func TestRegistry_ExecuteBatchStream_OnAfterSummaryTracksSoftenedErrorChunk(t *testing.T) {
 	tool := newMiddlewareMinTool(
 		"batch_soft_summary",
@@ -594,6 +774,75 @@ func TestRegistry_ExecuteIter(t *testing.T) {
 		}
 	}
 	assert.GreaterOrEqual(t, seen, 1)
+}
+
+func TestRegistry_ExecuteIter_DeadlineExceeded_SuppressedLikeCancel(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"deadline_iter",
+		func(ctx context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	var errorYields int
+	for _, iterErr := range reg.ExecuteIter(ctx, ToolCall{
+		ToolName: "deadline_iter",
+		Input:    ToolInput{CallID: "d1", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
+}
+
+func TestRegistry_ExecuteIter_BareCancel_SuppressedLikeDeadline(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"cancel_iter",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return context.Canceled
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var errorYields int
+	for _, iterErr := range reg.ExecuteIter(context.Background(), ToolCall{
+		ToolName: "cancel_iter",
+		Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
+}
+
+func TestRegistry_ExecuteIter_WrappedCancel_SuppressedLikeDeadline(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"wrapped_cancel_iter",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewInternalError(fmt.Errorf("tool failed: %w", context.Canceled))
+		},
+	)
+	reg := mustBuildRegistry(t, []Tool{tool})
+
+	var errorYields int
+	for _, iterErr := range reg.ExecuteIter(context.Background(), ToolCall{
+		ToolName: "wrapped_cancel_iter",
+		Input:    ToolInput{CallID: "c2", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
 }
 
 func TestRegistry_ExecuteBatchStream_ChunkTagsAndErrors(t *testing.T) {
@@ -1180,4 +1429,50 @@ func TestRegistry_ExecuteBatchStream_AfterShutdown_YieldsSoftError(t *testing.T)
 	)
 	require.NoError(t, err)
 	require.True(t, gotErrChunk)
+}
+
+func TestRegistry_Execute_CanceledNotWrappedAsValidation(t *testing.T) {
+	t.Parallel()
+	tool, err := NewProxyTool(
+		"cancel_tool",
+		"returns cancel",
+		[]byte(`{"type":"object"}`),
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+			return context.Canceled
+		},
+	)
+	require.NoError(t, err)
+	reg := mustBuildRegistry(t, []Tool{tool})
+	err = reg.Execute(context.Background(), ToolCall{
+		ToolName: "cancel_tool",
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
+	}, func(Chunk) error { return nil })
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := AsToolError(err)
+	if ok {
+		require.NotEqual(t, CodeValidationFailed, te.Code)
+	}
+}
+
+func TestRegistry_Execute_DeadlineNormalizedToTimeout(t *testing.T) {
+	t.Parallel()
+	tool, err := NewProxyTool(
+		"deadline_tool",
+		"returns deadline",
+		[]byte(`{"type":"object"}`),
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+			return context.DeadlineExceeded
+		},
+	)
+	require.NoError(t, err)
+	reg := mustBuildRegistry(t, []Tool{tool})
+	err = reg.Execute(context.Background(), ToolCall{
+		ToolName: "deadline_tool",
+		Input:    ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
+	}, func(Chunk) error { return nil })
+	require.Error(t, err)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 }

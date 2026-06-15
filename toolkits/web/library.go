@@ -26,8 +26,8 @@ func SearchStructured(ctx context.Context, provider SearchProvider, query string
 }
 
 // ScrapePage fetches a URL and returns main content as Markdown (library mode).
-// HTML is pre-capped without a truncation suffix; there is no JSON wire envelope.
-// WithMaxPageBytes sets the wire budget used to derive the HTML read limit (see scrapeContentByteCap).
+// HTML read and markdown conversion are fail-closed: pages or markdown output exceeding the derived
+// byte cap return an error. Use WithMaxPageBytes to raise the budget (default 2MB wire budget).
 func ScrapePage(ctx context.Context, rawURL string, opts ...Option) (string, error) {
 	var o options
 	for _, opt := range opts {

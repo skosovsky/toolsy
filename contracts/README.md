@@ -2,16 +2,27 @@
 
 Contract-based translators that turn external API specs into [toolsy](..) tools. Each submodule is **isolated** (own `go.mod`); add only the one you need.
 
-| Module       | Entry point              | Input                    | Output              |
-|-------------|---------------------------|--------------------------|---------------------|
-| **openapi/**  | `ParseURL(ctx, specURL, opts)` | OpenAPI 3.x spec URL     | `[]toolsy.Tool` (one per operation) |
-| **graphql/**  | `Introspect(ctx, endpoint, opts)` | GraphQL endpoint URL     | `[]toolsy.Tool` (one per Query/Mutation field) |
-| **grpc/**     | `Reflect(ctx, cc, opts)` | Existing `grpc.ClientConnInterface` (you dial) | `[]toolsy.Tool` (one per RPC method) |
+| Module       | Entry point                       | Input                                          | Output                                         |
+| ------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| **openapi/** | `ParseURL(ctx, specURL, opts)`    | OpenAPI 3.x spec URL                           | `[]toolsy.Tool` (one per operation)            |
+| **graphql/** | `Introspect(ctx, endpoint, opts)` | GraphQL endpoint URL                           | `[]toolsy.Tool` (one per Query/Mutation field) |
+| **grpc/**    | `Reflect(ctx, cc, opts)`          | Existing `grpc.ClientConnInterface` (you dial) | `[]toolsy.Tool` (one per RPC method)           |
 
 Common behavior:
 
 - **Tool names** are sanitized to `^[a-zA-Z0-9_-]{1,64}$`; collisions get a numeric suffix (`_2`, `_3`, …).
-- **Response truncation**: if the response body exceeds `MaxResponseBytes` (default 512 KiB), it is truncated and a short message is appended.
+- **Response handling:** Spec fetch and introspection use fail-closed `ReadLimitedBytes` (`ErrReadLimitExceeded` on exceed). Tool **execute** paths use opt-in `ReadAndTruncate` with a truncation suffix; gRPC uses post-marshal truncate on the wire payload.
+
+### Default read budgets (library mode)
+
+| Path                                        | Default | Notes                                                                       |
+| ------------------------------------------- | ------- | --------------------------------------------------------------------------- |
+| OpenAPI spec fetch (`ParseURL`)             | 8 MB    | `defaultMaxSpecBytes`                                                       |
+| GraphQL introspection (`postIntrospection`) | 512 KB  | `defaultMaxResponseBytes` — intentionally smaller than spec fetch           |
+| OpenAPI / GraphQL tool execute              | 512 KB  | `MaxResponseBytes`; display tier uses `ReadAndTruncate`                     |
+| `agents` REST client (`agents` package)     | 4 MB    | `defaultMaxResponseBytes`; fail-closed `ReadLimitedBytes` on full JSON body |
+
+Spec fetch and introspection are separate one-shot reads; execute budgets apply per tool call response.
 - **Context**: all network calls use the given `context`; cancellation aborts the request.
 
 Add each tool to setup builder: `builder.Add(tools...)` and then `reg, err := builder.Build()`.

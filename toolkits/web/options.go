@@ -58,7 +58,8 @@ func applyDefaults(o *options) {
 }
 
 // WithMaxPageBytes sets the final wire JSON byte budget for web_scrape (default 2MB).
-// HTML is pre-capped without a truncation suffix; wire suffix applies only via format.CapWireJSON.
+// Scrape fails closed when HTML exceeds the derived content cap; use WithMaxPageBytes to raise the budget.
+// Wire suffix applies only via format.CapWireJSON.
 func WithMaxPageBytes(n int) Option {
 	return func(o *options) {
 		o.maxPageBytes = n
@@ -80,8 +81,9 @@ func WithHTTPClient(c HTTPClient) Option {
 }
 
 // WithScraper sets a custom scraper (e.g. for JS-rendered pages). Default uses html-to-markdown.
-// Custom implementations should respect caller context and bound CPU; only the default htmlScraper
-// cancels in-flight HTML conversion when the scrape context is done.
+// Custom implementations must enforce maxBytes fail-closed in HTMLToMarkdown (return an error when
+// markdown output exceeds maxBytes; no silent truncate). They should respect caller context and bound
+// CPU; only the default htmlScraper cancels in-flight HTML conversion when the scrape context is done.
 func WithScraper(s Scraper) Option {
 	return func(o *options) {
 		o.scraper = s

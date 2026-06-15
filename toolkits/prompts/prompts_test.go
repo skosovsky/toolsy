@@ -120,3 +120,21 @@ func TestAsTool_MaxBytesTruncate(t *testing.T) {
 	)
 	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
 }
+
+func TestAsTool_ProviderCancel(t *testing.T) {
+	p := &mockProvider{err: context.Canceled}
+	tool, err := AsTool(p)
+	require.NoError(t, err)
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"x"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	if ok {
+		require.NotEqual(t, toolsy.CodeInternal, te.Code)
+	}
+}

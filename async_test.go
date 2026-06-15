@@ -92,6 +92,36 @@ func TestAsAsyncTool_OnCompleteHook(t *testing.T) {
 	require.NoError(t, gotErr)
 }
 
+func TestAsAsyncTool_OnComplete_PreservesCancelChain(t *testing.T) {
+	var (
+		done   sync.WaitGroup
+		gotErr error
+	)
+	done.Add(1)
+	base := &testutil.MockTool{
+		ManifestVal: toolsy.ToolManifest{Name: "cancel", Parameters: map[string]any{"type": "object"}},
+		ExecuteFn: func(context.Context, *toolsy.RunEnv, toolsy.ToolInput, func(toolsy.Chunk) error) error {
+			return context.Canceled
+		},
+	}
+	wrapped := toolsy.AsAsyncTool(
+		base,
+		toolsy.WithOnComplete(func(_ context.Context, _ string, _ []toolsy.Chunk, err error) {
+			gotErr = err
+			done.Done()
+		}),
+	)
+	err := wrapped.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.NoError(t, err)
+	done.Wait()
+	require.ErrorIs(t, gotErr, context.Canceled)
+}
+
 func TestAsAsyncTool_NilCallback(t *testing.T) {
 	base := &testutil.MockTool{
 		ManifestVal: toolsy.ToolManifest{Name: "nop", Parameters: map[string]any{"type": "object"}},

@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/format"
 	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
-	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
 
 type extractArgs struct {
@@ -106,16 +106,10 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (ExtractWi
 		}
 		defer func() { _ = os.Remove(path) }()
 	} else {
-		path = filepath.Clean(filePath)
-		var info os.FileInfo
-		info, err = os.Stat(path)
+		path, format, err = localFilePathForExtract(ctx, filePath, o)
 		if err != nil {
-			return ExtractWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat: %w", err))
+			return ExtractWireResult{}, err
 		}
-		if info.Size() > int64(o.maxBytes) {
-			return ExtractWireResult{}, toolsy.NewValidationError("file too large")
-		}
-		format = formatFromURL(path)
 	}
 
 	format = strings.ToLower(strings.TrimPrefix(format, "."))
@@ -126,41 +120,63 @@ func doExtract(ctx context.Context, o *options, filePath, url string) (ExtractWi
 	return ExtractWireResult{Text: text}, nil
 }
 
+func localFilePathForExtract(ctx context.Context, filePath string, o *options) (string, string, error) {
+	path := filepath.Clean(filePath)
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/document: stat"); ie != nil {
+		return "", "", ie
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat: %w", statErr))
+	}
+	contentCap := contentByteCap(o.maxBytes)
+	if info.Size() > int64(contentCap) {
+		return "", "", toolsy.MapToolkitCapError(ctx, "toolkit/document: stat size", contentCap, "file", "")
+	}
+	return path, formatFromURL(path), nil
+}
+
+// wrapParseError preserves ToolErrors (validation) and wraps other parse failures as internal errors.
+func wrapParseError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := toolsy.AsToolError(err); ok {
+		return err
+	}
+	return toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
+}
+
 // extractTextByFormat parses the file at path according to format (csv, pdf, docx).
 func extractTextByFormat(ctx context.Context, path, format string, o *options) (string, error) {
+	byteCap := contentByteCap(o.maxBytes)
 	switch format {
 	case "csv":
 		f, openErr := os.Open(path) // #nosec G703 -- path from args; size checked above
 		if openErr != nil {
-			return "", openErr
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: open csv file: %w", openErr))
 		}
 		defer func() { _ = f.Close() }()
-		text, err := parseCSV(ctx, f, contentByteCap(o.maxBytes))
-		if err != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
-		}
-		return text, nil
+		text, err := parseCSV(ctx, f, byteCap)
+		return text, wrapParseError(err)
 	case "pdf":
-		text, err := parsePDF(ctx, path, contentByteCap(o.maxBytes))
-		if err != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
-		}
-		return text, nil
+		text, err := parsePDF(ctx, path, byteCap)
+		return text, wrapParseError(err)
 	case "docx":
 		f, openErr := os.Open(path) // #nosec G703 -- path from args; size checked above
 		if openErr != nil {
-			return "", openErr
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: open docx file: %w", openErr))
 		}
 		defer func() { _ = f.Close() }()
+		if ie := toolsy.ToolkitContextError(ctx, "toolkit/document: stat docx file"); ie != nil {
+			return "", ie
+		}
 		info, statErr := f.Stat()
 		if statErr != nil {
 			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: stat docx file: %w", statErr))
 		}
-		text, err := parseDOCX(ctx, f, info.Size(), contentByteCap(o.maxBytes))
-		if err != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse: %w", err))
-		}
-		return text, nil
+		text, err := parseDOCX(ctx, f, info.Size(), byteCap)
+		return text, wrapParseError(err)
 	default:
 		return "", toolsy.NewValidationError("unsupported format: " + format)
 	}
@@ -180,29 +196,29 @@ func copyRemoteResponseToTemp(
 	if format == "" {
 		format = formatFromContentType(resp.Header.Get("Content-Type"))
 	}
-	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, o.maxBytes)
+	contentCap := contentByteCap(o.maxBytes)
+	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, contentCap)
+	if mapped := toolsy.MapToolkitReadError(
+		ctx, err, "toolkit/document: read remote body", contentCap, "remote file", "",
+	); mapped != nil {
+		return "", "", mapped
+	}
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return "", "", err
-		}
-		if strings.Contains(err.Error(), "read exceeds") {
-			return "", "", toolsy.NewValidationError("remote file too large")
-		}
 		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: read remote body: %w", err))
 	}
 	tmp, createErr := os.CreateTemp("", "document-*")
 	if createErr != nil {
-		return "", "", createErr
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: create temp: %w", createErr))
 	}
 	tmpPath := tmp.Name()
 	if _, writeErr := tmp.Write(data); writeErr != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
-		return "", "", writeErr
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: write temp: %w", writeErr))
 	}
 	if closeErr := tmp.Close(); closeErr != nil {
 		_ = os.Remove(tmpPath)
-		return "", "", closeErr
+		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: close temp: %w", closeErr))
 	}
 	return tmpPath, format, nil
 }

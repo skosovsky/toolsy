@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestWithErrorFormatter_ValidationErrorBecomesErrorChunk(t *testing.T) {
@@ -197,6 +200,106 @@ func TestWithErrorFormatter_BypassesContextCanceled(t *testing.T) {
 		},
 	)
 	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 0, yieldCalls)
+}
+
+func TestFormatExecutionError_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: get failed: %w", context.Canceled))
+	msg := formatExecutionError(err)
+	require.Contains(t, msg, "canceled")
+	require.NotContains(t, msg, "internal system error")
+	require.NotContains(t, msg, "byte limit")
+}
+
+func TestFormatExecutionError_TimeoutOverReadLimit(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: get failed: %w", context.DeadlineExceeded))
+	msg := formatExecutionError(err)
+	require.Contains(t, msg, "timed out")
+	require.NotContains(t, msg, "internal system error")
+	require.NotContains(t, msg, "byte limit")
+}
+
+func TestErrorChunkSummaryText_InterruptOverInternal(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: get failed: %w", context.Canceled))
+	chunk := NewErrorChunkFromErr(err)
+	text := ErrorChunkSummaryText(chunk, err)
+	require.Contains(t, text, "canceled")
+	require.NotContains(t, text, "internal system error")
+}
+
+func TestNewErrorChunkFromErr_InternalWrappedCancel_LlmMessageNotGeneric(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: get failed: %w", context.Canceled))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	require.Contains(t, string(chunk.Data), "canceled")
+	require.NotContains(t, string(chunk.Data), "internal system error")
+}
+
+func TestReadLimitToolError_SandboxSubject(t *testing.T) {
+	t.Parallel()
+	const maxBytes = 4096
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxBytes,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	te := readLimitToolError(capErr)
+	require.NotNil(t, te)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "stdout exceeds 4096 byte limit")
+}
+
+func TestReadLimitToolError_BareSentinel_UsesGeneric(t *testing.T) {
+	t.Parallel()
+	te := readLimitToolError(textprocessor.ErrReadLimitExceeded)
+	require.NotNil(t, te)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "response exceeds byte limit")
+	require.NotContains(t, te.Reason, "262144")
+}
+
+func TestErrorChunkGoldenOrder_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	cancelWrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	inner := NewInternalError(fmt.Errorf("tool: %w", cancelWrapped))
+	chunk := NewErrorChunkFromErr(inner)
+	require.True(t, chunk.IsError)
+	te, err := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, err)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+	require.Contains(t, string(chunk.Data), "canceled")
+
+	limitErr := NewInternalError(composite)
+	limitChunk := NewErrorChunkFromErr(limitErr)
+	limitTE, err := unmarshalToolErrorWire(limitChunk.Data)
+	require.NoError(t, err)
+	require.Equal(t, CodeValidationFailed, limitTE.Code)
+}
+
+func TestWithErrorFormatter_BypassesDeadlineExceeded(t *testing.T) {
+	t.Parallel()
+	deadline := newMiddlewareMinTool(
+		"deadline_tool",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return context.DeadlineExceeded
+		},
+	)
+	yieldCalls := 0
+	err := WithErrorFormatter()(deadline).Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error {
+			yieldCalls++
+			return nil
+		},
+	)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Equal(t, 0, yieldCalls)
 }
 
@@ -408,4 +511,180 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 	)
 	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
 	require.Empty(t, maxStepChunks)
+}
+
+func TestNewErrorChunkFromErr_ReadLimitExceeded(t *testing.T) {
+	chunk := NewErrorChunkFromErr(textprocessor.ErrReadLimitExceeded)
+	require.True(t, chunk.IsError)
+	te, err := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, err)
+	assert.Equal(t, CodeValidationFailed, te.Code)
+	assert.Contains(t, string(chunk.Data), "byte limit")
+}
+
+func TestNewErrorChunkFromErr_WrappedCancel_NotValidation(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: get failed: %w", context.Canceled))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestNewErrorChunkFromErr_BareCancel_NotValidation(t *testing.T) {
+	t.Parallel()
+	chunk := NewErrorChunkFromErr(context.Canceled)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+}
+
+func TestNewErrorChunkFromErr_ExistingToolErrorWrappedCancel_NotValidation(t *testing.T) {
+	t.Parallel()
+	validationTE := NewValidationError("invalid field")
+	err := errors.Join(validationTE, context.Canceled)
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+}
+
+func TestNewErrorChunkFromErr_WrappedDeadline(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("toolkit: slow op: %w", context.DeadlineExceeded))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestNewErrorChunkFromErr_InternalWrappingReadLimit(t *testing.T) {
+	t.Parallel()
+	err := NewInternalError(fmt.Errorf("proxy: %w", textprocessor.ErrReadLimitExceeded))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.Equal(t, CodeValidationFailed, te.Code)
+}
+
+func TestNewErrorChunkFromErr_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	cancelWrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	err := NewInternalError(fmt.Errorf("tool: %w", cancelWrapped))
+	_ = composite // limit-only baseline covered elsewhere
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+	require.ErrorIs(t, err, context.Canceled)
+
+	limitErr := NewInternalError(composite)
+	limitChunk := NewErrorChunkFromErr(limitErr)
+	te2, unmarshalErr2 := unmarshalToolErrorWire(limitChunk.Data)
+	require.NoError(t, unmarshalErr2)
+	require.Equal(t, CodeValidationFailed, te2.Code)
+}
+
+func TestNewErrorChunkFromErr_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf(
+		"read failed: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	chunk := NewErrorChunkFromErr(composite)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+	require.ErrorIs(t, composite, context.Canceled)
+}
+
+func TestNewErrorChunkFromErr_DeadlineOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	deadlineWrapped := fmt.Errorf("slow: %w", context.DeadlineExceeded)
+	err := NewInternalError(fmt.Errorf("tool: %w", deadlineWrapped))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+
+	limitChunk := NewErrorChunkFromErr(NewInternalError(composite))
+	te2, unmarshalErr2 := unmarshalToolErrorWire(limitChunk.Data)
+	require.NoError(t, unmarshalErr2)
+	require.Equal(t, CodeValidationFailed, te2.Code)
+}
+
+func TestNewErrorChunkFromErr_TimeoutOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	timeoutWrapped := fmt.Errorf("slow: %w", ErrTimeout)
+	err := NewInternalError(fmt.Errorf("tool: %w", timeoutWrapped))
+	chunk := NewErrorChunkFromErr(err)
+	require.True(t, chunk.IsError)
+	te, unmarshalErr := unmarshalToolErrorWire(chunk.Data)
+	require.NoError(t, unmarshalErr)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.NotEqual(t, CodeValidationFailed, te.Code)
+
+	limitChunk := NewErrorChunkFromErr(NewInternalError(composite))
+	te2, unmarshalErr2 := unmarshalToolErrorWire(limitChunk.Data)
+	require.NoError(t, unmarshalErr2)
+	require.Equal(t, CodeValidationFailed, te2.Code)
+}
+
+func TestWithErrorFormatter_BypassesWrappedCancel(t *testing.T) {
+	t.Parallel()
+	inner := newMiddlewareMinTool(
+		"cancel_tool",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewInternalError(fmt.Errorf("toolkit: op failed: %w", context.Canceled))
+		},
+	)
+	yieldCalls := 0
+	err := WithErrorFormatter()(inner).Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error {
+			yieldCalls++
+			return nil
+		},
+	)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 0, yieldCalls)
+}
+
+func TestWithErrorFormatter_BypassesBareCancel(t *testing.T) {
+	t.Parallel()
+	inner := newMiddlewareMinTool(
+		"cancel_tool_bare",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return context.Canceled
+		},
+	)
+	yieldCalls := 0
+	err := WithErrorFormatter()(inner).Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error {
+			yieldCalls++
+			return nil
+		},
+	)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, 0, yieldCalls)
 }

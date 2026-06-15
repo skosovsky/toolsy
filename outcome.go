@@ -111,6 +111,9 @@ func executionErrorFromChunk(c Chunk) *ToolError {
 }
 
 func toolErrorFromRunCall(err error) *ToolError {
+	if isContextInterrupt(err) {
+		return nil
+	}
 	if te, ok := AsToolError(err); ok {
 		return te
 	}
@@ -120,6 +123,9 @@ func toolErrorFromRunCall(err error) *ToolError {
 func runCallInfraError(err error) bool {
 	if err == nil {
 		return false
+	}
+	if isContextInterrupt(err) {
+		return true
 	}
 	if errors.Is(err, ErrStreamAborted) {
 		return true

@@ -12,3 +12,6 @@ runtime policy for production agents.
 
 Container teardown and post-run log collection use bounded cleanup timeouts so
 deadline paths cannot hang indefinitely.
+
+Workspace archive reads each file with fail-closed `textprocessor.ReadLimitedBytes`
+(`defaultMaxArchiveFileBytes`, 64 MiB per file) — not unbounded `io.ReadAll`.

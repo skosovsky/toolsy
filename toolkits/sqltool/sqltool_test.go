@@ -826,3 +826,29 @@ func TestSQLExecute_TripleIoC_MaxRowsFormatterValidator(t *testing.T) {
 	)
 	require.Equal(t, 1, payload["rows"])
 }
+
+func TestDoInspectSchema_CancelDuringTables(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	tables := []string{"t1", "t2", "t3"}
+	_, err := doInspectSchema(ctx, openSQLite(t), "sqlite", &sqliteDialect{}, &options{}, tables)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestDoExecuteRead_CancelDuringQuery(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := doExecuteRead(ctx, openSQLite(t), &options{}, "SELECT 1")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestDoExecuteRead_QueryErrorIsToolError(t *testing.T) {
+	db := openSQLite(t)
+	_, err := doExecuteRead(context.Background(), db, &options{}, "SELECT id FROM missing_table")
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}

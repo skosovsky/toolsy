@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const helperScriptName = "main.txt"
@@ -213,6 +214,34 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
 }
 
+func TestRunRejectsOversizedStdout(t *testing.T) {
+	sb, err := New(WithRuntime("helper", helperRuntime()))
+	require.NoError(t, err)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "helper",
+		Code:     "bigout",
+		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestRunRejectsOversizedStdoutWithNonZeroExit(t *testing.T) {
+	sb, err := New(WithRuntime("helper", helperRuntime()))
+	require.NoError(t, err)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "helper",
+		Code:     "bigout-exit",
+		Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1"},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
 func TestHostHelperProcess(_ *testing.T) {
 	if os.Getenv("GO_WANT_HOST_CHILD_PROCESS") == "1" {
 		for {
@@ -252,6 +281,11 @@ func TestHostHelperProcess(_ *testing.T) {
 		os.Exit(7)
 	case "sleep":
 		time.Sleep(5 * time.Second)
+	case "bigout":
+		_, _ = fmt.Fprint(os.Stdout, strings.Repeat("x", 256*1024+1))
+	case "bigout-exit":
+		_, _ = fmt.Fprint(os.Stdout, strings.Repeat("x", 256*1024+1))
+		os.Exit(7)
 	case "spawn-child":
 		pidFile := os.Getenv("TOOLSY_CHILD_PID_FILE")
 		if pidFile == "" {

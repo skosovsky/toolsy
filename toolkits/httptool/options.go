@@ -79,7 +79,9 @@ func hasForbiddenHeaders(headers map[string]string) bool {
 	return false
 }
 
-// WithMaxResponseBody sets the maximum response body size in bytes (default 512KB). Truncated body gets "[Truncated]" suffix.
+// WithMaxResponseBody sets the maximum response body field size in bytes for probe GET/POST (default 512KB).
+// This is the budget for the "body" value inside {"status":N,"body":"..."}, not the full wire JSON envelope.
+// Library ReadBodyLimited returns textprocessor.ErrReadLimitExceeded on exceed; probe tools return CodeValidationFailed.
 func WithMaxResponseBody(n int) Option {
 	return func(o *options) {
 		o.maxResponseBody = n

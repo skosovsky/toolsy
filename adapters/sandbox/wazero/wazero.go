@@ -1,10 +1,10 @@
 package wazero
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ type guestEngine interface {
 		module []byte,
 		workspaceDir string,
 		env map[string]string,
-		stdout, stderr *bytes.Buffer,
+		stdout, stderr io.Writer,
 	) (time.Duration, error)
 }
 
@@ -103,37 +103,26 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: write code file: %w", exectool.ErrSandboxFailure, err)
 	}
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	duration, err := s.engine.Run(ctx, s.module, workspaceDir, req.Env, &stdout, &stderr)
+	var stdout = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
+	var stderr = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
+	duration, err := s.engine.Run(ctx, s.module, workspaceDir, req.Env, stdout, stderr)
 
 	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return exectool.RunResult{}, exectool.ErrTimeout
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return exectool.RunResult{}, ctx.Err()
-		}
-
 		var exitErr *wazerosys.ExitError
 		if errors.As(err, &exitErr) {
-			return exectool.RunResult{
-				Stdout:   stdout.String(),
-				Stderr:   stderr.String(),
-				ExitCode: int(exitErr.ExitCode()),
-				Duration: duration,
-			}, nil
+			return sandboxfs.FinalizeOrInterrupt(
+				ctx, err, stdout, stderr, int(exitErr.ExitCode()), duration, true, false,
+			)
 		}
 
-		return exectool.RunResult{}, fmt.Errorf("%w: execute guest: %w", exectool.ErrSandboxFailure, err)
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			fmt.Errorf("%w: execute guest: %w", exectool.ErrSandboxFailure, err),
+			stdout, stderr, 0, duration, false, false,
+		)
 	}
 
-	return exectool.RunResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
-		ExitCode: 0,
-		Duration: duration,
-	}, nil
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, stderr, 0, duration, true, false)
 }
 
 func (e *wazeroEngine) Run(
@@ -141,7 +130,7 @@ func (e *wazeroEngine) Run(
 	module []byte,
 	workspaceDir string,
 	env map[string]string,
-	stdout, stderr *bytes.Buffer,
+	stdout, stderr io.Writer,
 ) (time.Duration, error) {
 	runtime := wazero.NewRuntimeWithConfig(ctx, e.runtimeConfig)
 	defer func() {

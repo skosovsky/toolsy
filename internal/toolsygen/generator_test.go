@@ -10,10 +10,13 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func testGen() *generator {
-	return &generator{fs: newDefaultOSFacade()}
+	return &generator{fs: newDefaultOSFacade(defaultMaxGeneratorFileBytes), maxFileBytes: defaultMaxGeneratorFileBytes}
 }
 
 // memDirEnt is a minimal [fs.DirEntry] for testing walkDir without a real directory tree.
@@ -48,7 +51,7 @@ func TestWalkDirUsesInjectedReadDir(t *testing.T) {
 			memDirEnt{name: "n.yaml", isDir: false},
 		},
 	}
-	facade := newDefaultOSFacade()
+	facade := newDefaultOSFacade(defaultMaxGeneratorFileBytes)
 	facade.readDir = func(name string) ([]os.DirEntry, error) {
 		ents, ok := tree[name]
 		if !ok {
@@ -92,7 +95,7 @@ func TestGenerateWithFSParityWithGenerate(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{Inputs: []string{dir}}
 	r1, err1 := Generate(ctx, cfg)
-	r2, err2 := generateWithFS(ctx, cfg, newDefaultOSFacade())
+	r2, err2 := generateWithFS(ctx, cfg, newDefaultOSFacade(defaultMaxGeneratorFileBytes))
 	if err1 != nil || err2 != nil {
 		t.Fatalf("errors: %v, %v", err1, err2)
 	}
@@ -153,7 +156,7 @@ func TestInferPackageNameMixedPackages(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "a.go"), "package alpha\n")
 	writeFile(t, filepath.Join(dir, "b.go"), "package beta\n")
 
-	_, err := testGen().inferPackageName(dir)
+	_, err := testGen().inferPackageName(context.Background(), dir)
 	if err == nil || !strings.Contains(err.Error(), "mixed package names") {
 		t.Fatalf("inferPackageName error = %v, want mixed package names", err)
 	}
@@ -331,7 +334,7 @@ parameters:
 			path := filepath.Join(dir, "tool.yaml")
 			writeFile(t, path, strings.TrimSpace(tt.manifest))
 
-			_, err := testGen().loadManifest(path)
+			_, err := testGen().loadManifest(context.Background(), path)
 			if err == nil || !strings.Contains(err.Error(), tt.wantSubstr) {
 				t.Fatalf("loadManifest error = %v, want substring %q", err, tt.wantSubstr)
 			}
@@ -364,7 +367,7 @@ parameters:
   required: ["doctor_id", "slot_time"]
 `)
 
-	m, err := testGen().loadManifest(path)
+	m, err := testGen().loadManifest(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadManifest: %v", err)
 	}
@@ -430,7 +433,7 @@ parameters:
         description: "Tag"
   required: ["count", "active", "tags"]
 `)
-	m, err := testGen().loadManifest(path)
+	m, err := testGen().loadManifest(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadManifest: %v", err)
 	}
@@ -474,7 +477,7 @@ parameters:
       description: "Text"
   required: ["text"]
 `)
-	m, err := testGen().loadManifest(path)
+	m, err := testGen().loadManifest(context.Background(), path)
 	if err != nil {
 		t.Fatalf("loadManifest: %v", err)
 	}
@@ -503,7 +506,7 @@ func TestValidateManifestSetDetectsCollisions(t *testing.T) {
 		t.Fatalf("mkdir two: %v", err)
 	}
 
-	errs := testGen().validateManifestSet([]*manifest{
+	errs := testGen().validateManifestSet(context.Background(), []*manifest{
 		{
 			Path:          filepath.Join(dirOne, "tool.yaml"),
 			Dir:           dirOne,
@@ -564,7 +567,7 @@ func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
 	secondPath := filepath.Join(dir, "second_gen.go")
 	writeFile(t, firstPath, "original")
 
-	fs := newDefaultOSFacade()
+	fs := newDefaultOSFacade(defaultMaxGeneratorFileBytes)
 	originalRename := fs.rename
 	renameCalls := 0
 	fs.rename = func(oldPath, newPath string) error {
@@ -951,5 +954,36 @@ func runGo(t *testing.T, dir, cache string, args ...string) {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("go %s in %s failed: %v\n%s", strings.Join(args, " "), dir, err, output)
+	}
+}
+
+func TestGeneratedProxyBareReadLimitExceeded(t *testing.T) {
+	t.Parallel()
+	tool, err := toolsy.NewProxyTool(
+		"proxy_limit",
+		"Returns read limit error",
+		[]byte(`{"type":"object"}`),
+		func(_ context.Context, _ *toolsy.RunEnv, _ []byte, _ func(toolsy.Chunk) error) error {
+			return textprocessor.ErrReadLimitExceeded
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewProxyTool: %v", err)
+	}
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	te, ok := toolsy.AsToolError(err)
+	if !ok || te.Code != toolsy.CodeValidationFailed {
+		t.Fatalf("error = %v, want CodeValidationFailed", err)
+	}
+	if !strings.Contains(te.Reason, "byte limit") {
+		t.Fatalf("reason = %q, want byte limit hint", te.Reason)
 	}
 }

@@ -12,8 +12,6 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
-const truncationSuffix = textprocessor.TruncationSuffix
-
 type listArgs struct {
 	Path string `json:"path"`
 }
@@ -110,7 +108,10 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 	return tools, nil
 }
 
-func doListDir(_ context.Context, baseDir string, _ *options, path string) (listResult, error) {
+func doListDir(ctx context.Context, baseDir string, _ *options, path string) (listResult, error) {
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/fstool: list dir"); ie != nil {
+		return listResult{}, ie
+	}
 	resolved, err := sanitizePath(baseDir, path)
 	if err != nil {
 		return listResult{}, err
@@ -128,6 +129,9 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 	}
 	infos := make([]entryInfo, 0, len(entries))
 	for _, e := range entries {
+		if ie := toolsy.ToolkitContextError(ctx, "toolkit/fstool: list dir entries"); ie != nil {
+			return listResult{}, ie
+		}
 		ei := entryInfo{Name: e.Name(), IsDir: e.IsDir(), Size: 0}
 		if !e.IsDir() {
 			if fi, infoErr := e.Info(); infoErr == nil {
@@ -140,6 +144,9 @@ func doListDir(_ context.Context, baseDir string, _ *options, path string) (list
 }
 
 func doReadFile(ctx context.Context, baseDir string, o *options, path string) (readResult, error) {
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/fstool: read file"); ie != nil {
+		return readResult{}, ie
+	}
 	resolved, err := sanitizePath(baseDir, path)
 	if err != nil {
 		return readResult{}, err
@@ -156,14 +163,21 @@ func doReadFile(ctx context.Context, baseDir string, o *options, path string) (r
 	if info.IsDir() {
 		return readResult{}, toolsy.NewValidationError("path is a directory, not a file")
 	}
-	content, err := readFileLimited(ctx, f, o.maxBytes)
+	contentCap := readContentByteCap(o.maxBytes)
+	if info.Size() > int64(contentCap) {
+		return readResult{}, toolsy.MapToolkitCapError(ctx, "toolkit/fstool: stat size", contentCap, "file", "")
+	}
+	content, err := readFileLimited(ctx, f, contentCap)
 	if err != nil {
 		return readResult{}, err
 	}
 	return readResult{Content: content}, nil
 }
 
-func doWriteFile(_ context.Context, baseDir, path, content string) (statusResult, error) {
+func doWriteFile(ctx context.Context, baseDir, path, content string) (statusResult, error) {
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/fstool: write file"); ie != nil {
+		return statusResult{}, ie
+	}
 	target, err := sanitizePathForWrite(baseDir, path)
 	if err != nil {
 		return statusResult{}, err
@@ -224,14 +238,14 @@ func checkWriteTargetSymlinkWithinSandbox(baseCanon, finalPath string) error {
 	return pathUnderBase(baseCanon, checkPath)
 }
 
-// readFileLimited reads up to maxBytes from r with UTF-8 safe truncation; respects ctx cancellation.
+// readFileLimited reads at most maxBytes from r (fail-closed); respects ctx cancellation.
 func readFileLimited(ctx context.Context, r io.Reader, maxBytes int) (string, error) {
-	text, err := textprocessor.ReadLimited(ctx, r, maxBytes, textprocessor.TruncationSuffix)
+	data, err := textprocessor.ReadLimitedBytes(ctx, r, maxBytes)
+	if mapped := toolsy.MapToolkitReadError(ctx, err, "toolkit/fstool: read", maxBytes, "file", ""); mapped != nil {
+		return "", mapped
+	}
 	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: context: %w", ctxErr))
-		}
 		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/fstool: read: %w", err))
 	}
-	return text, nil
+	return string(data), nil
 }

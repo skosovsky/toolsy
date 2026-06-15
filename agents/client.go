@@ -18,8 +18,10 @@ import (
 
 // ClientOptions configures the Agent Protocol HTTP client.
 type ClientOptions struct {
-	HTTPClient      *http.Client
-	allowPrivateIPs bool
+	HTTPClient        *http.Client
+	allowPrivateIPs   bool
+	maxResponseBytes  int
+	maxSSEStreamBytes int
 }
 
 // WithAllowPrivateIPs relaxes SSRF IP blocking on the default safe transport (tests and private networks).
@@ -43,6 +45,20 @@ func WithHTTPClient(client *http.Client) func(*ClientOptions) {
 	}
 }
 
+// WithMaxResponseBody sets the maximum REST response body size in bytes (default 4 MiB).
+func WithMaxResponseBody(n int) func(*ClientOptions) {
+	return func(o *ClientOptions) {
+		o.maxResponseBytes = n
+	}
+}
+
+// WithMaxSSEStreamBytes sets the total byte budget for SSE step streams (default httptool.DefaultMaxSSEStreamBytes).
+func WithMaxSSEStreamBytes(n int) func(*ClientOptions) {
+	return func(o *ClientOptions) {
+		o.maxSSEStreamBytes = n
+	}
+}
+
 // NewClient creates a client for the Agent Protocol server at baseURL. Options can customize the HTTP client.
 func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
 	var o ClientOptions
@@ -51,6 +67,20 @@ func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	return &Client{baseURL: baseURL, opts: o}
+}
+
+func (c *Client) maxResponseBytes() int {
+	if c.opts.maxResponseBytes > 0 {
+		return c.opts.maxResponseBytes
+	}
+	return defaultMaxResponseBytes
+}
+
+func (c *Client) maxSSEStreamBytes() int {
+	if c.opts.maxSSEStreamBytes > 0 {
+		return c.opts.maxSSEStreamBytes
+	}
+	return httptool.DefaultMaxSSEStreamBytes
 }
 
 func (c *Client) httpClient() *http.Client {
@@ -81,12 +111,9 @@ func (c *Client) CreateTask(ctx context.Context, args json.RawMessage, authHeade
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return nil, fmt.Errorf("agents: create task: status %d", resp.StatusCode)
 	}
-	bodyBytes, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, defaultMaxResponseBytes)
+	bodyBytes, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, c.maxResponseBytes())
 	if err != nil {
-		if strings.Contains(err.Error(), "read exceeds") {
-			return nil, toolsy.NewValidationError("response body too large")
-		}
-		return nil, fmt.Errorf("agents: read create task response: %w", err)
+		return nil, mapCreateTaskReadError(ctx, err, c.maxResponseBytes())
 	}
 	// Try wrapped response {"task": {...}} first.
 	var wrapped createTaskResponse
@@ -99,6 +126,19 @@ func (c *Client) CreateTask(ctx context.Context, args json.RawMessage, authHeade
 		return nil, fmt.Errorf("agents: decode create task result: %w", err)
 	}
 	return &task, nil
+}
+
+func mapCreateTaskReadError(ctx context.Context, err error, maxBytes int) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return toolsy.MapReadLimitErrorFor(err, maxBytes, "create task response", "")
+	}
+	return fmt.Errorf("agents: read create task response: %w", err)
 }
 
 // CancelTask sends POST /ap/v1/agent/tasks/{task_id}/cancel to cancel the task on the server.

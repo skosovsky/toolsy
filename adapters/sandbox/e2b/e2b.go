@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/exectool"
 	"github.com/skosovsky/toolsy/internal/sandboxfs"
 )
@@ -28,7 +30,12 @@ type Client interface {
 // Session is an active remote sandbox instance.
 type Session interface {
 	WriteFile(ctx context.Context, path string, data []byte) error
-	StartAndWait(ctx context.Context, command string, env map[string]string) (CommandResult, error)
+	StartAndWait(
+		ctx context.Context,
+		command string,
+		env map[string]string,
+		stdout, stderr io.Writer,
+	) (CommandResult, error)
 	Kill(ctx context.Context) error
 }
 
@@ -79,7 +86,9 @@ func cleanupSession(session Session) {
 }
 
 func classifyControlPlaneError(runCtx context.Context, err error, op string) error {
-	if runCtx.Err() == context.DeadlineExceeded || errors.Is(err, context.DeadlineExceeded) {
+	if runCtx.Err() == context.DeadlineExceeded ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, exectool.ErrTimeout) {
 		return exectool.ErrTimeout
 	}
 	if runCtx.Err() != nil {
@@ -87,6 +96,9 @@ func classifyControlPlaneError(runCtx context.Context, err error, op string) err
 	}
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
+	}
+	if mapped := toolsy.MapSandboxReadLimitError(err); mapped != nil {
+		return mapped
 	}
 	return fmt.Errorf("%w: %s: %w", exectool.ErrSandboxFailure, op, err)
 }
@@ -428,15 +440,18 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	}
 
 	start := time.Now()
-	result, err := session.StartAndWait(ctx, runtime.Command, req.Env)
+	var stdoutBuf = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
+	var stderrBuf = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
+	result, err := session.StartAndWait(ctx, runtime.Command, req.Env, stdoutBuf, stderrBuf)
 	if err != nil {
-		return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "start process")
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			classifyControlPlaneError(ctx, err, "start process"),
+			stdoutBuf, stderrBuf, 0, time.Since(start), false, false,
+		)
 	}
 
-	return exectool.RunResult{
-		Stdout:   result.Stdout,
-		Stderr:   result.Stderr,
-		ExitCode: result.ExitCode,
-		Duration: time.Since(start),
-	}, nil
+	return sandboxfs.FinalizeOrInterrupt(
+		ctx, nil, stdoutBuf, stderrBuf, result.ExitCode, time.Since(start), true, false,
+	)
 }

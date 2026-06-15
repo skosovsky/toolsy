@@ -4,7 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,7 +19,9 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type mockClient struct {
@@ -329,10 +336,10 @@ func TestNewAppliesImageMappingAndResourceOptions(t *testing.T) {
 func TestReadArchiveFileClosesFileBeforeReturn(t *testing.T) {
 	rc := &trackingReadCloser{Reader: bytes.NewReader([]byte("payload"))}
 
-	data, err := readArchiveFile(func(name string) (io.ReadCloser, error) {
+	data, err := readArchiveFile(context.Background(), func(name string) (io.ReadCloser, error) {
 		require.Equal(t, "data.txt", name)
 		return rc, nil
-	}, "data.txt")
+	}, "data.txt", 7, defaultMaxArchiveFileBytes)
 	require.NoError(t, err)
 	require.Equal(t, []byte("payload"), data)
 	require.Equal(t, 1, rc.closeCalls)
@@ -346,11 +353,75 @@ func TestReadArchiveFileClosesFileOnReadError(t *testing.T) {
 		),
 	}
 
-	_, err := readArchiveFile(func(string) (io.ReadCloser, error) {
+	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
 		return rc, nil
-	}, "data.txt")
+	}, "data.txt", 7, defaultMaxArchiveFileBytes)
 	require.Error(t, err)
 	require.Equal(t, 1, rc.closeCalls)
+}
+
+func TestReadArchiveFile_ExceedsSizeLimit(t *testing.T) {
+	rc := &trackingReadCloser{Reader: bytes.NewReader([]byte("payload"))}
+	const maxBytes = 4
+
+	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
+		return rc, nil
+	}, "big.bin", 100, maxBytes)
+	require.Error(t, err)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "exceeds 4 byte limit")
+	require.Equal(t, 0, rc.closeCalls)
+}
+
+func TestReadArchiveFile_ReadExceedsLimit(t *testing.T) {
+	rc := &trackingReadCloser{Reader: bytes.NewReader(make([]byte, 20))}
+	const maxBytes = 10
+
+	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
+		return rc, nil
+	}, "big.bin", 7, maxBytes)
+	require.Error(t, err)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "exceeds 10 byte limit")
+	require.Equal(t, 1, rc.closeCalls)
+}
+
+func TestClassifySetupError_ArchiveReadLimitMapsValidation(t *testing.T) {
+	capErr := fmt.Errorf(
+		"%w: file data.txt exceeds %d byte limit: %w",
+		exectool.ErrSandboxFailure,
+		4,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	err := classifySetupError(context.Background(), capErr, "archive workspace")
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "data.txt")
+}
+
+func TestClassifySetupError_TimeoutOverReadLimit(t *testing.T) {
+	t.Parallel()
+	err := classifySetupError(
+		context.Background(),
+		fmt.Errorf("archive: %w", exectool.ErrTimeout),
+		"archive workspace",
+	)
+	require.ErrorIs(t, err, exectool.ErrTimeout)
+}
+
+func TestClassifySetupError_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	capErr := fmt.Errorf(
+		"%w: file data.txt exceeds %d byte limit: %w",
+		exectool.ErrSandboxFailure,
+		4,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	wrapped := fmt.Errorf("archive: %w", context.Canceled)
+	inner := fmt.Errorf("setup: %w", errors.Join(wrapped, capErr))
+	err := classifySetupError(context.Background(), inner, "archive workspace")
+	require.ErrorIs(t, err, context.Canceled)
 }
 
 type timeoutClient struct {
@@ -522,6 +593,154 @@ func (m *setupTimeoutClient) ContainerStart(
 		return m.timeoutErr(ctx)
 	}
 	return m.mockClient.ContainerStart(ctx, containerID, options)
+}
+
+func TestCollectContainerLogs_ExceedsLimit(t *testing.T) {
+	large := strings.Repeat("x", defaultMaxContainerLogBytes+1)
+	s := &Sandbox{client: &mockClient{logs: muxLogs(large, "")}}
+	outBuf, errBuf, err := s.collectContainerLogs(context.Background(), "abc123")
+	require.Error(t, err)
+	require.NotNil(t, outBuf)
+	require.NotNil(t, errBuf)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "stdout")
+}
+
+func TestDocker_Run_LogOverflowWithCanceledCtx_InterruptWins(t *testing.T) {
+	large := strings.Repeat("x", defaultMaxContainerLogBytes+1)
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &cancelOnLogsClient{
+		mockClient: mockClient{
+			waitResponse: container.WaitResponse{StatusCode: 0},
+			logs:         muxLogs(large, ""),
+		},
+		runCtx: ctx,
+		cancel: cancel,
+	}
+	sb, err := New(WithClient(client))
+	require.NoError(t, err)
+
+	_, err = sb.Run(ctx, exectool.RunRequest{
+		Language: "python",
+		Code:     "print(1)",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+type cancelOnLogsClient struct {
+	mockClient
+
+	runCtx context.Context
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnLogsClient) ContainerLogs(
+	ctx context.Context,
+	containerID string,
+	options container.LogsOptions,
+) (io.ReadCloser, error) {
+	c.cancel()
+	return c.mockClient.ContainerLogs(ctx, containerID, options)
+}
+
+func TestArchiveWorkspace_ExceedsSingleFileBudget(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "huge.bin")
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	require.NoError(t, f.Truncate(int64(defaultMaxArchiveFileBytes)+1))
+	require.NoError(t, f.Close())
+
+	_, err = archiveWorkspace(context.Background(), root)
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "exceeds")
+}
+
+func TestArchiveWorkspace_ExceedsTotalBudget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("archive total budget test writes multi-file sparse payloads")
+	}
+	root := t.TempDir()
+	const fileSize = int64(defaultMaxArchiveFileBytes)
+	for i := range 5 {
+		path := filepath.Join(root, fmt.Sprintf("part%d.bin", i))
+		f, err := os.Create(path)
+		require.NoError(t, err)
+		require.NoError(t, f.Truncate(fileSize))
+		require.NoError(t, f.Close())
+	}
+	_, err := archiveWorkspace(context.Background(), root)
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "workspace archive exceeds")
+}
+
+func TestArchiveWorkspace_CancelDuringWalk(t *testing.T) {
+	root := t.TempDir()
+	for i := range 10 {
+		path := filepath.Join(root, "file"+strconv.Itoa(i)+".txt")
+		require.NoError(t, os.WriteFile(path, []byte("data"), 0o600))
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := archiveWorkspace(ctx, root)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestReadArchiveFile_CanceledBeforeSizeCheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
+		return nil, errors.New("should not open")
+	}, "big.bin", 2048, 1024)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestReadArchiveFile_CancelOverSizeCap(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
+		return nil, errors.New("should not open")
+	}, "big.bin", 2048, 1024)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestReadArchiveFile_InterruptInChainOverReadLimit(t *testing.T) {
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
+		return io.NopCloser(&instantErrReader{err: composite}), nil
+	}, "f.bin", 0, 1024)
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotErrorIs(t, err, exectool.ErrSandboxFailure)
+}
+
+func TestReadArchiveFile_CanceledAfterSuccessfulRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	data := []byte("ok")
+	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
+		cancel()
+		return io.NopCloser(strings.NewReader(string(data))), nil
+	}, "f.bin", int64(len(data)), 1024)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+type instantErrReader struct {
+	err error
+}
+
+func (r *instantErrReader) Read([]byte) (int, error) {
+	return 0, r.err
 }
 
 func muxLogs(stdout, stderr string) []byte {

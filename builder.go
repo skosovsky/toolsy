@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // tool is the internal implementation of Tool built by NewTool, NewStreamTool, NewDynamicToolFromSpec, or NewProxyTool.
@@ -297,11 +299,29 @@ func wrapHandlerError(err error) error {
 	if IsControlError(err) {
 		return err
 	}
-	if _, ok := AsToolError(err); ok {
+	if te, ok := AsToolError(err); ok && te.Code == CodeInternal && isContextInterrupt(te.Err) {
+		err = te.Err
+	}
+	if errors.Is(err, context.Canceled) {
 		return err
 	}
-	if errors.Is(err, ErrTimeout) || errors.Is(err, context.DeadlineExceeded) {
-		return NewTimeoutError(true)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return NewTimeoutErrorFrom(err, true)
+	}
+	if errors.Is(err, ErrTimeout) {
+		return NewTimeoutErrorFrom(err, true)
+	}
+	if isContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		if mapped := MapSandboxReadLimitError(err); mapped != nil {
+			return mapped
+		}
+		return MapReadLimitError(err, 0)
+	}
+	if te, ok := AsToolError(err); ok {
+		return te
 	}
 	return NewInternalError(err)
 }

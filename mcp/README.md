@@ -6,6 +6,7 @@ This module bridges MCP servers to [toolsy](https://github.com/skosovsky/toolsy)
 
 - **Transports**: `StdioTransport` (child process via stdin/stdout) and `SSETransport` (HTTP Server-Sent Events with dynamic POST endpoint).
 - **Client**: eager lifecycle via `Connect(ctx, transport, opts...)`. Handshake is executed during connect and returned client is ready for `GetTools`, `GetResourceTool`, `GetPrompts`, `GetPrompt`.
+- **Read limits**: proxy tool **Execute** (`runMCPToolCall`, `GetResourceTool`, `GetPrompt`) map transport `ErrReadLimitExceeded` via `MapReadLimitError` with `Client.maxStreamBytes()`. **Library pagination** (`GetTools`, `GetPrompts` iterators) and **Initialize** also map read-limit errors the same way. Wrap at the call site if you need bare sentinel in library-only code.
 - **Manifest policy**: MCP tool `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`) map to `toolsy` manifest fields on proxy tools. `openWorldHint` is accepted but not mapped (no direct manifest equivalent). `read_mcp_resource` is `ReadOnly`.
 - **Thread-safe**: Safe for concurrent use (e.g. `Registry.ExecuteBatchStream`). Request IDs are generated with `atomic.Uint64`; pending responses are correlated via `sync.Map`.
 - **Resilience**: Context cancellation and yield errors trigger `notifications/cancelled` and return `toolsy.ErrStreamAborted`. Process crash (stdio) unblocks all pending `Call`s with an error.
@@ -98,7 +99,8 @@ The `Transport` interface provides `Call(ctx, method, params) (result []byte, re
 
 - `NewStdioTransport(executable string, args []string, opts ...StdioTransportOption)` — executable, **args as a slice** (convenient for programmatic command building, e.g. conditionally appending `--debug` or `--path`), and optional options. The spec document may show a variadic example; the implementation uses a slice and options (WithLogger, WithStdioFirstLineTimeout) for consistency and programmatic use.
 - Options: `mcp.WithLogger(logger *slog.Logger)` (stderr forwarded to logger; default `slog.Default()`); `mcp.WithStdioFirstLineTimeout(d time.Duration)` (max wait for first stdout line after start; default 30s); `mcp.WithStdioMaxStreamBytes(n)`.
-- Stderr lines are scanned with the same 1 MiB line cap; read loops honor context cancellation via `readCtx`.
+- Stderr lines are scanned with the same 1 MiB line cap and total stream byte budget (`WithStdioMaxStreamBytes`); log lines are truncated to 256 bytes for observability. Read loops honor context cancellation via `readCtx`; mid-read cancel uses `httptool.LimitStreamReaderWithContext` (stdout pipe and stderr forward).
+- Stream reads use `httptool.LimitStreamReaderWithContext` (compose `textprocessor.ReaderWithContext` + byte budget); exceeding the total stream cap returns `textprocessor.ErrReadLimitExceeded` (partial data may have been consumed before the error). Cancellation during an in-progress `Read` is honored via the same wrapper. See [docs/migration-task30.md](../docs/migration-task30.md) for stream tier vs fail-closed transport reads.
 
 ## SSE transport
 
@@ -112,6 +114,10 @@ The `Transport` interface provides `Call(ctx, method, params) (result []byte, re
 ## Content formatting
 
 Tool and resource results are converted to LLM-friendly text via **`mcp.FormatContent`**: text parts are concatenated, images are embedded as Markdown `![image](data:<mediaType>;base64,...)`. When the server sets `isError: true`, the chunk is prefixed with "Tool error: " and `Chunk.IsError` is set. You can override formatting by providing your own logic and calling `FormatContentItems` or parsing results yourself.
+
+## Read-limit and cancel golden order
+
+When a composite error carries both a context interrupt and `textprocessor.ErrReadLimitExceeded`, MCP client and transport paths return the interrupt — not `CodeValidationFailed`. This applies to `mapCallReadLimitFor`, `handleToolCallResult`, `finish*CallResponse`, and `streamLimitErr()`. Read-limit mapping uses subject-specific `toolsy.MapReadLimitErrorFor` (e.g. `"MCP initialize response"`, `"MCP tool response"`). See [docs/migration-task30.md](../docs/migration-task30.md) (MCP cancel-over-limit).
 
 ## Requirements
 

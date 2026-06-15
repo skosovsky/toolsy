@@ -3,13 +3,18 @@ package e2b
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"maps"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/internal/sandboxfs"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type fakeClient struct {
@@ -31,18 +36,19 @@ func (c *fakeClient) CreateSandbox(context.Context) (Session, error) {
 }
 
 type fakeSession struct {
-	writes     map[string][]byte
-	writeErrs  map[string]error
-	result     CommandResult
-	err        error
-	killed     bool
-	killCount  int
-	command    string
-	env        map[string]string
-	blockRun   bool
-	blockKill  bool
-	writeDelay time.Duration
-	runDelay   time.Duration
+	writes       map[string][]byte
+	writeErrs    map[string]error
+	result       CommandResult
+	err          error
+	killed       bool
+	killCount    int
+	command      string
+	env          map[string]string
+	blockRun     bool
+	blockKill    bool
+	writeDelay   time.Duration
+	runDelay     time.Duration
+	stdoutChunks []string
 }
 
 func (s *fakeSession) WriteFile(_ context.Context, path string, data []byte) error {
@@ -59,7 +65,12 @@ func (s *fakeSession) WriteFile(_ context.Context, path string, data []byte) err
 	return nil
 }
 
-func (s *fakeSession) StartAndWait(ctx context.Context, command string, env map[string]string) (CommandResult, error) {
+func (s *fakeSession) StartAndWait(
+	ctx context.Context,
+	command string,
+	env map[string]string,
+	stdout, stderr io.Writer,
+) (CommandResult, error) {
 	s.command = command
 	if len(env) > 0 {
 		s.env = make(map[string]string, len(env))
@@ -75,7 +86,23 @@ func (s *fakeSession) StartAndWait(ctx context.Context, command string, env map[
 	if s.err != nil {
 		return CommandResult{}, s.err
 	}
-	return s.result, nil
+	if len(s.stdoutChunks) > 0 && stdout != nil {
+		for _, chunk := range s.stdoutChunks {
+			if _, err := io.WriteString(stdout, chunk); err != nil {
+				return CommandResult{}, err
+			}
+		}
+	} else if stdout != nil && s.result.Stdout != "" {
+		if _, err := io.WriteString(stdout, s.result.Stdout); err != nil {
+			return CommandResult{}, err
+		}
+	}
+	if stderr != nil && s.result.Stderr != "" {
+		if _, err := io.WriteString(stderr, s.result.Stderr); err != nil {
+			return CommandResult{}, err
+		}
+	}
+	return CommandResult{ExitCode: s.result.ExitCode}, nil
 }
 
 func (s *fakeSession) Kill(ctx context.Context) error {
@@ -373,4 +400,64 @@ func TestRunDurationExcludesProvisioningAndUpload(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, res.Duration, 20*time.Millisecond)
 	require.Less(t, res.Duration, 70*time.Millisecond)
+}
+
+func TestRunRejectsOversizedRemoteOutputStreaming(t *testing.T) {
+	chunk := strings.Repeat("x", 64*1024)
+	chunks := make([]string, 0, 5)
+	for range 5 {
+		chunks = append(chunks, chunk)
+	}
+	session := &fakeSession{stdoutChunks: chunks, result: CommandResult{ExitCode: 0}}
+	sb, err := New(&fakeClient{session: session})
+	require.NoError(t, err)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "python",
+		Code:     "print(1)",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "byte limit")
+}
+
+func TestRunRejectsOversizedRemoteOutput(t *testing.T) {
+	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
+	session := &fakeSession{result: CommandResult{Stdout: big, ExitCode: 0}}
+	sb, err := New(&fakeClient{session: session})
+	require.NoError(t, err)
+
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
+		Language: "python",
+		Code:     "print(1)",
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.Contains(t, err.Error(), "byte limit")
+}
+
+func TestClassifyControlPlaneError_TimeoutOverReadLimit(t *testing.T) {
+	t.Parallel()
+	err := classifyControlPlaneError(
+		context.Background(),
+		fmt.Errorf("start: %w", exectool.ErrTimeout),
+		"start process",
+	)
+	require.ErrorIs(t, err, exectool.ErrTimeout)
+}
+
+func TestClassifyControlPlaneError_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	capErr := fmt.Errorf(
+		"%w: stdout exceeds %d byte limit: %w",
+		exectool.ErrSandboxFailure,
+		4096,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	wrapped := fmt.Errorf("start: %w", context.Canceled)
+	inner := fmt.Errorf("setup: %w", errors.Join(wrapped, capErr))
+	err := classifyControlPlaneError(context.Background(), inner, "start process")
+	require.ErrorIs(t, err, context.Canceled)
 }

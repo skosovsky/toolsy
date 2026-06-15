@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
@@ -52,8 +54,8 @@ func (c *Client) streamStepsOnce(
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return "", false, false, fmt.Errorf("agents: stream steps: status %d", resp.StatusCode)
 	}
-	limitedBody := httptool.LimitStreamReader(resp.Body, httptool.DefaultMaxSSEStreamBytes)
-	lastID, done, yieldedAny, err := parseSSESteps(ctx, limitedBody, yield)
+	limitedBody := httptool.LimitStreamReaderWithContext(ctx, resp.Body, c.maxSSEStreamBytes())
+	lastID, done, yieldedAny, err := parseSSESteps(ctx, limitedBody, c.maxSSEStreamBytes(), yield)
 	if err != nil {
 		return lastID, done, yieldedAny, err
 	}
@@ -115,7 +117,12 @@ func consumeSSELine(line string, data, id *string) {
 // parseSSESteps reads SSE from r, parses each event's data as Step, and calls yield(step, nil).
 // Yields at most one error (and then stops). Returns last event id, whether a step had IsLast,
 // whether at least one step was yielded, and any parse/read error.
-func parseSSESteps(ctx context.Context, r io.Reader, yield func(Step, error) bool) (string, bool, bool, error) {
+func parseSSESteps(
+	ctx context.Context,
+	r io.Reader,
+	maxStreamBytes int,
+	yield func(Step, error) bool,
+) (string, bool, bool, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(nil, maxSSEScanBytes)
 	var data, id string
@@ -147,10 +154,27 @@ func parseSSESteps(ctx context.Context, r io.Reader, yield func(Step, error) boo
 		data = ""
 		id = ""
 	}
-	if scanErr := scanner.Err(); scanErr != nil {
-		return lastID, done, yieldedAny, fmt.Errorf("agents: read stream: %w", scanErr)
+	return lastID, done, yieldedAny, classifySSEScanError(ctx, scanner.Err(), maxStreamBytes)
+}
+
+func classifySSEScanError(ctx context.Context, scanErr error, maxStreamBytes int) error {
+	if scanErr == nil {
+		return nil
 	}
-	return lastID, done, yieldedAny, nil
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if toolsy.IsContextInterrupt(scanErr) {
+		return scanErr
+	}
+	if textprocessor.IsReadLimitExceeded(scanErr) {
+		return fmt.Errorf(
+			"agents: stream exceeds %d byte limit: %w",
+			maxStreamBytes,
+			scanErr,
+		)
+	}
+	return fmt.Errorf("agents: read stream: %w", scanErr)
 }
 
 // StreamSteps connects to GET /ap/v1/agent/tasks/{task_id}/steps?stream=true and returns an iterator over steps.

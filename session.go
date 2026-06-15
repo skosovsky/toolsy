@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"errors"
 	"iter"
 	"slices"
 	"sync"
@@ -145,7 +144,7 @@ func (s *Session) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chun
 			return nil
 		})
 
-		if !consumerStopped && err != nil && !errors.Is(err, context.Canceled) {
+		if !consumerStopped && err != nil && !isContextInterrupt(err) {
 			yield(Chunk{}, err)
 		}
 	}

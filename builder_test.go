@@ -3,10 +3,14 @@ package toolsy
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestNewTool_Simple(t *testing.T) {
@@ -338,4 +342,171 @@ func TestMarshalToolResult_StandardMarshal(t *testing.T) {
 	data, err := marshalToolResult(payload{N: 7})
 	require.NoError(t, err)
 	require.JSONEq(t, `{"n":7}`, string(data))
+}
+
+func TestWrapHandlerError_WrappedCancel(t *testing.T) {
+	t.Parallel()
+	inner := fmt.Errorf("tool failed: %w", context.Canceled)
+	wrapped := wrapHandlerError(NewInternalError(inner))
+	require.ErrorIs(t, wrapped, context.Canceled)
+	te, ok := AsToolError(wrapped)
+	if ok {
+		require.NotEqual(t, CodeInternal, te.Code)
+	}
+}
+
+func TestWrapHandlerError_WrappedDeadline(t *testing.T) {
+	t.Parallel()
+	inner := fmt.Errorf("tool failed: %w", context.DeadlineExceeded)
+	wrapped := wrapHandlerError(NewInternalError(inner))
+	require.ErrorIs(t, wrapped, context.DeadlineExceeded)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+	require.ErrorIs(t, wrapped, ErrTimeout)
+}
+
+func TestWrapHandlerError_ReadLimitExceeded(t *testing.T) {
+	t.Parallel()
+	wrapped := wrapHandlerError(textprocessor.ErrReadLimitExceeded)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+	require.NotContains(t, te.Reason, "262144")
+}
+
+func TestWrapHandlerError_BareReadLimitExceeded_GenericMessage(t *testing.T) {
+	t.Parallel()
+	wrapped := wrapHandlerError(textprocessor.ErrReadLimitExceeded)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "response exceeds byte limit")
+	require.NotContains(t, te.Reason, "262144")
+}
+
+func TestWrapHandlerError_InternalWrappingReadLimit(t *testing.T) {
+	t.Parallel()
+	inner := fmt.Errorf("proxy stream: %w", textprocessor.ErrReadLimitExceeded)
+	wrapped := wrapHandlerError(NewInternalError(inner))
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+}
+
+func TestNewProxyTool_BareReadLimitExceeded(t *testing.T) {
+	t.Parallel()
+	tool, err := NewProxyTool(
+		"proxy_limit",
+		"Returns read limit error",
+		[]byte(`{"type":"object"}`),
+		func(_ context.Context, _ *RunEnv, _ []byte, _ func(Chunk) error) error {
+			return textprocessor.ErrReadLimitExceeded
+		},
+	)
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{}`)},
+		func(Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+}
+
+func TestWrapHandlerError_BareCancel(t *testing.T) {
+	t.Parallel()
+	wrapped := wrapHandlerError(context.Canceled)
+	require.ErrorIs(t, wrapped, context.Canceled)
+	_, ok := AsToolError(wrapped)
+	require.False(t, ok)
+}
+
+func TestWrapHandlerError_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	cancelWrapped := fmt.Errorf("aborted: %w", context.Canceled)
+	inner := NewInternalError(fmt.Errorf("tool: %w", cancelWrapped))
+	wrapped := wrapHandlerError(inner)
+	require.ErrorIs(t, wrapped, context.Canceled)
+
+	limitOnly := wrapHandlerError(NewInternalError(composite))
+	te, ok := AsToolError(limitOnly)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+}
+
+func TestWrapHandlerError_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf(
+		"read failed: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	wrapped := wrapHandlerError(composite)
+	require.ErrorIs(t, wrapped, context.Canceled)
+	_, ok := AsToolError(wrapped)
+	require.False(t, ok)
+}
+
+func TestWrapHandlerError_DeadlineOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	deadlineWrapped := fmt.Errorf("slow: %w", context.DeadlineExceeded)
+	inner := NewInternalError(fmt.Errorf("tool: %w", deadlineWrapped))
+	wrapped := wrapHandlerError(inner)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+
+	limitOnly := wrapHandlerError(NewInternalError(composite))
+	te2, ok := AsToolError(limitOnly)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te2.Code)
+}
+
+func TestWrapHandlerError_BareErrTimeout(t *testing.T) {
+	t.Parallel()
+	wrapped := wrapHandlerError(ErrTimeout)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+	require.True(t, te.Retryable)
+}
+
+func TestWrapHandlerError_TimeoutOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf("read failed: %w", textprocessor.ErrReadLimitExceeded)
+	timeoutWrapped := fmt.Errorf("slow: %w", ErrTimeout)
+	inner := NewInternalError(fmt.Errorf("tool: %w", timeoutWrapped))
+	wrapped := wrapHandlerError(inner)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeTimeout, te.Code)
+
+	limitOnly := wrapHandlerError(NewInternalError(composite))
+	te2, ok := AsToolError(limitOnly)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te2.Code)
+}
+
+func TestWrapHandlerError_SandboxReadLimitSubject(t *testing.T) {
+	t.Parallel()
+	const maxBytes = 4096
+	capErr := fmt.Errorf(
+		"sandbox: stdout exceeds %d byte limit: %w",
+		maxBytes,
+		textprocessor.ErrReadLimitExceeded,
+	)
+	wrapped := wrapHandlerError(capErr)
+	te, ok := AsToolError(wrapped)
+	require.True(t, ok)
+	require.Equal(t, CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "stdout exceeds 4096 byte limit")
 }

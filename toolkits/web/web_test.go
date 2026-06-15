@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,6 +111,298 @@ func TestWebScrape_Success(t *testing.T) {
 	)
 	require.Contains(t, result.Markdown, "Hello")
 	require.Contains(t, result.Markdown, "world")
+}
+
+func TestWebScrape_ExceedsMaxBody(t *testing.T) {
+	const maxPage = 4096
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte("<html><body><p>" + strings.Repeat("x", 50000) + "</p></body></html>"))
+	}))
+	defer server.Close()
+
+	provider := &mockSearchProvider{}
+	tools, err := AsTools(
+		provider,
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxPageBytes(maxPage),
+	)
+	require.NoError(t, err)
+	scrapeTool := tools[1]
+
+	err = scrapeTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(scrapeContentByteCap(maxPage)))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestWebScrape_MarkdownExpansionExceedsCap(t *testing.T) {
+	const maxPage = 250
+	contentCap := scrapeContentByteCap(maxPage)
+	// Many <hr/> tags: HTML fits content cap but markdown expands (--- per rule).
+	body := "<html><body>" + strings.Repeat("<hr/>", 41) + "</body></html>"
+	require.LessOrEqual(t, len(body), contentCap)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	provider := &mockSearchProvider{}
+	tools, err := AsTools(
+		provider,
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxPageBytes(maxPage),
+	)
+	require.NoError(t, err)
+	scrapeTool := tools[1]
+
+	err = scrapeTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "markdown exceeds")
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestParseScrapeResponse_CancelOverMarkdownCap_ReturnsInternal(t *testing.T) {
+	const maxPage = 4096
+	contentCap := scrapeContentByteCap(maxPage)
+	o := &options{}
+	WithMaxPageBytes(maxPage)(o)
+	applyDefaults(o)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("<p>x</p>")),
+	}
+	_, err := parseScrapeResponse(ctx, resp, o)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+
+	// With active ctx, markdown exceed still maps validation.
+	activeCtx := context.Background()
+	WithScraper(&mockScraper{fn: func(_ context.Context, _ string, maxBytes int) (string, error) {
+		return "", WrapMarkdownExceedsLimit(maxBytes)
+	}})(o)
+	_, err = parseScrapeResponse(activeCtx, resp, o)
+	require.Error(t, err)
+	te, ok = toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+}
+
+func TestScrape_CancelOverHTMLReadLimit_InterruptWins(t *testing.T) {
+	const maxPage = 4096
+	contentCap := scrapeContentByteCap(maxPage)
+	o := &options{}
+	WithMaxPageBytes(maxPage)(o)
+	applyDefaults(o)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	huge := strings.Repeat("x", contentCap+100)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader(huge)),
+	}
+	_, err := parseScrapeResponse(ctx, resp, o)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestScrape_InterruptInChainOverReadLimit_InterruptWins(t *testing.T) {
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	mapped := toolsy.MapToolkitReadError(
+		context.Background(),
+		composite,
+		"toolkit/web: read body",
+		scrapeContentByteCap(4096),
+		"page",
+		"use WithMaxPageBytes to raise the budget",
+	)
+	require.Error(t, mapped)
+	require.ErrorIs(t, mapped, context.Canceled)
+	te, ok := toolsy.AsToolError(mapped)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+func TestParseScrapeResponse_MarkdownExceedsCap(t *testing.T) {
+	const maxPage = 4096
+	contentCap := scrapeContentByteCap(maxPage)
+	o := &options{}
+	WithMaxPageBytes(maxPage)(o)
+	WithScraper(&mockScraper{fn: func(_ context.Context, _ string, maxBytes int) (string, error) {
+		return "", WrapMarkdownExceedsLimit(maxBytes)
+	}})(o)
+	applyDefaults(o)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("<p>x</p>")),
+	}
+	_, err := parseScrapeResponse(context.Background(), resp, o)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "markdown exceeds")
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestParseScrapeResponse_CancelDuringConvert(t *testing.T) {
+	o := &options{}
+	WithScraper(&mockScraper{fn: func(ctx context.Context, _ string, _ int) (string, error) {
+		return "", ctx.Err()
+	}})(o)
+	applyDefaults(o)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("<p>x</p>")),
+	}
+	_, err := parseScrapeResponse(ctx, resp, o)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.ErrorIs(t, te, context.Canceled)
+}
+
+func TestWebScrape_CancelDuringDo(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		_, _ = w.Write([]byte("<p>x</p>"))
+	}))
+	defer server.Close()
+
+	provider := &mockSearchProvider{}
+	tools, err := AsTools(
+		provider,
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+	)
+	require.NoError(t, err)
+	scrapeTool := tools[1]
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- scrapeTool.Execute(
+			ctx,
+			toolsy.NewRunEnv(nil),
+			toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
+			func(toolsy.Chunk) error { return nil },
+		)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	err = <-done
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestParseScrapeResponse_CustomScraperMarkdownMessage(t *testing.T) {
+	const maxPage = 4096
+	o := &options{}
+	WithMaxPageBytes(maxPage)(o)
+	WithScraper(&mockScraper{fn: func(_ context.Context, _ string, maxBytes int) (string, error) {
+		return "", fmt.Errorf("custom markdown exceeds %d byte limit", maxBytes)
+	}})(o)
+	applyDefaults(o)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Body:       io.NopCloser(strings.NewReader("<p>x</p>")),
+	}
+	_, err := parseScrapeResponse(context.Background(), resp, o)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+func TestWebScrape_CustomScraper_ExceedsCap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<p>x</p>"))
+	}))
+	defer server.Close()
+
+	const maxPage = 4096
+	contentCap := scrapeContentByteCap(maxPage)
+	custom := &mockScraper{fn: func(_ context.Context, _ string, maxBytes int) (string, error) {
+		require.Equal(t, contentCap, maxBytes)
+		return "", fmt.Errorf("toolkit/web: markdown exceeds %d byte limit: %w", maxBytes, ErrMarkdownExceedsLimit)
+	}}
+	provider := &mockSearchProvider{}
+	tools, err := AsTools(
+		provider,
+		WithScraper(custom),
+		WithHTTPClient(server.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxPageBytes(maxPage),
+	)
+	require.NoError(t, err)
+
+	err = tools[1].Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
 func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
@@ -219,7 +515,7 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 	defer server.Close()
 
 	customCalled := false
-	custom := &mockScraper{fn: func(_ string, _ int) (string, error) {
+	custom := &mockScraper{fn: func(_ context.Context, _ string, _ int) (string, error) {
 		customCalled = true
 		return "custom output", nil
 	}}
@@ -245,11 +541,11 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 }
 
 type mockScraper struct {
-	fn func(html string, maxBytes int) (string, error)
+	fn func(ctx context.Context, html string, maxBytes int) (string, error)
 }
 
-func (m *mockScraper) HTMLToMarkdown(html string, maxBytes int) (string, error) {
-	return m.fn(html, maxBytes)
+func (m *mockScraper) HTMLToMarkdown(ctx context.Context, html string, maxBytes int) (string, error) {
+	return m.fn(ctx, html, maxBytes)
 }
 
 func TestAsTools_NilProvider_Error(t *testing.T) {
@@ -260,7 +556,7 @@ func TestAsTools_NilProvider_Error(t *testing.T) {
 func TestHTMLScraper_StripsTags(t *testing.T) {
 	html := `<p>Text</p><script>huge();</script><style>body{}</style>`
 	s := newHTMLScraper()
-	out, err := s.HTMLToMarkdown(html, 10000)
+	out, err := s.HTMLToMarkdown(context.Background(), html, 10000)
 	require.NoError(t, err)
 	require.Contains(t, out, "Text")
 	require.False(t, strings.Contains(out, "huge") || strings.Contains(out, "body{}"))
@@ -294,7 +590,7 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 func TestHTMLScraper_StripsLayoutElements(t *testing.T) {
 	html := `<header><p>Site header</p></header><main><p>Main content here</p></main><nav>Links</nav><aside>Sidebar</aside><footer>Copyright</footer>`
 	s := newHTMLScraper()
-	out, err := s.HTMLToMarkdown(html, 10000)
+	out, err := s.HTMLToMarkdown(context.Background(), html, 10000)
 	require.NoError(t, err)
 	require.Contains(t, out, "Main content here")
 	require.NotContains(t, out, "Site header")
@@ -577,14 +873,19 @@ func TestWebScrape_WithMaxPageBytes_WithResultFormatter(t *testing.T) {
 }
 
 func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
-	body := "<html><body><p>" + strings.Repeat("x", 220) + "</p></body></html>"
+	// HTML must fit scrapeContentByteCap(maxWire) — read is fail-closed.
+	const maxWire = 250
+	contentCap := scrapeContentByteCap(maxWire)
+	overhead := len("<html><body><p>") + len("</p></body></html>")
+	repeat := max(contentCap-overhead, 1)
+	body := "<html><body><p>" + strings.Repeat("x", repeat) + "</p></body></html>"
+	require.LessOrEqual(t, len(body), contentCap)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(body))
 	}))
 	defer server.Close()
 
-	const maxWire = 250
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
 		WithHTTPClient(server.Client()),
@@ -615,13 +916,13 @@ func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
 	}
 }
 
-func TestHTMLScraper_TruncatesWithoutSuffix(t *testing.T) {
+func TestHTMLScraper_ExceedsMaxBytesReturnsError(t *testing.T) {
 	html := "<html><body><p>" + strings.Repeat("x", 500) + "</p></body></html>"
 	s := newHTMLScraper()
-	out, err := s.HTMLToMarkdown(html, 50)
-	require.NoError(t, err)
-	require.LessOrEqual(t, len(out), 50)
-	require.NotContains(t, out, "[Truncated]")
+	_, err := s.HTMLToMarkdown(context.Background(), html, 50)
+	require.Error(t, err)
+	require.True(t, IsMarkdownExceedsLimit(err))
+	require.Contains(t, err.Error(), "exceeds 50 byte limit")
 }
 
 func TestHTMLScraper_ContextCanceled(t *testing.T) {

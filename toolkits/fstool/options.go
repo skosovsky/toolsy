@@ -55,7 +55,8 @@ func WithReadOnly(readOnly bool) Option {
 	}
 }
 
-// WithMaxBytes sets the maximum bytes to read from a file (default 1 MB). Truncation is UTF-8 safe.
+// WithMaxBytes sets the wire JSON byte budget for read_file (default 1 MB). Fail-closed reads use
+// readContentByteCap(maxBytes); exceeding returns a validation error (stat pre-check or read).
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n

@@ -36,7 +36,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 				"reason": args.Reason,
 			})
 			if marshalErr != nil {
-				return fmt.Errorf("toolkit/human: marshal approval payload: %w", marshalErr)
+				return toolsy.NewInternalError(fmt.Errorf("toolkit/human: marshal approval payload: %w", marshalErr))
 			}
 			return toolsy.YieldControl(yield, &toolsy.PauseSignal{
 				Reason: string(payload),
@@ -57,7 +57,9 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 				"question": args.Question,
 			})
 			if marshalErr != nil {
-				return fmt.Errorf("toolkit/human: marshal clarification payload: %w", marshalErr)
+				return toolsy.NewInternalError(
+					fmt.Errorf("toolkit/human: marshal clarification payload: %w", marshalErr),
+				)
 			}
 			return toolsy.YieldControl(yield, &toolsy.PauseSignal{
 				Reason: string(payload),

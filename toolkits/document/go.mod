@@ -6,7 +6,6 @@ require (
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/skosovsky/toolsy v0.0.0
 	github.com/skosovsky/toolsy/toolkits/httptool v0.0.0
-	github.com/skosovsky/toolsy/toolkits/internal/format v0.0.0
 	github.com/stretchr/testify v1.11.1
 )
 
@@ -20,5 +19,4 @@ require (
 replace (
 	github.com/skosovsky/toolsy => ../..
 	github.com/skosovsky/toolsy/toolkits/httptool => ../httptool
-	github.com/skosovsky/toolsy/toolkits/internal/format => ../internal/format
 )

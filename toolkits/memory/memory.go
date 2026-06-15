@@ -146,14 +146,14 @@ func loadFacts(ctx context.Context, run *toolsy.RunEnv) (map[string]string, erro
 	}
 	raw, err := run.StateStore.Load(ctx, factsStateKey)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/memory: load facts: %w", err)
+		return nil, toolsy.NewInternalError(fmt.Errorf("toolkit/memory: load facts: %w", err))
 	}
 	if len(raw) == 0 {
 		return map[string]string{}, nil
 	}
 	facts := make(map[string]string)
 	if err := json.Unmarshal(raw, &facts); err != nil {
-		return nil, fmt.Errorf("toolkit/memory: decode facts: %w", err)
+		return nil, toolsy.NewInternalError(fmt.Errorf("toolkit/memory: decode facts: %w", err))
 	}
 	return facts, nil
 }
@@ -164,10 +164,10 @@ func saveFacts(ctx context.Context, run *toolsy.RunEnv, facts map[string]string)
 	}
 	raw, err := json.Marshal(facts)
 	if err != nil {
-		return fmt.Errorf("toolkit/memory: encode facts: %w", err)
+		return toolsy.NewInternalError(fmt.Errorf("toolkit/memory: encode facts: %w", err))
 	}
 	if err := run.StateStore.Save(ctx, factsStateKey, raw); err != nil {
-		return fmt.Errorf("toolkit/memory: save facts: %w", err)
+		return toolsy.NewInternalError(fmt.Errorf("toolkit/memory: save facts: %w", err))
 	}
 	return nil
 }

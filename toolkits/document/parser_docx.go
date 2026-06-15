@@ -15,16 +15,26 @@ import (
 
 const wordDocXML = "word/document.xml"
 
+const maxZipEntries = 1024
+
 // parseDOCX extracts text from a DOCX (ZIP with word/document.xml). Reads from r with size limit (zip bomb protection).
 func parseDOCX(ctx context.Context, r io.ReaderAt, size int64, maxBytes int) (string, error) {
 	zr, err := zip.NewReader(r, size)
 	if err != nil {
 		return "", toolsy.NewInternalError(fmt.Errorf("document: docx zip: %w", err))
 	}
+	if ie := toolsy.ToolkitContextError(ctx, "document: docx zip entries"); ie != nil {
+		return "", ie
+	}
+	if len(zr.File) > maxZipEntries {
+		return "", toolsy.NewValidationError(
+			fmt.Sprintf("docx zip entry count %d exceeds %d entry limit", len(zr.File), maxZipEntries),
+		)
+	}
 	var docFile *zip.File
 	for _, f := range zr.File {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", fmt.Errorf("toolkit/document: %w", ctxErr)
+		if ie := toolsy.ToolkitContextError(ctx, "document: docx zip walk"); ie != nil {
+			return "", ie
 		}
 		if f.Name == wordDocXML {
 			docFile = f
@@ -34,22 +44,32 @@ func parseDOCX(ctx context.Context, r io.ReaderAt, size int64, maxBytes int) (st
 	if docFile == nil {
 		return "", toolsy.NewValidationError(fmt.Sprintf("document: docx missing %s", wordDocXML))
 	}
+	if ie := toolsy.ToolkitContextError(ctx, "document: docx size check"); ie != nil {
+		return "", ie
+	}
 	if maxBytes > 0 && docFile.UncompressedSize64 > uint64(maxBytes) {
-		return "", toolsy.NewValidationError(
-			fmt.Sprintf("document: docx uncompressed size %d exceeds limit", docFile.UncompressedSize64),
-		)
+		return "", toolsy.MapToolkitCapError(ctx, "document: docx size check", maxBytes, "docx uncompressed size", "")
 	}
 	rc, err := docFile.Open()
 	if err != nil {
-		return "", err
+		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: open docx entry: %w", err))
 	}
 	defer func() { _ = rc.Close() }()
-	limited := io.LimitReader(rc, int64(maxBytes)+1)
-	rawStr, err := textprocessor.ReadLimited(ctx, limited, maxBytes, "")
-	if err != nil {
-		return "", err
+	raw, err := textprocessor.ReadLimitedBytes(ctx, rc, maxBytes)
+	if mapped := toolsy.MapToolkitReadError(
+		ctx,
+		err,
+		"document: docx read",
+		maxBytes,
+		"docx content",
+		"",
+	); mapped != nil {
+		return "", mapped
 	}
-	return extractTextFromWordXML(ctx, []byte(rawStr), maxBytes)
+	if err != nil {
+		return "", toolsy.NewInternalError(fmt.Errorf("document: docx read: %w", err))
+	}
+	return extractTextFromWordXML(ctx, raw, maxBytes)
 }
 
 // extractTextFromWordXML parses word/document.xml and extracts text from w:t elements.
@@ -59,8 +79,8 @@ func extractTextFromWordXML(ctx context.Context, raw []byte, maxBytes int) (stri
 	tokens := 0
 	for {
 		if tokens%64 == 0 {
-			if err := ctx.Err(); err != nil {
-				return "", fmt.Errorf("toolkit/document: %w", err)
+			if ie := toolsy.ToolkitContextError(ctx, "document: docx xml"); ie != nil {
+				return "", ie
 			}
 		}
 		tokens++
@@ -69,18 +89,22 @@ func extractTextFromWordXML(ctx context.Context, raw []byte, maxBytes int) (stri
 			break
 		}
 		if err != nil {
-			return "", err
+			return "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: parse word xml: %w", err))
 		}
 		t, ok := tok.(xml.StartElement)
 		if !ok {
 			continue
 		}
 		appendWordMLFromStartElement(t, dec, &b)
-		if b.Len() > maxBytes {
-			return textprocessor.TruncateStringUTF8NoSuffix(b.String(), maxBytes), nil
+		if maxBytes > 0 && b.Len() > maxBytes {
+			return "", toolsy.MapToolkitCapError(ctx, "document: docx xml cap", maxBytes, "docx extracted text", "")
 		}
 	}
-	return textprocessor.TruncateStringUTF8NoSuffix(b.String(), maxBytes), nil
+	text := b.String()
+	if maxBytes > 0 && len(text) > maxBytes {
+		return "", toolsy.MapToolkitCapError(ctx, "document: docx text cap", maxBytes, "docx extracted text", "")
+	}
+	return text, nil
 }
 
 func appendWordMLFromStartElement(t xml.StartElement, dec *xml.Decoder, b *strings.Builder) {

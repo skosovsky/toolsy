@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 type limitReadCloser struct {
@@ -171,6 +174,88 @@ func TestExecuteGraphQLReadsAtMostMaxBytesPlusOne(t *testing.T) {
 	if !bytes.Equal(got.Data, expected) {
 		t.Fatalf("unexpected body: got %q want %q", got.Data, expected)
 	}
+}
+
+func TestPostIntrospection_ExceedsResponseLimit(t *testing.T) {
+	const maxBytes = 20
+	body := strings.Repeat("x", 100)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	_, err := postIntrospection(context.Background(), server.URL, Options{
+		HTTPClient:       server.Client(),
+		MaxResponseBytes: maxBytes,
+		AllowPrivateIPs:  true,
+	})
+	if err == nil {
+		t.Fatal("expected error for oversized introspection response")
+	}
+	if !errors.Is(err, textprocessor.ErrReadLimitExceeded) {
+		t.Fatalf("expected ErrReadLimitExceeded in chain, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), strconv.Itoa(maxBytes)) {
+		t.Fatalf("expected limit in error message, got: %v", err)
+	}
+}
+
+func TestPostIntrospection_CancelOverReadLimit_InterruptWins(t *testing.T) {
+	body := strings.Repeat("x", 100)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := postIntrospection(ctx, server.URL, Options{
+		HTTPClient:       server.Client(),
+		MaxResponseBytes: 10,
+		AllowPrivateIPs:  true,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+	if errors.Is(err, textprocessor.ErrReadLimitExceeded) {
+		t.Fatalf("read limit must not win over cancel: %v", err)
+	}
+}
+
+func TestPostIntrospection_InterruptInChainOverReadLimit_InterruptWins(t *testing.T) {
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	err := mapGraphQLReadError(context.Background(), composite, 4096)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
+	}
+}
+
+func mapGraphQLReadError(ctx context.Context, err error, maxBytes int) error {
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return fmt.Errorf("graphql: introspection exceeds %d byte limit: %w", maxBytes, err)
+	}
+	return fmt.Errorf("graphql: read: %w", err)
 }
 
 func TestPostIntrospection_Non2xxStatus(t *testing.T) {

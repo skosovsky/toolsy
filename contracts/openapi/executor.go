@@ -88,7 +88,7 @@ func execute(
 		return fmt.Errorf("openapi: response status %d", resp.StatusCode)
 	}
 
-	text, err := textprocessor.ReadLimited(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	text, err := textprocessor.ReadAndTruncate(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
 	if err != nil {
 		return fmt.Errorf("openapi: read response: %w", err)
 	}

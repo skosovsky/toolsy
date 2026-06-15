@@ -1,9 +1,12 @@
 package toolsy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // Sentinel errors for toolsy. Use [errors.Is] to check.
@@ -134,6 +137,95 @@ func NewTimeoutError(retryable bool) *ToolError {
 		Retryable: retryable,
 		Err:       ErrTimeout,
 	}
+}
+
+// NewTimeoutErrorFrom reports execution timeout while preserving cause (e.g. [context.DeadlineExceeded]) in the unwrap chain.
+func NewTimeoutErrorFrom(cause error, retryable bool) *ToolError {
+	if cause == nil {
+		return NewTimeoutError(retryable)
+	}
+	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+		Code:      CodeTimeout,
+		Reason:    ErrTimeout.Error(),
+		Retryable: retryable,
+		Err:       fmt.Errorf("%w: %w", ErrTimeout, cause),
+	}
+}
+
+// MapReadLimitError maps [textprocessor.ErrReadLimitExceeded] to [CodeValidationFailed] for LLM-facing tools.
+// When maxBytes > 0, Reason includes the limit; otherwise a generic message is used.
+// If maxBytes is 0, [textprocessor.ReadLimitMaxBytes] scans the unwrap chain for "exceeds N byte limit".
+func MapReadLimitError(err error, maxBytes int) error {
+	if !textprocessor.IsReadLimitExceeded(err) {
+		return err
+	}
+	if maxBytes <= 0 {
+		maxBytes = textprocessor.ReadLimitMaxBytes(err)
+	}
+	if maxBytes > 0 {
+		return NewValidationError(fmt.Sprintf("response exceeds %d byte limit", maxBytes))
+	}
+	return NewValidationError("response exceeds byte limit")
+}
+
+// MapReadLimitErrorFor maps [textprocessor.ErrReadLimitExceeded] to [CodeValidationFailed] with a domain-specific subject.
+// Optional hint is appended after the limit message (e.g. "use WithMaxPageBytes to raise the budget").
+func MapReadLimitErrorFor(err error, maxBytes int, subject string, hint string) error {
+	if !textprocessor.IsReadLimitExceeded(err) {
+		return err
+	}
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return MapReadLimitError(err, maxBytes)
+	}
+	if maxBytes <= 0 {
+		maxBytes = textprocessor.ReadLimitMaxBytes(err)
+	}
+	var msg string
+	if maxBytes > 0 {
+		msg = fmt.Sprintf("%s exceeds %d byte limit", subject, maxBytes)
+	} else {
+		msg = fmt.Sprintf("%s exceeds byte limit", subject)
+	}
+	hint = strings.TrimSpace(hint)
+	if hint != "" {
+		msg += "; " + hint
+	}
+	return NewValidationError(msg)
+}
+
+// MapSandboxReadLimitError maps sandbox [textprocessor.ErrReadLimitExceeded] chains to [CodeValidationFailed].
+// Returns nil for bare sentinel or non-sandbox-formatted limits; callers should use [MapReadLimitError].
+func MapSandboxReadLimitError(err error) error {
+	if !textprocessor.IsReadLimitExceeded(err) {
+		return nil
+	}
+	subject := textprocessor.ReadLimitSubject(err)
+	maxBytes := textprocessor.ReadLimitMaxBytes(err)
+	if subject == "" && maxBytes <= 0 {
+		return nil
+	}
+	if maxBytes <= 0 {
+		maxBytes = defaultSandboxReadLimitBytes
+	}
+	return MapReadLimitErrorFor(err, maxBytes, subject, "")
+}
+
+const (
+	// defaultSandboxReadLimitBytes matches [sandboxfs.DefaultMaxSandboxOutputBytes] (import cycle).
+	defaultSandboxReadLimitBytes = 256 * 1024
+)
+
+// isContextInterrupt reports ctx cancel/deadline/timeout in err's unwrap chain.
+func isContextInterrupt(err error) bool {
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, ErrTimeout)
+}
+
+// IsContextInterrupt reports whether err is or wraps a context cancel, deadline, or [ErrTimeout].
+func IsContextInterrupt(err error) bool {
+	return isContextInterrupt(err)
 }
 
 // NewShutdownError reports registry shutdown.

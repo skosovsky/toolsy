@@ -1,6 +1,6 @@
 # Toolsy: HTTP Toolkit (safe GET/POST for agents)
 
-**Description:** Lets the agent perform HTTP GET and POST requests to external APIs with SSRF protection (allowed domains whitelist, optional private IP checks) and configurable response body truncation.
+**Description:** Lets the agent perform HTTP GET and POST requests to external APIs with SSRF protection (allowed domains whitelist, optional private IP checks) and configurable response body limits (fail-closed).
 
 ## Installation
 
@@ -17,7 +17,7 @@ go get github.com/skosovsky/toolsy/toolkits/httptool
 | `http_get`  | Perform an HTTP GET request         | `{"url": "string"}`                                     |
 | `http_post` | Perform an HTTP POST with JSON body | `{"url": "string", "json_body": {"key": "value", ...}}` |
 
-Result: `{"status": 200, "body": "..."}`. Body is truncated to `maxResponseBody` (default 512KB) with `[Truncated]` suffix if longer. This is a **probe-tool tier**: suffix lives in the `body` field before JSON marshal, not the toolkit wire-cap path (`format.CapWireJSON`).
+Result: `{"status": 200, "body": "..."}`. `WithMaxResponseBody` caps the **body field** budget in probe mode (default 512KB); final wire JSON `{"status":N,"body":"..."}` may be slightly larger due to envelope overhead (~27 bytes). Responses larger than the body limit return **`CodeValidationFailed`** (fail-closed — no silent truncate). Probe tools do **not** use `format.CapWireJSON`; only the body read budget applies.
 
 ## Library mode (without tools)
 
@@ -25,8 +25,11 @@ Use exported primitives in host infrastructure:
 
 ```go
 import (
+	"context"
+	"errors"
 	"net/http"
 
+	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
@@ -36,8 +39,12 @@ func newSafeClient(allowed []string) *http.Client {
 	}, httptool.CheckRedirectAllowed(allowed, false))
 }
 
-// Read response bodies with UTF-8 safe truncation:
-body, err := httptool.ReadBodyLimited(ctx, resp.Body, 512*1024)
+// Read response bodies (fail-closed):
+data, err := httptool.ReadBodyLimited(ctx, resp.Body, 512*1024)
+if errors.Is(err, textprocessor.ErrReadLimitExceeded) {
+    // handle limit
+}
+body := string(data)
 ```
 
 **SafeDialOptions host policy:**
@@ -56,7 +63,7 @@ See `IsBlockedIP` (preferred for SSRF dial/resolve) and `IsPrivateIP` (legacy al
 
 - **Custom client:** `WithHTTPClient` merges only `Timeout` onto the safe client; Transport and CheckRedirect from a custom client are ignored.
 
-- **Response size:** Use `WithMaxResponseBody(n)` to cap response body size (default 512KB). Truncation is UTF-8 safe.
+- **Response size:** `WithMaxResponseBody(n)` sets the **body field** read budget in probe tools (default 512KB), not the full wire JSON size. Exceeding the body limit returns **`CodeValidationFailed`** (fail-closed). Envelope fields (`status`, JSON keys) add fixed overhead on the wire.
 
 - **Headers:** Use `WithHeaders(map[string]string{...})` to add headers to every request. Prefer not to pass secrets to the agent via headers; use a proxy or server-side auth instead.
 

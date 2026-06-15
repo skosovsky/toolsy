@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
@@ -48,6 +50,7 @@ func WithStdioMaxStreamBytes(n int) StdioTransportOption {
 }
 
 const stdioFirstLineTimeout = 30 * time.Second
+const maxStdioLogLineBytes = 256
 
 var errStdioFirstLineTimeout = errors.New("mcp stdio: timeout waiting for first line from process stdout")
 
@@ -81,6 +84,8 @@ type stdioTransport struct {
 
 	readerDone chan struct{}
 	writeMu    sync.Mutex
+	streamErr  error
+	streamMu   sync.RWMutex
 
 	notifyMu       sync.Mutex
 	notifyHandlers map[string]func(params []byte)
@@ -94,7 +99,7 @@ type StdioTransport struct {
 // NewStdioTransport creates a transport that runs a child process and uses stdin/stdout for JSON-RPC.
 // Stderr is forwarded to the logger. Use WithLogger to set a custom logger; otherwise [slog.Default] is used.
 func NewStdioTransport(executable string, args []string, opts ...StdioTransportOption) *StdioTransport {
-	t := &stdioTransport{
+	t := &stdioTransport{ //nolint:exhaustruct // streamErr/streamMu zero-initialized
 		executable:       executable,
 		args:             args,
 		logger:           slog.Default(),
@@ -158,7 +163,7 @@ func (t *stdioTransport) start(ctx context.Context) error {
 		t.startErr = err
 		return err
 	}
-	t.stdout = httptool.LimitStreamReadCloser(stdoutPipe, t.maxStreamBytes)
+	t.stdout = httptool.LimitStreamReadCloserWithContext(ctx, stdoutPipe, t.maxStreamBytes)
 
 	stderrPipe, err := t.cmd.StderrPipe()
 	if err != nil {
@@ -177,7 +182,7 @@ func (t *stdioTransport) start(ctx context.Context) error {
 	}
 
 	// Forward stderr to logger so JSON-RPC channel is not broken.
-	go t.forwardStderr(stderrPipe)
+	go t.forwardStderr(ctx, stderrPipe)
 
 	// Read loop: parse JSON-RPC from stdout and dispatch.
 	go t.readLoop()
@@ -206,14 +211,22 @@ func (t *stdioTransport) start(ctx context.Context) error {
 	}
 }
 
-func (t *stdioTransport) forwardStderr(r io.Reader) {
-	scanner := bufio.NewScanner(r)
+func truncateLogLine(s string) string {
+	if len(s) <= maxStdioLogLineBytes {
+		return s
+	}
+	return s[:maxStdioLogLineBytes] + fmt.Sprintf("...(truncated, %d bytes total)", len(s))
+}
+
+func (t *stdioTransport) forwardStderr(ctx context.Context, r io.Reader) {
+	limited := httptool.LimitStreamReaderWithContext(ctx, r, t.maxStreamBytes)
+	scanner := bufio.NewScanner(limited)
 	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
-		t.logger.Info("mcp stderr", "line", scanner.Text())
+		t.logger.InfoContext(ctx, "mcp stderr", "line", truncateLogLine(scanner.Text()))
 	}
 	if err := scanner.Err(); err != nil {
-		t.logger.Error("mcp stderr read", "err", err)
+		t.logger.ErrorContext(ctx, "mcp stderr read", "err", err)
 	}
 }
 
@@ -224,6 +237,11 @@ func (t *stdioTransport) readLoop() {
 	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
 		if t.readCtx != nil && t.readCtx.Err() != nil {
+			err := t.readCtx.Err()
+			t.streamMu.Lock()
+			t.streamErr = err
+			t.streamMu.Unlock()
+			t.unblockAllPending(err)
 			return
 		}
 		line := scanner.Bytes()
@@ -239,6 +257,12 @@ func (t *stdioTransport) readLoop() {
 	if err == nil {
 		err = errors.New("process stdout closed")
 	}
+	if t.readCtx != nil && t.readCtx.Err() != nil {
+		err = t.readCtx.Err()
+	}
+	t.streamMu.Lock()
+	t.streamErr = err
+	t.streamMu.Unlock()
 	t.unblockAllPending(err)
 }
 
@@ -251,7 +275,7 @@ func (t *stdioTransport) dispatchMessage(line []byte) {
 		Params json.RawMessage `json:"params"`
 	}
 	if err := json.Unmarshal(line, &raw); err != nil {
-		t.logger.Info("mcp invalid json from stdout", "line", string(line), "err", err)
+		t.logger.Info("mcp invalid json from stdout", "line", truncateLogLine(string(line)), "err", err)
 		return
 	}
 
@@ -311,6 +335,50 @@ func (t *stdioTransport) unblockAllPending(err error) {
 	})
 }
 
+func (t *stdioTransport) streamLimitErr() error {
+	t.streamMu.RLock()
+	err := t.streamErr
+	t.streamMu.RUnlock()
+	if err == nil {
+		return nil
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return err
+	}
+	return nil
+}
+
+func (t *stdioTransport) finishStdioCallResponse(ctx context.Context, res *callResult) ([]byte, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if res.Err != nil {
+		if toolsy.IsContextInterrupt(res.Err) {
+			return nil, res.Err
+		}
+		if textprocessor.IsReadLimitExceeded(res.Err) {
+			return nil, res.Err
+		}
+		return nil, res.Err
+	}
+	return res.Result, nil
+}
+
+// MaxStreamBytes returns the configured stdout JSON-RPC stream byte budget.
+func (s *StdioTransport) MaxStreamBytes() int {
+	return s.impl.maxStreamBytesConfigured()
+}
+
+func (t *stdioTransport) maxStreamBytesConfigured() int {
+	if t.maxStreamBytes > 0 {
+		return t.maxStreamBytes
+	}
+	return httptool.DefaultMaxSSEStreamBytes
+}
+
 // Call sends a request and waits for the response.
 func (s *StdioTransport) Call(ctx context.Context, method string, params any) ([]byte, string, error) {
 	return s.impl.call(ctx, method, params)
@@ -358,17 +426,28 @@ func (t *stdioTransport) call(ctx context.Context, method string, params any) ([
 		return nil, "", err
 	}
 
+	if ctx.Err() != nil {
+		return nil, idStr, ctx.Err()
+	}
+	if limitErr := t.streamLimitErr(); limitErr != nil {
+		return nil, idStr, limitErr
+	}
+
 	select {
 	case <-ctx.Done():
 		return nil, idStr, ctx.Err()
 	case res, ok := <-ch:
 		if !ok {
+			if ctx.Err() != nil {
+				return nil, idStr, ctx.Err()
+			}
+			if limitErr := t.streamLimitErr(); limitErr != nil {
+				return nil, idStr, limitErr
+			}
 			return nil, idStr, errors.New("response channel closed")
 		}
-		if res.Err != nil {
-			return nil, idStr, res.Err
-		}
-		return res.Result, idStr, nil
+		result, finishErr := t.finishStdioCallResponse(ctx, res)
+		return result, idStr, finishErr
 	}
 }
 
@@ -448,3 +527,5 @@ func (t *stdioTransport) close() error {
 
 // Ensure StdioTransport implements Transport at compile time.
 var _ Transport = (*StdioTransport)(nil)
+
+var _ StreamByteCapTransport = (*StdioTransport)(nil)

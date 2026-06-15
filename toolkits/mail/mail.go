@@ -246,22 +246,15 @@ func normalizeBody(ctx context.Context, body string) string {
 	if !looksLikeHTML(body) {
 		return body
 	}
-	type convertResult struct {
-		markdown string
-		err      error
-	}
-	done := make(chan convertResult, 1)
-	go func() {
-		md, err := htmltomarkdown.ConvertString(body)
-		done <- convertResult{markdown: md, err: err}
-	}()
-	select {
-	case <-ctx.Done():
+	if err := ctx.Err(); err != nil {
 		return body
-	case res := <-done:
-		if res.err != nil {
-			return body
-		}
-		return strings.TrimSpace(res.markdown)
 	}
+	md, err := htmltomarkdown.ConvertString(body)
+	if err != nil {
+		return body
+	}
+	if err := ctx.Err(); err != nil {
+		return body
+	}
+	return strings.TrimSpace(md)
 }

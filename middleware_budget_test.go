@@ -177,12 +177,7 @@ func TestMiddlewareStack_BudgetCheckedOnceWithTruncationAndBatchErrorNotDuplicat
 		},
 	)
 	require.NoError(t, err)
-	require.Len(t, chunks, 1)
-	assert.True(t, chunks[0].IsError)
-	require.Equal(t, MimeTypeToolErrorJSON, chunks[0].MimeType) //nolint:testifylint // mime type
-	te, err := unmarshalToolErrorWire(chunks[0].Data)
-	require.NoError(t, err)
-	assert.Equal(t, CodeTimeout, te.Code)
+	require.Empty(t, chunks)
 	assert.Equal(t, int64(1), attempts.Load())
 	assert.Equal(t, int64(1), tracker.calls.Load())
 }

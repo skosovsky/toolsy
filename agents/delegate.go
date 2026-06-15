@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const (
-	createTaskAuthToolName  = "agents.create_task"
-	cancelTaskAuthToolName  = "agents.cancel_task"
-	streamStepsAuthToolName = "agents.stream_steps"
+	createTaskAuthToolName    = "agents.create_task"
+	cancelTaskAuthToolName    = "agents.cancel_task"
+	streamStepsAuthToolName   = "agents.stream_steps"
+	defaultMaxStepOutputBytes = 256 * 1024
 )
 
 // cancelTaskTimeout bounds CancelTask after the stream context is canceled.
@@ -45,7 +47,11 @@ func formatStepOutput(text string, artifacts []Artifact) string {
 			b.WriteString(fileName)
 		}
 	}
-	return b.String()
+	out := b.String()
+	if defaultMaxStepOutputBytes > 0 && len(out) > defaultMaxStepOutputBytes {
+		out = textprocessor.TruncateStringUTF8(out, defaultMaxStepOutputBytes, textprocessor.TruncationSuffix)
+	}
+	return out
 }
 
 func resolveAuthHeader(ctx context.Context, run *toolsy.RunEnv, toolName string) (string, error) {
@@ -92,6 +98,15 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 			}()
 			for step, streamErr := range client.StreamSteps(ctx, task.TaskID, streamAuth) {
 				if streamErr != nil {
+					if ctxErr := ctx.Err(); ctxErr != nil {
+						return fmt.Errorf("agents: stream ended: %w", ctxErr)
+					}
+					if toolsy.IsContextInterrupt(streamErr) {
+						return fmt.Errorf("agents: stream error: %w", streamErr)
+					}
+					if textprocessor.IsReadLimitExceeded(streamErr) {
+						return toolsy.MapReadLimitErrorFor(streamErr, client.maxSSEStreamBytes(), "SSE step stream", "")
+					}
 					return fmt.Errorf("agents: stream error: %w", streamErr)
 				}
 				if step.IsLast {
@@ -113,7 +128,7 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 				}
 			}
 			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("agents: stream canceled: %w", err)
+				return fmt.Errorf("agents: stream ended: %w", err)
 			}
 			// If the stream ends without a step with IsLast, we exit without a final chunk
 			// (server-dependent behavior; orchestrator gets no final result in that case).

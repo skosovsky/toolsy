@@ -12,16 +12,16 @@ go get github.com/skosovsky/toolsy/toolkits/prompts
 
 ## Available tools
 
-| Tool                     | Description                        | Input                                                    |
-|--------------------------|------------------------------------|----------------------------------------------------------|
-| `get_agent_instructions` | Get system prompt for a given role | `{"role_id": "string", "variables": {"key": "value"}}`  |
+| Tool                     | Description                        | Input                                                  |
+| ------------------------ | ---------------------------------- | ------------------------------------------------------ |
+| `get_agent_instructions` | Get system prompt for a given role | `{"role_id": "string", "variables": {"key": "value"}}` |
 
 Output: Rendered instructions text.
 
 ## Configuration and security
 
 - **WithName / WithDescription:** Customize tool name and description for the registry.
-- **WithMaxBytes(n):** Truncates returned instructions to n bytes (UTF-8 safe). Default 512 KB.
+- **WithMaxBytes(n):** Truncates returned instructions to n bytes (UTF-8 safe) with `\n[Truncated]` suffix. Default 512 KB. **Display/wire tier** after template render — not a fail-closed transport read (see [migration-task30.md](../../docs/migration-task30.md)).
 
 All errors from the provider are wrapped with the `toolkit/prompts:` prefix.
 

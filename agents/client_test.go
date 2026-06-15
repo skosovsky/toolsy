@@ -3,11 +3,17 @@ package agents
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestCreateTask_Accepts202Accepted(t *testing.T) {
@@ -57,6 +63,30 @@ func TestCancelTask_Non2xxStatus(t *testing.T) {
 	require.Contains(t, err.Error(), "400")
 }
 
+func TestCreateTask_ExceedsResponseLimit(t *testing.T) {
+	largeBody := strings.Repeat("x", 100)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(largeBody))
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(
+		srv.URL,
+		WithHTTPClient(srv.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxResponseBody(20),
+	)
+	_, err := client.CreateTask(context.Background(), json.RawMessage(`{"q":"x"}`), "")
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "20")
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
 func TestStreamStepsOnce_Non2xxStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "fail", http.StatusInternalServerError)
@@ -73,4 +103,41 @@ func TestStreamStepsOnce_Non2xxStatus(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "500")
+}
+
+func TestCreateTask_CancelOverResponseLimit(t *testing.T) {
+	t.Parallel()
+	const responseCap = 64
+	largeBody := strings.Repeat("z", responseCap+100)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tasks") {
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(largeBody))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client := NewClient(
+		srv.URL,
+		WithHTTPClient(srv.Client()),
+		WithAllowPrivateIPs(true),
+		WithMaxResponseBody(responseCap),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := client.CreateTask(ctx, json.RawMessage(`{}`), "")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestMapCreateTaskReadError_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	err := mapCreateTaskReadError(context.Background(), composite, 1024)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }

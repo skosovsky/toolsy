@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 // quietConnectLogger returns a [ClientOption] that discards client logs during Connect tests.
@@ -83,6 +86,16 @@ func (t *connectCaptureTransport) OnNotification(method string, _ func([]byte)) 
 func (t *connectCaptureTransport) Close() error {
 	t.closeCalls++
 	return nil
+}
+
+type streamCapCaptureTransport struct {
+	connectCaptureTransport
+
+	streamCap int
+}
+
+func (t *streamCapCaptureTransport) MaxStreamBytes() int {
+	return t.streamCap
 }
 
 type notifyCaptureTransport struct {
@@ -240,7 +253,90 @@ func TestHandleToolCallResult_ErrorChunkUsesStructuredWire(t *testing.T) {
 		Code string `json:"code"`
 	}
 	require.NoError(t, json.Unmarshal(got.Data, &wire))
-	require.Equal(t, string(toolsy.CodeInternal), wire.Code)
+	require.Equal(t, string(toolsy.CodeValidationFailed), wire.Code)
+}
+
+func TestHandleToolCallResult_ReadLimitExceeded_MapsValidation(t *testing.T) {
+	client := &Client{}
+	err := client.handleToolCallResult(
+		context.Background(),
+		callResultWithErr{err: textprocessor.ErrReadLimitExceeded, requestID: "req-limit"},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", httptool.DefaultMaxSSEStreamBytes))
+}
+
+func TestGetResourceTool_ReadLimitExceeded(t *testing.T) {
+	client := &Client{transport: &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded}}
+	tool, err := client.GetResourceTool()
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"uri":"file:///x"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", httptool.DefaultMaxSSEStreamBytes))
+}
+
+func TestGetPrompt_ReadLimitExceeded(t *testing.T) {
+	client := &Client{transport: &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded}}
+	_, err := client.GetPrompt(context.Background(), "greeting", nil)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", httptool.DefaultMaxSSEStreamBytes))
+}
+
+func TestGetResourceTool_ReadLimit_CustomStreamCap(t *testing.T) {
+	const customCap = 2048
+	client := &Client{transport: &streamCapCaptureTransport{
+		connectCaptureTransport: connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded},
+		streamCap:               customCap,
+	}}
+	tool, err := client.GetResourceTool()
+	require.NoError(t, err)
+
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"uri":"file:///x"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
+	require.NotContains(t, te.Reason, fmt.Sprintf("%d byte limit", httptool.DefaultMaxSSEStreamBytes))
+}
+
+func TestHandleToolCallResult_ReadLimit_CustomStreamCap(t *testing.T) {
+	const customCap = 2048
+	client := &Client{transport: &streamCapCaptureTransport{
+		connectCaptureTransport: connectCaptureTransport{},
+		streamCap:               customCap,
+	}}
+	err := client.handleToolCallResult(
+		context.Background(),
+		callResultWithErr{err: textprocessor.ErrReadLimitExceeded, requestID: "req-limit"},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
 }
 
 func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
@@ -291,4 +387,177 @@ func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
 	require.True(t, deleteTool.Manifest().Dangerous)
 	require.True(t, deleteTool.Manifest().Idempotent)
 	require.False(t, deleteTool.Manifest().ReadOnly)
+}
+
+func TestConnect_Initialize_ReadLimitMapsValidation(t *testing.T) {
+	t.Parallel()
+	base := &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded}
+	_, err := Connect(context.Background(), base, quietConnectLogger())
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+	require.Contains(t, te.Reason, "MCP initialize response")
+	require.Equal(t, MethodInitialize, base.calledMethod)
+}
+
+func TestGetTools_ReadLimitExceeded(t *testing.T) {
+	t.Parallel()
+	client := &Client{transport: &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded}}
+	var iterErr error
+	for _, err := range client.GetTools(context.Background()) {
+		if err != nil {
+			iterErr = err
+			break
+		}
+	}
+	require.Error(t, iterErr)
+	te, ok := toolsy.AsToolError(iterErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+	require.Contains(t, te.Reason, "MCP tools list response")
+}
+
+func TestGetPrompts_ReadLimitExceeded(t *testing.T) {
+	t.Parallel()
+	client := &Client{transport: &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded}}
+	var iterErr error
+	for _, err := range client.GetPrompts(context.Background()) {
+		if err != nil {
+			iterErr = err
+			break
+		}
+	}
+	require.Error(t, iterErr)
+	te, ok := toolsy.AsToolError(iterErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, "byte limit")
+}
+
+func TestConnect_Initialize_ReadLimit_CustomStreamCap(t *testing.T) {
+	t.Parallel()
+	const customCap = 2048
+	base := &streamCapCaptureTransport{
+		connectCaptureTransport: connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded},
+		streamCap:               customCap,
+	}
+	_, err := Connect(context.Background(), base, quietConnectLogger())
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
+}
+
+func TestGetTools_ReadLimit_CustomStreamCap(t *testing.T) {
+	t.Parallel()
+	const customCap = 2048
+	client := &Client{transport: &streamCapCaptureTransport{
+		connectCaptureTransport: connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded},
+		streamCap:               customCap,
+	}}
+	var iterErr error
+	for _, err := range client.GetTools(context.Background()) {
+		if err != nil {
+			iterErr = err
+			break
+		}
+	}
+	require.Error(t, iterErr)
+	te, ok := toolsy.AsToolError(iterErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
+}
+
+func TestGetPrompts_ReadLimit_CustomStreamCap(t *testing.T) {
+	t.Parallel()
+	const customCap = 2048
+	client := &Client{transport: &streamCapCaptureTransport{
+		connectCaptureTransport: connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded},
+		streamCap:               customCap,
+	}}
+	var iterErr error
+	for _, err := range client.GetPrompts(context.Background()) {
+		if err != nil {
+			iterErr = err
+			break
+		}
+	}
+	require.Error(t, iterErr)
+	te, ok := toolsy.AsToolError(iterErr)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
+}
+
+func TestMapCallReadLimit_CancelOverLimit(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	client := &Client{}
+	err := client.mapCallReadLimitFor(ctx, textprocessor.ErrReadLimitExceeded, "MCP tools list response")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestMapCallReadLimit_DeadlineOverLimit(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	client := &Client{}
+	err := client.mapCallReadLimitFor(ctx, textprocessor.ErrReadLimitExceeded, "MCP tools list response")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+func TestMapCallReadLimit_TimeoutOverLimit(t *testing.T) {
+	t.Parallel()
+	client := &Client{}
+	err := client.mapCallReadLimitFor(
+		context.Background(),
+		fmt.Errorf("slow: %w", toolsy.ErrTimeout),
+		"MCP tools list response",
+	)
+	require.ErrorIs(t, err, toolsy.ErrTimeout)
+}
+
+func TestHandleToolCallResult_CancelOverReadLimit(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	client := &Client{}
+	err := client.handleToolCallResult(
+		ctx,
+		callResultWithErr{err: textprocessor.ErrReadLimitExceeded},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestMapCallReadLimitFor_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	client := &Client{}
+	composite := fmt.Errorf(
+		"stream: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	err := client.mapCallReadLimitFor(context.Background(), composite, "MCP tools list response")
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestHandleToolCallResult_InterruptInChainOverReadLimit(t *testing.T) {
+	t.Parallel()
+	client := &Client{}
+	composite := fmt.Errorf(
+		"stream: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	err := client.handleToolCallResult(
+		context.Background(),
+		callResultWithErr{err: composite},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.ErrorIs(t, err, context.Canceled)
 }

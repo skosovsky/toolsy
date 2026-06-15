@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/format"
 	"github.com/skosovsky/toolsy/internal/sqlutil"
 	"github.com/skosovsky/toolsy/textprocessor"
-	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
 
 type inspectArgs struct {
@@ -186,7 +186,7 @@ func doInspectSchema(
 	driverLower := strings.ToLower(driverName)
 	for _, table := range tables {
 		if err := ctx.Err(); err != nil {
-			return InspectResult{}, fmt.Errorf("toolkit/sqltool: %w", err)
+			return InspectResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/sqltool: inspect schema: %w", err))
 		}
 		if err := appendColumnsToSchema(ctx, db, driverLower, d, table, &b); err != nil {
 			return InspectResult{}, err
@@ -198,7 +198,7 @@ func doInspectSchema(
 func fetchTableNamesFromDB(ctx context.Context, db *sql.DB, d dialect, o *options) ([]string, error) {
 	rows, err := db.QueryContext(ctx, d.listTablesQuery())
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/sqltool: list tables: %w", err)
+		return nil, wrapSQLToolErr(fmt.Errorf("list tables: %w", err))
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -206,14 +206,14 @@ func fetchTableNamesFromDB(ctx context.Context, db *sql.DB, d dialect, o *option
 	for rows.Next() {
 		var name string
 		if scanErr := rows.Scan(&name); scanErr != nil {
-			return nil, fmt.Errorf("toolkit/sqltool: scan table name: %w", scanErr)
+			return nil, wrapSQLToolErr(fmt.Errorf("scan table name: %w", scanErr))
 		}
 		if len(o.allowedTables) == 0 || contains(o.allowedTables, name) {
 			tables = append(tables, name)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, wrapSQLToolErr(err)
 	}
 	return tables, nil
 }
@@ -239,7 +239,7 @@ func appendColumnsToSchema(
 	q, args := d.columnsQuery(table)
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return fmt.Errorf("toolkit/sqltool: columns for %s: %w", table, err)
+		return wrapSQLToolErr(fmt.Errorf("columns for %s: %w", table, err))
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -247,7 +247,7 @@ func appendColumnsToSchema(
 	for rows.Next() {
 		name, dataType, nullableStr, defaultVal, scanErr := scanColumnRow(rows, driverLower)
 		if scanErr != nil {
-			return scanErr
+			return wrapSQLToolErr(scanErr)
 		}
 		if rowCount == 0 {
 			fmt.Fprintf(
@@ -260,7 +260,7 @@ func appendColumnsToSchema(
 		fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return wrapSQLToolErr(err)
 	}
 	if rowCount == 0 {
 		fmt.Fprintf(b, "## Table: %s\n\nTable not found or has no columns.\n\n", table)
@@ -276,7 +276,7 @@ func scanColumnRow(rows *sql.Rows, driverLower string) (string, string, string, 
 		var cid, notnull, pk int64
 		var dflt sql.NullString
 		if scanErr := rows.Scan(&cid, &name, &dataType, &notnull, &dflt, &pk); scanErr != nil {
-			return "", "", "", "", fmt.Errorf("toolkit/sqltool: scan column: %w", scanErr)
+			return "", "", "", "", wrapSQLToolErr(fmt.Errorf("scan column: %w", scanErr))
 		}
 		if notnull == 0 {
 			nullableStr = "YES"
@@ -290,7 +290,7 @@ func scanColumnRow(rows *sql.Rows, driverLower string) (string, string, string, 
 	}
 	var def sql.NullString
 	if scanErr := rows.Scan(&name, &dataType, &nullableStr, &def); scanErr != nil {
-		return "", "", "", "", scanErr
+		return "", "", "", "", wrapSQLToolErr(scanErr)
 	}
 	if def.Valid {
 		defaultVal = def.String
@@ -306,7 +306,7 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (E
 
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		return ExecuteResult{}, fmt.Errorf("toolkit/sqltool: query: %w", err)
+		return ExecuteResult{}, wrapSQLToolErr(fmt.Errorf("query: %w", err))
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -329,14 +329,14 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (E
 			break
 		}
 		if err := rows.Scan(scanDest...); err != nil {
-			return ExecuteResult{}, err
+			return ExecuteResult{}, wrapSQLToolErr(err)
 		}
 		appendMarkdownDataRow(&b, vals, o.maxCellBytes)
 		b.WriteString("\n")
 		rowCount++
 	}
 	if err := rows.Err(); err != nil {
-		return ExecuteResult{}, err
+		return ExecuteResult{}, wrapSQLToolErr(err)
 	}
 	return ExecuteResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount}, nil
 }
@@ -382,4 +382,14 @@ func escapeMarkdownCell(s string) string {
 
 func contains(slice []string, s string) bool {
 	return slices.Contains(slice, s)
+}
+
+func wrapSQLToolErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := toolsy.AsToolError(err); ok {
+		return err
+	}
+	return toolsy.NewInternalError(fmt.Errorf("toolkit/sqltool: %w", err))
 }

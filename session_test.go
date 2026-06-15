@@ -3,6 +3,7 @@ package toolsy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func newSessionRegistry(t *testing.T, tools []Tool, opts ...RegistryOption) *Registry {
@@ -144,6 +147,109 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 	}
 	assert.Equal(t, 2, seen)
 	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+}
+
+func TestSessionExecuteIter_DeadlineExceeded_SuppressedLikeCancel(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"deadline_iter",
+		func(ctx context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	)
+	reg := newSessionRegistry(t, []Tool{tool})
+	session, err := NewSession(reg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	var errorYields int
+	for _, iterErr := range session.ExecuteIter(ctx, ToolCall{
+		ToolName: "deadline_iter",
+		Input:    ToolInput{CallID: "d1", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
+}
+
+func TestSessionExecuteIter_BareCancel_SuppressedLikeDeadline(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"cancel_iter",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return context.Canceled
+		},
+	)
+	reg := newSessionRegistry(t, []Tool{tool})
+	session, err := NewSession(reg)
+	require.NoError(t, err)
+
+	var errorYields int
+	for _, iterErr := range session.ExecuteIter(context.Background(), ToolCall{
+		ToolName: "cancel_iter",
+		Input:    ToolInput{CallID: "c1", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
+}
+
+func TestSessionExecuteIter_WrappedCancel_SuppressedLikeDeadline(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"wrapped_cancel_iter",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewInternalError(fmt.Errorf("tool failed: %w", context.Canceled))
+		},
+	)
+	reg := newSessionRegistry(t, []Tool{tool})
+	session, err := NewSession(reg)
+	require.NoError(t, err)
+
+	var errorYields int
+	for _, iterErr := range session.ExecuteIter(context.Background(), ToolCall{
+		ToolName: "wrapped_cancel_iter",
+		Input:    ToolInput{CallID: "c2", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+		}
+	}
+	require.Equal(t, 0, errorYields)
+}
+
+func TestSessionExecuteIter_ReadLimit_YieldsError(t *testing.T) {
+	t.Parallel()
+	tool := newMiddlewareMinTool(
+		"limit_iter",
+		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
+			return NewInternalError(fmt.Errorf("proxy: %w", textprocessor.ErrReadLimitExceeded))
+		},
+	)
+	reg := newSessionRegistry(t, []Tool{tool})
+	session, err := NewSession(reg)
+	require.NoError(t, err)
+
+	var lastErr error
+	var errorYields int
+	for _, iterErr := range session.ExecuteIter(context.Background(), ToolCall{
+		ToolName: "limit_iter",
+		Input:    ToolInput{CallID: "l1", ArgsJSON: []byte(`{}`)},
+	}) {
+		if iterErr != nil {
+			errorYields++
+			lastErr = iterErr
+		}
+	}
+	require.Equal(t, 1, errorYields)
+	require.True(t, textprocessor.IsReadLimitExceeded(lastErr))
 }
 
 func TestSessionConcurrentUseCountsSteps(t *testing.T) {

@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"iter"
 	"log/slog"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 const (
@@ -79,6 +80,31 @@ func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*C
 	return c, nil
 }
 
+func (c *Client) maxStreamBytes() int {
+	if capTransport, ok := c.transport.(StreamByteCapTransport); ok {
+		if n := capTransport.MaxStreamBytes(); n > 0 {
+			return n
+		}
+	}
+	return httptool.DefaultMaxSSEStreamBytes
+}
+
+func (c *Client) mapCallReadLimitFor(ctx context.Context, err error, subject string) error {
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return toolsy.MapReadLimitErrorFor(err, c.maxStreamBytes(), subject, "")
+	}
+	return err
+}
+
 func (c *Client) connect(ctx context.Context) error {
 	if err := c.transport.Start(ctx); err != nil {
 		return err
@@ -108,7 +134,7 @@ func (c *Client) connect(ctx context.Context) error {
 	paramsWithRoots.Roots = roots
 	resultBytes, _, err := c.transport.Call(ctx, MethodInitialize, paramsWithRoots)
 	if err != nil {
-		return err
+		return c.mapCallReadLimitFor(ctx, err, "MCP initialize response")
 	}
 	var result InitializeResult
 	if err := json.Unmarshal(resultBytes, &result); err != nil {
@@ -149,7 +175,7 @@ func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 		params := ToolsListParams{Cursor: cursor}
 		res, _, err := c.transport.Call(ctx, MethodToolsList, params)
 		if err != nil {
-			return nil, "", fmt.Errorf("mcp: list tools: %w", err)
+			return nil, "", c.mapCallReadLimitFor(ctx, err, "MCP tools list response")
 		}
 		var result ToolsListResult
 		if err := json.Unmarshal(res, &result); err != nil {
@@ -324,6 +350,15 @@ func (c *Client) handleToolCallResult(
 	yield func(toolsy.Chunk) error,
 ) error {
 	if r.err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if toolsy.IsContextInterrupt(r.err) {
+			return r.err
+		}
+		if textprocessor.IsReadLimitExceeded(r.err) {
+			return toolsy.MapReadLimitErrorFor(r.err, c.maxStreamBytes(), "MCP tool response", "")
+		}
 		return r.err
 	}
 	mapped, formatErr := FormatContent(r.res)
@@ -343,7 +378,7 @@ func (c *Client) handleToolCallResult(
 
 func mcpResultChunk(data []byte, isError bool) toolsy.Chunk {
 	if isError {
-		return toolsy.NewErrorChunkFromErr(toolsy.NewInternalError(errors.New(string(data))))
+		return toolsy.NewErrorChunkFromErr(toolsy.NewValidationError(string(data)))
 	}
 	return toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: toolsy.MimeTypeText}
 }
@@ -366,7 +401,7 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 		}
 		res, _, err := transport.Call(ctx, MethodResourcesRead, ResourcesReadParams{URI: args.URI})
 		if err != nil {
-			return fmt.Errorf("mcp: read resource: %w", err)
+			return c.mapCallReadLimitFor(ctx, err, "MCP resource read response")
 		}
 		mapped, formatErr := FormatContent(res)
 		chunkData := res
@@ -392,7 +427,7 @@ func (c *Client) GetPrompts(ctx context.Context) iter.Seq2[Prompt, error] {
 		params := PromptsListParams{Cursor: cursor}
 		res, _, err := c.transport.Call(ctx, MethodPromptsList, params)
 		if err != nil {
-			return nil, "", fmt.Errorf("mcp: list prompts: %w", err)
+			return nil, "", c.mapCallReadLimitFor(ctx, err, "MCP prompts list response")
 		}
 		var result PromptsListResult
 		if err := json.Unmarshal(res, &result); err != nil {
@@ -408,7 +443,7 @@ func (c *Client) GetPrompt(ctx context.Context, name string, args map[string]str
 	params := PromptsGetParams{Name: name, Arguments: args}
 	resultBytes, _, err := c.transport.Call(ctx, MethodPromptsGet, params)
 	if err != nil {
-		return nil, fmt.Errorf("mcp: get prompt: %w", err)
+		return nil, c.mapCallReadLimitFor(ctx, err, "MCP prompt response")
 	}
 	var result PromptsGetResult
 	if err := json.Unmarshal(resultBytes, &result); err != nil {

@@ -240,7 +240,9 @@ func (t *asyncTool) invokeOnComplete(ctx context.Context, taskID string, collect
 		defer func() { _ = recover() }() // isolate callback panic so it does not crash the process
 		err := executionErr
 		if err != nil {
-			err = toolErrorFromRunCall(err)
+			if te := toolErrorFromRunCall(err); te != nil {
+				err = te
+			}
 		}
 		t.opts.onComplete(ctx, taskID, collected, err)
 	}()

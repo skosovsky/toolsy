@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/format"
 	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
-	"github.com/skosovsky/toolsy/toolkits/internal/format"
 )
 
 // maxSearchResultsDisplayed is the maximum number of search hits included in the markdown list (before truncation).
@@ -167,12 +167,32 @@ func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return ScrapeWireResult{}, toolsy.NewValidationError("fetch failed: " + resp.Status)
 	}
-	body, readErr := textprocessor.ReadLimited(ctx, resp.Body, scrapeContentByteCap(o.maxPageBytes), "")
+	bodyBytes, readErr := textprocessor.ReadLimitedBytes(ctx, resp.Body, scrapeContentByteCap(o.maxPageBytes))
+	if mapped := toolsy.MapToolkitReadError(
+		ctx, readErr, "toolkit/web: read body",
+		scrapeContentByteCap(o.maxPageBytes), "page", "use WithMaxPageBytes to raise the budget",
+	); mapped != nil {
+		return ScrapeWireResult{}, mapped
+	}
 	if readErr != nil {
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: read body: %w", readErr))
 	}
-	markdown, convErr := scrapeHTMLToMarkdown(ctx, o.scraper, body, 0)
+	body := string(bodyBytes)
+	byteCap := scrapeContentByteCap(o.maxPageBytes)
+	markdown, convErr := scrapeHTMLToMarkdown(ctx, o.scraper, body, byteCap)
 	if convErr != nil {
+		if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
+			return ScrapeWireResult{}, ie
+		}
+		if IsMarkdownExceedsLimit(convErr) {
+			return ScrapeWireResult{}, toolsy.MapToolkitCapError(
+				ctx,
+				"toolkit/web: convert",
+				byteCap,
+				"markdown",
+				"use WithMaxPageBytes to raise the budget",
+			)
+		}
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
 	}
 	return ScrapeWireResult{Markdown: markdown}, nil

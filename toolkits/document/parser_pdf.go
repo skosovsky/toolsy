@@ -3,75 +3,70 @@ package document
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
+	"strings"
 
 	"github.com/ledongthuc/pdf"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
 
-// parsePDF extracts text from a PDF file at filePath. Reads at most maxBytes to avoid OOM (no truncation suffix).
-// PDF extraction is best-effort cancellable; underlying library calls may finish in background after ctx cancel.
+// parsePDF extracts text from a PDF file at filePath with a running byte budget (fail-closed).
+// [os.Stat] is a coarse guard before [pdf.Open]; per-page extraction stops before exceeding maxBytes.
 func parsePDF(ctx context.Context, filePath string, maxBytes int) (string, error) {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return "", fmt.Errorf("toolkit/document: %w", ctxErr)
+	if ie := toolsy.ToolkitContextError(ctx, "document: pdf open"); ie != nil {
+		return "", ie
 	}
 
-	type openResult struct {
-		f   *os.File
-		r   *pdf.Reader
-		err error
-	}
-	openDone := make(chan openResult, 1)
-	go func() {
-		f, r, err := pdf.Open(filePath)
-		openDone <- openResult{f: f, r: r, err: err}
-	}()
-
-	var f *os.File
-	var r *pdf.Reader
-	select {
-	case <-ctx.Done():
-		return "", fmt.Errorf("toolkit/document: %w", ctx.Err())
-	case res := <-openDone:
-		if res.err != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("document: pdf open: %w", res.err))
+	if maxBytes > 0 {
+		if ie := toolsy.ToolkitContextError(ctx, "document: pdf stat"); ie != nil {
+			return "", ie
 		}
-		f, r = res.f, res.r
+		info, statErr := os.Stat(filePath)
+		if statErr != nil {
+			return "", toolsy.NewInternalError(fmt.Errorf("document: pdf stat: %w", statErr))
+		}
+		if info.Size() > int64(maxBytes) {
+			return "", toolsy.MapToolkitCapError(ctx, "document: pdf stat size", maxBytes, "pdf file", "")
+		}
+	}
+
+	f, r, err := pdf.Open(filePath)
+	if err != nil {
+		return "", toolsy.NewInternalError(fmt.Errorf("document: pdf open: %w", err))
 	}
 	defer func() { _ = f.Close() }()
 
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return "", fmt.Errorf("toolkit/document: %w", ctxErr)
+	return extractPDFTextByPage(ctx, r, maxBytes)
+}
+
+func extractPDFTextByPage(ctx context.Context, r *pdf.Reader, maxBytes int) (string, error) {
+	numPages := r.NumPage()
+	if numPages == 0 {
+		return "", nil
 	}
 
-	type plainTextResult struct {
-		reader io.Reader
-		err    error
-	}
-	done := make(chan plainTextResult, 1)
-	go func() {
-		plain, getErr := r.GetPlainText()
-		done <- plainTextResult{reader: plain, err: getErr}
-	}()
-
-	var plain io.Reader
-	select {
-	case <-ctx.Done():
-		return "", fmt.Errorf("toolkit/document: %w", ctx.Err())
-	case res := <-done:
-		if res.err != nil {
-			return "", toolsy.NewInternalError(fmt.Errorf("document: pdf get text: %w", res.err))
+	var b strings.Builder
+	for pageNum := 1; pageNum <= numPages; pageNum++ {
+		if ie := toolsy.ToolkitContextError(ctx, fmt.Sprintf("document: pdf page %d", pageNum)); ie != nil {
+			return "", ie
 		}
-		plain = res.reader
-	}
 
-	limited := io.LimitReader(plain, int64(maxBytes)+1)
-	s, err := textprocessor.ReadLimited(ctx, limited, maxBytes, "")
-	if err != nil {
-		return "", toolsy.NewInternalError(fmt.Errorf("document: pdf read: %w", err))
+		remaining := maxBytes - b.Len()
+		if maxBytes > 0 && remaining <= 0 {
+			return "", toolsy.MapToolkitCapError(ctx, "document: pdf text", maxBytes, "pdf text", "")
+		}
+
+		page := r.Page(pageNum)
+		pageText, err := page.GetPlainText(nil)
+		if err != nil {
+			return "", toolsy.NewInternalError(fmt.Errorf("document: pdf page %d text: %w", pageNum, err))
+		}
+
+		if maxBytes > 0 && len(pageText) > remaining {
+			return "", toolsy.MapToolkitCapError(ctx, "document: pdf text", maxBytes, "pdf text", "")
+		}
+		b.WriteString(pageText)
 	}
-	return s, nil
+	return b.String(), nil
 }

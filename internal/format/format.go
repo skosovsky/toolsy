@@ -9,6 +9,15 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
+// WireContentCap returns the content byte budget derived from a wire JSON budget and fixed envelope overhead.
+// Use when transport reads must leave room for JSON field names and envelope bytes (before CapWireJSON).
+func WireContentCap(maxWireBytes, envelopeOverhead int) int {
+	if maxWireBytes <= envelopeOverhead {
+		return maxWireBytes
+	}
+	return maxWireBytes - envelopeOverhead
+}
+
 // Apply runs optional formatter and host validator on a typed value, returning JSON bytes.
 func Apply[T any](
 	value T,
@@ -45,7 +54,7 @@ func ApplyWithEnvelope[T any, E any](
 	}
 	data, err := json.Marshal(out)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/format: marshal result: %w", err)
+		return nil, toolsy.NewInternalError(fmt.Errorf("internal/format: marshal result: %w", err))
 	}
 	return CapWireJSON(data, maxWireBytes, textprocessor.TruncationSuffix), nil
 }
@@ -54,7 +63,7 @@ func ApplyWithEnvelope[T any, E any](
 func MarshalWireCap(v any, maxWireBytes int) (json.RawMessage, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/format: marshal result: %w", err)
+		return nil, toolsy.NewInternalError(fmt.Errorf("internal/format: marshal result: %w", err))
 	}
 	return CapWireJSON(data, maxWireBytes, textprocessor.TruncationSuffix), nil
 }

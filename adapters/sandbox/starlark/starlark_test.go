@@ -2,12 +2,16 @@ package starlark
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/internal/sandboxfs"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestRunPrintsToStdout(t *testing.T) {
@@ -137,4 +141,42 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrUnsupportedLanguage)
+}
+
+func TestRunRejectsOversizedEvalStderr(t *testing.T) {
+	sb := New()
+	huge := strings.Repeat("e", sandboxfs.DefaultMaxSandboxOutputBytes+1)
+	_, err := sb.Run(context.Background(), exectool.RunRequest{
+		Language: "starlark",
+		Code:     fmt.Sprintf("fail(%q)", huge),
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestRunRejectsStdoutExceedingCap(t *testing.T) {
+	sb := New()
+	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
+	_, err := sb.Run(context.Background(), exectool.RunRequest{
+		Language: "starlark",
+		Code:     fmt.Sprintf(`print(%q)`, big),
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestRunRejectsFileReadExceedingCap(t *testing.T) {
+	sb := New()
+	big := make([]byte, sandboxfs.DefaultMaxSandboxFileReadBytes+1)
+	res, err := sb.Run(context.Background(), exectool.RunRequest{
+		Language: "starlark",
+		Code:     `print(fs.read("big.txt"))`,
+		Files:    map[string][]byte{"big.txt": big},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, res.ExitCode)
+	require.Contains(t, res.Stderr, "exceeds")
+	require.Contains(t, res.Stderr, "read operation exceeded configured byte limit")
 }

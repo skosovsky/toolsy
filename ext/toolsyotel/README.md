@@ -16,7 +16,7 @@ toolsyotel.WithTracing(
 )
 ```
 
-When enabled, spans include `langfuse.observation.input` / `output` and `gen_ai.tool.call.arguments` / `result`, truncated with `... [truncated]` when over the limit.
+When enabled, spans include `langfuse.observation.input` / `output` and `gen_ai.tool.call.arguments` / `result`, truncated with `... [truncated]` when over the limit. Payload truncation is **observability display tier** — not a transport read primitive (see [docs/migration-task30.md](../../docs/migration-task30.md)).
 
 Soft error chunks (`IsError: true`) set `gen_ai.tool.soft_error` and `gen_ai.tool.soft_error_text` on the span. Legacy text error chunks are normalized before summary; captured output uses the same normalized text when content capture is enabled.
 

@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
@@ -53,6 +55,8 @@ type sseTransportImpl struct {
 	bodyCloser    io.ReadCloser
 	bodyCloseOnce sync.Once
 
+	callResponseTimeout time.Duration // zero = sseCallResponseTimeout; tests may shorten
+
 	notifyMu       sync.Mutex
 	notifyHandlers map[string]func(params []byte)
 }
@@ -89,6 +93,18 @@ func NewSSETransport(initialURL string, opts ...SSETransportOption) *SSETranspor
 		opt(impl)
 	}
 	return &SSETransport{impl: impl}
+}
+
+// MaxStreamBytes returns the configured SSE JSON-RPC stream byte budget.
+func (s *SSETransport) MaxStreamBytes() int {
+	return s.impl.maxStreamBytesConfigured()
+}
+
+func (t *sseTransportImpl) maxStreamBytesConfigured() int {
+	if t.maxStreamBytes > 0 {
+		return t.maxStreamBytes
+	}
+	return httptool.DefaultMaxSSEStreamBytes
 }
 
 // Start starts the GET request to initialURL and begins reading the SSE stream.
@@ -136,7 +152,7 @@ func (t *sseTransportImpl) start(ctx context.Context) error {
 	t.bodyCloser = resp.Body
 	t.readCtx = ctx
 
-	go t.readLoop(httptool.LimitStreamReader(resp.Body, t.maxStreamBytes))
+	go t.readLoop(httptool.LimitStreamReaderWithContext(ctx, resp.Body, t.maxStreamBytes))
 	select {
 	case <-ctx.Done():
 		t.closeBody(resp.Body)
@@ -152,7 +168,7 @@ func (t *sseTransportImpl) closeBody(body io.ReadCloser) {
 		return
 	}
 	t.bodyCloseOnce.Do(func() {
-		httptool.CloseResponseBody(context.Background(), body)
+		httptool.CloseResponseBody(t.readCtx, body)
 	})
 }
 
@@ -168,9 +184,7 @@ func (t *sseTransportImpl) readLoop(body io.Reader) {
 			err := t.readCtx.Err()
 			t.unblockAllPending(err)
 			t.postURLMu.Lock()
-			if t.postURL == "" {
-				t.streamErr = err
-			}
+			t.streamErr = err
 			t.postURLMu.Unlock()
 			t.readyOnce.Do(func() { close(t.ready) })
 			return
@@ -189,18 +203,23 @@ func (t *sseTransportImpl) readLoop(body io.Reader) {
 			continue
 		}
 		if strings.HasPrefix(line, "data:") {
-			data = strings.TrimSpace(line[5:])
+			part := strings.TrimSpace(line[5:])
+			if data != "" {
+				data += "\n"
+			}
+			data += part
 		}
 	}
 	err := scanner.Err()
 	if err == nil {
 		err = errors.New("sse stream closed")
 	}
+	if t.readCtx != nil && t.readCtx.Err() != nil {
+		err = t.readCtx.Err()
+	}
 	t.unblockAllPending(err)
 	t.postURLMu.Lock()
-	if t.postURL == "" {
-		t.streamErr = err
-	}
+	t.streamErr = err
 	t.postURLMu.Unlock()
 	t.readyOnce.Do(func() { close(t.ready) })
 }
@@ -297,7 +316,23 @@ func (t *sseTransportImpl) resolvePostURL(postURL string) (*url.URL, error) {
 	return resolved, nil
 }
 
-func (t *sseTransportImpl) getPostURL() (string, error) {
+func (t *sseTransportImpl) streamLimitErr() error {
+	t.postURLMu.RLock()
+	err := t.streamErr
+	t.postURLMu.RUnlock()
+	if err == nil {
+		return nil
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return err
+	}
+	return nil
+}
+
+func (t *sseTransportImpl) getPostURL(ctx context.Context) (string, error) {
 	select {
 	case <-t.ready:
 	default:
@@ -307,11 +342,17 @@ func (t *sseTransportImpl) getPostURL() (string, error) {
 	u := t.postURL
 	err := t.streamErr
 	t.postURLMu.RUnlock()
-	if u == "" && err != nil {
-		return "", err
-	}
 	if u == "" {
+		if err != nil {
+			return "", err
+		}
 		return "", errors.New("endpoint not received")
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if limitErr := t.streamLimitErr(); limitErr != nil {
+		return "", limitErr
 	}
 	return u, nil
 }
@@ -321,8 +362,51 @@ func (s *SSETransport) Call(ctx context.Context, method string, params any) ([]b
 	return s.impl.call(ctx, method, params)
 }
 
+func (t *sseTransportImpl) waitSSECallResponse(
+	ctx context.Context,
+	method string,
+	ch <-chan *sseCallResult,
+) ([]byte, error) {
+	timeout := sseCallResponseTimeout
+	if t.callResponseTimeout > 0 {
+		timeout = t.callResponseTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-ch:
+		return t.finishSSECallResponse(ctx, res)
+	case <-timer.C:
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if limitErr := t.streamLimitErr(); limitErr != nil {
+			return nil, limitErr
+		}
+		return nil, fmt.Errorf("timeout waiting for response to %s", method)
+	}
+}
+
+func (t *sseTransportImpl) finishSSECallResponse(ctx context.Context, res *sseCallResult) ([]byte, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if res.Err != nil {
+		if toolsy.IsContextInterrupt(res.Err) {
+			return nil, res.Err
+		}
+		if textprocessor.IsReadLimitExceeded(res.Err) {
+			return nil, res.Err
+		}
+		return nil, res.Err
+	}
+	return res.Result, nil
+}
+
 func (t *sseTransportImpl) call(ctx context.Context, method string, params any) ([]byte, string, error) {
-	postURL, err := t.getPostURL()
+	postURL, err := t.getPostURL(ctx)
 	if err != nil {
 		return nil, "", err
 	}
@@ -375,20 +459,15 @@ func (t *sseTransportImpl) call(ctx context.Context, method string, params any) 
 	}
 	httptool.CloseResponseBody(ctx, resp.Body)
 
-	timer := time.NewTimer(sseCallResponseTimeout)
-	defer timer.Stop()
-	// Response arrives asynchronously via the SSE stream; wait for it.
-	select {
-	case <-ctx.Done():
+	if ctx.Err() != nil {
 		return nil, idStr, ctx.Err()
-	case res := <-ch:
-		if res.Err != nil {
-			return nil, idStr, res.Err
-		}
-		return res.Result, idStr, nil
-	case <-timer.C:
-		return nil, idStr, fmt.Errorf("timeout waiting for response to %s", method)
 	}
+	if limitErr := t.streamLimitErr(); limitErr != nil {
+		return nil, idStr, limitErr
+	}
+
+	result, err := t.waitSSECallResponse(ctx, method, ch)
+	return result, idStr, err
 }
 
 // Notify sends a JSON-RPC notification via POST.
@@ -397,7 +476,7 @@ func (s *SSETransport) Notify(ctx context.Context, method string, params any) er
 }
 
 func (t *sseTransportImpl) notify(ctx context.Context, method string, params any) error {
-	postURL, err := t.getPostURL()
+	postURL, err := t.getPostURL(ctx)
 	if err != nil {
 		return err
 	}
@@ -469,3 +548,5 @@ func (t *sseTransportImpl) close() error {
 }
 
 var _ Transport = (*SSETransport)(nil)
+
+var _ StreamByteCapTransport = (*SSETransport)(nil)

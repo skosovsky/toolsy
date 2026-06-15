@@ -54,7 +54,7 @@ All text/JSON toolkits support host-controlled output shaping:
 | `sqltool`  | `WithExecuteResultFormatter`, `WithInspectResultFormatter` | `WithHostResultValidator` |
 | `document` | `WithResultFormatter`                                      | `WithHostResultValidator` |
 
-Validator-only mode validates the default tool wire envelope (exported types: `web.SearchWireResult`, `web.ScrapeWireResult`, `rag.SearchMarkdownWire`, `rag.SearchDocumentsWire`, `timetool.CurrentResult`, `timetool.CalculateResult`, `sqltool.InspectResult`, `sqltool.ExecuteResult`, `document.ExtractWireResult`), not raw slices/strings. Use `toolkits/internal/format.ApplyWithEnvelope` when adding new toolkits.
+Validator-only mode validates the default tool wire envelope (exported types: `web.SearchWireResult`, `web.ScrapeWireResult`, `rag.SearchMarkdownWire`, `rag.SearchDocumentsWire`, `timetool.CurrentResult`, `timetool.CalculateResult`, `sqltool.InspectResult`, `sqltool.ExecuteResult`, `document.ExtractWireResult`), not raw slices/strings. Use `github.com/skosovsky/toolsy/internal/format.ApplyWithEnvelope` when adding new toolkits.
 
 When a byte budget is configured, `ApplyWithEnvelope` caps **final wire JSON** via `format.CapWireJSON` (including after custom formatters).
 
@@ -64,13 +64,13 @@ When a byte budget is configured, `ApplyWithEnvelope` caps **final wire JSON** v
 
 Modules with outbound HTTP should reuse `httptool` library primitives (`NewSafeHTTPClient`, `SafeDialTransport`, `ReadBodyLimited`), not `http.DefaultClient`:
 
-| Module                                   | Default client                     | Notes                                                                                                                          |
-| ---------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `toolkits/web` scrape                    | `httptool` safe stack              | Search HTTP is host-owned via `SearchProvider`                                                                                 |
-| `toolkits/document` remote               | `httptool` safe stack              | IP-only (no host blacklist)                                                                                                    |
-| `agents`                                 | `httptool.NewSafeHTTPClient`       | `MergeHTTPClient` for custom timeout; bounded via `ReadLimitedBytes`                                                           |
-| `contracts/openapi`, `contracts/graphql` | safe client + merge                | Execute: status-before-read + `ReadLimited` + `CloseResponseBody`; spec/introspection: status-before-read + `ReadLimitedBytes` |
-| `mcp` SSE                                | `httptool` via `WithSSEHTTPClient` | Long-lived stream (`Timeout: 0`); `ValidateRemoteURL` on GET/POST; `WithSSEAllowPrivateIPs` for tests                          |
+| Module                                   | Default client                     | Notes                                                                                                                             |
+| ---------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `toolkits/web` scrape                    | `httptool` safe stack              | Search HTTP is host-owned via `SearchProvider`                                                                                    |
+| `toolkits/document` remote               | `httptool` safe stack              | IP-only (no host blacklist)                                                                                                       |
+| `agents`                                 | `httptool.NewSafeHTTPClient`       | `MergeHTTPClient` for custom timeout; bounded via `ReadLimitedBytes`                                                              |
+| `contracts/openapi`, `contracts/graphql` | safe client + merge                | Execute: `ReadAndTruncate`; spec/introspection: `ReadLimitedBytes` (fail-closed). See [migration-task30.md](migration-task30.md). |
+| `mcp` SSE                                | `httptool` via `WithSSEHTTPClient` | Long-lived stream (`Timeout: 0`); `ValidateRemoteURL` on GET/POST; `WithSSEAllowPrivateIPs` for tests                             |
 
 Custom `*http.Client` values merge **Timeout only**; Transport always comes from the SSRF-safe default.
 
@@ -82,23 +82,25 @@ All `contracts/openapi` and `contracts/graphql` HTTP paths use `CloseResponseBod
 
 ### Body-read tier
 
-| Path                                      | API                                         | ctx-aware |
-| ----------------------------------------- | ------------------------------------------- | --------- |
-| toolkits HTTP (`httptool` probe)          | `ReadBodyLimited` → `ReadLimited` + suffix  | yes       |
-| `web` scrape                              | `ReadLimited(..., "")` (no suffix)          | yes       |
-| `fstool` / local files                    | `ReadLimited`                               | yes       |
-| contracts execute                         | `ReadLimited` + `ContractsTruncationSuffix` | yes       |
-| contracts spec/introspection, agents REST | `ReadLimitedBytes` (hard cap)               | yes       |
-| `document` remote download                | `ReadLimitedBytes`                          | yes       |
-| `contracts/grpc`                          | `TruncateBytesToValidUTF8String` on bytes   | n/a       |
+> **Superseded by [migration-task30.md](migration-task30.md)** for read I/O contracts (fail-closed transport, `ErrReadLimitExceeded`, opt-in `ReadAndTruncate`).
 
-Local file reads use `textprocessor.ReadLimited` / hard chop without wire suffix; contract tools use `ContractsTruncationSuffix`; sqltool rows use `SQLRowsTruncationSuffix`, cells `SQLCellTruncationSuffix` (semantic tier — not duplicated on wire inspect schema); web search list uses `SearchResultsTruncationSuffix`.
+| Path                                      | API (post-task30)                               | ctx-aware |
+| ----------------------------------------- | ----------------------------------------------- | --------- |
+| toolkits HTTP (`httptool` probe)          | `ReadBodyLimited` → `[]byte` fail-closed        | yes       |
+| `web` scrape                              | `ReadLimitedBytes` → error on exceed            | yes       |
+| `fstool` / local files                    | `ReadLimitedBytes` → validation in tool         | yes       |
+| contracts execute                         | `ReadAndTruncate` + `ContractsTruncationSuffix` | yes       |
+| contracts spec/introspection, agents REST | `ReadLimitedBytes` (hard cap)                   | yes       |
+| `document` remote download                | `ReadLimitedBytes`                              | yes       |
+| `contracts/grpc`                          | `TruncateBytesToValidUTF8String` on bytes       | n/a       |
+
+Semantic suffixes (`ContractsTruncationSuffix`, `SQLRowsTruncationSuffix`, `SearchResultsTruncationSuffix`, etc.) apply on display/wire tiers — not on transport read primitives.
 
 ### Wire byte budget (tool paths)
 
-`WithMax*Bytes` options on rag, web, document, sqltool inspect set the **final wire JSON** size. Content pre-cap (parsers, `capDocumentsForWire`, web scrape HTML) trims without `\n[Truncated]`; `format.CapWireJSON` adds the suffix once. Sqltool inspect uses wire cap only (no schema builder suffix). Semantic row/cell caps on execute remain separate from wire budget.
+`WithMax*Bytes` options on rag, web, document, sqltool inspect set the **final wire JSON** size. Transport reads are fail-closed; `format.CapWireJSON` may add `\n[Truncated]` once on the wire envelope. Semantic row/cell caps on execute remain separate from wire budget.
 
-`httptool` probe tools embed truncation in the `body` field (probe tier, not `format.CapWireJSON`). Library `web.ScrapePage` pre-caps HTML via `textprocessor.ReadLimited` without suffix; tool mode applies wire cap on `ScrapeWireResult`.
+`httptool` probe tools return `CodeValidationFailed` when the response exceeds `maxResponseBody` (no silent body truncate). Library `web.ScrapePage` uses fail-closed HTML read; raise budget with `WithMaxPageBytes`.
 
 ### HTTP success status
 
@@ -112,7 +114,7 @@ Outbound fetch tiers (`web` scrape, `document` remote, `contracts/openapi` spec 
 | `web` scrape HTML→Markdown | Default scraper cancels in-flight `ConvertString` on ctx done; custom `WithScraper` must bound CPU |
 | `mail` HTML normalize      | `normalizeBody` cancels in-flight conversion on ctx done (falls back to raw HTML)                  |
 
-Out of scope: `mail` / `prompts` / `fstool` content-only caps; `timetool` IoC `maxWireBytes=0`; `contracts/grpc` `ContractsTruncationSuffix` tier.
+Out of scope: `mail` / `prompts` content-only caps; `timetool` IoC `maxWireBytes=0`; `contracts/grpc` `ContractsTruncationSuffix` tier.
 
 ### SSE / stdio stream tier
 

@@ -21,6 +21,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // Result describes files produced by a generator run.
@@ -30,7 +31,8 @@ type Result struct {
 
 // Config configures a generator run.
 type Config struct {
-	Inputs []string
+	Inputs       []string
+	MaxFileBytes int // 0 = defaultMaxGeneratorFileBytes
 }
 
 type manifest struct {
@@ -65,7 +67,7 @@ type generatedFile struct {
 
 // osFacade abstracts filesystem operations for dependency injection (tests may substitute).
 type osFacade struct {
-	readFile   func(name string) ([]byte, error)
+	readFile   func(ctx context.Context, name string) ([]byte, error)
 	createTemp func(dir, pattern string) (*os.File, error)
 	rename     func(oldpath, newpath string) error
 	remove     func(name string) error
@@ -73,9 +75,11 @@ type osFacade struct {
 	readDir    func(name string) ([]os.DirEntry, error)
 }
 
-func newDefaultOSFacade() osFacade {
+func newDefaultOSFacade(maxFileBytes int) osFacade {
 	return osFacade{
-		readFile:   os.ReadFile,
+		readFile: func(ctx context.Context, name string) ([]byte, error) {
+			return readFileLimitedFromDisk(ctx, name, maxFileBytes)
+		},
 		createTemp: os.CreateTemp,
 		rename:     os.Rename,
 		remove:     os.Remove,
@@ -84,25 +88,86 @@ func newDefaultOSFacade() osFacade {
 	}
 }
 
+func readFileLimitedFromDisk(ctx context.Context, path string, maxBytes int) ([]byte, error) {
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxGeneratorFileBytes
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, fmt.Errorf("toolsygen: read file: %w", ctxErr)
+	}
+	if info, err := os.Stat(path); err == nil && info.Size() > int64(maxBytes) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("toolsygen: read file: %w", ctxErr)
+		}
+		return nil, fmt.Errorf(
+			"toolsygen: file %s size %d exceeds %d byte limit: %w",
+			path, info.Size(), maxBytes, textprocessor.ErrReadLimitExceeded,
+		)
+	}
+	// #nosec G304 -- manifest and source paths are explicit generator inputs.
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	data, err := textprocessor.ReadLimitedBytes(ctx, f, maxBytes)
+	return finishGeneratorRead(ctx, path, maxBytes, data, err)
+}
+
+func finishGeneratorRead(ctx context.Context, path string, maxBytes int, data []byte, err error) ([]byte, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, fmt.Errorf("toolsygen: read file: %w", ctxErr)
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return nil, fmt.Errorf("toolsygen: read file: %w", err)
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return nil, fmt.Errorf("toolsygen: %s exceeds %d byte limit: %w", path, maxBytes, err)
+	}
+	return data, err
+}
+
 type generator struct {
-	fs osFacade
+	fs           osFacade
+	maxFileBytes int
 }
 
 const (
-	fileModeGenerated    fs.FileMode = 0o644
-	jsonSchemaTypeString             = "string"
+	fileModeGenerated            fs.FileMode = 0o644
+	jsonSchemaTypeString                     = "string"
+	defaultMaxGeneratorFileBytes             = 4 * 1024 * 1024
 )
 
 // Generate scans the provided roots, validates all manifests, renders Go code, and writes
 // all output files only after the full validation/render pass succeeds.
 func Generate(ctx context.Context, cfg Config) (Result, error) {
-	g := &generator{fs: newDefaultOSFacade()}
+	g := newGenerator(cfg)
 	return g.generate(ctx, cfg)
 }
 
 func generateWithFS(ctx context.Context, cfg Config, fs osFacade) (Result, error) {
-	g := &generator{fs: fs}
+	g := newGenerator(cfg)
+	g.fs = fs
 	return g.generate(ctx, cfg)
+}
+
+func newGenerator(cfg Config) *generator {
+	maxBytes := cfg.MaxFileBytes
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxGeneratorFileBytes
+	}
+	return &generator{fs: newDefaultOSFacade(maxBytes), maxFileBytes: maxBytes}
+}
+
+func (g *generator) readFileLimited(ctx context.Context, path string) ([]byte, error) {
+	data, err := g.fs.readFile(ctx, path)
+	if err != nil {
+		return finishGeneratorRead(ctx, path, g.maxFileBytes, nil, err)
+	}
+	if g.maxFileBytes > 0 && len(data) > g.maxFileBytes {
+		err = textprocessor.ErrReadLimitExceeded
+	}
+	return finishGeneratorRead(ctx, path, g.maxFileBytes, data, err)
 }
 
 func (g *generator) generate(ctx context.Context, cfg Config) (Result, error) {
@@ -125,14 +190,14 @@ func (g *generator) generate(ctx context.Context, cfg Config) (Result, error) {
 		if err := checkContext(ctx); err != nil {
 			return Result{}, err
 		}
-		m, loadErr := g.loadManifest(path)
+		m, loadErr := g.loadManifest(ctx, path)
 		if loadErr != nil {
 			errs = append(errs, loadErr)
 			continue
 		}
 		manifests = append(manifests, m)
 	}
-	errs = append(errs, g.validateManifestSet(manifests)...)
+	errs = append(errs, g.validateManifestSet(ctx, manifests)...)
 	if len(errs) > 0 {
 		return Result{}, joinErrors(errs)
 	}
@@ -288,8 +353,8 @@ func isManifestFile(path string) bool {
 	}
 }
 
-func (g *generator) loadManifest(path string) (*manifest, error) {
-	root, err := g.readManifestFile(path)
+func (g *generator) loadManifest(ctx context.Context, path string) (*manifest, error) {
+	root, err := g.readManifestFile(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
@@ -332,7 +397,7 @@ func (g *generator) loadManifest(path string) (*manifest, error) {
 	}
 
 	dir := filepath.Dir(path)
-	packageName, err := g.inferPackageName(dir)
+	packageName, err := g.inferPackageName(ctx, dir)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
@@ -360,9 +425,9 @@ func (g *generator) loadManifest(path string) (*manifest, error) {
 	}, nil
 }
 
-func (g *generator) readManifestFile(path string) (map[string]any, error) {
+func (g *generator) readManifestFile(ctx context.Context, path string) (map[string]any, error) {
 	// #nosec G304 -- manifest paths are the explicit inputs to the generator.
-	data, err := g.fs.readFile(path)
+	data, err := g.readFileLimited(ctx, path)
 	if err != nil {
 		return nil, fmt.Errorf("read manifest: %w", err)
 	}
@@ -649,7 +714,7 @@ func parseRequiredSet(raw map[string]any, schemaPath string) (map[string]bool, e
 	return out, nil
 }
 
-func (g *generator) validateManifestSet(manifests []*manifest) []error {
+func (g *generator) validateManifestSet(ctx context.Context, manifests []*manifest) []error {
 	var errs []error
 
 	toolNames := make(map[string]string, len(manifests))
@@ -660,7 +725,7 @@ func (g *generator) validateManifestSet(manifests []*manifest) []error {
 	for _, m := range manifests {
 		errs = appendManifestNameCollision(errs, m, toolNames)
 		errs = appendOutputPathCollision(errs, m, outputs)
-		errs = g.appendManifestIdentCollisions(errs, m, identsByDir, existingByDir)
+		errs = g.appendManifestIdentCollisions(ctx, errs, m, identsByDir, existingByDir)
 	}
 
 	return errs
@@ -683,6 +748,7 @@ func appendOutputPathCollision(errs []error, m *manifest, outputs map[string]str
 }
 
 func (g *generator) appendManifestIdentCollisions(
+	ctx context.Context,
 	errs []error,
 	m *manifest,
 	identsByDir map[string]map[string]string,
@@ -692,7 +758,7 @@ func (g *generator) appendManifestIdentCollisions(
 		identsByDir[m.Dir] = make(map[string]string)
 	}
 	if _, ok := existingByDir[m.Dir]; !ok {
-		symbols, symErr := g.collectExistingSymbols(m.Dir)
+		symbols, symErr := g.collectExistingSymbols(ctx, m.Dir)
 		if symErr != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", m.Path, symErr))
 			symbols = map[string]string{}
@@ -723,7 +789,7 @@ func (g *generator) appendManifestIdentCollisions(
 }
 
 //nolint:gocognit // AST walk over packages; inherent branching
-func (g *generator) collectExistingSymbols(dir string) (map[string]string, error) {
+func (g *generator) collectExistingSymbols(ctx context.Context, dir string) (map[string]string, error) {
 	entries, err := g.fs.readDir(dir)
 	if err != nil {
 		return nil, fmt.Errorf("read directory for symbol scan: %w", err)
@@ -742,7 +808,7 @@ func (g *generator) collectExistingSymbols(dir string) (map[string]string, error
 		}
 
 		path := filepath.Join(dir, name)
-		src, err := g.fs.readFile(path)
+		src, err := g.readFileLimited(ctx, path)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
@@ -778,7 +844,7 @@ func (g *generator) collectExistingSymbols(dir string) (map[string]string, error
 	return symbols, nil
 }
 
-func (g *generator) inferPackageName(dir string) (string, error) {
+func (g *generator) inferPackageName(ctx context.Context, dir string) (string, error) {
 	entries, err := g.fs.readDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("read directory for package inference: %w", err)
@@ -796,7 +862,7 @@ func (g *generator) inferPackageName(dir string) (string, error) {
 			continue
 		}
 		path := filepath.Join(dir, name)
-		src, err := g.fs.readFile(path)
+		src, err := g.readFileLimited(ctx, path)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", path, err)
 		}
@@ -1160,7 +1226,7 @@ func (g *generator) stageFilesForCommit(
 		if err := checkContext(ctx); err != nil {
 			return nil, err
 		}
-		existing, readErr := g.fs.readFile(file.Path)
+		existing, readErr := g.readFileLimited(ctx, file.Path)
 		switch {
 		case readErr == nil && bytes.Equal(existing, file.Content):
 			continue
@@ -1329,15 +1395,5 @@ func joinErrors(errs []error) error {
 			filtered = append(filtered, err)
 		}
 	}
-	if len(filtered) == 0 {
-		return nil
-	}
-	var b strings.Builder
-	for i, err := range filtered {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(err.Error())
-	}
-	return errors.New(b.String())
+	return errors.Join(filtered...)
 }

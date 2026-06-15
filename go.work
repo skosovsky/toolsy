@@ -18,7 +18,6 @@ use (
 	./toolkits/fstool
 	./toolkits/httptool
 	./toolkits/human
-	./toolkits/internal/format
 	./toolkits/mail
 	./toolkits/memory
 	./toolkits/prompts

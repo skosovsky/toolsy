@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/skosovsky/toolsy/exectool"
 	"github.com/skosovsky/toolsy/internal/sandboxfs"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // Sandbox executes Starlark code with in-memory files and env bindings.
@@ -36,12 +38,21 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	var stdout strings.Builder
+	var stdout = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
+	var printErr error
 	thread := new(toolstarlark.Thread)
 	thread.Name = "toolsy-starlark"
 	thread.Print = func(_ *toolstarlark.Thread, msg string) {
-		stdout.WriteString(msg)
-		stdout.WriteByte('\n')
+		if printErr != nil {
+			return
+		}
+		if _, err := stdout.Write([]byte(msg)); err != nil {
+			printErr = err
+			return
+		}
+		if _, err := stdout.Write([]byte{'\n'}); err != nil {
+			printErr = err
+		}
 	}
 
 	done := make(chan struct{})
@@ -64,28 +75,33 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	_, err = toolstarlark.ExecFileOptions(&fileOpts, thread, "main.star", req.Code, predeclared)
 	duration := time.Since(start)
 
-	if err != nil {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			return exectool.RunResult{}, exectool.ErrTimeout
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return exectool.RunResult{}, ctx.Err()
-		}
-
-		return exectool.RunResult{
-			Stdout:   strings.TrimSuffix(stdout.String(), "\n"),
-			Stderr:   err.Error(),
-			ExitCode: 1,
-			Duration: duration,
-		}, nil
+	if printErr != nil {
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			fmt.Errorf("%w: stdout: %w", exectool.ErrSandboxFailure, printErr),
+			stdout, nil, 0, duration, false, false,
+		)
 	}
 
-	return exectool.RunResult{
-		Stdout:   strings.TrimSuffix(stdout.String(), "\n"),
-		Stderr:   "",
-		ExitCode: 0,
-		Duration: duration,
-	}, nil
+	if err != nil {
+		var stderrBuf = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
+		if _, writeErr := io.WriteString(stderrBuf, err.Error()); writeErr != nil {
+			return sandboxfs.FinalizeOrInterrupt(ctx, writeErr, stdout, stderrBuf, 0, duration, false, false)
+		}
+
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			nil,
+			stdout,
+			stderrBuf,
+			1,
+			duration,
+			false,
+			false,
+		)
+	}
+
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, duration, true, true)
 }
 
 func (s *Sandbox) supports(language string) bool {
@@ -161,6 +177,15 @@ func (f *fsObject) read(
 	data, ok := f.files[path]
 	if !ok {
 		return nil, fmt.Errorf("file not found: %s", path)
+	}
+	if len(data) > sandboxfs.DefaultMaxSandboxFileReadBytes {
+		return nil, fmt.Errorf(
+			"%w: fs.read %s exceeds %d byte limit: %w",
+			exectool.ErrSandboxFailure,
+			path,
+			sandboxfs.DefaultMaxSandboxFileReadBytes,
+			textprocessor.ErrReadLimitExceeded,
+		)
 	}
 	return toolstarlark.String(string(data)), nil
 }

@@ -6,8 +6,8 @@ Agent Protocol bridge for [toolsy](https://github.com/skosovsky/toolsy). This mo
 
 ## Features
 
-- **REST client:** `CreateTask`, `CancelTask` with custom HTTP client and runtime auth supplied through `*toolsy.RunEnv` (`toolsy.WithCredentials` on `toolsy.NewRunEnv`).
-- **SSE streaming:** `StreamSteps` consumes `GET /ap/v1/agent/tasks/{id}/steps?stream=true`, parses steps, and supports **Last-Event-ID** auto-reconnect with a 1s backoff on disconnect.
+- **REST client:** `CreateTask`, `CancelTask` with custom HTTP client and runtime auth supplied through `*toolsy.RunEnv` (`toolsy.WithCredentials` on `toolsy.NewRunEnv`). `CreateTask` response bodies use fail-closed `textprocessor.ReadLimitedBytes` (default **4 MB** via `defaultMaxResponseBytes`; override with `WithMaxResponseBody`). Exceed returns `CodeValidationFailed` with the limit in `Reason` — not `errors.Is(err, ErrReadLimitExceeded)` on the tool error chain. `CancelTask` does not read the response body — it checks HTTP status and drains via `CloseResponseBody` only.
+- **SSE streaming:** `StreamSteps` consumes `GET /ap/v1/agent/tasks/{id}/steps?stream=true`, parses steps, and supports **Last-Event-ID** auto-reconnect with a 1s backoff on disconnect. Total SSE byte budget defaults to `httptool.DefaultMaxSSEStreamBytes` (override with `WithMaxSSEStreamBytes` on `NewClient`).
 - **Delegation:** `AsTool` (sync delegation with progress streaming) and `AsBackgroundTool` (fire-and-forget, returns `task_id` for status checks).
 
 ### Stream completion

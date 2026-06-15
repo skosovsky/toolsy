@@ -19,18 +19,25 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
+	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/exectool"
 	"github.com/skosovsky/toolsy/internal/sandboxfs"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const (
-	containerWorkspace = "/workspace"
-	cleanupTimeout     = 5 * time.Second
-	logsTimeout        = 5 * time.Second
+	containerWorkspace          = "/workspace"
+	cleanupTimeout              = 5 * time.Second
+	logsTimeout                 = 5 * time.Second
+	defaultMaxArchiveFileBytes  = 64 * 1024 * 1024
+	defaultMaxArchiveTotalBytes = 256 * 1024 * 1024
+	defaultMaxContainerLogBytes = sandboxfs.DefaultMaxSandboxOutputBytes
 )
 
 func classifySetupError(runCtx context.Context, err error, op string) error {
-	if runCtx.Err() == context.DeadlineExceeded || errors.Is(err, context.DeadlineExceeded) {
+	if runCtx.Err() == context.DeadlineExceeded ||
+		errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, exectool.ErrTimeout) {
 		return exectool.ErrTimeout
 	}
 	if runCtx.Err() != nil {
@@ -38,6 +45,9 @@ func classifySetupError(runCtx context.Context, err error, op string) error {
 	}
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
+	}
+	if mapped := toolsy.MapSandboxReadLimitError(err); mapped != nil {
+		return mapped
 	}
 	return fmt.Errorf("%w: %s: %w", exectool.ErrSandboxFailure, op, err)
 }
@@ -137,7 +147,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	workspace, archive, err := s.materializeWorkspace(req, runtime)
+	workspace, archive, err := s.materializeWorkspace(ctx, req, runtime)
 	if err != nil {
 		return exectool.RunResult{}, err
 	}
@@ -181,50 +191,42 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 
 	exitCode, duration, err := s.waitForContainer(ctx, created.ID)
 	if err != nil {
-		return exectool.RunResult{}, err
+		return exectool.RunResult{}, classifySetupError(ctx, err, "wait container")
 	}
 
-	stdout, stderr, err := s.collectContainerLogs(created.ID)
-	if err != nil {
-		return exectool.RunResult{}, err
-	}
-
-	return exectool.RunResult{
-		Stdout:   stdout,
-		Stderr:   stderr,
-		ExitCode: int(exitCode),
-		Duration: duration,
-	}, nil
+	stdoutBuf, stderrBuf, logErr := s.collectContainerLogs(ctx, created.ID)
+	return sandboxfs.FinalizeOrInterrupt(ctx, logErr, stdoutBuf, stderrBuf, int(exitCode), duration, true, false)
 }
 
 func (s *Sandbox) materializeWorkspace(
+	ctx context.Context,
 	req exectool.RunRequest,
 	runtime Runtime,
 ) (string, []byte, error) {
 	workspace, err := os.MkdirTemp("", "toolsy-docker-*")
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: create workspace: %w", exectool.ErrSandboxFailure, err)
+		return "", nil, classifySetupError(ctx, err, "create workspace")
 	}
 
 	canonicalFiles, err := sandboxfs.CanonicalizeFiles(req.Files, runtime.ScriptName)
 	if err != nil {
 		_ = os.RemoveAll(workspace)
-		return "", nil, fmt.Errorf("%w: validate files: %w", exectool.ErrSandboxFailure, err)
+		return "", nil, classifySetupError(ctx, err, "validate files")
 	}
 
 	if err = sandboxfs.WriteWorkspace(workspace, canonicalFiles); err != nil {
 		_ = os.RemoveAll(workspace)
-		return "", nil, fmt.Errorf("%w: materialize files: %w", exectool.ErrSandboxFailure, err)
+		return "", nil, classifySetupError(ctx, err, "materialize files")
 	}
 	if err = sandboxfs.WriteFile(workspace, runtime.ScriptName, []byte(req.Code)); err != nil {
 		_ = os.RemoveAll(workspace)
-		return "", nil, fmt.Errorf("%w: write script: %w", exectool.ErrSandboxFailure, err)
+		return "", nil, classifySetupError(ctx, err, "write script")
 	}
 
-	archive, err := archiveWorkspace(workspace)
+	archive, err := archiveWorkspace(ctx, workspace)
 	if err != nil {
 		_ = os.RemoveAll(workspace)
-		return "", nil, fmt.Errorf("%w: archive workspace: %w", exectool.ErrSandboxFailure, err)
+		return "", nil, classifySetupError(ctx, err, "archive workspace")
 	}
 	return workspace, archive, nil
 }
@@ -284,8 +286,14 @@ func resolveContainerWaitError(runCtx context.Context, waitErr error, kill func(
 	return fmt.Errorf("%w: wait container: %w", exectool.ErrSandboxFailure, waitErr)
 }
 
-func (s *Sandbox) collectContainerLogs(containerID string) (string, string, error) {
-	logsCtx, logsCancel := context.WithTimeout(context.Background(), logsTimeout)
+func (s *Sandbox) collectContainerLogs(
+	ctx context.Context,
+	containerID string,
+) (*sandboxfs.CappedBuffer, *sandboxfs.CappedBuffer, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, nil, ctxErr
+	}
+	logsCtx, logsCancel := context.WithTimeout(ctx, logsTimeout)
 	defer logsCancel()
 
 	var logOpts container.LogsOptions
@@ -294,21 +302,22 @@ func (s *Sandbox) collectContainerLogs(containerID string) (string, string, erro
 
 	logs, err := s.client.ContainerLogs(logsCtx, containerID, logOpts)
 	if err != nil {
-		return "", "", fmt.Errorf("%w: read logs: %w", exectool.ErrSandboxFailure, err)
+		return nil, nil, classifySetupError(ctx, err, "read logs")
 	}
 	defer func() {
 		_ = logs.Close()
 	}()
 
-	var outBuf bytes.Buffer
-	var errBuf bytes.Buffer
-	if _, demuxErr := stdcopy.StdCopy(&outBuf, &errBuf, logs); demuxErr != nil {
-		return "", "", fmt.Errorf("%w: demux logs: %w", exectool.ErrSandboxFailure, demuxErr)
+	outBuf := sandboxfs.NewCappedBuffer("container stdout", defaultMaxContainerLogBytes)
+	errBuf := sandboxfs.NewCappedBuffer("container stderr", defaultMaxContainerLogBytes)
+	if _, demuxErr := stdcopy.StdCopy(outBuf, errBuf, logs); demuxErr != nil {
+		return outBuf, errBuf, fmt.Errorf("%w: demux logs: %w", exectool.ErrSandboxFailure, demuxErr)
 	}
-	return outBuf.String(), errBuf.String(), nil
+	return outBuf, errBuf, nil
 }
 
-func archiveWorkspace(root string) ([]byte, error) {
+//nolint:gocognit // walk callback: ctx, total budget, per-file read
+func archiveWorkspace(ctx context.Context, root string) ([]byte, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	rootFS, err := os.OpenRoot(root)
@@ -324,8 +333,19 @@ func archiveWorkspace(root string) ([]byte, error) {
 		if err != nil {
 			return err
 		}
+		if walkCtxErr := ctx.Err(); walkCtxErr != nil {
+			return walkCtxErr
+		}
 		if info.IsDir() {
 			return nil
+		}
+		if buf.Len() > defaultMaxArchiveTotalBytes {
+			return fmt.Errorf(
+				"%w: workspace archive exceeds %d byte limit: %w",
+				exectool.ErrSandboxFailure,
+				defaultMaxArchiveTotalBytes,
+				textprocessor.ErrReadLimitExceeded,
+			)
 		}
 
 		rel, err := filepath.Rel(root, path)
@@ -346,9 +366,9 @@ func archiveWorkspace(root string) ([]byte, error) {
 			return werr
 		}
 
-		data, err := readArchiveFile(func(name string) (io.ReadCloser, error) {
+		data, err := readArchiveFile(ctx, func(name string) (io.ReadCloser, error) {
 			return rootFS.Open(name)
-		}, name)
+		}, name, info.Size(), defaultMaxArchiveFileBytes)
 		if err != nil {
 			return err
 		}
@@ -365,7 +385,26 @@ func archiveWorkspace(root string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func readArchiveFile(open func(name string) (io.ReadCloser, error), name string) ([]byte, error) {
+func readArchiveFile(
+	ctx context.Context,
+	open func(name string) (io.ReadCloser, error),
+	name string,
+	fileSize int64,
+	maxBytes int,
+) ([]byte, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if maxBytes > 0 && fileSize > int64(maxBytes) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return nil, fmt.Errorf(
+			"%w: file %s size %d exceeds %d byte limit: %w",
+			exectool.ErrSandboxFailure,
+			name, fileSize, maxBytes, textprocessor.ErrReadLimitExceeded,
+		)
+	}
 	file, err := open(name)
 	if err != nil {
 		return nil, err
@@ -373,7 +412,21 @@ func readArchiveFile(open func(name string) (io.ReadCloser, error), name string)
 	defer func() {
 		_ = file.Close()
 	}()
-	return io.ReadAll(file)
+	data, err := textprocessor.ReadLimitedBytes(ctx, file, maxBytes)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return nil, err
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		return nil, fmt.Errorf(
+			"%w: file %s exceeds %d byte limit: %w",
+			exectool.ErrSandboxFailure,
+			name, maxBytes, textprocessor.ErrReadLimitExceeded,
+		)
+	}
+	return data, err
 }
 
 func encodeEnv(env map[string]string) []string {

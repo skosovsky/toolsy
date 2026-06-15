@@ -30,6 +30,15 @@ func ParseURL(ctx context.Context, specURL string, opts Options) ([]toolsy.Tool,
 	}
 	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, defaultMaxSpecBytes)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if toolsy.IsContextInterrupt(err) {
+			return nil, err
+		}
+		if textprocessor.IsReadLimitExceeded(err) {
+			return nil, fmt.Errorf("openapi: spec exceeds %d byte limit: %w", defaultMaxSpecBytes, err)
+		}
 		return nil, fmt.Errorf("openapi: read spec: %w", err)
 	}
 

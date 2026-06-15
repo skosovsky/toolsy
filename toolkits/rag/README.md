@@ -34,7 +34,7 @@ md := rag.FormatDocumentsMarkdown(docs)
 
 ## Configuration
 
-- **WithMaxBytes / WithMaxResults** — byte budget applies to **final wire JSON** (including when `WithResultFormatter` is set). JSON shape pre-cap (`capDocumentsForWire`) trims document content without `\n[Truncated]`; wire suffix is applied once by `format.CapWireJSON`. `WithMaxResults(0)` means no limit (default when unset: 10). `WithScopeFilter` runs before `maxResults`.
+- **WithMaxBytes / WithMaxResults** — byte budget applies to **final wire JSON** (including when `WithResultFormatter` is set). JSON shape (`ShapeDocumentsJSON`) uses fail-closed `capDocumentsForWire`: drops extra documents, then returns **`CodeValidationFailed`** if the wire payload still cannot fit (no silent byte-by-byte content chop). Markdown default path relies on `format.CapWireJSON` for wire suffix. `WithMaxResults(0)` means no limit (default when unset: 10). `WithScopeFilter` runs before `maxResults`.
 - **WithResultShape** — `ShapeMarkdown` (default) or `ShapeDocumentsJSON`.
 - **WithScopeFilter** — RBAC hook to filter documents per request context.
 - **WithResultFormatter / WithHostResultValidator** — host DTO and validation before JSON marshal. When both are set, the validator receives **formatter output**, not the default envelope. Validator-only with default `ShapeMarkdown` validates `SearchMarkdownWire` (`{"results": "..."}`). Use `WithResultShape(ShapeDocumentsJSON)` for `SearchDocumentsWire`.
@@ -45,4 +45,4 @@ md := rag.FormatDocumentsMarkdown(docs)
 searchTool, err := rag.AsSearchTool(&myRetriever{}, rag.WithMaxBytes(256*1024))
 ```
 
-See [docs/migration-task29.md](../../docs/migration-task29.md) for breaking changes from `Retriever` (`[]string`).
+See [docs/migration-task29.md](../../docs/migration-task29.md) for breaking changes from `Retriever` (`[]string`). See [docs/migration-task30.md](../../docs/migration-task30.md) for fail-closed wire budget checks (`capDocumentsForWire`, `CodeValidationFailed`).

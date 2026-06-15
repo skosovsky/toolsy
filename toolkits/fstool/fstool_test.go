@@ -3,14 +3,20 @@ package fstool
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func decodeJSONChunk[T any](t *testing.T, c toolsy.Chunk) T {
@@ -77,7 +83,20 @@ func TestFSReadFile_Success(t *testing.T) {
 	require.Equal(t, content, result.Content)
 }
 
-func TestFSReadFile_Truncation(t *testing.T) {
+func TestReadFileLimited_ExceedsOnReadPath(t *testing.T) {
+	const byteCap = 32
+	content := strings.Repeat("y", byteCap+1)
+	_, err := readFileLimited(context.Background(), strings.NewReader(content), byteCap)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(byteCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestFSReadFile_ExceedsLimitReturnsValidationError(t *testing.T) {
 	base := t.TempDir()
 	large := make([]byte, 500)
 	for i := range large {
@@ -85,7 +104,113 @@ func TestFSReadFile_Truncation(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(base, "big.txt"), large, 0o600))
 
-	tools, err := AsTools(base, WithMaxBytes(20))
+	const maxBytes = 20
+	tools, err := AsTools(base, WithMaxBytes(maxBytes))
+	require.NoError(t, err)
+	readTool := tools[1]
+
+	err = readTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"big.txt"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(readContentByteCap(maxBytes)))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestFSReadFile_CanceledBeforeStat_ReturnsInternal(t *testing.T) {
+	base := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(base, "f.txt"), []byte("hello"), 0o600))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := doReadFile(ctx, base, &options{maxBytes: 1024}, "f.txt")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+func TestFSReadFile_CancelOverStatCap_InterruptWins(t *testing.T) {
+	const wireMax = 1000
+	contentCap := readContentByteCap(wireMax)
+	base := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(base, "big.txt"), []byte(strings.Repeat("x", contentCap+1)), 0o600))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := doReadFile(ctx, base, &options{maxBytes: wireMax}, "big.txt")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.NotErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestReadFileLimited_InterruptInChainOverReadLimit(t *testing.T) {
+	composite := fmt.Errorf(
+		"read: %w",
+		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
+	)
+	_, err := readFileLimited(
+		context.Background(),
+		io.NopCloser(&instantErrReader{err: composite}),
+		1024,
+	)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+}
+
+type instantErrReader struct {
+	err error
+}
+
+func (r *instantErrReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+func TestFSReadFile_BetweenWireAndContentCap(t *testing.T) {
+	const wireMax = 1000
+	contentCap := readContentByteCap(wireMax)
+	base := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(base, "edge.txt"), []byte(strings.Repeat("x", contentCap+1)), 0o600))
+
+	tools, err := AsTools(base, WithMaxBytes(wireMax))
+	require.NoError(t, err)
+	readTool := tools[1]
+
+	err = readTool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"path":"edge.txt"}`)},
+		func(toolsy.Chunk) error { return nil },
+	)
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+}
+
+func TestFSReadFile_WithinLimit(t *testing.T) {
+	base := t.TempDir()
+	content := "hello world"
+	require.NoError(t, os.WriteFile(filepath.Join(base, "small.txt"), []byte(content), 0o600))
+
+	tools, err := AsTools(base, WithMaxBytes(1024))
 	require.NoError(t, err)
 	readTool := tools[1]
 
@@ -95,15 +220,14 @@ func TestFSReadFile_Truncation(t *testing.T) {
 		readTool.Execute(
 			context.Background(),
 			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"big.txt"}`)},
+			toolsy.ToolInput{ArgsJSON: []byte(`{"path":"small.txt"}`)},
 			func(c toolsy.Chunk) error {
 				result = decodeJSONChunk[readResult](t, c)
 				return nil
 			},
 		),
 	)
-	require.Contains(t, result.Content, "[Truncated]")
-	require.LessOrEqual(t, len(result.Content), 20+len(truncationSuffix)+5)
+	require.Equal(t, content, result.Content)
 }
 
 func TestFSWriteFile_Success(t *testing.T) {
@@ -225,4 +349,20 @@ func TestAsTools_ToolCountReadOnly(t *testing.T) {
 	tools, err := AsTools(t.TempDir(), WithReadOnly(true))
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
+}
+
+func TestListDir_CancelBeforeRead(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := doListDir(ctx, t.TempDir(), &options{}, "")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestWriteFile_CancelBeforeWrite(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := doWriteFile(ctx, t.TempDir(), "out.txt", "data")
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 }
