@@ -112,7 +112,7 @@ func countAsyncLayers(t Tool) int {
 	return n
 }
 
-// registryRuntimeState is shared by a root registry and all Subset views derived from it.
+// registryRuntimeState is shared by a root registry and all views derived from it.
 type registryRuntimeState struct {
 	mu       sync.Mutex
 	done     chan struct{}
@@ -225,19 +225,33 @@ func (r *Registry) ToolNames() []string {
 	return r.sortedToolNames()
 }
 
-// Subset returns a new registry containing only the named tools from r.
+// Subset returns a capability-backed registry view containing only the named tools from r.
 // Duplicate names in allowedNames are ignored (silent dedup).
 // Returns an error if any name is not present in r (strict fail-fast).
 // The parent registry is not modified. Registry options (hooks, validator) are inherited.
 // Subset shares runtime state (Shutdown, in-flight tracking) with r and all sibling views.
 // Shutdown on either parent or subset stops the entire tree (see [Registry.Shutdown]).
-//
-// Use Subset for capability scoping (which tools an agent profile may see).
-// Runtime authorization (per-call data access) belongs in middleware, not Subset.
+// Prefer [Registry.View] when the caller needs snapshot identity, required tool validation, or view policy.
 func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
+	view, err := r.View(RegistryViewSpec{
+		ToolNames:         allowedNames,
+		RequiredToolNames: nil,
+		Reason:            "registry subset",
+		Owner:             "toolsy",
+		Policy:            nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return view.reg, nil
+}
+
+func (r *Registry) subsetWithPolicy(policy Policy, allowedNames ...string) (*Registry, error) {
 	if _, err := r.requireRuntimeState(); err != nil {
 		return nil, fmt.Errorf("toolsy: subset: %w", err)
 	}
+	opts := r.opts
+	opts.policy = composePolicies(opts.policy, policy)
 	seen := make(map[string]struct{}, len(allowedNames))
 	tools := make(map[string]Tool, len(allowedNames))
 	for _, name := range allowedNames {
@@ -253,7 +267,7 @@ func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
 	}
 	return &Registry{
 		tools: tools,
-		opts:  r.opts,
+		opts:  opts,
 		state: r.state,
 	}, nil
 }
@@ -345,6 +359,9 @@ func (r *Registry) executeWithSummary(
 	tool, ok := r.tools[call.ToolName]
 	if !ok {
 		state.running.Done()
+		if r.opts.view.ID != "" {
+			return summary, false, NewCapabilityDeniedError(call.ToolName, r.opts.view)
+		}
 		return summary, false, NewToolNotFoundError()
 	}
 
@@ -354,7 +371,13 @@ func (r *Registry) executeWithSummary(
 	if execEnv == nil {
 		execEnv = NewRunEnv(nil)
 	}
-	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r))
+	call.Input = call.Input.Clone()
+	call.CallContext = bindCallMetadata(call.CallContext, call)
+	if r.opts.view.ID != "" {
+		call.CallContext = bindViewMetadata(call.CallContext, r.opts.view.ID)
+	}
+	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r), call.CallContext)
+	execEnv.view = cloneRegistryViewSnapshot(r.opts.view)
 	defer func() {
 		if execEnv.async == nil || !execEnv.async.backgroundStarted.Load() {
 			release()
@@ -369,7 +392,7 @@ func (r *Registry) executeWithSummary(
 		defer func() {
 			dur := time.Since(start)
 			if r.opts.onAfter != nil {
-				r.opts.onAfter(ctx, call, summary, dur)
+				r.opts.onAfter(ctx, cloneToolCall(call), summary, dur)
 			}
 		}()
 	}
@@ -383,7 +406,7 @@ func (r *Registry) executeWithSummary(
 	}
 
 	if r.opts.onBefore != nil {
-		r.opts.onBefore(ctx, call)
+		r.opts.onBefore(ctx, cloneToolCall(call))
 	}
 
 	toolYield := r.wrapYieldWithCallMeta(ctx, call, &summary, yield)
@@ -401,11 +424,42 @@ func (r *Registry) runToolWithValidationAndExecute(
 	toolYield func(Chunk) error,
 	summary *ExecutionSummary,
 ) {
+	manifest := cloneManifestForPolicy(tool.Manifest())
+	if err := enforceRequirementsPolicy(manifest.Requirements, r.opts.policy); err != nil {
+		summary.Error = err
+		return
+	}
 	if r.opts.authorizer != nil {
-		if aErr := r.opts.authorizer.Authorize(ctx, tool.Manifest(), call.Input); aErr != nil {
-			summary.Error = aErr
+		req := AuthorizationRequest{
+			Manifest:    cloneManifestForPolicy(manifest),
+			Input:       call.Input.Clone(),
+			CallContext: call.CallContext,
+			View:        cloneRegistryViewSnapshot(r.opts.view),
+		}
+		if aErr := r.opts.authorizer.Authorize(ctx, req); aErr != nil {
+			if _, ok := AsToolError(aErr); ok {
+				summary.Error = aErr
+			} else {
+				summary.Error = NewPolicyDeniedErrorFrom(aErr)
+			}
 			return
 		}
+	}
+	if r.opts.policy != nil {
+		req := PolicyRequest{
+			Manifest:    cloneManifestForPolicy(manifest),
+			Input:       call.Input.Clone(),
+			CallContext: call.CallContext,
+			View:        cloneRegistryViewSnapshot(r.opts.view),
+		}
+		if pErr := evaluatePolicy(ctx, r.opts.policy, req); pErr != nil {
+			summary.Error = pErr
+			return
+		}
+	}
+	if err := enforceRuntimeRequirements(manifest.Requirements, env); err != nil {
+		summary.Error = err
+		return
 	}
 	if r.opts.validator != nil {
 		if vErr := r.opts.validator.Validate(ctx, call.ToolName, string(call.Input.ArgsJSON)); vErr != nil {
@@ -417,6 +471,23 @@ func (r *Registry) runToolWithValidationAndExecute(
 	}
 	summary.Error = tool.Execute(ctx, env, call.Input, toolYield)
 	summary.Error = normalizeExecutionInterrupt(summary.Error)
+}
+
+func enforceRequirementsPolicy(req ToolRequirements, policy Policy) error {
+	if !hasRequirements(req) || policyEnforcesRequirements(policy) {
+		return nil
+	}
+	return NewPolicyDeniedError("tool requirements require a requirements policy", "requirements")
+}
+
+func enforceRuntimeRequirements(req ToolRequirements, env *RunEnv) error {
+	if !req.NeedsSession && (req.MemoryAccess == "" || req.MemoryAccess == MemoryAccessNone) {
+		return nil
+	}
+	if env != nil && (env.session != nil || env.StateStore != nil) {
+		return nil
+	}
+	return NewDependencyMissingError("session state")
 }
 
 func normalizeExecutionInterrupt(err error) error {
@@ -564,7 +635,7 @@ func (r *Registry) runBatchStreamWorker(
 		if !summaryReady || r.opts.onAfter == nil {
 			return
 		}
-		r.opts.onAfter(batchCtx, call, summary, time.Since(start))
+		r.opts.onAfter(batchCtx, cloneToolCall(call), summary, time.Since(start))
 	}()
 	toolYield := func(c Chunk) error {
 		if c.CallID == "" {
@@ -648,10 +719,10 @@ func (r *Registry) ExecuteBatchStream(ctx context.Context, calls []ToolCall, yie
 // Both synchronous executions and background jobs started by AsAsyncTool (when run via Registry) are tracked;
 // Shutdown blocks until all of them finish or ctx is cancelled.
 //
-// Subset views share runtime state with their parent. Calling Shutdown on any view closes the shared
+// Registry views share runtime state with their parent. Calling Shutdown on any view closes the shared
 // lifecycle for the entire registry tree (idempotent via [sync.Once]). Only the application owner of the
 // root registry (for example App or Server on SIGTERM) should call Shutdown; do not call Shutdown on a
-// per-request Subset to "clean up" after an agent run.
+// per-request view to "clean up" after an agent run.
 func (r *Registry) Shutdown(ctx context.Context) error {
 	state, err := r.requireRuntimeState()
 	if err != nil {

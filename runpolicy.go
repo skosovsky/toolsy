@@ -7,7 +7,7 @@ import (
 
 // RunPolicy describes session-level tool choice constraints for LLM adapters.
 // Enforcement is applied only by [Session.Execute], not by [Registry.Execute].
-// Use [Registry.Subset] for static capability scoping at registry level.
+// Use [Registry.View] for static capability scoping at registry level.
 //
 // Semantics:
 //   - ForcedTool: every Execute must target this tool name.

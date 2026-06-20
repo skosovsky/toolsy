@@ -6,14 +6,30 @@ import (
 	"fmt"
 )
 
+// OutcomeStatus describes the terminal semantic state of RunCall.
+type OutcomeStatus string
+
+const (
+	OutcomeSuccess             OutcomeStatus = "success"
+	OutcomeEmptySuccess        OutcomeStatus = "empty_success"
+	OutcomeNoopSuccess         OutcomeStatus = "noop_success"
+	OutcomeBusinessError       OutcomeStatus = "business_error"
+	OutcomeInfrastructureError OutcomeStatus = "infrastructure_error"
+)
+
 // ToolOutcome aggregates a synchronous tool call result without manual chunk glue.
 type ToolOutcome struct {
 	ToolName         string
 	Result           []byte
 	ResultMimeType   string
+	TypedResult      any
+	EmptyResult      bool
+	Noop             bool
+	Effects          []any
 	Progress         []Chunk
 	Controls         []ControlSignal
 	CompletionPolicy CompletionPolicy
+	Status           OutcomeStatus
 	ExecutionError   *ToolError
 }
 
@@ -21,6 +37,15 @@ type ToolOutcome struct {
 func DecodeOutcomeAs[T any](o ToolOutcome) (*T, error) {
 	if o.ExecutionError != nil {
 		return nil, o.ExecutionError
+	}
+	if o.TypedResult != nil {
+		if typed, ok := o.TypedResult.(T); ok {
+			return &typed, nil
+		}
+		return nil, NewSchemaError(fmt.Sprintf("typed outcome result is not requested type %T", *new(T)))
+	}
+	if o.EmptyResult {
+		return nil, NewSchemaError("cannot decode empty successful outcome")
 	}
 	chunk := Chunk{
 		Event:    EventResult,
@@ -30,18 +55,34 @@ func DecodeOutcomeAs[T any](o ToolOutcome) (*T, error) {
 	return DecodeChunkAs[T](chunk)
 }
 
+// DecodeOutcomeEffectsAs returns typed host effects from an outcome.
+func DecodeOutcomeEffectsAs[T any](o ToolOutcome) ([]T, error) {
+	if len(o.Effects) == 0 {
+		return nil, nil
+	}
+	out := make([]T, 0, len(o.Effects))
+	for _, effect := range o.Effects {
+		typed, ok := effect.(T)
+		if !ok {
+			return nil, NewSchemaError(fmt.Sprintf("outcome effect is not requested type %T", *new(T)))
+		}
+		out = append(out, typed)
+	}
+	return out, nil
+}
+
 // RunCall executes one tool call and returns an aggregated [ToolOutcome].
 // Business failures are returned as (outcome, nil) with outcome.ExecutionError set.
-// Infrastructure failures return (zero ToolOutcome, err), including structured error chunks
+// Infrastructure failures return (outcome with [OutcomeInfrastructureError], err), including structured error chunks
 // from [WithErrorFormatter] when the decoded [ToolError.Code] is an orchestrator/infra code.
 // Control-plane signals return (outcome, err) with partial Progress/Controls preserved.
 // Multiple non-error [EventResult] chunks overwrite Result (last wins).
 func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, error) {
 	if s == nil {
-		return ToolOutcome{}, NewValidationError("session is nil")
+		return newInfrastructureOutcome(""), NewValidationError("session is nil")
 	}
 	if s.reg == nil {
-		return ToolOutcome{}, NewToolNotFoundError()
+		return newInfrastructureOutcome(call.ToolName), NewToolNotFoundError()
 	}
 
 	outcome := ToolOutcome{ToolName: call.ToolName} //nolint:exhaustruct // filled during Execute
@@ -51,28 +92,7 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 
 	var terminalBusiness bool
 	err := s.Execute(ctx, call, func(c Chunk) error {
-		switch c.Event {
-		case EventProgress:
-			if !terminalBusiness {
-				outcome.Progress = append(outcome.Progress, c)
-			}
-		case EventControl:
-			if !terminalBusiness && c.Control != nil {
-				outcome.Controls = append(outcome.Controls, c.Control)
-			}
-		case EventResult:
-			if c.IsError {
-				outcome.Result = nil
-				outcome.ResultMimeType = ""
-				outcome.ExecutionError = executionErrorFromChunk(c)
-				terminalBusiness = true
-				return nil
-			}
-			outcome.Result = append([]byte(nil), c.Data...)
-			outcome.ResultMimeType = c.MimeType
-		default:
-			// ignore unknown events for sync outcome aggregation
-		}
+		accountRunCallChunk(&outcome, &terminalBusiness, c)
 		return nil
 	})
 
@@ -81,7 +101,8 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 			return outcome, err
 		}
 		if runCallInfraError(err) {
-			return ToolOutcome{}, err
+			outcome.Status = OutcomeInfrastructureError
+			return outcome, err
 		}
 		outcome.ExecutionError = toolErrorFromRunCall(err)
 		return finalizeRunCallOutcome(outcome)
@@ -89,11 +110,69 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 	return finalizeRunCallOutcome(outcome)
 }
 
+func newInfrastructureOutcome(toolName string) ToolOutcome {
+	return ToolOutcome{ //nolint:exhaustruct // zero values intentionally mean no result/progress/effects are available.
+		ToolName: toolName,
+		Status:   OutcomeInfrastructureError,
+	}
+}
+
 func finalizeRunCallOutcome(outcome ToolOutcome) (ToolOutcome, error) {
 	if outcome.ExecutionError != nil && runCallInfraError(outcome.ExecutionError) {
-		return ToolOutcome{}, outcome.ExecutionError
+		outcome.Status = OutcomeInfrastructureError
+		return outcome, outcome.ExecutionError
+	}
+	if outcome.Status == "" {
+		switch {
+		case outcome.ExecutionError != nil:
+			outcome.Status = OutcomeBusinessError
+		case outcome.Noop:
+			outcome.Status = OutcomeNoopSuccess
+		case outcome.EmptyResult:
+			outcome.Status = OutcomeEmptySuccess
+		default:
+			outcome.Status = OutcomeSuccess
+		}
 	}
 	return outcome, nil
+}
+
+func accountRunCallChunk(outcome *ToolOutcome, terminalBusiness *bool, c Chunk) {
+	switch c.Event {
+	case EventProgress:
+		if !*terminalBusiness {
+			outcome.Progress = append(outcome.Progress, c)
+		}
+	case EventControl:
+		if !*terminalBusiness && c.Control != nil {
+			outcome.Controls = append(outcome.Controls, c.Control)
+		}
+	case EventResult:
+		accountRunCallResult(outcome, terminalBusiness, c)
+	default:
+		// ignore unknown events for sync outcome aggregation
+	}
+}
+
+func accountRunCallResult(outcome *ToolOutcome, terminalBusiness *bool, c Chunk) {
+	if c.IsError {
+		outcome.Result = nil
+		outcome.ResultMimeType = ""
+		outcome.TypedResult = nil
+		outcome.EmptyResult = false
+		outcome.Effects = nil
+		outcome.ExecutionError = executionErrorFromChunk(c)
+		outcome.Status = OutcomeBusinessError
+		*terminalBusiness = true
+		return
+	}
+	outcome.Result = append([]byte(nil), c.Data...)
+	outcome.ResultMimeType = c.MimeType
+	outcome.TypedResult = c.TypedResult
+	outcome.EmptyResult = c.EmptyResult
+	outcome.Noop = c.Noop
+	outcome.Effects = append([]any(nil), c.Effects...)
+	outcome.Controls = append(outcome.Controls, c.Controls...)
 }
 
 func executionErrorFromChunk(c Chunk) *ToolError {
@@ -139,7 +218,7 @@ func runCallInfraError(err error) bool {
 	}
 	switch te.Code {
 	case CodeToolNotFound, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady,
-		CodeDependencyMissing, CodeToolsContractMissing:
+		CodeDependencyMissing, CodeToolsContractMissing, CodePolicyDenied, CodeCapabilityDenied:
 		return true
 	default:
 		return false

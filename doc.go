@@ -2,11 +2,12 @@
 //
 // # Overview
 //
-// Pipeline: Go handler + args struct -> NewTool/NewStreamTool -> Tool -> Registry ->
-// Execute. Input JSON is validated against generated schema, the handler is called,
-// and results are streamed as Chunk values.
+// Pipeline: Go typed handler + args struct -> NewTypedTool -> Registry.View ->
+// Session.RunCall. Input JSON is validated against generated schema, policy runs before
+// handlers, and results are returned as ToolOutcome values. Low-level Execute remains
+// available for streaming adapters and transport glue that need direct Chunk handling.
 //
-// # v1.0 contracts
+// # Runtime contracts
 //
 //   - Tool interface:
 //     Manifest() ToolManifest
@@ -19,7 +20,7 @@
 //     StateCodecRegistry for typed snapshot roundtrips (see docs/migration-task28.md and docs/adr/adr-task28-hardening.md).
 //   - RunCall + ToolOutcome + DecodeOutcomeAs: sync aggregation; business errors in ExecutionError (Error-as-Value).
 //   - ValidateManifestContract + ManifestSet: declarative contract checks without Registry.Build.
-//   - NewTypedTool, NewDynamicToolFromSpec, ManifestSet, ToolRequirements (v1.0 clear break).
+//   - NewTypedTool, NewDynamicToolFromSpec, ManifestSet, ToolRequirements.
 //   - RunEnv: Put/Require/Lookup (deps); SetState/GetState delegate to bound Session;
 //     NewRunEnv(session, opts...); session may be nil for DI-only usage.
 //   - ToolError: structured errors with Code and Retryable (replaces ClientError/SystemError).
@@ -36,35 +37,36 @@
 // NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical
 // ToolCall/ToolResult wire format and textprocessor for standalone UTF-8 truncation.
 //
-// # Example (streaming / low-level)
+// # Example
 //
-// The Execute example below assembles chunks manually. For synchronous host loops, prefer RunCall (see block after Example).
+// The primary synchronous host path is typed tool + registry view + RunCall.
 //
 //	type Args struct { City string `json:"city" jsonschema:"City name"` }
 //	type Out struct { Temp float64 `json:"temp"` }
-//	tool, _ := toolsy.NewTool("weather", "Get weather", func(_ context.Context, _ *toolsy.RunEnv, a Args) (Out, error) {
-//		return Out{Temp: 22.5}, nil
+//	type Subject struct { ID string }
+//	type Scope struct { Workspace string }
+//	tool, _ := toolsy.NewTypedTool(toolsy.TypedToolSpec[Subject, Scope, Args, Out, struct{}]{
+//		Name: "weather",
+//		Description: "Get weather",
+//		Handler: func(_ context.Context, _ toolsy.TypedCallContext[Subject, Scope], _ *toolsy.RunEnv, a Args) (toolsy.ToolResult[Out, struct{}], error) {
+//			return toolsy.NewToolResult[Out, struct{}](Out{Temp: 22.5}), nil
+//		},
 //	})
 //	reg, _ := toolsy.NewRegistryBuilder().Add(tool).Build()
-//	env := toolsy.NewRunEnv(nil)
+//	view, _ := reg.View(toolsy.RegistryViewSpec{
+//		ToolNames: []string{"weather"},
+//		RequiredToolNames: []string{"weather"},
+//	})
+//	sess, _ := view.NewSession()
 //	call := toolsy.ToolCall{
 //		ToolName: "weather",
 //		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"city":"Moscow"}`)},
-//		Env:      env,
+//		Env:      toolsy.NewRunEnv(sess),
+//		CallContext: toolsy.NewCallContext(
+//			Subject{ID: "user-1"},
+//			Scope{Workspace: "default"},
+//		),
 //	}
-//	var out Out
-//	_ = reg.Execute(ctx, call, func(c toolsy.Chunk) error {
-//		decoded, err := toolsy.DecodeChunkAs[Out](c)
-//		if err != nil {
-//			return err
-//		}
-//		out = *decoded
-//		return nil
-//	})
-//
-// Sync agent loops can aggregate chunks via RunCall:
-//
-//	sess, _ := toolsy.NewSession(reg)
 //	outcome, err := sess.RunCall(ctx, call)
 //	if err != nil { /* infrastructure */ }
 //	if outcome.ExecutionError != nil { /* business — toolsy.AsToolError */ }

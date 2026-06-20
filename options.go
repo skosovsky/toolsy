@@ -97,7 +97,7 @@ func WithIdempotent() ToolOption {
 }
 
 // WithRequirements sets typed declarative requirements on the tool manifest.
-// Enforcement is the host's responsibility (see [ToolRequirements]).
+// Enforcement belongs to registry/session policy (see [NewRequirementsPolicy]).
 func WithRequirements(req ToolRequirements) ToolOption {
 	return func(c *ToolConfig) {
 		c.Manifest.Requirements = cloneRequirements(req)
@@ -121,7 +121,9 @@ type RegistryOption func(*registryOptions)
 type registryOptions struct {
 	recoverPanics bool
 	validator     Validator
+	policy        Policy
 	authorizer    Authorizer
+	view          RegistryViewSnapshot
 	onBefore      func(context.Context, ToolCall)
 	onAfter       func(context.Context, ToolCall, ExecutionSummary, time.Duration)
 	onChunk       func(context.Context, Chunk)
@@ -139,6 +141,20 @@ func WithValidator(v Validator) RegistryOption {
 	return func(o *registryOptions) {
 		o.validator = v
 	}
+}
+
+// WithPolicy configures fail-closed policy/capability enforcement before tool handlers run.
+func WithPolicy(p Policy) RegistryOption {
+	return func(o *registryOptions) {
+		o.policy = composePolicies(o.policy, p)
+	}
+}
+
+// WithRequirementsPolicy configures fail-closed typed enforcement for manifest requirements.
+func WithRequirementsPolicy[TSubject, TScope any](
+	fn RequirementsDecisionFunc[TSubject, TScope],
+) RegistryOption {
+	return WithPolicy(NewRequirementsPolicy(fn))
 }
 
 // WithOnBeforeExecute sets a hook called before each tool execution.

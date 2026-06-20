@@ -1,5 +1,5 @@
 // Package main shows wrapping a toolsy HTTP tool with routery policies (timeout, retry, bulkhead)
-// and calling it via Session.RunCall (toolsy v1.0 host-facing API).
+// and calling the wrapped typed tool via Session.RunCall.
 package main
 
 import (
@@ -128,6 +128,8 @@ func findHTTPGetTool(tools []toolsy.Tool) (toolsy.Tool, error) {
 }
 
 func buildReliableExecutor(baseGet toolsy.Tool) routery.Executor[execReq, httpGetResult] {
+	// The wrapped host tool uses RunCall above; direct Execute here is low-level adapter glue
+	// for reusing the underlying httptool implementation inside routery.
 	base := routery.ExecutorFunc[execReq, httpGetResult](func(ctx context.Context, req execReq) (httpGetResult, error) {
 		raw, marshalErr := json.Marshal(req.Args)
 		if marshalErr != nil {
@@ -164,11 +166,26 @@ func retryOnNetTimeout(_ context.Context, _ execReq, execErr error) bool {
 }
 
 func buildWrappedTool(reliable routery.Executor[execReq, httpGetResult]) (toolsy.Tool, error) {
-	return toolsy.NewTypedTool(toolsy.TypedToolSpec[httpGetArgs, httpGetResult]{
+	return toolsy.NewTypedTool(toolsy.TypedToolSpec[
+		toolsy.NoSubject,
+		toolsy.NoScope,
+		httpGetArgs,
+		httpGetResult,
+		struct{},
+	]{
 		Name:        "http_get_resilient",
 		Description: "HTTP GET with routery timeout, retry, and bulkhead",
-		Handler: func(ctx context.Context, run *toolsy.RunEnv, args httpGetArgs) (httpGetResult, error) {
-			return reliable.Execute(ctx, execReq{Env: run, Args: args})
+		Handler: func(
+			ctx context.Context,
+			_ toolsy.TypedCallContext[toolsy.NoSubject, toolsy.NoScope],
+			run *toolsy.RunEnv,
+			args httpGetArgs,
+		) (toolsy.ToolResult[httpGetResult, struct{}], error) {
+			res, err := reliable.Execute(ctx, execReq{Env: run, Args: args})
+			if err != nil {
+				return toolsy.ToolResult[httpGetResult, struct{}]{}, err
+			}
+			return toolsy.NewToolResult[httpGetResult, struct{}](res), nil
 		},
 	})
 }

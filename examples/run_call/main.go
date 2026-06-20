@@ -1,4 +1,4 @@
-// Package main demonstrates RunCall, ToolOutcome, and DecodeOutcomeAs (toolsy v1.0).
+// Package main demonstrates RunCall, ToolOutcome, and DecodeOutcomeAs.
 package main
 
 import (
@@ -34,7 +34,13 @@ func main() {
 }
 
 func mustDoubleTool() toolsy.Tool {
-	tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[doubleArgs, doubleResult]{
+	tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[
+		toolsy.NoSubject,
+		toolsy.NoScope,
+		doubleArgs,
+		doubleResult,
+		struct{},
+	]{
 		Name:        "double",
 		Description: "Double an integer",
 		ArgValidator: func(a doubleArgs) error {
@@ -43,8 +49,13 @@ func mustDoubleTool() toolsy.Tool {
 			}
 			return nil
 		},
-		Handler: func(_ context.Context, _ *toolsy.RunEnv, a doubleArgs) (doubleResult, error) {
-			return doubleResult{Double: a.N * 2}, nil
+		Handler: func(
+			_ context.Context,
+			_ toolsy.TypedCallContext[toolsy.NoSubject, toolsy.NoScope],
+			_ *toolsy.RunEnv,
+			a doubleArgs,
+		) (toolsy.ToolResult[doubleResult, struct{}], error) {
+			return toolsy.NewToolResult[doubleResult, struct{}](doubleResult{Double: a.N * 2}), nil
 		},
 	})
 	if err != nil {

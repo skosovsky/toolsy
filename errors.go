@@ -39,6 +39,8 @@ const (
 	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
 	CodeBudgetExceeded       ErrorCode = "BUDGET_EXCEEDED"
 	CodeStateCodecMissing    ErrorCode = "STATE_CODEC_MISSING"
+	CodePolicyDenied         ErrorCode = "POLICY_DENIED"
+	CodeCapabilityDenied     ErrorCode = "CAPABILITY_DENIED"
 )
 
 // ToolError is the structured execution error envelope for orchestrator routing.

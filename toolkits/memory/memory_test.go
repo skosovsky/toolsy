@@ -44,7 +44,14 @@ func mustBuildMemoryRegistry(t *testing.T, s *Scratchpad) *toolsy.Registry {
 	t.Helper()
 	tools, err := s.AsTools()
 	require.NoError(t, err)
-	reg, err := toolsy.NewRegistryBuilder().Add(tools...).Build()
+	reg, err := toolsy.NewRegistryBuilder(
+		toolsy.WithRequirementsPolicy(func(
+			_ context.Context,
+			_ toolsy.RequirementsPolicyRequest[toolsy.NoSubject, toolsy.NoScope],
+		) toolsy.Decision {
+			return toolsy.AllowDecision()
+		}),
+	).Add(tools...).Build()
 	require.NoError(t, err)
 	return reg
 }
@@ -76,6 +83,25 @@ func TestScratchpad_ReadToolManifestReadOnly(t *testing.T) {
 	require.NotNil(t, readTool)
 	require.True(t, readTool.Manifest().ReadOnly)
 	require.Equal(t, toolsy.MemoryAccessRead, readTool.Manifest().Requirements.MemoryAccess)
+}
+
+func TestScratchpad_RequiresRequirementsPolicy(t *testing.T) {
+	s := NewScratchpad()
+	tools, err := s.AsTools()
+	require.NoError(t, err)
+	reg, err := toolsy.NewRegistryBuilder().Add(tools...).Build()
+	require.NoError(t, err)
+
+	err = reg.Execute(context.Background(), toolsy.ToolCall{
+		ToolName: "memory_read_all",
+		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
+		Env:      toolsy.NewRunEnv(nil, toolsy.WithStateStore(newMemStateStore())),
+	}, func(toolsy.Chunk) error { return nil })
+
+	require.Error(t, err)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	assert.Equal(t, toolsy.CodePolicyDenied, te.Code)
 }
 
 func TestScratchpad_PinRead(t *testing.T) {
@@ -252,10 +278,9 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	require.True(t, toolsy.ClientCorrectable(te.Code))
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "run.StateStore is required")
-	require.ErrorIs(t, err, toolsy.ErrValidation)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	assert.Equal(t, toolsy.CodeDependencyMissing, te.Code)
+	require.Contains(t, te.Reason, "session state")
 }
 
 func TestScratchpad_Concurrent(t *testing.T) {

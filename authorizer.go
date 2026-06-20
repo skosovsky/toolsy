@@ -4,7 +4,18 @@ import "context"
 
 // Authorizer performs runtime authorization before tool execution.
 type Authorizer interface {
-	Authorize(ctx context.Context, manifest ToolManifest, input ToolInput) error
+	Authorize(ctx context.Context, req AuthorizationRequest) error
+}
+
+// AuthorizerFunc adapts a function to Authorizer.
+type AuthorizerFunc func(context.Context, AuthorizationRequest) error
+
+// Authorize implements Authorizer.
+func (f AuthorizerFunc) Authorize(ctx context.Context, req AuthorizationRequest) error {
+	if f == nil {
+		return NewPolicyDeniedError("authorizer function is nil")
+	}
+	return f(ctx, req)
 }
 
 // WithAuthorizer configures registry-level authorization executed before tools run.
@@ -39,8 +50,17 @@ func (t *authorizationTool) Execute(
 	if t.auth == nil {
 		return t.next.Execute(ctx, run, input, yield)
 	}
-	if err := t.auth.Authorize(ctx, t.next.Manifest(), input); err != nil {
-		return err
+	req := AuthorizationRequest{
+		Manifest:    cloneManifestForPolicy(t.next.Manifest()),
+		Input:       input.Clone(),
+		CallContext: run.CallContext(),
+		View:        run.RegistryViewSnapshot(),
+	}
+	if err := t.auth.Authorize(ctx, req); err != nil {
+		if _, ok := AsToolError(err); ok {
+			return err
+		}
+		return NewPolicyDeniedErrorFrom(err)
 	}
 	return t.next.Execute(ctx, run, input, yield)
 }

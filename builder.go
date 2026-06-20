@@ -52,9 +52,10 @@ func NewTool[T any, R any](
 			return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
 		}
 		chunk := Chunk{
-			Event:    EventResult,
-			Data:     data,
-			MimeType: MimeTypeJSON,
+			Event:       EventResult,
+			Data:        data,
+			MimeType:    MimeTypeJSON,
+			TypedResult: res,
 		}
 		prepared, err := prepareChunk(chunk)
 		if err != nil {

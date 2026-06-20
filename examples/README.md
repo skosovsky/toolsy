@@ -14,4 +14,4 @@ go run ./examples/calculator
 - **`resiliency`** — host retry loop with `Session.RunCall` and `NewTypedTool`
 - **`calculator`** — minimal `RunCall` + `DecodeOutcomeAs` with two tools
 
-Other examples (`streaming`, `full_agent`) demonstrate chunk-level streaming APIs and legacy patterns.
+Other examples (`streaming`, `full_agent`) demonstrate intentionally low-level chunk APIs. They are useful for adapter work, but `run_call` is the primary typed path.

@@ -190,7 +190,7 @@ func TestRegistry_Subset_ExecuteDeniedForNonMember(t *testing.T) {
 		ToolCall{ToolName: "denied", Input: ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
+	requireToolErrorCode(t, err, CodeCapabilityDenied, ErrCapabilityDenied)
 }
 
 func TestRegistry_Subset_ParentShutdownBlocksSubsetExecute(t *testing.T) {

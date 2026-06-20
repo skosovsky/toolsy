@@ -166,6 +166,8 @@ func TestRunCallInfraError_Classification(t *testing.T) {
 		{name: "stream_aborted", err: ErrStreamAborted},
 		{name: "dependency_missing", err: NewDependencyMissingError("db")},
 		{name: "contract_missing", err: NewToolsContractMissingError([]string{"a"}, []string{"a"})},
+		{name: "policy_denied", err: NewPolicyDeniedError("blocked")},
+		{name: "capability_denied", err: NewCapabilityDeniedError("hidden", RegistryViewSnapshot{ID: "view-1"})},
 		{name: "internal", err: NewInternalError(errors.New("malformed chunk"))},
 		{name: "plain", err: assert.AnError},
 		{name: "context_canceled", err: context.Canceled},
@@ -210,6 +212,7 @@ func TestSession_RunCall_ContextCancel_IsInfraNotBusiness(t *testing.T) {
 		require.True(t, runCallInfraError(err))
 		require.Nil(t, outcome.ExecutionError)
 		require.Empty(t, outcome.Result)
+		assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 	}
 
 	t.Run("with_formatter", func(t *testing.T) {
@@ -250,6 +253,7 @@ func TestSession_RunCall_CancelOverReadLimit_IsInfra(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, runCallInfraError(err))
 	require.Nil(t, outcome.ExecutionError)
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 
 func TestSession_RunCall_DeadlineExceeded_IsInfraWithChain(t *testing.T) {
@@ -273,6 +277,7 @@ func TestSession_RunCall_DeadlineExceeded_IsInfraWithChain(t *testing.T) {
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.True(t, runCallInfraError(err))
 	require.Nil(t, outcome.ExecutionError)
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 	te, ok := AsToolError(err)
 	if ok {
 		require.Equal(t, CodeTimeout, te.Code)
@@ -296,12 +301,13 @@ func TestSession_RunCall_InfraMaxSteps(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = sess.RunCall(context.Background(), ToolCall{
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
 		ToolName: "ok",
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 		Env:      NewRunEnv(sess),
 	})
 	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 
 func TestSession_RunCall_InfraDependencyMissing(t *testing.T) {
@@ -316,12 +322,13 @@ func TestSession_RunCall_InfraDependencyMissing(t *testing.T) {
 	sess, err := NewSession(reg)
 	require.NoError(t, err)
 
-	_, err = sess.RunCall(context.Background(), ToolCall{
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
 		ToolName: "needs_db",
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 		Env:      NewRunEnv(sess),
 	})
 	requireToolErrorCode(t, err, CodeDependencyMissing)
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 
 func TestSession_RunCall_InfraDependencyMissing_WithFormatter(t *testing.T) {
@@ -499,7 +506,7 @@ func TestSession_RunCall_LegacyTextErrorChunk_NormalizedToInfraError(t *testing.
 	te, ok := AsToolError(err)
 	require.True(t, ok)
 	assert.Contains(t, te.Reason, "malformed error chunk")
-	_ = outcome
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 
 func TestSession_RunCall_StructuredBusinessErrorChunk_ToOutcome(t *testing.T) {
@@ -594,7 +601,7 @@ func TestSession_RunCall_InfraToolNotFound(t *testing.T) {
 	sess, err := NewSession(reg)
 	require.NoError(t, err)
 
-	_, err = sess.RunCall(context.Background(), ToolCall{
+	outcome, err := sess.RunCall(context.Background(), ToolCall{
 		ToolName: "missing",
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 		Env:      NewRunEnv(sess),
@@ -603,6 +610,7 @@ func TestSession_RunCall_InfraToolNotFound(t *testing.T) {
 	te, ok := AsToolError(err)
 	require.True(t, ok)
 	assert.Equal(t, CodeToolNotFound, te.Code)
+	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 
 func TestSession_RunCall_SandboxStdoutReadLimit_BusinessOutcome(t *testing.T) {
@@ -645,7 +653,8 @@ func TestNewTypedTool_Validators(t *testing.T) {
 	type result struct {
 		V int `json:"v"`
 	}
-	tool, err := NewTypedTool(TypedToolSpec[args, result]{
+	// Arrange.
+	tool, err := NewTypedTool(TypedToolSpec[NoSubject, NoScope, args, result, struct{}]{
 		Name:        "typed",
 		Description: "Typed",
 		ArgValidator: func(a args) error {
@@ -660,30 +669,42 @@ func TestNewTypedTool_Validators(t *testing.T) {
 			}
 			return nil
 		},
-		Handler: func(_ context.Context, _ *RunEnv, a args) (result, error) {
-			return result{V: a.N}, nil
+		Handler: func(
+			_ context.Context,
+			_ TypedCallContext[NoSubject, NoScope],
+			_ *RunEnv,
+			a args,
+		) (ToolResult[result, struct{}], error) {
+			return NewToolResult[result, struct{}](result{V: a.N}), nil
 		},
 	})
 	require.NoError(t, err)
 
 	reg, err := NewRegistryBuilder().Add(tool).Build()
 	require.NoError(t, err)
+
+	// Act.
 	err = reg.Execute(context.Background(), ToolCall{
 		ToolName: "typed",
 		Input:    ToolInput{ArgsJSON: []byte(`{"n":0}`)},
 		Env:      NewRunEnv(nil),
 	}, func(Chunk) error { return nil })
+
+	// Assert.
 	require.Error(t, err)
 	te, ok := AsToolError(err)
 	require.True(t, ok)
 	assert.Equal(t, CodeValidationFailed, te.Code)
 
+	// Act.
 	var res result
 	err = reg.Execute(context.Background(), ToolCall{
 		ToolName: "typed",
 		Input:    ToolInput{ArgsJSON: []byte(`{"n":2}`)},
 		Env:      NewRunEnv(nil),
 	}, func(c Chunk) error { return json.Unmarshal(c.Data, &res) })
+
+	// Assert.
 	require.NoError(t, err)
 	assert.Equal(t, 2, res.V)
 }

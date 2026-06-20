@@ -14,7 +14,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -28,19 +27,43 @@ func main() {
 	type Out struct {
 		Temp float64 `json:"temp"`
 	}
+	type Subject struct {
+		ID string
+	}
+	type Scope struct {
+		Workspace string
+	}
 
-	tool, err := toolsy.NewTool(
-		"weather",
-		"Get temperature for city",
-		func(_ context.Context, _ *toolsy.RunEnv, a Args) (Out, error) {
-			return Out{Temp: 22.5}, nil
+	tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[Subject, Scope, Args, Out, struct{}]{
+		Name:        "weather",
+		Description: "Get temperature for city",
+		Handler: func(
+			_ context.Context,
+			_ toolsy.TypedCallContext[Subject, Scope],
+			_ *toolsy.RunEnv,
+			_ Args,
+		) (toolsy.ToolResult[Out, struct{}], error) {
+			return toolsy.NewToolResult[Out, struct{}](Out{Temp: 22.5}), nil
 		},
-	)
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	reg, err := toolsy.NewRegistryBuilder().Add(tool).Build()
+	if err != nil {
+		log.Fatal(err)
+	}
+	view, err := reg.View(toolsy.RegistryViewSpec{
+		ToolNames:         []string{"weather"},
+		RequiredToolNames: []string{"weather"},
+		Reason:            "weather profile",
+		Owner:             "agent",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	sess, err := view.NewSession()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,17 +74,21 @@ func main() {
 			CallID:   "1",
 			ArgsJSON: []byte(`{"city":"Moscow"}`),
 		},
+		Env: toolsy.NewRunEnv(sess),
+		CallContext: toolsy.NewCallContext(
+			Subject{ID: "user-1"},
+			Scope{Workspace: "default"},
+		),
 	}
 
-	var out Out
-	err = reg.Execute(context.Background(), call, func(c toolsy.Chunk) error {
-		decoded, decErr := toolsy.DecodeChunkAs[Out](c)
-		if decErr != nil {
-			return decErr
-		}
-		out = *decoded
-		return nil
-	})
+	outcome, err := sess.RunCall(context.Background(), call)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if outcome.ExecutionError != nil {
+		log.Fatal(outcome.ExecutionError)
+	}
+	out, err := toolsy.DecodeOutcomeAs[Out](outcome)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -72,7 +99,7 @@ func main() {
 
 ### Sync agent loop
 
-For synchronous host loops, prefer `Session.RunCall` + `DecodeOutcomeAs` instead of manual chunk assembly:
+For synchronous host loops, use `Session.RunCall` + `DecodeOutcomeAs` instead of manual chunk assembly:
 
 ```go
 sess, _ := toolsy.NewSession(reg)
@@ -83,14 +110,14 @@ if outcome.ExecutionError != nil { /* business — toolsy.AsToolError */ }
 result, _ := toolsy.DecodeOutcomeAs[Out](outcome)
 ```
 
-See `examples/run_call/main.go`. The quick start above uses low-level `Registry.Execute` for streaming adapters.
+See `examples/run_call/main.go`. Use low-level `Registry.Execute` only inside streaming adapters or transport glue that must consume chunks directly.
 
-## v1.0 API contracts
+## API contracts
 
 - `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, env, input, yield)`.
-- `ToolCall` carries `Input toolsy.ToolInput`; old `ToolCall.Args` is removed.
+- `ToolCall` carries `Input toolsy.ToolInput` and optional `CallContext` for typed subject/scope.
 - `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
-- `Chunk` data-plane: `Event`, `Data`, `MimeType`, `IsError`, `Progress`.
+- `Chunk` data-plane: `Event`, `Data`, `MimeType`, `IsError`, `Progress`, `TypedResult`, `EmptyResult`, `Noop`, `Effects`.
 - `Chunk` control-plane: `EventControl` + typed `ControlSignal` (`PauseSignal`, `YieldSignal`, `HaltSignal`, `UIActionSignal`).
 - `Chunk.Event` values: `EventProgress`, `EventResult`, `EventControl`.
 - `Chunk.RawData` is removed.
@@ -99,12 +126,12 @@ See `examples/run_call/main.go`. The quick start above uses low-level `Registry.
 
 ## Architecture
 
-vNext core is a **stateless tool execution engine**: typed manifests, middleware, streaming chunks, and session policies. Orchestrators (for example `flowy`) own the agent loop, chat persistence, and routing after `CompletionPolicy`. `toolsy` executes tools and emits control signals; the orchestrator applies manifest policy and stores history (`historycodec` wire format).
+Core is a **stateless tool execution engine**: typed manifests, middleware, streaming chunks, call context, registry views, and session policies. External orchestrators own the agent loop, chat persistence, and routing after `CompletionPolicy`. `toolsy` executes tools, enforces its configured policy/capability boundary, and emits typed results, effects, and control signals.
 
 ## Registry setup
 
 Timeouts, retries, and concurrency limits are **not** configured on the registry.
-Apply them outside `toolsy` (for example with [`github.com/skosovsky/routery`](https://github.com/skosovsky/routery)) by wrapping tool execution; see `examples/resiliency/main.go` (host loop uses `Session.RunCall`).
+Apply them outside `toolsy` by wrapping tool execution; see `examples/resiliency/main.go` (host loop uses `Session.RunCall`).
 
 The registry recovers panics from tools by default; avoid `WithRecovery()` in `Use()` (it runs before the registry hook and is deprecated for registry stacks).
 
@@ -130,13 +157,23 @@ if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list
     return err
 }
 
-// Capability: static tool visibility (saves tokens; tools not in subset have no schema in the manifest).
-profileReg, err := reg.Subset("book_appointment", "list_slots")
+// Capability view: static tool visibility plus optional execution policy.
+profileView, err := reg.View(toolsy.RegistryViewSpec{
+    ToolNames: []string{"book_appointment", "list_slots"},
+    Reason: "booking profile",
+    Owner: "agent-profile",
+    Policy: toolsy.NewRequirementsPolicy(func(ctx context.Context, req toolsy.RequirementsPolicyRequest[UserSubject, WorkspaceScope]) toolsy.Decision {
+        if !req.Context.Subject.Can(req.Requirements.Permissions...) {
+            return toolsy.DenyDecision("missing permission", "permissions")
+        }
+        return toolsy.AllowDecision()
+    }),
+})
 if err != nil {
     return err
 }
 
-ms, err := profileReg.ManifestSet()
+ms, err := profileView.ManifestSet()
 if err != nil {
     return err
 }
@@ -145,13 +182,14 @@ if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list
 }
 ```
 
-- **`Subset`**: creates a capability view with only the named tools. Duplicate names are ignored. Unknown names return an error. Subset shares runtime state (shutdown and in-flight tracking) with the root registry.
+- **`Registry.View`**: creates a first-class capability object with tool names, manifest set, durable snapshot identity, optional policy, execution enforcement, and shared root lifecycle. Calls to tools outside the view manifest return `CodeCapabilityDenied`.
+- **`Subset`**: view-backed alias for a named tool set. Prefer `Registry.View` when the scope needs snapshot identity, required tool validation, policy, prompt contract, or restore requirements.
 - **`ValidateManifestContract`**: returns `*ToolError` with `CodeToolsContractMissing` when required tools are missing (`AsToolError` + `FixableArgs` lists missing names). Duplicate names in `requiredNames` are deduplicated. Works with `NewManifestSet` or `reg.ManifestSet()` — no runtime readiness required.
 - **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateManifestContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
 
-**Capability vs runtime authorization:** use `Subset` for which tools a profile may use at all. Use middleware for per-call checks (tenant, role, payload) that depend on `context` or arguments.
+**Capability vs runtime authorization:** use `Registry.View` for which tools a profile may use at all, `NewRequirementsPolicy` / `WithRequirementsPolicy` for manifest requirements against typed subject/scope, and typed tool policy for per-call args checks.
 
-**Shutdown:** call `Shutdown` only on the root registry owner (for example your app on SIGTERM). Subset views share lifecycle: `subset.Shutdown()` stops the entire registry tree, not just one agent request.
+**Shutdown:** call `Shutdown` only on the root registry owner (for example your app on SIGTERM). Registry views share lifecycle: `view.Shutdown()` stops the entire registry tree, not just one agent request.
 
 ## Tool manifest and policy fields
 
@@ -163,23 +201,25 @@ if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list
 - `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`
 - `CompletionPolicy` (`continue`, `silent_yield`, `halt`)
 
-Built-in `toolkits/*` set policy flags (`ReadOnly`, `Dangerous`, …) on each tool; `toolkits/memory` declares `ToolRequirements` (session + read/write memory). Hosts should add `WithRequirements` to custom tools. `exectool` marks `exec_code` as `Dangerous` by default. MCP proxy tools map server `annotations` hints into the same manifest fields; `read_mcp_resource` is `ReadOnly`.
+Built-in `toolkits/*` set policy flags (`ReadOnly`, `Dangerous`, …) on each tool; `toolkits/memory` declares `ToolRequirements` (session + read/write memory). Custom tools should declare `WithRequirements`, then attach `WithRequirementsPolicy` or `RegistryViewSpec.Policy: NewRequirementsPolicy(...)` so registry/session execution enforces requirements before validators and handlers run.
 
 Example:
 
 ```go
-tool, err := toolsy.NewTool(
-	"delete_user",
-	"Delete a user account",
-	handler,
-	toolsy.WithDangerous(),
-	toolsy.WithRequiresConfirmation(),
-	toolsy.WithCompletionPolicy(toolsy.CompletionHalt),
-	toolsy.WithRequirements(toolsy.ToolRequirements{
-		MemoryAccess: toolsy.MemoryAccessReadWrite,
-		Permissions:  []toolsy.Permission{"admin"},
-	}),
-)
+tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[UserSubject, WorkspaceScope, DeleteUserArgs, DeleteUserResult, struct{}]{
+	Name:        "delete_user",
+	Description: "Delete a user account",
+	Handler:     deleteUserHandler,
+	Options: []toolsy.ToolOption{
+		toolsy.WithDangerous(),
+		toolsy.WithRequiresConfirmation(),
+		toolsy.WithCompletionPolicy(toolsy.CompletionHalt),
+		toolsy.WithRequirements(toolsy.ToolRequirements{
+			MemoryAccess: toolsy.MemoryAccessReadWrite,
+			Permissions:  []toolsy.Permission{"admin"},
+		}),
+	},
+})
 if err != nil {
 	return err
 }
@@ -238,6 +278,15 @@ In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState
 - `Put` / `Require` / `Lookup` — dependencies (`deps` map, not serialized)
 - `SetState` / `GetState` — delegate to the bound `Session` when `NewRunEnv(session)` was used
 
+Subject, scope, and request-local policy data belong in `ToolCall.CallContext`, not in string-keyed `RunEnv` state:
+
+```go
+call.CallContext = toolsy.NewCallContext(
+    UserSubject{ID: "u1"},
+    WorkspaceScope{ID: "w1"},
+)
+```
+
 ```go
 codecs := toolsy.NewStateCodecRegistry()
 _ = toolsy.RegisterJSONCodec[MyState](codecs, "agent")
@@ -271,14 +320,19 @@ if outcome.ExecutionError != nil {
     _ = te.Code
     return outcome.ExecutionError
 }
+if outcome.Status == toolsy.OutcomeEmptySuccess {
+    return nil
+}
 result, err := toolsy.DecodeOutcomeAs[MyResult](outcome)
+effects, err := toolsy.DecodeOutcomeEffectsAs[MyEffect](outcome)
+_ = effects
 ```
 
 Business failures must be read from `outcome.ExecutionError`, not only `err != nil`, so progress chunks before the error are preserved.
-Legacy text error chunks (`MimeTypeText` + `IsError`) are normalized to structured wire with `CodeInternal`; `RunCall` returns them as **infrastructure** `error`, not `outcome.ExecutionError` (see migration guide).
+Legacy text error chunks (`MimeTypeText` + `IsError`) are normalized to structured wire with `CodeInternal`; `RunCall` returns them as **infrastructure** `error` with `OutcomeInfrastructureError`, not `outcome.ExecutionError` (see migration guide).
 `WithErrorFormatter` emits structured `ToolError` JSON in error chunks; `RunCall` restores `Code` / `Retryable` / `FixableArgs`.
 
-See [docs/migration-task28.md](docs/migration-task28.md), [docs/adr/adr-task28-hardening.md](docs/adr/adr-task28-hardening.md), and `examples/run_call/main.go`.
+See [docs/migration-task31.md](docs/migration-task31.md), [docs/migration-task28.md](docs/migration-task28.md), [docs/adr/adr-task28-hardening.md](docs/adr/adr-task28-hardening.md), and `examples/run_call/main.go`.
 
 ### StateCodecRegistry
 
@@ -342,37 +396,19 @@ OTel recipe for `SemanticTruncationReport` lives in extension docs:
 
 See runnable core example: `examples/semantic_truncation/main.go`.
 
-## Policy middleware recipe
+## Policy and capability recipe
 
-Use middleware to stop execution before tool handler code runs:
+Use registry policy to stop execution before validators and tool handler code run:
 
 ```go
-var ErrRateLimit = errors.New("rate limit exceeded")
-
-type rateLimitTool struct {
-	next  toolsy.Tool
-	allow func(context.Context) bool
-}
-
-func (t *rateLimitTool) Manifest() toolsy.ToolManifest { return t.next.Manifest() }
-
-func (t *rateLimitTool) Execute(
-	ctx context.Context,
-	env *toolsy.RunEnv,
-	input toolsy.ToolInput,
-	yield func(toolsy.Chunk) error,
-) error {
-	if !t.allow(ctx) {
-		return ErrRateLimit
-	}
-	return t.next.Execute(ctx, env, input, yield)
-}
-
-func WithRateLimit(allow func(context.Context) bool) toolsy.Middleware {
-	return func(next toolsy.Tool) toolsy.Tool {
-		return &rateLimitTool{next: next, allow: allow}
-	}
-}
+reg, err := toolsy.NewRegistryBuilder(
+    toolsy.WithPolicy(toolsy.PolicyFunc(func(ctx context.Context, req toolsy.PolicyRequest) toolsy.Decision {
+        if req.Manifest.Dangerous {
+            return toolsy.DenyDecision("dangerous tool requires a narrower capability")
+        }
+        return toolsy.AllowDecision()
+    })),
+).Add(tools...).Build()
 ```
 
 Error propagation differs by execution path:
@@ -397,7 +433,7 @@ reg, err := toolsy.NewRegistryBuilder().
 Notes:
 
 - `WithTruncation` truncates `text/plain` and `text/markdown` by default; `application/json` truncation is opt-in via `WithTruncationIncludeJSON(true)`.
-- Transient retries, timeouts, and bulkheads belong outside `toolsy` (for example `github.com/skosovsky/routery` wrapping tool execution). See `examples/resiliency/main.go`.
+- Transient retries, timeouts, and bulkheads belong outside `toolsy` as execution wrappers. See `examples/resiliency/main.go`.
 - `WithErrorFormatter` may convert terminal errors into `Chunk{IsError: true}` and then return `nil` (soft error).
 - `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxStepsExceeded`, shutdown/validator failures) remain hard errors.
 - If you need to classify step success/failure in an orchestrator using `SessionTrack`, use `Chunk.IsError` as the failure signal; `SessionTrack` counts executions, not outcome status.
@@ -419,12 +455,12 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 
 ## Authorization and idempotency
 
-- Registry-level: `WithAuthorizer` or middleware `WithAuthorization`.
+- Registry-level: prefer `WithPolicy`; `WithAuthorizer` and `WithAuthorization` accept `AuthorizationRequest` with manifest, input, call context, and view identity.
 - Idempotent tools: mark with `WithIdempotent()` and wrap registry with `WithIdempotency(store, keyFn)`.
 
 ### Session tool choice (RunPolicy)
 
-`RunPolicy` is validated and enforced only on `Session.Execute`. Direct `Registry.Execute` does not apply run policy; use `Registry.Subset` for static tool visibility.
+`RunPolicy` is validated and enforced only on `Session.Execute`. Direct `Registry.Execute` does not apply run policy; use `Registry.View` for static tool visibility and capability policy.
 
 ```go
 sess, err := toolsy.NewSession(reg, toolsy.WithRunPolicy(toolsy.RunPolicy{
@@ -475,11 +511,11 @@ When async tool is executed via `Registry`, background jobs are tracked so `Shut
 
 Background execution uses `context.WithoutCancel` on the parent context: cancellation and deadlines from the caller (e.g. a short HTTP request from the LLM) do **not** propagate to the background goroutine, while `context.Value` (tracing, loggers) still does.
 
-Implications for external executors such as [`routery.Timeout`](https://github.com/skosovsky/routery):
+Implications for external executor wrappers:
 
-- `routery.Timeout(toolsy.AsAsyncTool(tool), d)` limits how long the orchestrator waits for the tool to return the **accepted** response (enqueue is usually fast). It does **not** cap how long the **background** work runs.
-- To cap background work, use `WithBackgroundTimeout` on `AsAsyncTool`, or wrap the base tool: `toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), toolsy.WithBackgroundTimeout(d))`.
-- If you also need a short limit on the accept phase, compose both: e.g. `routery.Timeout(toolsy.AsAsyncTool(routery.Timeout(baseTool, workBudget), ...), acceptBudget)`.
+- A timeout wrapper around `toolsy.AsAsyncTool(tool)` limits how long the orchestrator waits for the **accepted** response (enqueue is usually fast). It does **not** cap how long the **background** work runs.
+- To cap background work, use `WithBackgroundTimeout` on `AsAsyncTool`, or wrap the base tool before converting it to async.
+- If you also need a short limit on the accept phase, compose both limits explicitly.
 
 ## MCP integration
 
@@ -495,7 +531,7 @@ defer client.Close()
 
 `Connect` performs handshake during creation and returns ready client.
 
-## Migration notes (v1 -> v2 -> vNext)
+## Historical Migration Notes
 
 - Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
 - Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
@@ -505,7 +541,7 @@ defer client.Close()
 - Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
 - `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
 
-**vNext breaking changes:**
+**Breaking changes:**
 
 - `Chunk.Metadata` removed — use `Progress` for data-plane progress and `Control` for orchestrator signals.
 - System manifest flags moved out of `Metadata`: use `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`, `CompletionPolicy`.
@@ -514,11 +550,16 @@ defer client.Close()
 - `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
 - `RunContext` → `*RunEnv` on `ToolCall.Env`; `BindEnv` → `Put` / `Require` / `Lookup`.
 - `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
+- `ToolCall.CallContext` carries typed subject/scope; `RunEnv` string keys are only an escape hatch for DI/session state.
+- `WithPolicy`, typed tool policy, and `Registry.View` are the primary policy/capability path; policy denial returns `CodePolicyDenied`, while calls outside a view return `CodeCapabilityDenied`.
+- `NewTypedTool` uses `TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect]`; handlers return `ToolResult[TResult, TEffect]`.
+- `ToolOutcome` carries `Status`, `TypedResult`, `EmptyResult`, `Noop`, and `Effects`.
 - See [docs/migration-task28.md](docs/migration-task28.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
+- See [docs/migration-task31.md](docs/migration-task31.md) for typed call context, registry views, policy, effects, and streaming continuation normalization.
 
-## Zero-resiliency core (post v2)
+## Zero-resiliency core
 
-The registry no longer applies default execution timeouts, concurrency limits, built-in retry middleware, or per-tool `WithTimeout` manifest deadlines. Removed APIs include `WithDefaultTimeout`, `WithMaxConcurrency`, `WithTimeoutMiddleware`, `WithIdempotentRetry`, `ToolOption` `WithTimeout`, and `ToolManifest.Timeout`. Use `context` deadlines and wrap execution with [`routery`](https://github.com/skosovsky/routery) (or your own middleware) instead; see `examples/resiliency/main.go`. Sandbox adapters honor only the `context` passed to `Run` (no separate `RunRequest` timeout field); limit `exec_code` runtime via the execution `ctx` or wrappers like `routery.Timeout` around the tool.
+The registry no longer applies default execution timeouts, concurrency limits, built-in retry middleware, or per-tool `WithTimeout` manifest deadlines. Removed APIs include `WithDefaultTimeout`, `WithMaxConcurrency`, `WithTimeoutMiddleware`, `WithIdempotentRetry`, `ToolOption` `WithTimeout`, and `ToolManifest.Timeout`. Use `context` deadlines and external execution wrappers instead; see `examples/resiliency/main.go`. Sandbox adapters honor only the `context` passed to `Run` (no separate `RunRequest` timeout field); limit `exec_code` runtime via the execution `ctx` or wrappers around the tool.
 
 gRPC reflection helpers take an injected `grpc.ClientConnInterface` (no dial inside `toolsy`). HTTP toolkits (`httptool`, `web`, `document`) use `httptool.SafeDialTransport` by default; pass `WithHTTPClient` to merge only `Timeout`. See [docs/migration-task29.md](docs/migration-task29.md) for enterprise toolkit IoC and SSRF unification, and [docs/migration-task30.md](docs/migration-task30.md) for fail-closed read I/O (`ErrReadLimitExceeded`, transport vs display tiers).
 

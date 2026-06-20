@@ -30,6 +30,8 @@ type RunEnv struct {
 	session     *Session
 	store       *runEnvStore
 	attachments []Attachment
+	callContext CallContext
+	view        RegistryViewSnapshot
 	async       *asyncRuntime
 }
 
@@ -72,12 +74,37 @@ func (e *RunEnv) Attachments() []Attachment {
 }
 
 // cloneForExecute returns a shallow copy sharing deps store and session pointer with per-call attachments.
-func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) *RunEnv {
+func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime, callContext ...CallContext) *RunEnv {
+	bound := CallContext{
+		Subject: nil,
+		Scope:   nil,
+		Metadata: CallMetadata{
+			CallID:   "",
+			ToolName: "",
+			ViewID:   "",
+			Tags:     nil,
+		},
+		Values: nil,
+	}
+	if len(callContext) > 0 {
+		bound = cloneCallContext(callContext[0])
+	} else if e != nil {
+		bound = cloneCallContext(e.callContext)
+	}
 	if e == nil {
 		return &RunEnv{ //nolint:exhaustruct // nil env bootstrap
 			store:       newRunEnvStore(),
 			attachments: cloneAttachments(attachments),
-			async:       async,
+			callContext: bound,
+			view: RegistryViewSnapshot{
+				ID:                "",
+				ToolNames:         nil,
+				RequiredToolNames: nil,
+				ManifestDigest:    "",
+				Reason:            "",
+				Owner:             "",
+			},
+			async: async,
 		}
 	}
 	return &RunEnv{
@@ -86,8 +113,18 @@ func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime) 
 		StateStore:  e.StateStore,
 		store:       e.store,
 		attachments: cloneAttachments(attachments),
+		callContext: bound,
+		view:        cloneRegistryViewSnapshot(e.view),
 		async:       async,
 	}
+}
+
+// RegistryViewSnapshot returns the capability view bound to the current execution, if any.
+func (e *RunEnv) RegistryViewSnapshot() RegistryViewSnapshot {
+	if e == nil {
+		return RegistryViewSnapshot{}
+	}
+	return cloneRegistryViewSnapshot(e.view)
 }
 
 // Put stores a session dependency. Prefer calling before tool execution; tools should read via [Require] or [Lookup].

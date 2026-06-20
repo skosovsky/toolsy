@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (task31 contracts)
+
+### Breaking
+
+- `Registry.View` is the primary capability boundary; `Subset` now delegates to a capability-backed view.
+- Calls to tools outside an active view manifest return `CodeCapabilityDenied`; `Session.RunCall` classifies policy/capability denials as infrastructure/pre-tool failures.
+- `RestoreView` validates durable snapshot identity and manifest digest before recreating a view.
+- Non-empty `ToolRequirements` require an attached requirements policy before execution.
+
+### Added
+
+- Typed call context, typed tool policy, structured tool effects, and `ToolResult` helpers.
+- Registry view snapshots with manifest digest, required tool validation, and restore-time mismatch checks.
+- Requirements policy support for host-owned subject/scope types.
+- Migration notes in [docs/migration-task31.md](docs/migration-task31.md).
+
 ## v1.0 (task28 hardening)
 
 ### Breaking

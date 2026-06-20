@@ -98,9 +98,19 @@ func (in ToolInput) Clone() ToolInput {
 
 // ToolCall is a single execution request (as produced by the LLM).
 type ToolCall struct {
-	ToolName string
-	Input    ToolInput
-	Env      *RunEnv
+	ToolName    string
+	Input       ToolInput
+	Env         *RunEnv
+	CallContext CallContext
+}
+
+func cloneToolCall(call ToolCall) ToolCall {
+	return ToolCall{
+		ToolName:    call.ToolName,
+		Input:       call.Input.Clone(),
+		Env:         call.Env,
+		CallContext: cloneCallContext(call.CallContext),
+	}
 }
 
 // ProgressInfo carries optional data-plane progress for EventProgress chunks.
@@ -122,6 +132,16 @@ type Chunk struct {
 	Data     []byte
 	MimeType string
 	IsError  bool
+	// TypedResult carries the host-typed result for in-process outcome aggregation.
+	TypedResult any
+	// EmptyResult marks an intentional successful no-op/empty result.
+	EmptyResult bool
+	// Noop marks an intentional successful no-op with no state/effect changes.
+	Noop bool
+	// Effects carries host-owned declarative effects for reducers outside toolsy.
+	Effects []any
+	// Controls carries declarative control-plane signals attached to a result.
+	Controls []ControlSignal
 	// Control carries typed orchestrator signals when Event == EventControl.
 	Control ControlSignal
 	// Progress carries optional progress metadata for EventProgress.
