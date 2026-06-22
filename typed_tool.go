@@ -2,12 +2,28 @@ package toolsy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 )
 
-// RawArgValidator validates raw JSON arguments before typed parsing.
-type RawArgValidator func(ctx context.Context, toolName string, argsJSON []byte) error
+// ArgsBindRequest is the raw execution boundary passed to an [ArgsBinder].
+type ArgsBindRequest struct {
+	Manifest    ToolManifest
+	Input       ToolInput
+	CallContext CallContext
+}
+
+// ValidatedArgs is the canonical output of an [ArgsBinder].
+type ValidatedArgs[T any] struct {
+	Value    T
+	Raw      []byte
+	Metadata map[string]any
+}
+
+// ArgsBinder validates raw input and returns canonical typed args for the handler.
+type ArgsBinder[T any] func(ctx context.Context, req ArgsBindRequest) (ValidatedArgs[T], error)
 
 // ArgValidator validates typed arguments after schema parse.
 type ArgValidator[T any] func(T) error
@@ -23,10 +39,11 @@ type PostconditionValidator[R, E any] func(ToolResult[R, E]) error
 
 // TypedPolicyRequest is the compile-time policy request for typed tools.
 type TypedPolicyRequest[TSubject, TScope, TArgs any] struct {
-	Manifest ToolManifest
-	Input    ToolInput
-	Context  TypedCallContext[TSubject, TScope]
-	Args     TArgs
+	Manifest  ToolManifest
+	Input     ToolInput
+	Context   TypedCallContext[TSubject, TScope]
+	Args      TArgs
+	BoundArgs ValidatedArgs[TArgs]
 }
 
 // TypedPolicy validates typed subject/scope/args before handler execution.
@@ -34,25 +51,31 @@ type TypedPolicy[TSubject, TScope, TArgs any] func(context.Context, TypedPolicyR
 
 // ToolResult is the typed result/effects contract returned by production typed tools.
 type ToolResult[TResult, TEffect any] struct {
-	Value       TResult
-	Empty       bool
-	Noop        bool
-	Effects     []TEffect
-	Controls    []ControlSignal
-	Raw         []byte
-	RawMimeType string
+	Value            TResult
+	Empty            bool
+	Noop             bool
+	Effects          []TEffect
+	Controls         []ControlSignal
+	Raw              []byte
+	RawMimeType      string
+	DeliveryClass    ToolDeliveryClass
+	Audience         ToolAudience
+	EnvelopeMetadata map[string]any
 }
 
 // NewToolResult returns a successful typed result with no effects.
 func NewToolResult[TResult, TEffect any](value TResult) ToolResult[TResult, TEffect] {
 	return ToolResult[TResult, TEffect]{
-		Value:       value,
-		Empty:       false,
-		Noop:        false,
-		Effects:     nil,
-		Controls:    nil,
-		Raw:         nil,
-		RawMimeType: "",
+		Value:            value,
+		Empty:            false,
+		Noop:             false,
+		Effects:          nil,
+		Controls:         nil,
+		Raw:              nil,
+		RawMimeType:      "",
+		DeliveryClass:    "",
+		Audience:         "",
+		EnvelopeMetadata: nil,
 	}
 }
 
@@ -60,13 +83,16 @@ func NewToolResult[TResult, TEffect any](value TResult) ToolResult[TResult, TEff
 func NewEmptyToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 	var zero TResult
 	return ToolResult[TResult, TEffect]{
-		Value:       zero,
-		Empty:       true,
-		Noop:        false,
-		Effects:     nil,
-		Controls:    nil,
-		Raw:         nil,
-		RawMimeType: "",
+		Value:            zero,
+		Empty:            true,
+		Noop:             false,
+		Effects:          nil,
+		Controls:         nil,
+		Raw:              nil,
+		RawMimeType:      "",
+		DeliveryClass:    "",
+		Audience:         "",
+		EnvelopeMetadata: nil,
 	}
 }
 
@@ -74,26 +100,29 @@ func NewEmptyToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 func NewNoopToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 	var zero TResult
 	return ToolResult[TResult, TEffect]{
-		Value:       zero,
-		Empty:       false,
-		Noop:        true,
-		Effects:     nil,
-		Controls:    nil,
-		Raw:         nil,
-		RawMimeType: "",
+		Value:            zero,
+		Empty:            false,
+		Noop:             true,
+		Effects:          nil,
+		Controls:         nil,
+		Raw:              nil,
+		RawMimeType:      "",
+		DeliveryClass:    "",
+		Audience:         "",
+		EnvelopeMetadata: nil,
 	}
 }
 
 // TypedToolSpec describes a first-class typed tool contract.
 type TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect any] struct {
 	Name, Description string
-	RawValidator      RawArgValidator
+	ArgsBinder        ArgsBinder[TArgs]
 	ArgValidator      ArgValidator[TArgs]
 	ResultValidator   ResultValidator[TResult]
 	EffectValidator   EffectValidator[TEffect]
 	Postcondition     PostconditionValidator[TResult, TEffect]
 	Policy            TypedPolicy[TSubject, TScope, TArgs]
-	Handler           func(ctx context.Context, call TypedCallContext[TSubject, TScope], env *RunEnv, args TArgs) (ToolResult[TResult, TEffect], error)
+	Handler           func(ctx context.Context, call TypedCallContext[TSubject, TScope], env *RunEnv, args ValidatedArgs[TArgs]) (ToolResult[TResult, TEffect], error)
 	Options           []ToolOption
 }
 
@@ -124,20 +153,20 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 	manifest := buildToolManifest(spec.Name, spec.Description, ext.Schema(), cfg.Manifest)
 
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
-		args, callCtx, err := prepareTypedToolCall[TSubject, TScope, TArgs](
+		bound, callCtx, err := prepareTypedToolCall[TSubject, TScope, TArgs](
 			ctx,
 			env,
 			input,
 			manifest,
 			ext,
-			spec.RawValidator,
+			spec.ArgsBinder,
 			spec.Policy,
 			spec.ArgValidator,
 		)
 		if err != nil {
 			return err
 		}
-		res, err := spec.Handler(ctx, callCtx, env, args)
+		res, err := spec.Handler(ctx, callCtx, env, cloneValidatedArgs(bound))
 		if err != nil {
 			return wrapHandlerError(err)
 		}
@@ -154,49 +183,101 @@ func prepareTypedToolCall[TSubject, TScope, TArgs any](
 	input ToolInput,
 	manifest ToolManifest,
 	ext *Extractor[TArgs],
-	rawValidator RawArgValidator,
+	argsBinder ArgsBinder[TArgs],
 	policy TypedPolicy[TSubject, TScope, TArgs],
 	argValidator ArgValidator[TArgs],
-) (TArgs, TypedCallContext[TSubject, TScope], error) {
-	var zeroArgs TArgs
+) (ValidatedArgs[TArgs], TypedCallContext[TSubject, TScope], error) {
+	var zeroArgs ValidatedArgs[TArgs]
 	var zeroCtx TypedCallContext[TSubject, TScope]
-	if rawValidator != nil {
-		rawErr := rawValidator(ctx, manifest.Name, append([]byte(nil), input.ArgsJSON...))
-		if rawErr != nil {
-			return zeroArgs, zeroCtx, wrapArgValidatorError(rawErr)
-		}
-	}
-	policyArgs, err := ext.ParseAndValidate(input.ArgsJSON)
-	if err != nil {
-		return zeroArgs, zeroCtx, err
-	}
 	callCtx, err := TypedContext[TSubject, TScope](env.CallContext())
 	if err != nil {
 		return zeroArgs, zeroCtx, err
 	}
+	bound, err := bindTypedArgs(ctx, input, manifest, callCtx, ext, argsBinder)
+	if err != nil {
+		return zeroArgs, zeroCtx, err
+	}
+	if argValidator != nil {
+		argErr := argValidator(bound.Value)
+		if argErr != nil {
+			return zeroArgs, zeroCtx, wrapArgValidatorError(argErr)
+		}
+	}
 	if policy != nil {
 		req := TypedPolicyRequest[TSubject, TScope, TArgs]{
-			Manifest: cloneManifestForPolicy(manifest),
-			Input:    input.Clone(),
-			Context:  callCtx,
-			Args:     policyArgs,
+			Manifest:  cloneManifestForPolicy(manifest),
+			Input:     input.Clone(),
+			Context:   callCtx,
+			Args:      cloneTypedArgValue(bound.Value),
+			BoundArgs: cloneValidatedArgs(bound),
 		}
 		policyErr := decisionError(policy(ctx, req))
 		if policyErr != nil {
 			return zeroArgs, zeroCtx, policyErr
 		}
 	}
+	return cloneValidatedArgs(bound), callCtx, nil
+}
+
+func bindTypedArgs[TSubject, TScope, TArgs any](
+	ctx context.Context,
+	input ToolInput,
+	manifest ToolManifest,
+	callCtx TypedCallContext[TSubject, TScope],
+	ext *Extractor[TArgs],
+	argsBinder ArgsBinder[TArgs],
+) (ValidatedArgs[TArgs], error) {
+	if argsBinder != nil {
+		bound, err := argsBinder(ctx, ArgsBindRequest{
+			Manifest: cloneManifestForPolicy(manifest),
+			Input:    input.Clone(),
+			CallContext: CallContext{
+				Subject:  callCtx.Subject,
+				Scope:    callCtx.Scope,
+				Metadata: cloneCallMetadata(callCtx.Metadata),
+				Values:   maps.Clone(callCtx.Values),
+			},
+		})
+		if err != nil {
+			return ValidatedArgs[TArgs]{}, wrapArgValidatorError(err)
+		}
+		bound.Raw = append([]byte(nil), bound.Raw...)
+		bound.Metadata = cloneArgsMetadata(bound.Metadata)
+		return bound, nil
+	}
 	args, err := ext.ParseAndValidate(input.ArgsJSON)
 	if err != nil {
-		return zeroArgs, zeroCtx, err
+		return ValidatedArgs[TArgs]{}, err
 	}
-	if argValidator != nil {
-		argErr := argValidator(args)
-		if argErr != nil {
-			return zeroArgs, zeroCtx, wrapArgValidatorError(argErr)
-		}
+	return ValidatedArgs[TArgs]{
+		Value:    args,
+		Raw:      append([]byte(nil), input.ArgsJSON...),
+		Metadata: nil,
+	}, nil
+}
+
+func cloneValidatedArgs[T any](in ValidatedArgs[T]) ValidatedArgs[T] {
+	return ValidatedArgs[T]{
+		Value:    cloneTypedArgValue(in.Value),
+		Raw:      append([]byte(nil), in.Raw...),
+		Metadata: cloneArgsMetadata(in.Metadata),
 	}
-	return args, callCtx, nil
+}
+
+func cloneArgsMetadata(in map[string]any) map[string]any {
+	return deepCloneMap(in)
+}
+
+func cloneTypedArgValue[T any](in T) T {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return in
+	}
+	var out T
+	if err := json.Unmarshal(payload, &out); err != nil {
+		return in
+	}
+	return out
 }
 
 func emitTypedToolResult[TResult, TEffect any](
@@ -264,6 +345,14 @@ func chunkFromToolResult[TResult, TEffect any](res ToolResult[TResult, TEffect])
 		chunk.Data = data
 		chunk.MimeType = MimeTypeJSON
 	}
+	chunk.Envelope = NewResultEnvelope(
+		res.Value,
+		chunk.Data,
+		chunk.MimeType,
+		res.DeliveryClass,
+		res.Audience,
+		res.EnvelopeMetadata,
+	)
 	return chunk, nil
 }
 

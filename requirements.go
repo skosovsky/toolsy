@@ -3,6 +3,7 @@ package toolsy
 import (
 	"context"
 	"maps"
+	"reflect"
 )
 
 // MemoryAccess describes how a tool uses session in-memory state.
@@ -121,6 +122,93 @@ func deepCloneValue(v any) any {
 		}
 		return out
 	default:
+		return cloneMutableValue(v)
+	}
+}
+
+func cloneMutableValue(v any) any {
+	if v == nil {
 		return v
 	}
+	cloned := cloneReflectValue(reflect.ValueOf(v))
+	if !cloned.IsValid() || !cloned.CanInterface() {
+		return v
+	}
+	return cloned.Interface()
+}
+
+func cloneReflectValue(v reflect.Value) reflect.Value {
+	if !v.IsValid() {
+		return v
+	}
+	switch v.Kind() {
+	case reflect.Interface:
+		return cloneReflectInterface(v)
+	case reflect.Pointer:
+		return cloneReflectPointer(v)
+	case reflect.Map:
+		return cloneReflectMap(v)
+	case reflect.Slice:
+		return cloneReflectSlice(v)
+	case reflect.Array:
+		return cloneReflectArray(v)
+	default:
+		return v
+	}
+}
+
+func cloneReflectInterface(v reflect.Value) reflect.Value {
+	if v.IsNil() {
+		return reflect.Zero(v.Type())
+	}
+	elem := cloneReflectValue(v.Elem())
+	if !elem.IsValid() || !elem.Type().AssignableTo(v.Type()) {
+		return v
+	}
+	out := reflect.New(v.Type()).Elem()
+	out.Set(elem)
+	return out
+}
+
+func cloneReflectPointer(v reflect.Value) reflect.Value {
+	if v.IsNil() {
+		return reflect.Zero(v.Type())
+	}
+	elem := cloneReflectValue(v.Elem())
+	out := reflect.New(v.Type().Elem())
+	if elem.IsValid() && elem.Type().AssignableTo(v.Type().Elem()) {
+		out.Elem().Set(elem)
+	}
+	return out
+}
+
+func cloneReflectMap(v reflect.Value) reflect.Value {
+	if v.IsNil() {
+		return reflect.Zero(v.Type())
+	}
+	out := reflect.MakeMapWithSize(v.Type(), v.Len())
+	iter := v.MapRange()
+	for iter.Next() {
+		out.SetMapIndex(iter.Key(), cloneReflectValue(iter.Value()))
+	}
+	return out
+}
+
+func cloneReflectSlice(v reflect.Value) reflect.Value {
+	if v.IsNil() {
+		return reflect.Zero(v.Type())
+	}
+	out := reflect.MakeSlice(v.Type(), v.Len(), v.Cap())
+	for i := range v.Len() {
+		out.Index(i).Set(cloneReflectValue(v.Index(i)))
+	}
+	return out
+}
+
+func cloneReflectArray(v reflect.Value) reflect.Value {
+	out := reflect.New(v.Type()).Elem()
+	for i := range v.Len() {
+		out.Index(i).Set(cloneReflectValue(v.Index(i)))
+	}
+	return out
 }

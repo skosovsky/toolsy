@@ -36,6 +36,9 @@ type Tool interface {
 // Validator checks JSON arguments before tool execution (e.g. guardrails).
 // If Validate returns an error, execution is aborted and the error is returned to the caller (fail-closed).
 // Applications can wrap external policy engines (e.g. guardy) without coupling toolsy to them.
+//
+// Validator is reject-only and cannot return canonical args. Use [ArgsBinder]
+// through [NewTypedTool] or [NewPolicyTool] for production agent execution paths.
 type Validator interface {
 	Validate(ctx context.Context, toolName string, argsJSON string) error
 }
@@ -146,6 +149,19 @@ type Chunk struct {
 	Control ControlSignal
 	// Progress carries optional progress metadata for EventProgress.
 	Progress *ProgressInfo
+	// Envelope classifies structured result/error payloads for downstream delivery.
+	Envelope *ToolEnvelope
+}
+
+// ToolEnvelope returns a typed delivery envelope for this chunk.
+func (c Chunk) ToolEnvelope() ToolEnvelope {
+	if c.Envelope != nil {
+		return *cloneToolEnvelope(c.Envelope)
+	}
+	if c.IsError {
+		return *NewErrorEnvelope(executionErrorFromChunk(c), c.Data, c.MimeType, "", "", nil)
+	}
+	return *NewResultEnvelope(c.TypedResult, c.Data, c.MimeType, "", "", nil)
 }
 
 // ExecutionSummary is passed to the after-execution hook (WithOnAfterExecute) when a tool

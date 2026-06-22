@@ -55,6 +55,7 @@ type Session struct {
 	track   *SessionTrack
 	policy  RunPolicy
 	opts    sessionOptions
+	binding SessionBinding
 	stateMu sync.RWMutex
 	state   map[string]any
 }
@@ -68,12 +69,17 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err := ValidateRunPolicy(cfg.policy); err != nil {
 		return nil, err
 	}
+	binding, err := newSessionBinding(reg, cfg)
+	if err != nil {
+		return nil, err
+	}
 	return &Session{ //nolint:exhaustruct // stateMu zero value; state map initialized below
-		reg:    reg,
-		track:  newSessionTrack(cfg),
-		policy: cfg.policy,
-		opts:   cfg,
-		state:  make(map[string]any),
+		reg:     reg,
+		track:   newSessionTrack(cfg),
+		policy:  cfg.policy,
+		opts:    cfg,
+		binding: binding,
+		state:   make(map[string]any),
 	}, nil
 }
 

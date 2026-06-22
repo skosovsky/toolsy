@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (task31 contracts)
+## Unreleased (task31/task32 contracts)
 
 ### Breaking
 
@@ -8,13 +8,23 @@
 - Calls to tools outside an active view manifest return `CodeCapabilityDenied`; `Session.RunCall` classifies policy/capability denials as infrastructure/pre-tool failures.
 - `RestoreView` validates durable snapshot identity and manifest digest before recreating a view.
 - Non-empty `ToolRequirements` require an attached requirements policy before execution.
+- `TypedToolSpec.Handler` now receives `ValidatedArgs[TArgs]`; raw validation moves to `ArgsBinder[TArgs]`.
+- Registered state snapshot slots reject explicit JSON `null` by default; strict-mode unknown `null` keys fail closed.
+- `RegistryViewSpec.Policy` now requires a stable `PolicyID`; restore validates the policy digest as part of view identity.
+- `SessionSnapshot` is stamped with session binding and cannot be imported into an incompatible registry/view/schema.
 
 ### Added
 
 - Typed call context, typed tool policy, structured tool effects, and `ToolResult` helpers.
 - Registry view snapshots with manifest digest, required tool validation, and restore-time mismatch checks.
 - Requirements policy support for host-owned subject/scope types.
+- `SessionBinding`, `SessionCheckpoint`, `Session.Rebind`, and view-scoped checkpoint restore helpers.
+- State schema digests include slot policy, value/codec type, and optional `WithStateSlotSchemaID`.
+- `ToolEnvelope` on chunks/outcomes for result/error delivery classification without JSON sniffing.
+- `NewPolicyToolFromSpec` for one-step policy-aware generic tool construction.
+- `NewPolicyTool` for binder/policy/requirements hardening around existing generic tools.
 - Migration notes in [docs/migration-task31.md](docs/migration-task31.md).
+- Migration notes in [docs/migration-task32.md](docs/migration-task32.md).
 
 ## v1.0 (task28 hardening)
 

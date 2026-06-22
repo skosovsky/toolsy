@@ -46,6 +46,7 @@ func (s *Session) ExportSnapshot() (SessionSnapshot, error) {
 	return SessionSnapshot{
 		version: sessionSnapshotVersion,
 		payload: payload,
+		binding: cloneSessionBinding(s.binding),
 	}, nil
 }
 
@@ -64,6 +65,9 @@ func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 			fmt.Sprintf("unsupported session snapshot version %d", version),
 			fmt.Errorf("toolsy: unsupported session snapshot version %d", version),
 		)
+	}
+	if bindingErr := validateSessionBindingCompatible(snap.Binding(), s.binding); bindingErr != nil {
+		return bindingErr
 	}
 	newMap, err := s.decodeStatePayload(payload)
 	if err != nil {
@@ -135,6 +139,13 @@ func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 	newMap := make(map[string]any, len(wire))
 	for k, raw := range wire {
 		if isStateClearRaw(raw) {
+			val, keep, err := s.decodeStateClear(k, raw)
+			if err != nil {
+				return nil, err
+			}
+			if keep {
+				newMap[k] = val
+			}
 			continue
 		}
 		val, err := s.decodeStateValue(k, raw)
@@ -142,6 +153,9 @@ func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 			return nil, err
 		}
 		newMap[k] = val
+	}
+	if err := s.validateRequiredStateSlots(newMap); err != nil {
+		return nil, err
 	}
 	return newMap, nil
 }
@@ -175,6 +189,54 @@ func (s *Session) decodeStateValue(key string, raw json.RawMessage) (any, error)
 		)
 	}
 	return generic, nil
+}
+
+func (s *Session) decodeStateClear(key string, raw json.RawMessage) (any, bool, error) {
+	if reg := s.opts.codecRegistry; reg != nil {
+		if entry, ok := reg.lookup(key); ok {
+			return decodeRegisteredStateClear(key, raw, entry)
+		}
+	}
+	if s.opts.strictStateCodecs {
+		return nil, false, NewStateCodecMissingError(key)
+	}
+	return nil, false, nil
+}
+
+func decodeRegisteredStateClear(key string, raw json.RawMessage, entry stateCodecEntry) (any, bool, error) {
+	policy := entry.statePolicy()
+	if !policy.Nullable {
+		return nil, false, NewSnapshotHydrationError(
+			fmt.Sprintf("state key %q is null", key),
+			fmt.Errorf("toolsy: state key %q is null but slot is non-nullable", key),
+		)
+	}
+	val, err := entry.decodeBytes(raw)
+	if err != nil {
+		return nil, false, NewSnapshotHydrationError(
+			fmt.Sprintf("failed to decode nullable state key %q", key),
+			fmt.Errorf("toolsy: failed to decode nullable state key %q: %w", key, err),
+		)
+	}
+	return val, true, nil
+}
+
+func (s *Session) validateRequiredStateSlots(state map[string]any) error {
+	if s.opts.codecRegistry == nil {
+		return nil
+	}
+	for key, policy := range s.opts.codecRegistry.slotPolicies() {
+		if !policy.Required {
+			continue
+		}
+		if _, ok := state[key]; !ok {
+			return NewSnapshotHydrationError(
+				fmt.Sprintf("required state key %q is missing", key),
+				fmt.Errorf("toolsy: required state key %q is missing", key),
+			)
+		}
+	}
+	return nil
 }
 
 // ValidateRunEnvSession reports when env is not bound to session.

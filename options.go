@@ -119,14 +119,16 @@ func WithOutputSchema(schema map[string]any) ToolOption {
 type RegistryOption func(*registryOptions)
 
 type registryOptions struct {
-	recoverPanics bool
-	validator     Validator
-	policy        Policy
-	authorizer    Authorizer
-	view          RegistryViewSnapshot
-	onBefore      func(context.Context, ToolCall)
-	onAfter       func(context.Context, ToolCall, ExecutionSummary, time.Duration)
-	onChunk       func(context.Context, Chunk)
+	recoverPanics   bool
+	validator       Validator
+	policy          Policy
+	policyDigest    string
+	policyIDMissing bool
+	authorizer      Authorizer
+	view            RegistryViewSnapshot
+	onBefore        func(context.Context, ToolCall)
+	onAfter         func(context.Context, ToolCall, ExecutionSummary, time.Duration)
+	onChunk         func(context.Context, Chunk)
 }
 
 // WithRecoverPanics enables panic recovery in Execute (returns [ToolError] with [CodeInternal]).
@@ -136,7 +138,10 @@ func WithRecoverPanics(enable bool) RegistryOption {
 	}
 }
 
-// WithValidator configures a validator run before tool unmarshaling (fail-closed).
+// WithValidator configures a low-level reject-only validator run before tool unmarshaling (fail-closed).
+//
+// Use [ArgsBinder] through [NewTypedTool] or [NewPolicyTool] when validation
+// needs to return canonical typed/sanitized args to the handler.
 func WithValidator(v Validator) RegistryOption {
 	return func(o *registryOptions) {
 		o.validator = v
@@ -144,17 +149,27 @@ func WithValidator(v Validator) RegistryOption {
 }
 
 // WithPolicy configures fail-closed policy/capability enforcement before tool handlers run.
-func WithPolicy(p Policy) RegistryOption {
+// policyID is part of session/checkpoint binding and must change when policy semantics change.
+func WithPolicy(policyID string, p Policy) RegistryOption {
 	return func(o *registryOptions) {
+		if p == nil {
+			return
+		}
+		if policyID == "" {
+			o.policyIDMissing = true
+		}
 		o.policy = composePolicies(o.policy, p)
+		o.policyDigest = appendRegistryPolicyDigest(o.policyDigest, policyID)
 	}
 }
 
 // WithRequirementsPolicy configures fail-closed typed enforcement for manifest requirements.
+// policyID is part of session/checkpoint binding and must change when policy semantics change.
 func WithRequirementsPolicy[TSubject, TScope any](
+	policyID string,
 	fn RequirementsDecisionFunc[TSubject, TScope],
 ) RegistryOption {
-	return WithPolicy(NewRequirementsPolicy(fn))
+	return WithPolicy(policyID, NewRequirementsPolicy(fn))
 }
 
 // WithOnBeforeExecute sets a hook called before each tool execution.
@@ -197,8 +212,8 @@ func WithStateCodecRegistry(r *StateCodecRegistry) SessionOption {
 	}
 }
 
-// WithStrictStateCodecs requires every non-nil session state key to have a registered [StateCodec].
-// Empty snapshots and JSON null values clear keys without requiring codecs.
+// WithStrictStateCodecs requires every imported/exported session state key to have a registered [StateCodec].
+// Empty snapshots are allowed; unknown JSON null values fail because there is no slot policy to authorize clearing.
 func WithStrictStateCodecs(strict bool) SessionOption {
 	return func(o *sessionOptions) {
 		o.strictStateCodecs = strict

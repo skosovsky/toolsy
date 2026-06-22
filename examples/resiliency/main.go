@@ -179,9 +179,9 @@ func buildWrappedTool(reliable routery.Executor[execReq, httpGetResult]) (toolsy
 			ctx context.Context,
 			_ toolsy.TypedCallContext[toolsy.NoSubject, toolsy.NoScope],
 			run *toolsy.RunEnv,
-			args httpGetArgs,
+			args toolsy.ValidatedArgs[httpGetArgs],
 		) (toolsy.ToolResult[httpGetResult, struct{}], error) {
-			res, err := reliable.Execute(ctx, execReq{Env: run, Args: args})
+			res, err := reliable.Execute(ctx, execReq{Env: run, Args: args.Value})
 			if err != nil {
 				return toolsy.ToolResult[httpGetResult, struct{}]{}, err
 			}

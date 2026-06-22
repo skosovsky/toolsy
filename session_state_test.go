@@ -101,6 +101,7 @@ func TestSessionState_ImportSnapshotRegisteredKey_InvalidPayloadPreservesState(t
 	raw, err := json.Marshal(sessionSnapshotWire{
 		Version: sessionSnapshotVersion,
 		Payload: json.RawMessage(`{"payload":{"name":123,"count":"bad"}}`),
+		Binding: sess.Binding(),
 	})
 	require.NoError(t, err)
 	snap, err := NewSessionSnapshotFromJSON(raw)
@@ -156,13 +157,16 @@ func TestSessionState_ImportSnapshotUnregisteredStructRemainsGenericMap(t *testi
 
 func TestImportSnapshot_StrictMode_UnregisteredKeyFails(t *testing.T) {
 	t.Parallel()
-	sess := newTestSession(t)
-	SetSessionState(sess, "payload", sessionStatePayload{Name: "raw"})
-
-	snap, err := sess.ExportSnapshot()
+	sess2 := newTestSession(t, WithStrictStateCodecs(true))
+	raw, err := json.Marshal(sessionSnapshotWire{
+		Version: sessionSnapshotVersion,
+		Payload: json.RawMessage(`{"payload":{"name":"raw"}}`),
+		Binding: sess2.Binding(),
+	})
+	require.NoError(t, err)
+	snap, err := NewSessionSnapshotFromJSON(raw)
 	require.NoError(t, err)
 
-	sess2 := newTestSession(t, WithStrictStateCodecs(true))
 	err = sess2.ImportSnapshot(snap)
 	require.Error(t, err)
 	requireToolErrorCode(t, err, CodeStateCodecMissing)
@@ -175,7 +179,7 @@ func TestImportSnapshot_StrictMode_EmptySnapshotClears(t *testing.T) {
 	sess := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true))
 	SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"})
 
-	empty, err := newTestSession(t, WithStrictStateCodecs(true)).ExportSnapshot()
+	empty, err := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true)).ExportSnapshot()
 	require.NoError(t, err)
 	require.NoError(t, sess.ImportSnapshot(empty))
 
@@ -183,7 +187,7 @@ func TestImportSnapshot_StrictMode_EmptySnapshotClears(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestImportSnapshot_StrictMode_NullKeyClearsWithoutCodec(t *testing.T) {
+func TestImportSnapshot_StrictMode_NullKeyWithoutCodecFails(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t, WithStrictStateCodecs(true))
 	SetSessionState(sess, "orphan", "value")
@@ -191,14 +195,18 @@ func TestImportSnapshot_StrictMode_NullKeyClearsWithoutCodec(t *testing.T) {
 	raw, err := json.Marshal(sessionSnapshotWire{
 		Version: sessionSnapshotVersion,
 		Payload: json.RawMessage(`{"orphan":null}`),
+		Binding: sess.Binding(),
 	})
 	require.NoError(t, err)
 	snap, err := NewSessionSnapshotFromJSON(raw)
 	require.NoError(t, err)
 
-	require.NoError(t, sess.ImportSnapshot(snap))
-	_, ok := GetSessionState[string](sess, "orphan")
-	require.False(t, ok)
+	err = sess.ImportSnapshot(snap)
+	require.Error(t, err)
+	requireToolErrorCode(t, err, CodeStateCodecMissing)
+	got, ok := GetSessionState[string](sess, "orphan")
+	require.True(t, ok)
+	require.Equal(t, "value", got)
 }
 
 func TestExportSnapshot_StrictMode_UnregisteredKeyFails(t *testing.T) {
@@ -359,15 +367,16 @@ func TestImportSnapshot_EmptySnapshot(t *testing.T) {
 
 func TestImportSnapshot_UnsupportedVersion(t *testing.T) {
 	t.Parallel()
+	sess := newTestSession(t)
 	raw, err := json.Marshal(sessionSnapshotWire{
 		Version: 99,
 		Payload: json.RawMessage(`{"k":"v"}`),
+		Binding: sess.Binding(),
 	})
 	require.NoError(t, err)
 	snap, err := NewSessionSnapshotFromJSON(raw)
 	require.NoError(t, err)
 
-	sess := newTestSession(t)
 	SetSessionState(sess, "keep", "original")
 	err = sess.ImportSnapshot(snap)
 	require.Error(t, err)

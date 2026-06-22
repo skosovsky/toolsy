@@ -48,7 +48,7 @@
 //	tool, _ := toolsy.NewTypedTool(toolsy.TypedToolSpec[Subject, Scope, Args, Out, struct{}]{
 //		Name: "weather",
 //		Description: "Get weather",
-//		Handler: func(_ context.Context, _ toolsy.TypedCallContext[Subject, Scope], _ *toolsy.RunEnv, a Args) (toolsy.ToolResult[Out, struct{}], error) {
+//		Handler: func(_ context.Context, _ toolsy.TypedCallContext[Subject, Scope], _ *toolsy.RunEnv, a toolsy.ValidatedArgs[Args]) (toolsy.ToolResult[Out, struct{}], error) {
 //			return toolsy.NewToolResult[Out, struct{}](Out{Temp: 22.5}), nil
 //		},
 //	})

@@ -45,7 +45,7 @@ func mustBuildMemoryRegistry(t *testing.T, s *Scratchpad) *toolsy.Registry {
 	tools, err := s.AsTools()
 	require.NoError(t, err)
 	reg, err := toolsy.NewRegistryBuilder(
-		toolsy.WithRequirementsPolicy(func(
+		toolsy.WithRequirementsPolicy("memory-test-requirements-policy", func(
 			_ context.Context,
 			_ toolsy.RequirementsPolicyRequest[toolsy.NoSubject, toolsy.NoScope],
 		) toolsy.Decision {

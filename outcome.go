@@ -23,6 +23,7 @@ type ToolOutcome struct {
 	Result           []byte
 	ResultMimeType   string
 	TypedResult      any
+	Envelope         ToolEnvelope
 	EmptyResult      bool
 	Noop             bool
 	Effects          []any
@@ -105,6 +106,7 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 			return outcome, err
 		}
 		outcome.ExecutionError = toolErrorFromRunCall(err)
+		outcome.Envelope = *NewErrorEnvelope(outcome.ExecutionError, nil, MimeTypeToolErrorJSON, "", "", nil)
 		return finalizeRunCallOutcome(outcome)
 	}
 	return finalizeRunCallOutcome(outcome)
@@ -159,6 +161,7 @@ func accountRunCallResult(outcome *ToolOutcome, terminalBusiness *bool, c Chunk)
 		outcome.Result = nil
 		outcome.ResultMimeType = ""
 		outcome.TypedResult = nil
+		outcome.Envelope = c.ToolEnvelope()
 		outcome.EmptyResult = false
 		outcome.Effects = nil
 		outcome.ExecutionError = executionErrorFromChunk(c)
@@ -169,6 +172,7 @@ func accountRunCallResult(outcome *ToolOutcome, terminalBusiness *bool, c Chunk)
 	outcome.Result = append([]byte(nil), c.Data...)
 	outcome.ResultMimeType = c.MimeType
 	outcome.TypedResult = c.TypedResult
+	outcome.Envelope = c.ToolEnvelope()
 	outcome.EmptyResult = c.EmptyResult
 	outcome.Noop = c.Noop
 	outcome.Effects = append([]any(nil), c.Effects...)

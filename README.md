@@ -41,7 +41,7 @@ func main() {
 			_ context.Context,
 			_ toolsy.TypedCallContext[Subject, Scope],
 			_ *toolsy.RunEnv,
-			_ Args,
+			_ toolsy.ValidatedArgs[Args],
 		) (toolsy.ToolResult[Out, struct{}], error) {
 			return toolsy.NewToolResult[Out, struct{}](Out{Temp: 22.5}), nil
 		},
@@ -122,7 +122,10 @@ See `examples/run_call/main.go`. Use low-level `Registry.Execute` only inside st
 - `Chunk.Event` values: `EventProgress`, `EventResult`, `EventControl`.
 - `Chunk.RawData` is removed.
 - Runtime `Registry` is immutable. Use `RegistryBuilder` to add tools and middleware before `Build()`.
-- Runtime-aware handlers: `NewTool`, `NewTypedTool`, `NewStreamTool`, `NewDynamicToolFromSpec`, `NewProxyTool`.
+- Production agent handlers: `NewTypedTool` and `NewPolicyToolFromSpec`.
+- Existing generic tools can be hardened with `NewPolicyTool`.
+- Policy-aware generic tools require an `ArgsBinder` that returns canonical raw bytes for the wrapped raw handler.
+- Low-level constructors: `NewTool`, `NewStreamTool`, `NewDynamicToolFromSpec`, `NewProxyTool`.
 
 ## Architecture
 
@@ -162,6 +165,7 @@ profileView, err := reg.View(toolsy.RegistryViewSpec{
     ToolNames: []string{"book_appointment", "list_slots"},
     Reason: "booking profile",
     Owner: "agent-profile",
+    PolicyID: "booking-profile-policy",
     Policy: toolsy.NewRequirementsPolicy(func(ctx context.Context, req toolsy.RequirementsPolicyRequest[UserSubject, WorkspaceScope]) toolsy.Decision {
         if !req.Context.Subject.Can(req.Requirements.Permissions...) {
             return toolsy.DenyDecision("missing permission", "permissions")
@@ -187,7 +191,7 @@ if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list
 - **`ValidateManifestContract`**: returns `*ToolError` with `CodeToolsContractMissing` when required tools are missing (`AsToolError` + `FixableArgs` lists missing names). Duplicate names in `requiredNames` are deduplicated. Works with `NewManifestSet` or `reg.ManifestSet()` — no runtime readiness required.
 - **`ToolNames`**, **`Has`**, **`GetAllTools`**, **`GetTool`**: map-view introspection only (tool names / membership in the current view). They do not validate runtime readiness; use `ValidateManifestContract` or `Execute` before running tools. A nil `*Registry` is safe for these helpers (empty/false results, no panic).
 
-**Capability vs runtime authorization:** use `Registry.View` for which tools a profile may use at all, `NewRequirementsPolicy` / `WithRequirementsPolicy` for manifest requirements against typed subject/scope, and typed tool policy for per-call args checks.
+**Capability vs runtime authorization:** use `Registry.View` for which tools a profile may use at all, `NewRequirementsPolicy` / `WithRequirementsPolicy` for manifest requirements against typed subject/scope, and typed tool policy for per-call args checks. Root registry policies require a stable policy ID through `WithPolicy`/`WithRequirementsPolicy`; that ID is part of `SessionBinding` for checkpoint/rebind safety.
 
 **Shutdown:** call `Shutdown` only on the root registry owner (for example your app on SIGTERM). Registry views share lifecycle: `view.Shutdown()` stops the entire registry tree, not just one agent request.
 
@@ -201,7 +205,7 @@ if err := toolsy.ValidateManifestContract(ms, []string{"book_appointment", "list
 - `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`
 - `CompletionPolicy` (`continue`, `silent_yield`, `halt`)
 
-Built-in `toolkits/*` set policy flags (`ReadOnly`, `Dangerous`, …) on each tool; `toolkits/memory` declares `ToolRequirements` (session + read/write memory). Custom tools should declare `WithRequirements`, then attach `WithRequirementsPolicy` or `RegistryViewSpec.Policy: NewRequirementsPolicy(...)` so registry/session execution enforces requirements before validators and handlers run.
+Built-in `toolkits/*` set policy flags (`ReadOnly`, `Dangerous`, …) on each tool; `toolkits/memory` declares `ToolRequirements` (session + read/write memory). Custom tools should declare `WithRequirements`, then attach `WithRequirementsPolicy("stable-policy-id", ...)` or `RegistryViewSpec.Policy: NewRequirementsPolicy(...)` with a stable `PolicyID` so registry/session execution enforces requirements before validators and handlers run.
 
 Example:
 
@@ -209,7 +213,14 @@ Example:
 tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[UserSubject, WorkspaceScope, DeleteUserArgs, DeleteUserResult, struct{}]{
 	Name:        "delete_user",
 	Description: "Delete a user account",
-	Handler:     deleteUserHandler,
+	Handler: func(
+		ctx context.Context,
+		call toolsy.TypedCallContext[UserSubject, WorkspaceScope],
+		env *toolsy.RunEnv,
+		args toolsy.ValidatedArgs[DeleteUserArgs],
+	) (toolsy.ToolResult[DeleteUserResult, struct{}], error) {
+		return deleteUserHandler(ctx, call, env, args.Value)
+	},
 	Options: []toolsy.ToolOption{
 		toolsy.WithDangerous(),
 		toolsy.WithRequiresConfirmation(),
@@ -402,7 +413,7 @@ Use registry policy to stop execution before validators and tool handler code ru
 
 ```go
 reg, err := toolsy.NewRegistryBuilder(
-    toolsy.WithPolicy(toolsy.PolicyFunc(func(ctx context.Context, req toolsy.PolicyRequest) toolsy.Decision {
+    toolsy.WithPolicy("dangerous-tool-policy", toolsy.PolicyFunc(func(ctx context.Context, req toolsy.PolicyRequest) toolsy.Decision {
         if req.Manifest.Dangerous {
             return toolsy.DenyDecision("dangerous tool requires a narrower capability")
         }
@@ -552,10 +563,11 @@ defer client.Close()
 - `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
 - `ToolCall.CallContext` carries typed subject/scope; `RunEnv` string keys are only an escape hatch for DI/session state.
 - `WithPolicy`, typed tool policy, and `Registry.View` are the primary policy/capability path; policy denial returns `CodePolicyDenied`, while calls outside a view return `CodeCapabilityDenied`.
-- `NewTypedTool` uses `TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect]`; handlers return `ToolResult[TResult, TEffect]`.
+- `NewTypedTool` uses `TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect]`; handlers receive `ValidatedArgs[TArgs]` and return `ToolResult[TResult, TEffect]`.
 - `ToolOutcome` carries `Status`, `TypedResult`, `EmptyResult`, `Noop`, and `Effects`.
 - See [docs/migration-task28.md](docs/migration-task28.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
 - See [docs/migration-task31.md](docs/migration-task31.md) for typed call context, registry views, policy, effects, and streaming continuation normalization.
+- See [docs/migration-task32.md](docs/migration-task32.md) for args binders, session checkpoints, snapshot slot policy, delivery envelopes, and policy-aware generic tools.
 
 ## Zero-resiliency core
 

@@ -16,7 +16,11 @@ type tool struct {
 	execute  func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error
 }
 
-// NewTool builds a Tool from a typed function that also receives [*RunEnv].
+// NewTool builds a low-level Tool from a typed function that also receives [*RunEnv].
+//
+// For production agent execution prefer [NewTypedTool] with [ArgsBinder]
+// or wrap generic tools with [NewPolicyTool]. NewTool is a low-level helper
+// for tools that do not need canonical args binding or typed policy.
 func NewTool[T any, R any](
 	name, description string,
 	fn func(ctx context.Context, env *RunEnv, args T) (R, error),

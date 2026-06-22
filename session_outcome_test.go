@@ -673,9 +673,9 @@ func TestNewTypedTool_Validators(t *testing.T) {
 			_ context.Context,
 			_ TypedCallContext[NoSubject, NoScope],
 			_ *RunEnv,
-			a args,
+			a ValidatedArgs[args],
 		) (ToolResult[result, struct{}], error) {
-			return NewToolResult[result, struct{}](result{V: a.N}), nil
+			return NewToolResult[result, struct{}](result{V: a.Value.N}), nil
 		},
 	})
 	require.NoError(t, err)

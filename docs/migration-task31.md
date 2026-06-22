@@ -6,7 +6,7 @@ Task31 moves production host integration from string-keyed runtime glue to typed
 
 - `ToolCall` now carries `CallContext` for typed subject/scope and request-local values.
 - `RunEnv` still carries DI and session access, but subject/scope should not be smuggled through `Put`, `Require`, `Lookup`, `SetState`, or `GetState`.
-- `WithPolicy` runs before raw validators, typed validators, and handlers. Denial returns `CodePolicyDenied`.
+- `WithPolicy` runs before raw validators, typed validators, and handlers. Denial returns `CodePolicyDenied`; root registry policies require a stable policy ID that becomes part of session binding.
 - `NewRequirementsPolicy` and `WithRequirementsPolicy` enforce `ToolManifest.Requirements` against typed subject/scope on the registry/view/session execution path; any non-empty requirements fail closed when no requirements policy is attached.
 - `WithAuthorizer` and `WithAuthorization` receive `AuthorizationRequest`, not separate manifest/input arguments.
 - `Registry.View` creates a first-class capability view with tool names, required tool names, manifest digest, durable snapshot identity, optional policy, and shared lifecycle.
@@ -36,7 +36,7 @@ tool, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[
         ctx context.Context,
         call toolsy.TypedCallContext[UserSubject, WorkspaceScope],
         env *toolsy.RunEnv,
-        args SearchArgs,
+        args toolsy.ValidatedArgs[SearchArgs],
     ) (toolsy.ToolResult[SearchResult, SearchEffect], error) {
         out := toolsy.NewToolResult[SearchResult, SearchEffect](SearchResult{})
         out.Effects = []SearchEffect{{}}
@@ -50,9 +50,9 @@ For tools that do not use subject or scope, use `toolsy.NoSubject` and `toolsy.N
 ## Migration checklist
 
 - Replace string-keyed subject/scope lookups with `ToolCall.CallContext`.
-- Replace manual permission branching with `WithRequirementsPolicy` or `RegistryViewSpec.Policy: NewRequirementsPolicy(...)`.
+- Replace manual permission branching with `WithRequirementsPolicy("stable-policy-id", ...)` or `RegistryViewSpec.Policy: NewRequirementsPolicy(...)` plus a stable `PolicyID`.
 - Replace ad-hoc scoped registry structs with `Registry.View` and `RegistryViewSnapshot`.
-- Replace raw `ArgsJSON` wrapper stacks with `NewTypedTool` validators and typed policy.
+- Replace raw `ArgsJSON` wrapper stacks with `NewTypedTool` `ArgsBinder` normalization, canonical sanitized raw forwarding, and typed policy. Keep validators for reject-only typed checks.
 - Replace byte-only outcome classification with `ToolOutcome.Status`, `DecodeOutcomeAs`, `DecodeOutcomeEffectsAs`, and `Controls`.
 - Remove service-side tool-call continuation normalization when call ids carry enough information for `StandardCallParser`.
 

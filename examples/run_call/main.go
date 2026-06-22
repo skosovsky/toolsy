@@ -53,9 +53,9 @@ func mustDoubleTool() toolsy.Tool {
 			_ context.Context,
 			_ toolsy.TypedCallContext[toolsy.NoSubject, toolsy.NoScope],
 			_ *toolsy.RunEnv,
-			a doubleArgs,
+			a toolsy.ValidatedArgs[doubleArgs],
 		) (toolsy.ToolResult[doubleResult, struct{}], error) {
-			return toolsy.NewToolResult[doubleResult, struct{}](doubleResult{Double: a.N * 2}), nil
+			return toolsy.NewToolResult[doubleResult, struct{}](doubleResult{Double: a.Value.N * 2}), nil
 		},
 	})
 	if err != nil {

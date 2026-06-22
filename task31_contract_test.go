@@ -39,9 +39,12 @@ func TestTask31TypedToolPipeline_ContextPolicyOutcomeEffects(t *testing.T) {
 	tool, err := NewTypedTool(TypedToolSpec[subject, scope, args, result, effect]{
 		Name:        "typed_task31",
 		Description: "Typed task31 contract",
-		RawValidator: func(_ context.Context, toolName string, raw []byte) error {
-			rawSeen = toolName == "typed_task31" && strings.Contains(string(raw), `"n":2`)
-			return nil
+		ArgsBinder: func(_ context.Context, req ArgsBindRequest) (ValidatedArgs[args], error) {
+			rawSeen = req.Manifest.Name == "typed_task31" && strings.Contains(string(req.Input.ArgsJSON), `"n":2`)
+			return ValidatedArgs[args]{
+				Value: args{N: 2},
+				Raw:   req.Input.ArgsJSON,
+			}, nil
 		},
 		Policy: func(_ context.Context, req TypedPolicyRequest[subject, scope, args]) Decision {
 			policySeen = req.Context.Subject.ID == "u1" &&
@@ -77,10 +80,10 @@ func TestTask31TypedToolPipeline_ContextPolicyOutcomeEffects(t *testing.T) {
 			_ context.Context,
 			call TypedCallContext[subject, scope],
 			_ *RunEnv,
-			a args,
+			a ValidatedArgs[args],
 		) (ToolResult[result, effect], error) {
 			handlerSeen = call.Subject.ID == "u1" && call.Scope.Tenant == "t1"
-			out := NewToolResult[result, effect](result{V: a.N * 10})
+			out := NewToolResult[result, effect](result{V: a.Value.N * 10})
 			out.Effects = []effect{{Kind: "indexed"}}
 			out.Controls = []ControlSignal{&UIActionSignal{Action: "refresh"}}
 			return out, nil
@@ -137,7 +140,7 @@ func TestTask31RegistryPolicy_DeniesBeforeValidatorAndHandler(t *testing.T) {
 	})
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(
-		WithPolicy(PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
+		WithPolicy("task31-deny-policy", PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
 			require.Equal(t, "deny_first", req.Manifest.Name)
 			return DenyDecision("blocked by policy")
 		})),
@@ -196,7 +199,7 @@ func TestTask31RequirementsPolicy_EnforcesManifestRequirementsWithTypedContext(t
 	)
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(
-		WithRequirementsPolicy(func(
+		WithRequirementsPolicy("task31-requirements-policy", func(
 			_ context.Context,
 			req RequirementsPolicyRequest[subject, scope],
 		) Decision {
@@ -313,7 +316,7 @@ func TestTask31RequirementsPolicy_AllowsToolsWithoutRequirementsWithoutTypedCont
 	})
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(
-		WithRequirementsPolicy(func(
+		WithRequirementsPolicy("task31-plain-requirements-policy", func(
 			_ context.Context,
 			_ RequirementsPolicyRequest[struct{ ID string }, struct{ Tenant string }],
 		) Decision {
@@ -367,7 +370,7 @@ func TestTask31PolicyAndAuthorizer_ReceiveDefensiveInputCopies(t *testing.T) {
 			mutateInput(req.Input)
 			return nil
 		})),
-		WithPolicy(PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
+		WithPolicy("task31-copy-policy", PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
 			mutateInput(req.Input)
 			return AllowDecision()
 		})),
@@ -414,9 +417,13 @@ func TestTask31TypedPipeline_ReceivesDefensiveCopiesAndSystemOwnedViewID(t *test
 	tool, err := NewTypedTool(TypedToolSpec[NoSubject, NoScope, args, result, struct{}]{
 		Name:        "typed_copy",
 		Description: "Typed copy",
-		RawValidator: func(_ context.Context, _ string, raw []byte) error {
+		ArgsBinder: func(_ context.Context, req ArgsBindRequest) (ValidatedArgs[args], error) {
+			raw := append([]byte(nil), req.Input.ArgsJSON...)
 			mutateFirstDigit(raw, '8')
-			return nil
+			return ValidatedArgs[args]{
+				Value: args{Items: []int{1}},
+				Raw:   []byte(`{"items":[1]}`),
+			}, nil
 		},
 		Policy: func(_ context.Context, req TypedPolicyRequest[NoSubject, NoScope, args]) Decision {
 			policyViewID = req.Context.Metadata.ViewID
@@ -434,11 +441,11 @@ func TestTask31TypedPipeline_ReceivesDefensiveCopiesAndSystemOwnedViewID(t *test
 			_ context.Context,
 			call TypedCallContext[NoSubject, NoScope],
 			_ *RunEnv,
-			a args,
+			a ValidatedArgs[args],
 		) (ToolResult[result, struct{}], error) {
 			handlerViewID = call.Metadata.ViewID
-			handlerFirst = a.Items[0]
-			return NewToolResult[result, struct{}](result{First: a.Items[0]}), nil
+			handlerFirst = a.Value.Items[0]
+			return NewToolResult[result, struct{}](result{First: a.Value.Items[0]}), nil
 		},
 	})
 	require.NoError(t, err)
@@ -538,6 +545,7 @@ func TestTask31RegistryView_SnapshotContractAndExecutionPolicy(t *testing.T) {
 		RequiredToolNames: []string{"a"},
 		Reason:            "contract test",
 		Owner:             "task31",
+		PolicyID:          "task31-policy",
 		Policy: PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
 			ok := req.View.ID != "" &&
 				req.CallContext.Metadata.ViewID == req.View.ID &&
@@ -572,7 +580,7 @@ func TestTask31RegistryView_SnapshotContractAndExecutionPolicy(t *testing.T) {
 		restoredPolicySawID = req.View.ID == snapshot.ID &&
 			req.CallContext.Metadata.ViewID == snapshot.ID
 		return AllowDecision()
-	}))
+	}), "task31-policy")
 	require.NoError(t, err)
 	err = restored.Execute(context.Background(), ToolCall{
 		ToolName: "a",
@@ -584,6 +592,9 @@ func TestTask31RegistryView_SnapshotContractAndExecutionPolicy(t *testing.T) {
 	staleID := snapshot
 	staleID.ID = "restored-view-id"
 	_, staleIDErr := reg.RestoreView(staleID, nil)
+	_, stalePolicyErr := reg.RestoreView(snapshot, PolicyFunc(func(context.Context, PolicyRequest) Decision {
+		return AllowDecision()
+	}), "wrong-policy")
 	_, missingRequiredErr := reg.View(RegistryViewSpec{
 		ToolNames:         []string{"a"},
 		RequiredToolNames: []string{"b"},
@@ -597,6 +608,7 @@ func TestTask31RegistryView_SnapshotContractAndExecutionPolicy(t *testing.T) {
 	assert.Equal(t, []string{"a"}, snapshot.ToolNames)
 	assert.Equal(t, []string{"a"}, snapshot.RequiredToolNames)
 	assert.NotEmpty(t, snapshot.ManifestDigest)
+	assert.NotEmpty(t, snapshot.PolicyDigest)
 	assert.Equal(t, "contract test", snapshot.Reason)
 	assert.Equal(t, "task31", snapshot.Owner)
 	require.NoError(t, ValidateManifestContract(manifestSet, []string{"a"}))
@@ -607,6 +619,7 @@ func TestTask31RegistryView_SnapshotContractAndExecutionPolicy(t *testing.T) {
 	assert.True(t, restoredPolicySawID)
 	require.Error(t, staleDigestErr)
 	require.Error(t, staleIDErr)
+	require.Error(t, stalePolicyErr)
 	require.Error(t, missingRequiredErr)
 
 	// Act.
@@ -678,9 +691,9 @@ func TestTask31TypedToolResult_EmptyAndNoopStatus(t *testing.T) {
 			_ context.Context,
 			_ TypedCallContext[NoSubject, NoScope],
 			_ *RunEnv,
-			a args,
+			a ValidatedArgs[args],
 		) (ToolResult[result, struct{}], error) {
-			switch a.Mode {
+			switch a.Value.Mode {
 			case "empty":
 				return NewEmptyToolResult[result, struct{}](), nil
 			case "noop":

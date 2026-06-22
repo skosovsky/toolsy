@@ -1,10 +1,14 @@
 package toolsy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
+	"slices"
 	"sync"
 )
 
@@ -12,6 +16,41 @@ import (
 type StateCodec[T any] interface {
 	Encode(T) ([]byte, error)
 	Decode([]byte) (T, error)
+}
+
+// StateSlotPolicy controls import semantics for a registered state slot.
+type StateSlotPolicy struct {
+	Required bool
+	Nullable bool
+	SchemaID string
+}
+
+type stateSlotOptions struct {
+	policy StateSlotPolicy
+}
+
+// StateSlotOption configures a registered state slot.
+type StateSlotOption func(*stateSlotOptions)
+
+// WithStateSlotRequired marks a state slot as required during snapshot import.
+func WithStateSlotRequired() StateSlotOption {
+	return func(o *stateSlotOptions) {
+		o.policy.Required = true
+	}
+}
+
+// WithStateSlotNullable allows explicit JSON null to be decoded by the slot codec.
+func WithStateSlotNullable(nullable bool) StateSlotOption {
+	return func(o *stateSlotOptions) {
+		o.policy.Nullable = nullable
+	}
+}
+
+// WithStateSlotSchemaID pins a host-owned schema version into session binding compatibility.
+func WithStateSlotSchemaID(id string) StateSlotOption {
+	return func(o *stateSlotOptions) {
+		o.policy.SchemaID = id
+	}
 }
 
 // JSONStateCodec is a [StateCodec] using encoding/json.
@@ -33,10 +72,13 @@ func (JSONStateCodec[T]) Decode(data []byte) (T, error) {
 type stateCodecEntry interface {
 	encodeValue(v any) ([]byte, error)
 	decodeBytes(data []byte) (any, error)
+	statePolicy() StateSlotPolicy
+	schemaFingerprint() string
 }
 
 type typedStateCodecEntry[T any] struct {
-	codec StateCodec[T]
+	codec  StateCodec[T]
+	policy StateSlotPolicy
 }
 
 func (e typedStateCodecEntry[T]) encodeValue(v any) ([]byte, error) {
@@ -54,6 +96,21 @@ func (e typedStateCodecEntry[T]) decodeBytes(data []byte) (any, error) {
 	return e.codec.Decode(data)
 }
 
+func (e typedStateCodecEntry[T]) statePolicy() StateSlotPolicy {
+	return e.policy
+}
+
+func (e typedStateCodecEntry[T]) schemaFingerprint() string {
+	valueType := reflect.TypeFor[T]()
+	codecType := reflect.TypeOf(e.codec)
+	return fmt.Sprintf(
+		"typed:%s:%s:%s",
+		reflectTypeFingerprint(valueType),
+		reflectTypeFingerprint(codecType),
+		e.policy.SchemaID,
+	)
+}
+
 // StateCodecRegistry maps session state keys to codecs.
 type StateCodecRegistry struct {
 	mu     sync.RWMutex
@@ -68,7 +125,7 @@ func NewStateCodecRegistry() *StateCodecRegistry {
 }
 
 // RegisterStateCodec associates key with codec for type T.
-func RegisterStateCodec[T any](r *StateCodecRegistry, key string, codec StateCodec[T]) error {
+func RegisterStateCodec[T any](r *StateCodecRegistry, key string, codec StateCodec[T], opts ...StateSlotOption) error {
 	if r == nil {
 		return errors.New("toolsy: nil StateCodecRegistry")
 	}
@@ -86,17 +143,17 @@ func RegisterStateCodec[T any](r *StateCodecRegistry, key string, codec StateCod
 	if _, exists := r.codecs[key]; exists {
 		return fmt.Errorf("toolsy: state codec key %q already registered", key)
 	}
-	r.codecs[key] = typedStateCodecEntry[T]{codec: codec}
+	r.codecs[key] = typedStateCodecEntry[T]{codec: codec, policy: stateSlotPolicy(opts)}
 	return nil
 }
 
 // RegisterJSONCodec registers JSON marshal/unmarshal for type T at key.
-func RegisterJSONCodec[T any](r *StateCodecRegistry, key string) error {
-	return RegisterStateCodec(r, key, JSONStateCodec[T]{})
+func RegisterJSONCodec[T any](r *StateCodecRegistry, key string, opts ...StateSlotOption) error {
+	return RegisterStateCodec(r, key, JSONStateCodec[T]{}, opts...)
 }
 
 // RegisterFromPrototype registers a JSON codec using the concrete type of prototype.
-func (r *StateCodecRegistry) RegisterFromPrototype(key string, prototype any) error {
+func (r *StateCodecRegistry) RegisterFromPrototype(key string, prototype any, opts ...StateSlotOption) error {
 	if r == nil {
 		return errors.New("toolsy: nil StateCodecRegistry")
 	}
@@ -110,10 +167,10 @@ func (r *StateCodecRegistry) RegisterFromPrototype(key string, prototype any) er
 	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	return r.registerReflectCodec(key, typ)
+	return r.registerReflectCodec(key, typ, stateSlotPolicy(opts))
 }
 
-func (r *StateCodecRegistry) registerReflectCodec(key string, typ reflect.Type) error {
+func (r *StateCodecRegistry) registerReflectCodec(key string, typ reflect.Type, policy StateSlotPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.codecs == nil {
@@ -122,12 +179,13 @@ func (r *StateCodecRegistry) registerReflectCodec(key string, typ reflect.Type) 
 	if _, exists := r.codecs[key]; exists {
 		return fmt.Errorf("toolsy: state codec key %q already registered", key)
 	}
-	r.codecs[key] = reflectJSONCodec{typ: typ}
+	r.codecs[key] = reflectJSONCodec{typ: typ, policy: policy}
 	return nil
 }
 
 type reflectJSONCodec struct {
-	typ reflect.Type
+	typ    reflect.Type
+	policy StateSlotPolicy
 }
 
 func (c reflectJSONCodec) encodeValue(v any) ([]byte, error) {
@@ -155,6 +213,14 @@ func (c reflectJSONCodec) decodeBytes(data []byte) (any, error) {
 	return reflect.ValueOf(ptr).Elem().Interface(), nil
 }
 
+func (c reflectJSONCodec) statePolicy() StateSlotPolicy {
+	return c.policy
+}
+
+func (c reflectJSONCodec) schemaFingerprint() string {
+	return fmt.Sprintf("reflect-json:%s:%s", reflectTypeFingerprint(c.typ), c.policy.SchemaID)
+}
+
 func (r *StateCodecRegistry) lookup(key string) (stateCodecEntry, bool) {
 	if r == nil || key == "" {
 		return nil, false
@@ -165,17 +231,88 @@ func (r *StateCodecRegistry) lookup(key string) (stateCodecEntry, bool) {
 	return entry, ok
 }
 
+func (r *StateCodecRegistry) slotPolicies() map[string]StateSlotPolicy {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]StateSlotPolicy, len(r.codecs))
+	for key, entry := range r.codecs {
+		out[key] = entry.statePolicy()
+	}
+	return out
+}
+
+func stateSlotPolicy(opts []StateSlotOption) StateSlotPolicy {
+	var cfg stateSlotOptions
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg.policy
+}
+
+func stateSchemaDigest(r *StateCodecRegistry) string {
+	entries := r.slotSchemaEntries()
+	if len(entries) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	h := sha256.New()
+	for _, key := range keys {
+		entry := entries[key]
+		policy := entry.statePolicy()
+		fmt.Fprintf(
+			h,
+			"%s\x00%t\x00%t\x00%s\x00%s\x00",
+			key,
+			policy.Required,
+			policy.Nullable,
+			policy.SchemaID,
+			entry.schemaFingerprint(),
+		)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (r *StateCodecRegistry) slotSchemaEntries() map[string]stateCodecEntry {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]stateCodecEntry, len(r.codecs))
+	maps.Copy(out, r.codecs)
+	return out
+}
+
+func reflectTypeFingerprint(typ reflect.Type) string {
+	if typ == nil {
+		return "<nil>"
+	}
+	if typ.PkgPath() == "" {
+		return typ.String()
+	}
+	return typ.PkgPath() + "." + typ.String()
+}
+
 const sessionSnapshotVersion = 1
 
 // SessionSnapshot is an opaque, versioned session state blob for persistence.
 type SessionSnapshot struct { //nolint:recvcheck // MarshalJSON value receiver; UnmarshalJSON pointer receiver
 	version int
 	payload []byte
+	binding SessionBinding
 }
 
 type sessionSnapshotWire struct {
 	Version int             `json:"version"`
 	Payload json.RawMessage `json:"payload"`
+	Binding SessionBinding  `json:"binding"`
 }
 
 // NewSessionSnapshotFromJSON parses snapshot bytes from storage.
@@ -199,7 +336,11 @@ func NewSessionSnapshotFromJSON(data []byte) (SessionSnapshot, error) {
 			errors.New("toolsy: session snapshot payload is required"),
 		)
 	}
-	return SessionSnapshot{version: wire.Version, payload: append([]byte(nil), wire.Payload...)}, nil
+	return SessionSnapshot{
+		version: wire.Version,
+		payload: append([]byte(nil), wire.Payload...),
+		binding: cloneSessionBinding(wire.Binding),
+	}, nil
 }
 
 // MarshalJSON serializes the snapshot for persistence.
@@ -213,6 +354,7 @@ func (s SessionSnapshot) MarshalJSON() ([]byte, error) {
 	return json.Marshal(sessionSnapshotWire{
 		Version: s.version,
 		Payload: json.RawMessage(s.payload),
+		Binding: cloneSessionBinding(s.binding),
 	})
 }
 
@@ -224,6 +366,7 @@ func (s *SessionSnapshot) UnmarshalJSON(data []byte) error {
 	}
 	s.version = parsed.version
 	s.payload = parsed.payload
+	s.binding = cloneSessionBinding(parsed.binding)
 	return nil
 }
 
@@ -235,4 +378,8 @@ func (s SessionSnapshot) versionAndPayload() (int, []byte, error) {
 		)
 	}
 	return s.version, append([]byte(nil), s.payload...), nil
+}
+
+func (s SessionSnapshot) Binding() SessionBinding {
+	return cloneSessionBinding(s.binding)
 }

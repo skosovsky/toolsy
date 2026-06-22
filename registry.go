@@ -54,6 +54,9 @@ func (b *RegistryBuilder) WithOptions(opts ...RegistryOption) *RegistryBuilder {
 // Build creates an immutable runtime registry.
 // Rejects tools with more than one [AsAsyncTool] layer anywhere in the chain (see [ChainUnwrapper]).
 func (b *RegistryBuilder) Build() (*Registry, error) {
+	if b.opts.policyIDMissing || (b.opts.policy != nil && b.opts.policyDigest == "") {
+		return nil, errors.New("toolsy: registry policy id is required")
+	}
 	tools := make(map[string]Tool, len(b.tools))
 	for _, raw := range b.tools {
 		if raw == nil {
@@ -239,6 +242,7 @@ func (r *Registry) Subset(allowedNames ...string) (*Registry, error) {
 		Reason:            "registry subset",
 		Owner:             "toolsy",
 		Policy:            nil,
+		PolicyID:          "",
 	})
 	if err != nil {
 		return nil, err

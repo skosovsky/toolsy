@@ -88,5 +88,11 @@ func prepareChunk(c Chunk) (Chunk, error) {
 	if err := validateChunk(c); err != nil {
 		return Chunk{}, err
 	}
+	if c.Envelope != nil {
+		c.Envelope = cloneToolEnvelope(c.Envelope)
+	} else if c.Event == EventResult {
+		envelope := c.ToolEnvelope()
+		c.Envelope = &envelope
+	}
 	return c, nil
 }

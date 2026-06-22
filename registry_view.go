@@ -19,6 +19,7 @@ type RegistryViewSpec struct {
 	Reason            string
 	Owner             string
 	Policy            Policy
+	PolicyID          string
 }
 
 // RegistryViewSnapshot is the serializable identity of a registry view.
@@ -27,6 +28,7 @@ type RegistryViewSnapshot struct {
 	ToolNames         []string `json:"tool_names"`
 	RequiredToolNames []string `json:"required_tool_names"`
 	ManifestDigest    string   `json:"manifest_digest"`
+	PolicyDigest      string   `json:"policy_digest,omitempty"`
 	Reason            string   `json:"reason"`
 	Owner             string   `json:"owner"`
 }
@@ -39,6 +41,12 @@ type RegistryView struct {
 
 // View creates a durable capability view with its own policy layered over the root registry policy.
 func (r *Registry) View(spec RegistryViewSpec) (*RegistryView, error) {
+	if spec.Policy != nil && spec.PolicyID == "" {
+		return nil, NewValidationError("registry view policy id is required")
+	}
+	if spec.Policy == nil && spec.PolicyID != "" {
+		return nil, NewValidationError("registry view policy is required when policy id is set")
+	}
 	if spec.ToolNames == nil {
 		spec.ToolNames = r.ToolNames()
 	}
@@ -65,12 +73,32 @@ func (r *Registry) View(spec RegistryViewSpec) (*RegistryView, error) {
 }
 
 // RestoreView recreates a view from a previously saved snapshot.
-func (r *Registry) RestoreView(snapshot RegistryViewSnapshot, policy Policy) (*RegistryView, error) {
+func (r *Registry) RestoreView(
+	snapshot RegistryViewSnapshot,
+	policy Policy,
+	policyID ...string,
+) (*RegistryView, error) {
 	if snapshot.ID == "" {
 		return nil, newRegistryViewSnapshotMismatchError("missing id", "id")
 	}
 	if snapshot.ManifestDigest == "" {
 		return nil, newRegistryViewSnapshotMismatchError("missing manifest digest", "manifest_digest")
+	}
+	restorePolicyID := ""
+	if len(policyID) > 0 {
+		restorePolicyID = policyID[0]
+	}
+	if snapshot.PolicyDigest != "" && policy == nil {
+		return nil, newRegistryViewSnapshotMismatchError("missing policy", "policy")
+	}
+	if snapshot.PolicyDigest != "" && restorePolicyID == "" {
+		return nil, newRegistryViewSnapshotMismatchError("missing policy id", "policy_id")
+	}
+	if snapshot.PolicyDigest == "" && policy != nil {
+		return nil, newRegistryViewSnapshotMismatchError("unexpected policy", "policy")
+	}
+	if snapshot.PolicyDigest == "" && restorePolicyID != "" {
+		return nil, newRegistryViewSnapshotMismatchError("unexpected policy id", "policy_id")
 	}
 	view, err := r.View(RegistryViewSpec{
 		ToolNames:         snapshot.ToolNames,
@@ -78,12 +106,16 @@ func (r *Registry) RestoreView(snapshot RegistryViewSnapshot, policy Policy) (*R
 		Reason:            snapshot.Reason,
 		Owner:             snapshot.Owner,
 		Policy:            policy,
+		PolicyID:          restorePolicyID,
 	})
 	if err != nil {
 		return nil, err
 	}
 	if snapshot.ManifestDigest != view.snapshot.ManifestDigest {
 		return nil, newRegistryViewSnapshotMismatchError("manifest digest mismatch", "manifest_digest")
+	}
+	if snapshot.PolicyDigest != view.snapshot.PolicyDigest {
+		return nil, newRegistryViewSnapshotMismatchError("policy digest mismatch", "policy_digest")
 	}
 	if snapshot.ID != view.snapshot.ID {
 		return nil, newRegistryViewSnapshotMismatchError("id mismatch", "id")
@@ -171,6 +203,22 @@ func (v *RegistryView) NewSession(opts ...SessionOption) (*Session, error) {
 	return NewSession(v.reg, opts...)
 }
 
+// NewSessionFromCheckpoint restores a session only when this view matches the checkpoint binding.
+func (v *RegistryView) NewSessionFromCheckpoint(checkpoint SessionCheckpoint, opts ...SessionOption) (*Session, error) {
+	if v == nil || v.reg == nil {
+		return nil, NewRegistryStateError()
+	}
+	return NewSessionFromCheckpoint(v.reg, checkpoint, opts...)
+}
+
+// RebindSession moves an existing session to this view after binding compatibility validation.
+func (v *RegistryView) RebindSession(s *Session) error {
+	if v == nil || v.reg == nil {
+		return NewRegistryStateError()
+	}
+	return s.Rebind(v.reg)
+}
+
 // Shutdown delegates lifecycle control to the shared root runtime state.
 func (v *RegistryView) Shutdown(ctx context.Context) error {
 	if v == nil || v.reg == nil {
@@ -193,6 +241,7 @@ func newRegistryViewSnapshot(spec RegistryViewSpec, reg *Registry) (RegistryView
 		ToolNames:         names,
 		RequiredToolNames: required,
 		ManifestDigest:    manifestDigest,
+		PolicyDigest:      registryViewPolicyDigest(spec.PolicyID),
 		Reason:            spec.Reason,
 		Owner:             spec.Owner,
 	}
@@ -212,6 +261,25 @@ func registryViewSnapshotID(snapshot RegistryViewSnapshot) (string, error) {
 	}
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+func registryViewPolicyDigest(policyID string) string {
+	if policyID == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(policyID))
+	return hex.EncodeToString(sum[:])
+}
+
+func appendRegistryPolicyDigest(current string, policyID string) string {
+	if policyID == "" {
+		return ""
+	}
+	h := sha256.New()
+	_, _ = h.Write([]byte(current))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(policyID))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func registryManifestDigest(reg *Registry) (string, error) {
