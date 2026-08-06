@@ -95,7 +95,7 @@ HTTP egress protection is centralized in `httptool` (`SafeDialTransport`, `NewSa
 | `document`  | remote URL fetch (IP-only; no host blacklist)      |
 | `agents`    | REST client, SSE stream steps                      |
 | `contracts` | OpenAPI/GraphQL execute and spec fetch             |
-| `mcp`       | SSE GET/POST (`WithSSEHTTPClient`, URL validation) |
+| `mcp`       | Streamable HTTP POST/GET (safe dial and redirects) |
 | `httptool`  | `AsTools` HTTP GET                                 |
 
 Leaf modules without HTTP (`fstool`, `sqltool`, `timetool`, `rag`, `mail`, …) must **not** import `httptool`. Local file reads use `textprocessor` (see `fstool.readFileLimited`).

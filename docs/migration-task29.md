@@ -70,7 +70,7 @@ Modules with outbound HTTP should reuse `httptool` library primitives (`NewSafeH
 | `toolkits/document` remote               | `httptool` safe stack              | IP-only (no host blacklist)                                                                                                       |
 | `agents`                                 | `httptool.NewSafeHTTPClient`       | `MergeHTTPClient` for custom timeout; bounded via `ReadLimitedBytes`                                                              |
 | `contracts/openapi`, `contracts/graphql` | safe client + merge                | Execute: `ReadAndTruncate`; spec/introspection: `ReadLimitedBytes` (fail-closed). See [migration-task30.md](migration-task30.md). |
-| `mcp` SSE                                | `httptool` via `WithSSEHTTPClient` | Long-lived stream (`Timeout: 0`); `ValidateRemoteURL` on GET/POST; `WithSSEAllowPrivateIPs` for tests                             |
+| `mcp` Streamable HTTP                    | `httptool` safe client              | Long-lived streams (`Timeout: 0`); one validated endpoint for POST/GET; private IP opt-in only for tests                         |
 
 Custom `*http.Client` values merge **Timeout only**; Transport always comes from the SSRF-safe default.
 
@@ -121,7 +121,7 @@ Out of scope: `mail` / `prompts` content-only caps; `timetool` IoC `maxWireBytes
 | Transport        | Per-line cap                         | Total stream cap                                     |
 | ---------------- | ------------------------------------ | ---------------------------------------------------- |
 | agents SSE steps | 1 MiB (`maxSSEScanBytes`)            | 16 MiB default (`httptool.DefaultMaxSSEStreamBytes`) |
-| mcp SSE          | 1 MiB (`rpcJSONLineScannerMaxBytes`) | 16 MiB default; `WithSSEMaxStreamBytes`              |
+| mcp Streamable HTTP | 1 MiB (`rpcJSONLineScannerMaxBytes`) | 16 MiB default; `WithStreamableHTTPMaxStreamBytes` |
 | mcp stdio        | 1 MiB per JSON line                  | 16 MiB default; `WithStdioMaxStreamBytes`            |
 
 Long-lived streams respect context cancellation in read loops (mcp SSE GET, mcp stdio stdout). MCP SSE GET/POST/notify and agents REST use `httptool.IsSuccessStatus` (2xx) before reading or draining the body.

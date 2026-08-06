@@ -17,6 +17,8 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
+const languageStarlark = "starlark"
+
 // Sandbox executes Starlark code with in-memory files and env bindings.
 type Sandbox struct {
 	languages []string
@@ -24,7 +26,7 @@ type Sandbox struct {
 
 // New creates a Starlark sandbox exposing only the "starlark" language.
 func New() *Sandbox {
-	return &Sandbox{languages: []string{"starlark"}}
+	return &Sandbox{languages: []string{languageStarlark}}
 }
 
 // SupportedLanguages returns a sorted copy of supported language names.

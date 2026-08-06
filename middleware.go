@@ -76,7 +76,8 @@ func (m *middlewareTool) Execute(ctx context.Context, env *RunEnv, input ToolInp
 	defer func() {
 		dur := time.Since(start)
 		if err != nil || errorChunks > 0 {
-			m.logger.Error(
+			m.logger.ErrorContext(
+				ctx,
 				"tool error",
 				"tool",
 				toolName,
@@ -94,7 +95,18 @@ func (m *middlewareTool) Execute(ctx context.Context, env *RunEnv, input ToolInp
 				err,
 			)
 		} else {
-			m.logger.Info("tool end", "tool", toolName, "duration", dur, "chunks", chunks, "bytes", totalBytes)
+			m.logger.InfoContext(
+				ctx,
+				"tool end",
+				"tool",
+				toolName,
+				"duration",
+				dur,
+				"chunks",
+				chunks,
+				"bytes",
+				totalBytes,
+			)
 		}
 	}()
 	err = m.next.Execute(ctx, env, input, yieldWrapped)

@@ -1,8 +1,15 @@
 # Changelog
 
-## Unreleased (task31/task32 contracts)
+## Unreleased (task31/task32/task33 contracts)
 
 ### Breaking
+
+- MCP client now supports only protocol revision `2025-11-25`; older revisions and compatibility fallback are removed.
+- Legacy `SSETransport`, `NewSSETransport`, `SSETransportOption` and `WithSSE*` APIs are removed in favor of single-endpoint `StreamableHTTPTransport`.
+- MCP `Transport` is now a bidirectional JSON-RPC peer using `Request`/`PendingRequest`; request IDs are available before awaiting a result.
+- MCP roots, progress, content and prompt DTOs use their `2025-11-25` wire shapes. `ProgressInfo.Current` and `Total` preserve fractional wire values.
+- Non-standard `ResourceContents.annotations` is removed; annotations remain only on content blocks where the `2025-11-25` schema defines them.
+- MCP `resource_link.size` now uses lossless `JSONNumber`; mathematically integral forms such as `1`, `1.0` and `1e3` retain their exact wire representation, while fractional values and present `null` fail strict encoding and decoding.
 
 - `Registry.View` is the primary capability boundary; `Subset` now delegates to a capability-backed view.
 - Calls to tools outside an active view manifest return `CodeCapabilityDenied`; `Session.RunCall` classifies policy/capability denials as infrastructure/pre-tool failures.
@@ -14,6 +21,17 @@
 - `SessionSnapshot` is stamped with session binding and cannot be imported into an incompatible registry/view/schema.
 
 ### Added
+
+- Strict MCP lifecycle/capability negotiation, Streamable HTTP sessions/version headers/resume, roots requests and discovery invalidation.
+- Correlated terminal JSON POST responses, independent POST-SSE resume state, retry-before-reconnect, and queued stdio writes with request IDs available before I/O completes.
+- Exact range-based cancelled-ID correlation, WHATWG-complete SSE framing, and independent stdio process/pipe shutdown with typed terminal-cause propagation.
+- MCP structured tool outputs with output-schema validation and lossless text/image/audio/resource content blocks.
+- Typed MCP protocol, capability, stale discovery, JSON-RPC, HTTP/session and remote execution errors.
+- Symmetric schema validation for decoded and programmatically constructed exported MCP wire DTOs.
+- JSON-RPC union fields and reserved extensions now fail closed; MCP enums, file roots, tool names, complete object schemas and binary base64 are validated at the DTO boundary.
+- Operation state is published only after `notifications/initialized` has been delivered; schema-valid empty implementation and prompt strings are preserved.
+- Icon metadata uses parser-flag-independent component URI grammar for HTTPS authority/scoped IPv6/IPvFuture/port and US-ASCII structural RFC 2397 media parameters, and icon sizes contain strings only; finite negative progress values remain valid and participate in monotonic ordering.
+- Server capability extensions preserve arbitrary JSON values losslessly, while known experimental and task capability branches follow their schema-defined object shapes.
 
 - Typed call context, typed tool policy, structured tool effects, and `ToolResult` helpers.
 - Registry view snapshots with manifest digest, required tool validation, and restore-time mismatch checks.

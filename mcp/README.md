@@ -1,125 +1,150 @@
-# MCP (Model Context Protocol) integration for toolsy
+# MCP 2025-11-25 client for toolsy
 
-This module bridges MCP servers to [toolsy](https://github.com/skosovsky/toolsy)'s `Tool` and `Registry` interface. It provides a transport layer (stdio and SSE) and maps MCP tools, resources, and prompts into types the orchestrator can use.
+`github.com/skosovsky/toolsy/mcp` is a strict MCP client and protocol bridge for `toolsy`.
 
-## Features
+The module supports exactly protocol revision `2025-11-25`. Older revisions, legacy HTTP+SSE endpoint discovery, compatibility aliases and automatic fallbacks are intentionally absent.
 
-- **Transports**: `StdioTransport` (child process via stdin/stdout) and `SSETransport` (HTTP Server-Sent Events with dynamic POST endpoint).
-- **Client**: eager lifecycle via `Connect(ctx, transport, opts...)`. Handshake is executed during connect and returned client is ready for `GetTools`, `GetResourceTool`, `GetPrompts`, `GetPrompt`.
-- **Read limits**: proxy tool **Execute** (`runMCPToolCall`, `GetResourceTool`, `GetPrompt`) map transport `ErrReadLimitExceeded` via `MapReadLimitError` with `Client.maxStreamBytes()`. **Library pagination** (`GetTools`, `GetPrompts` iterators) and **Initialize** also map read-limit errors the same way. Wrap at the call site if you need bare sentinel in library-only code.
-- **Manifest policy**: MCP tool `annotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`) map to `toolsy` manifest fields on proxy tools. `openWorldHint` is accepted but not mapped (no direct manifest equivalent). `read_mcp_resource` is `ReadOnly`.
-- **Thread-safe**: Safe for concurrent use (e.g. `Registry.ExecuteBatchStream`). Request IDs are generated with `atomic.Uint64`; pending responses are correlated via `sync.Map`.
-- **Resilience**: Context cancellation and yield errors trigger `notifications/cancelled` and return `toolsy.ErrStreamAborted`. Process crash (stdio) unblocks all pending `Call`s with an error.
+## Supported surface
 
-## Example
+- stdio and single-endpoint Streamable HTTP;
+- bidirectional JSON-RPC requests, responses and notifications;
+- strict lifecycle/version/capability negotiation;
+- roots via `roots/list` using canonical `file://` URIs;
+- tools with annotations, `outputSchema`, `structuredContent`, icons and task metadata;
+- text, image, audio, resource-link and embedded-resource content blocks;
+- text and binary resource contents;
+- prompts with current tagged content blocks;
+- fractional progress through `_meta.progressToken`;
+- typed `RequestMeta` with lossless non-reserved extension fields on every request DTO;
+- lossless non-reserved extension fields on every MCP result DTO through `Extra`;
+- cancellation with the exact active JSON-RPC request ID, emitted only after the request reaches the wire and wins the atomic terminal race;
+- tools/resources/prompts invalidation and URI-normalized subscribed resource updates, including sub-resources;
+- structured logging notifications whose required `data` may contain any JSON value, including `null`;
+- bounded reads and SSRF-safe Streamable HTTP defaults.
+- schema-equivalent validation on both decode and encode for every exported wire DTO, including required fields, tagged unions and nested metadata.
+- exact envelope/extension collision checks plus enum, URI, tool-name, full JSON Schema 2020-12 compilation and base64 validation; required strings remain empty-capable unless the schema defines a stronger constraint.
+- icon sources restricted to HTTPS URLs with a hostname or RFC 2397 image data URIs, plus finite monotonic progress without an invented non-negative constraint.
+
+Tasks, sampling, elicitation, MCP Apps, full OAuth orchestration and MCP server implementation are outside this module. They are not advertised as capabilities.
+
+## Stdio
 
 ```go
-package main
-
-import (
-	"context"
-	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/mcp"
+transport := mcp.NewStdioTransport(
+    "npx",
+    []string{"-y", "@modelcontextprotocol/server-postgres", databaseURL},
+    mcp.WithStdioMaxStreamBytes(16<<20),
 )
 
-func main() {
-	ctx := context.Background()
-	reg, err := toolsy.NewRegistryBuilder().Build()
-	if err != nil {
-		panic(err)
-	}
-
-	// 1. Initialize transport (e.g. Postgres MCP)
-	transport := mcp.NewStdioTransport("npx", []string{"-y", "@modelcontextprotocol/server-postgres", "postgres://localhost/db"})
-
-	// 2. Connect client with Roots (local folders the agent allows the MCP server to access)
-	client, err := mcp.Connect(ctx, transport, mcp.WithClientRoots([]string{"/my/workspace"}))
-	if err != nil {
-		panic(err)
-	}
-	defer client.Close()
-
-	// 3. Register all tools from the server into the toolsy registry
-	builder := toolsy.NewRegistryBuilder()
-	for tool, err := range client.GetTools(ctx) {
-		if err != nil {
-			panic(err)
-		}
-		builder.Add(tool)
-	}
-
-	// 4. Add the system tool for reading resources from this server
-	resTool, _ := client.GetResourceTool()
-	builder.Add(resTool)
-	reg, err = builder.Build()
-	if err != nil {
-		panic(err)
-	}
-
-	// reg is ready for the LLM: it will generate JSON Schema, handle validation, streaming, and progress.
-	// Apply execution deadlines on the context passed to Execute (or wrap tools with routery).
-	_ = reg
+client, err := mcp.Connect(
+    ctx,
+    transport,
+    mcp.WithClientRoots([]string{workspace}),
+    mcp.WithPaginationLimits(mcp.PaginationLimits{
+        MaxPages:       100,
+        MaxCursorBytes: 64 << 10,
+    }),
+)
+if err != nil {
+    return err
 }
+defer client.Close()
 ```
 
-## Contract validation at startup
+`Start` does not wait for unsolicited server output. The client sends `initialize` first, as required by MCP. Cancelling the handshake context after a successful connection does not kill the child; `Close` owns transport shutdown and terminates the complete child process tree. On Windows the child starts suspended, is attached to a kill-on-close Job Object, and only then resumes. A pre-cancelled request is rejected before allocating an ID.
 
-Before building the registry, verify required tool names against MCP (or other) manifests without `Registry.Build`:
+Request IDs accept strings or mathematically integral JSON numbers; exact forms such as `1.0` and `1e0` correlate without a `float64` round-trip, while fractional IDs fail closed. Cancelled numeric request IDs are retained in an exact bounded range set, so long contiguous cancellation runs stay compact and one late terminal response is consumed safely; an actual duplicate response still fails closed. If pathological range fragmentation exhausts exact correlation state, the peer closes fail closed instead of guessing whether an old ID was cancelled. Cancellation completes every waiter and cancels the request-scoped transport operation. Delivery waits are bounded, and cancelling a queued stdio write cannot abort another request's active write. Shutdown cancels and joins active server-to-client request handlers before transport close returns.
+
+## Streamable HTTP
 
 ```go
-var mcpTools []toolsy.Tool
-for tool, err := range client.GetTools(ctx) {
-	if err != nil {
-		return err
-	}
-	mcpTools = append(mcpTools, tool)
-}
-ms, err := toolsy.NewManifestSet(mcpTools...)
+transport := mcp.NewStreamableHTTPTransport(
+    "https://example.com/mcp",
+    mcp.WithStreamableHTTPRequestDecorator(func(req *http.Request) error {
+        token, err := tokens.Token(req.Context())
+        if err != nil {
+            return err
+        }
+        req.Header.Set("Authorization", "Bearer "+token)
+        return nil
+    }),
+)
+
+client, err := mcp.Connect(ctx, transport)
 if err != nil {
-	return err
+    return err
 }
-if err := toolsy.ValidateManifestContract(ms, []string{"query", "read_mcp_resource"}); err != nil {
-	return err
-}
+defer client.Close()
 ```
 
-See [docs/migration-task28.md](../docs/migration-task28.md) for v1.0 manifest, `RunCall`, and error chunk contracts.
+The transport uses one endpoint for POST and optional GET polling. JSON POST responses must be terminal and correlated to the original request ID. A terminal SSE response cancels its request-scoped POST even if the server keeps the stream open. Interrupted POST SSE streams resume independently with their own `Last-Event-ID`, honoring SSE `retry` before reconnect; retry delays are clamped to 100 ms–5 min to prevent server-driven reconnect storms. POST cursors never leak into the independent operation-phase GET stream. The SSE parser accepts CR/LF/CRLF framing, one leading BOM, and the specified event-ID plus empty-`data` priming event. A terminal POST/GET contract failure autonomously cancels every active HTTP operation. The transport also handles `202 Accepted`, `MCP-Session-Id`, `MCP-Protocol-Version` and best-effort DELETE on close.
 
-## Transport interface
+The custom HTTP client option only imports safe timeout settings; custom transports cannot replace the SSRF-safe dialer. Use the request decorator for authentication headers. The decorator receives a bodyless temporary request; method, URL, Host and body-related fields are protected, and the final request is detached from the callback's pointer. OAuth discovery, consent and token storage belong to the host.
 
-The `Transport` interface provides `Call(ctx, method, params) (result []byte, requestID string, err error)`. The **requestID** is the JSON-RPC request id used for the call; it is returned so the client can send `notifications/cancelled` with that id when the request is aborted (e.g. context cancellation or yield error). Implementations are thread-safe.
+`ContentBlock.Size` uses `JSONNumber`, preserving exact integral JSON number forms (including exponent notation) without a `float64` round-trip. Fractional values are rejected because the MCP JSON Schema defines resource size as an integer byte count.
 
-## Stdio transport
+## Registering tools
 
-| Limit               | Default | Option                               |
-| ------------------- | ------- | ------------------------------------ |
-| Per JSON line       | 1 MiB   | fixed (`rpcJSONLineScannerMaxBytes`) |
-| Total stdout stream | 16 MiB  | `WithStdioMaxStreamBytes`            |
-| First line wait     | 30s     | `WithStdioFirstLineTimeout`          |
+```go
+builder := toolsy.NewRegistryBuilder()
+for proxy, err := range client.GetTools(ctx) {
+    if err != nil {
+        return err
+    }
+    builder.Add(proxy)
+}
 
-- `NewStdioTransport(executable string, args []string, opts ...StdioTransportOption)` — executable, **args as a slice** (convenient for programmatic command building, e.g. conditionally appending `--debug` or `--path`), and optional options. The spec document may show a variadic example; the implementation uses a slice and options (WithLogger, WithStdioFirstLineTimeout) for consistency and programmatic use.
-- Options: `mcp.WithLogger(logger *slog.Logger)` (stderr forwarded to logger; default `slog.Default()`); `mcp.WithStdioFirstLineTimeout(d time.Duration)` (max wait for first stdout line after start; default 30s); `mcp.WithStdioMaxStreamBytes(n)`.
-- Stderr lines are scanned with the same 1 MiB line cap and total stream byte budget (`WithStdioMaxStreamBytes`); log lines are truncated to 256 bytes for observability. Read loops honor context cancellation via `readCtx`; mid-read cancel uses `httptool.LimitStreamReaderWithContext` (stdout pipe and stderr forward).
-- Stream reads use `httptool.LimitStreamReaderWithContext` (compose `textprocessor.ReaderWithContext` + byte budget); exceeding the total stream cap returns `textprocessor.ErrReadLimitExceeded` (partial data may have been consumed before the error). Cancellation during an in-progress `Read` is honored via the same wrapper. See [docs/migration-task30.md](../docs/migration-task30.md) for stream tier vs fail-closed transport reads.
+resourceTool, err := client.GetResourceTool()
+if err == nil { // resources capability is optional
+    builder.Add(resourceTool)
+}
 
-## SSE transport
+registry, err := builder.Build()
+```
 
-| Limit             | Default | Option                  |
-| ----------------- | ------- | ----------------------- |
-| Per SSE data line | 1 MiB   | fixed                   |
-| Total GET stream  | 16 MiB  | `WithSSEMaxStreamBytes` |
+MCP `inputSchema` becomes `ToolManifest.Parameters`; `outputSchema` becomes `ToolManifest.OutputSchema`. Both schemas default to JSON Schema 2020-12 and preserve numeric constraints exactly beyond IEEE-754 precision. Structured results are validated before delivery. `isError: true` becomes `CodeRemoteExecution`, distinct from schema, JSON-RPC and transport errors.
 
-- `NewSSETransport(initialURL string, opts ...SSETransportOption)` — only the initial URL (e.g. `http://localhost:3001/sse`) is fixed. Default HTTP client uses `httptool.NewSafeHTTPClient` (SSRF-safe dial). Override with `mcp.WithSSEHTTPClient(client *http.Client)` when needed. The server must send an event with type `endpoint` first; the `data` field is the URL used for POST (Call/Notify). GET must return HTTP 2xx; POST/notify responses must be 2xx before body drain.
+## Invalidation
 
-## Content formatting
+Discovery snapshots are versioned. After `notifications/tools/list_changed`, proxies created from the previous tools snapshot fail with `StaleDiscoveryError` until the host reloads and rebuilds its registry.
 
-Tool and resource results are converted to LLM-friendly text via **`mcp.FormatContent`**: text parts are concatenated, images are embedded as Markdown `![image](data:<mediaType>;base64,...)`. When the server sets `isError: true`, the chunk is prefixed with "Tool error: " and `Chunk.IsError` is set. You can override formatting by providing your own logic and calling `FormatContentItems` or parsing results yourself.
+```go
+go func() {
+    for event := range client.Invalidations() {
+        scheduleRegistryReload(event)
+    }
+}()
+```
 
-## Read-limit and cancel golden order
+`InvalidationGeneration` and `DiscoveryGeneration` are authoritative even if a slow event consumer overflows the bounded notification channel.
+`Client.Close` is concurrent-safe and closes both `Invalidations()` and `LogMessages()` after transport dispatch has stopped, so range consumers terminate normally.
 
-When a composite error carries both a context interrupt and `textprocessor.ErrReadLimitExceeded`, MCP client and transport paths return the interrupt — not `CodeValidationFailed`. This applies to `mapCallReadLimitFor`, `handleToolCallResult`, `finish*CallResponse`, and `streamLimitErr()`. Read-limit mapping uses subject-specific `toolsy.MapReadLimitErrorFor` (e.g. `"MCP initialize response"`, `"MCP tool response"`). See [docs/migration-task30.md](../docs/migration-task30.md) (MCP cancel-over-limit).
+## Migration from the old module
 
-## Requirements
+This is a breaking migration:
 
-- Go 1.26+
-- Only standard library and `github.com/skosovsky/toolsy` (no heavy third-party MCP SDK).
+- remove `NewSSETransport`, `SSETransport`, `SSETransportOption` and every `WithSSE*` option;
+- replace remote setup with `NewStreamableHTTPTransport`;
+- remove protocol negotiation for `2024-11-05`, `2025-03-26` and `2025-06-18`;
+- remove top-level `roots` from initialize; roots are returned from `roots/list`;
+- move progress tokens to `params._meta.progressToken`;
+- use fractional `ProgressInfo.Current` and `ProgressInfo.Total`;
+- replace content fields `base64`/`mediaType` with `data`/`mimeType`;
+- consume `CallToolResult`, `ContentBlock` and `ResourceContents` instead of shape-sniffing raw JSON;
+- use `PromptsGetResult`; the legacy `PromptMessageResult` alias is removed;
+- handle typed `ProtocolVersionError`, `CapabilityError`, `UnsupportedFeatureError`, `StaleDiscoveryError`, `RPCError`, `HTTPError`, `RemoteToolError` and `ErrSessionExpired`.
+
+No deprecated aliases or compatibility shims are provided.
+
+## Limits
+
+| Path | Default | Configuration |
+| --- | ---: | --- |
+| stdio JSON line | 1 MiB | fixed |
+| stdio protocol stdout stream | 16 MiB | `WithStdioMaxStreamBytes` |
+| stdio stderr logged line | 256 bytes | fixed; excess is discarded without closing transport |
+| Streamable HTTP JSON/SSE response | 16 MiB | `WithStreamableHTTPMaxStreamBytes` |
+| discovery pages | 1000 | `WithPaginationLimits` |
+| cumulative discovery cursor bytes | 1 MiB | `WithPaginationLimits` |
+
+Context interruption wins over read-limit mapping. Errors never include Authorization headers, full binary blocks or unbounded response bodies.

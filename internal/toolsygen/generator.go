@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -1362,8 +1363,7 @@ func (g *generator) reserveTempPath(dir, pattern string) (string, error) {
 
 func (g *generator) rollbackCommitted(committed []stagedFile) error {
 	var errs []error
-	for i := len(committed) - 1; i >= 0; i-- {
-		sf := committed[i]
+	for _, sf := range slices.Backward(committed) {
 		if err := g.fs.remove(sf.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			errs = append(errs, fmt.Errorf("%s: remove committed file during rollback: %w", sf.path, err))
 			continue

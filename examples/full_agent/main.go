@@ -12,6 +12,8 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const toolAddName = "add"
+
 func main() {
 	add, mul, err := buildTools()
 	if err != nil {
@@ -42,7 +44,7 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 		Sum int `json:"sum"`
 	}
 	add, err := toolsy.NewTool(
-		"add",
+		toolAddName,
 		"Add two integers",
 		func(_ context.Context, _ *toolsy.RunEnv, in AddIn) (AddOut, error) {
 			return AddOut{Sum: in.A + in.B}, nil
@@ -75,10 +77,10 @@ func buildTools() (toolsy.Tool, toolsy.Tool, error) {
 func demonstrateCallParser() {
 	parts := []toolsy.ContentPart{
 		{Type: toolsy.ContentTypeText, Text: "I'll add."},
-		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: "add", Args: `{"a":1,`},
-		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: "add", ArgsChunk: `"b":2}`},
+		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: toolAddName, Args: `{"a":1,`},
+		{Type: toolsy.ContentTypeToolCall, ToolCallID: "call_1", ToolName: toolAddName, ArgsChunk: `"b":2}`},
 	}
-	raw, err := toolsy.StandardCallParser{}.ExtractExactlyOne(parts, "add")
+	raw, err := toolsy.StandardCallParser{}.ExtractExactlyOne(parts, toolAddName)
 	if err != nil {
 		log.Printf("CallParser demo: %v", err)
 		return
@@ -94,9 +96,9 @@ func runBatchStream(reg *toolsy.Registry) error {
 		Product int `json:"product"`
 	}
 	calls := []toolsy.ToolCall{
-		{ToolName: "add", Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
+		{ToolName: toolAddName, Input: toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{"a": 1, "b": 2}`)}},
 		{ToolName: "mul", Input: toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{"a": 3, "b": 4}`)}},
-		{ToolName: "add", Input: toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
+		{ToolName: toolAddName, Input: toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{"a": 10, "b": 20}`)}},
 	}
 	var idx int
 	return reg.ExecuteBatchStream(context.Background(), calls, func(c toolsy.Chunk) error {
@@ -105,7 +107,7 @@ func runBatchStream(reg *toolsy.Registry) error {
 			return nil
 		}
 		switch c.ToolName {
-		case "add":
+		case toolAddName:
 			out, err := toolsy.DecodeChunkAs[AddOut](c)
 			if err != nil {
 				log.Printf("decode add result: %v", err)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
@@ -106,9 +107,13 @@ func deepCopySchemaFromMap(schemaMap map[string]any) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
 	}
-	var schemaCopy map[string]any
-	if err := json.Unmarshal(data, &schemaCopy); err != nil {
+	decoded, err := jsonschemax.Decode(data)
+	if err != nil {
 		return nil, fmt.Errorf("failed to deep copy schema map: %w", err)
+	}
+	schemaCopy, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, errors.New("failed to deep copy schema map: schema must be an object")
 	}
 	return schemaCopy, nil
 }
@@ -122,8 +127,8 @@ func rawArgsValidatedExecute(
 	handler func(ctx context.Context, env *RunEnv, argsJSON []byte, yield func(Chunk) error) error,
 ) func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error {
 	return func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
-		var v any
-		if err := json.Unmarshal(input.ArgsJSON, &v); err != nil {
+		v, err := jsonschemax.Decode(input.ArgsJSON)
+		if err != nil {
 			return wrapJSONParseError(err)
 		}
 		if err := validateAgainstSchema(compiled, v); err != nil {
@@ -231,9 +236,13 @@ func NewProxyTool(
 	if handler == nil {
 		return nil, errors.New("proxy tool handler must not be nil")
 	}
-	var parsed map[string]any
-	if err := json.Unmarshal(rawJSONSchema, &parsed); err != nil {
+	decoded, err := jsonschemax.Decode(rawJSONSchema)
+	if err != nil {
 		return nil, fmt.Errorf("failed to parse proxy schema: %w", err)
+	}
+	parsed, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, errors.New("failed to parse proxy schema: schema must be an object")
 	}
 	schemaCopy, err := deepCopySchemaFromMap(parsed)
 	if err != nil {
@@ -242,8 +251,7 @@ func NewProxyTool(
 	if cfg.Schema.Strict {
 		applyStrictMode(schemaCopy)
 	}
-	stripSchemaIDs(schemaCopy)
-	compiled, err := compileRawSchema(schemaCopy)
+	compiled, err := jsonschemax.Compile(schemaCopy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile proxy schema: %w", err)
 	}

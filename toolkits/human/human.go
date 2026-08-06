@@ -8,6 +8,8 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const payloadKindKey = "kind"
+
 type approvalArgs struct {
 	Action string `json:"action"`
 	Reason string `json:"reason"`
@@ -31,9 +33,9 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		o.approvalDesc,
 		func(_ context.Context, _ *toolsy.RunEnv, args approvalArgs, yield func(toolsy.Chunk) error) error {
 			payload, marshalErr := json.Marshal(map[string]string{
-				"kind":   "approval",
-				"action": args.Action,
-				"reason": args.Reason,
+				payloadKindKey: "approval",
+				"action":       args.Action,
+				"reason":       args.Reason,
 			})
 			if marshalErr != nil {
 				return toolsy.NewInternalError(fmt.Errorf("toolkit/human: marshal approval payload: %w", marshalErr))
@@ -53,8 +55,8 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		o.clarificationDesc,
 		func(_ context.Context, _ *toolsy.RunEnv, args clarificationArgs, yield func(toolsy.Chunk) error) error {
 			payload, marshalErr := json.Marshal(map[string]string{
-				"kind":     "clarification",
-				"question": args.Question,
+				payloadKindKey: "clarification",
+				"question":     args.Question,
 			})
 			if marshalErr != nil {
 				return toolsy.NewInternalError(

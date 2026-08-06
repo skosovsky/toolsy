@@ -118,8 +118,8 @@ func cloneToolCall(call ToolCall) ToolCall {
 
 // ProgressInfo carries optional data-plane progress for EventProgress chunks.
 type ProgressInfo struct {
-	Percent *int
-	Total   *int
+	Current *float64
+	Total   *float64
 	Message string
 	Label   string
 	Status  string

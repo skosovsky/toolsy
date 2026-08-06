@@ -14,7 +14,10 @@ import (
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-const truncationSuffix = textprocessor.ContractsTruncationSuffix
+const (
+	truncationSuffix = textprocessor.ContractsTruncationSuffix
+	operationQuery   = "query"
+)
 
 // introspectionQuery uses fragment TypeRef for full type depth (e.g. [String!] -> NON_NULL(LIST(NON_NULL(SCALAR)))).
 const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
@@ -66,7 +69,7 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 	schema := ir.Data.Schema
 	allowedOps := opts.Operations
 	if len(allowedOps) == 0 {
-		allowedOps = []string{"query", "mutation"}
+		allowedOps = []string{operationQuery, "mutation"}
 	}
 	allowedSet := make(map[string]bool)
 	for _, o := range allowedOps {
@@ -77,10 +80,10 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 	usedNames := make(map[string]bool)
 	tools, err = appendToolsForOperationKind(
 		tools,
-		"query",
+		operationQuery,
 		"GraphQL query: ",
 		schema.QueryType,
-		allowedSet["query"],
+		allowedSet[operationQuery],
 		typeMap,
 		endpoint,
 		opts,
@@ -108,7 +111,7 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 
 func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]byte, error) {
 	client := opts.httpClient()
-	body := map[string]string{"query": introspectionQuery}
+	body := map[string]string{operationQuery: introspectionQuery}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("graphql: marshal intro body: %w", err)

@@ -1,5 +1,11 @@
 package e2b
 
+const (
+	languagePython   = "python"
+	pythonCommand    = "python /workspace/main.py"
+	pythonScriptName = "main.py"
+)
+
 // Runtime describes how a language should be executed inside the remote E2B
 // workspace.
 //
@@ -45,9 +51,9 @@ func defaultRuntimes() map[string]Runtime {
 			Command:    "node /workspace/main.js",
 			ScriptName: "main.js",
 		},
-		"python": {
-			Command:    "python /workspace/main.py",
-			ScriptName: "main.py",
+		languagePython: {
+			Command:    pythonCommand,
+			ScriptName: pythonScriptName,
 		},
 	}
 }

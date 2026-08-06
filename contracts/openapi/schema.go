@@ -8,6 +8,12 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+const (
+	jsonSchemaTypeKey = "type"
+	jsonSchemaObject  = "object"
+	jsonSchemaString  = "string"
+)
+
 // operationParamSets returns path, query, and body parameter name sets for an operation.
 // pathNames: from pathTemplate placeholders {name}. queryNames: from parameters with In=="query".
 // bodyNames: top-level keys from requestBody application/json schema (resolved via Schema.Value); nil if no body.
@@ -85,8 +91,8 @@ func operationToJSONSchema(op *openapi3.Operation, pathItem *openapi3.PathItem) 
 	required = mergeRequestBodyJSONPropertiesIntoProps(op, props, required)
 
 	out := map[string]any{
-		"type":       "object",
-		"properties": props,
+		jsonSchemaTypeKey: jsonSchemaObject,
+		"properties":      props,
 	}
 	if len(required) > 0 {
 		out["required"] = required
@@ -111,7 +117,7 @@ func appendOperationParametersToProps(op *openapi3.Operation, props map[string]a
 		if schema != nil && schema.Value != nil {
 			props[name] = schemaRefToJSONSchemaMap(schema)
 		} else {
-			props[name] = map[string]any{"type": "string"}
+			props[name] = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 		}
 	}
 	return required
@@ -137,7 +143,7 @@ func appendPathItemParametersToProps(pathItem *openapi3.PathItem, props map[stri
 		if schema != nil && schema.Value != nil {
 			props[name] = schemaRefToJSONSchemaMap(schema)
 		} else {
-			props[name] = map[string]any{"type": "string"}
+			props[name] = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 		}
 	}
 	return required
@@ -176,22 +182,22 @@ func mergeRequestBodyJSONPropertiesIntoProps(op *openapi3.Operation, props map[s
 
 func schemaRefToJSONSchemaMap(s *openapi3.SchemaRef) map[string]any {
 	if s == nil || s.Value == nil {
-		return map[string]any{"type": "string"}
+		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	}
 	return schemaToJSONSchemaMap(s.Value)
 }
 
 func schemaToJSONSchemaMap(s *openapi3.Schema) map[string]any {
 	if s == nil {
-		return map[string]any{"type": "string"}
+		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	}
 	out := make(map[string]any)
 	if s.Type != nil && len(*s.Type) > 0 {
 		types := *s.Type
 		if len(types) == 1 {
-			out["type"] = types[0]
+			out[jsonSchemaTypeKey] = types[0]
 		} else {
-			out["type"] = types
+			out[jsonSchemaTypeKey] = types
 		}
 	}
 	if s.Format != "" {

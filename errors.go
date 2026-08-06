@@ -41,6 +41,7 @@ const (
 	CodeStateCodecMissing    ErrorCode = "STATE_CODEC_MISSING"
 	CodePolicyDenied         ErrorCode = "POLICY_DENIED"
 	CodeCapabilityDenied     ErrorCode = "CAPABILITY_DENIED"
+	CodeRemoteExecution      ErrorCode = "REMOTE_EXECUTION"
 )
 
 // ToolError is the structured execution error envelope for orchestrator routing.

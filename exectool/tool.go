@@ -13,6 +13,14 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const (
+	schemaTypeObject           = "object"
+	schemaTypeString           = "string"
+	schemaType                 = "type"
+	schemaDescription          = "description"
+	schemaAdditionalProperties = "additionalProperties"
+)
+
 type execArgs struct {
 	Language string            `json:"language"`
 	Code     string            `json:"code"`
@@ -165,34 +173,34 @@ func buildSchema(languages []string) map[string]any {
 	}
 
 	return map[string]any{
-		"type": "object",
+		schemaType: schemaTypeObject,
 		"properties": map[string]any{
 			"language": map[string]any{
-				"type":        "string",
-				"description": "Programming or scripting language to execute",
-				"enum":        enum,
+				schemaType:        schemaTypeString,
+				schemaDescription: "Programming or scripting language to execute",
+				"enum":            enum,
 			},
 			"code": map[string]any{
-				"type":        "string",
-				"description": "Source code to execute",
+				schemaType:        schemaTypeString,
+				schemaDescription: "Source code to execute",
 			},
 			"env": map[string]any{
-				"type":        "object",
-				"description": "Optional environment variables passed into the sandbox",
-				"additionalProperties": map[string]any{
-					"type": "string",
+				schemaType:        schemaTypeObject,
+				schemaDescription: "Optional environment variables passed into the sandbox",
+				schemaAdditionalProperties: map[string]any{
+					schemaType: schemaTypeString,
 				},
 			},
 			"files": map[string]any{
-				"type":        "object",
-				"description": "Optional UTF-8 text files materialized in the sandbox workspace",
-				"additionalProperties": map[string]any{
-					"type": "string",
+				schemaType:        schemaTypeObject,
+				schemaDescription: "Optional UTF-8 text files materialized in the sandbox workspace",
+				schemaAdditionalProperties: map[string]any{
+					schemaType: schemaTypeString,
 				},
 			},
 		},
-		"required":             []any{"language", "code"},
-		"additionalProperties": false,
+		"required":                 []any{"language", "code"},
+		schemaAdditionalProperties: false,
 	}
 }
 

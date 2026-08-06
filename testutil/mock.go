@@ -7,6 +7,11 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const (
+	jsonSchemaObject  = "object"
+	jsonSchemaTypeKey = "type"
+)
+
 // MockTool is a configurable Tool implementation for tests.
 type MockTool struct {
 	ManifestVal toolsy.ToolManifest
@@ -26,7 +31,7 @@ func (m *MockTool) Manifest() toolsy.ToolManifest {
 	return toolsy.ToolManifest{ //nolint:exhaustruct // test default manifest
 		Name:        "mock",
 		Description: "",
-		Parameters:  map[string]any{"type": "object"},
+		Parameters:  map[string]any{jsonSchemaTypeKey: jsonSchemaObject},
 		Tags:        nil,
 		Version:     "",
 	}

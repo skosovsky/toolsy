@@ -1,14 +1,215 @@
-// Package mcp provides a Model Context Protocol (MCP) client that bridges
-// MCP servers to toolsy's Tool/Registry interface. It supports stdio and SSE transports.
+// Package mcp provides a strict Model Context Protocol 2025-11-25 client bridge
+// for toolsy. It supports stdio and Streamable HTTP transports.
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"maps"
+	"regexp"
 )
 
-// JSON-RPC 2.0 message types.
+const (
+	ProtocolVersion           = "2025-11-25"
+	JSONRPCVersion            = "2.0"
+	jsonNull                  = "null"
+	rpcMethodNotFoundMessage  = "Method not found"
+	contentTypeText           = "text"
+	contentTypeImage          = "image"
+	contentTypeAudio          = "audio"
+	contentTypeResourceLink   = "resource_link"
+	contentTypeResource       = "resource"
+	audienceUser              = "user"
+	audienceAssistant         = "assistant"
+	applicationOctetStream    = "application/octet-stream"
+	mimeTypeField             = "mimeType"
+	nameField                 = "name"
+	titleField                = "title"
+	descriptionField          = "description"
+	annotationsField          = "annotations"
+	metaField                 = "_meta"
+	dataField                 = "data"
+	serverInfoField           = "serverInfo"
+	capabilitiesField         = "capabilities"
+	clientInfoField           = "clientInfo"
+	taskSupportOptional       = "optional"
+	taskSupportForbidden      = "forbidden"
+	taskSupportRequired       = "required"
+	capabilityToolsField      = "tools"
+	capabilityResourcesField  = "resources"
+	capabilityPromptsField    = "prompts"
+	capabilityLoggingField    = "logging"
+	capabilityCompleteField   = "completions"
+	capabilityTasksField      = "tasks"
+	capabilityExperimentField = "experimental"
+)
 
-// Request is a JSON-RPC 2.0 request (id present, expects response).
+var jsonNumberPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$`)
+
+var metaKeyPattern = regexp.MustCompile(
+	`^(?:[A-Za-z](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*/)?` +
+		`(?:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)?$`,
+)
+
+// Meta preserves additive MCP metadata fields.
+type Meta map[string]json.RawMessage
+
+func (m *Meta) UnmarshalJSON(data []byte) error {
+	fields, err := decodeObjectFields(data)
+	if err != nil {
+		return err
+	}
+	if err := validateMetaKeys(fields); err != nil {
+		return err
+	}
+	*m = fields
+	return nil
+}
+
+func (m Meta) MarshalJSON() ([]byte, error) {
+	if err := validateMetaKeys(m); err != nil {
+		return nil, err
+	}
+	type plain Meta
+	return json.Marshal(plain(m))
+}
+
+func validateMetaKeys(meta map[string]json.RawMessage) error {
+	for key := range meta {
+		if !metaKeyPattern.MatchString(key) {
+			return errors.New("mcp: invalid _meta key format")
+		}
+	}
+	return nil
+}
+
+// ProgressToken is an MCP string-or-number progress token.
+type ProgressToken struct { //nolint:recvcheck // json.Marshaler requires value semantics; UnmarshalJSON must mutate.
+	raw json.RawMessage
+}
+
+// JSONNumber preserves the exact lexical representation of a JSON number.
+type JSONNumber string //nolint:recvcheck // json.Marshaler uses value semantics; UnmarshalJSON must mutate.
+
+func (n *JSONNumber) UnmarshalJSON(data []byte) error {
+	value := string(data)
+	if !jsonNumberPattern.MatchString(value) {
+		return errors.New("mcp: value must be a JSON number")
+	}
+	*n = JSONNumber(value)
+	return nil
+}
+
+func (n JSONNumber) MarshalJSON() ([]byte, error) {
+	value := string(n)
+	if !jsonNumberPattern.MatchString(value) {
+		return nil, errors.New("mcp: value must be a JSON number")
+	}
+	return []byte(value), nil
+}
+
+func (n JSONNumber) String() string { return string(n) }
+
+func NewStringProgressToken(value string) ProgressToken {
+	b, _ := json.Marshal(value)
+	return ProgressToken{raw: b}
+}
+
+func NewIntegerProgressToken(value int64) ProgressToken {
+	return ProgressToken{raw: fmt.Appendf(nil, "%d", value)}
+}
+
+func (t ProgressToken) IsZero() bool { return len(t.raw) == 0 }
+
+func (t ProgressToken) String() string {
+	if len(t.raw) == 0 {
+		return ""
+	}
+	var value string
+	if json.Unmarshal(t.raw, &value) == nil {
+		return value
+	}
+	return string(t.raw)
+}
+
+func (t ProgressToken) MarshalJSON() ([]byte, error) {
+	if len(t.raw) == 0 {
+		return []byte(jsonNull), nil
+	}
+	return bytes.Clone(t.raw), nil
+}
+
+func (t *ProgressToken) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte(jsonNull)) {
+		return errors.New("mcp: progress token must be a string or number")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	switch v := value.(type) {
+	case string:
+	case json.Number:
+		if !jsonNumberPattern.MatchString(v.String()) {
+			return errors.New("mcp: invalid numeric progress token")
+		}
+	default:
+		return errors.New("mcp: progress token must be a string or number")
+	}
+	t.raw = bytes.Clone(data)
+	return nil
+}
+
+type RequestMeta struct {
+	ProgressToken ProgressToken `json:"progressToken,omitzero"`
+	Extra         Meta          `json:"-"`
+}
+
+func (m *RequestMeta) UnmarshalJSON(data []byte) error {
+	fields, err := decodeObjectFields(data)
+	if err != nil {
+		return err
+	}
+	var decoded RequestMeta
+	if raw, ok := fields["progressToken"]; ok {
+		if err := json.Unmarshal(raw, &decoded.ProgressToken); err != nil {
+			return err
+		}
+		delete(fields, "progressToken")
+	}
+	if len(fields) > 0 {
+		if err := validateMetaKeys(fields); err != nil {
+			return err
+		}
+		decoded.Extra = fields
+	}
+	*m = decoded
+	return nil
+}
+
+func (m RequestMeta) MarshalJSON() ([]byte, error) {
+	if err := validateMetaKeys(m.Extra); err != nil {
+		return nil, err
+	}
+	if _, reserved := m.Extra["progressToken"]; reserved {
+		return nil, errors.New("mcp: RequestMeta.Extra must not contain reserved progressToken")
+	}
+	fields := make(map[string]json.RawMessage, len(m.Extra)+1)
+	maps.Copy(fields, m.Extra)
+	if !m.ProgressToken.IsZero() {
+		raw, err := json.Marshal(m.ProgressToken)
+		if err != nil {
+			return nil, err
+		}
+		fields["progressToken"] = raw
+	}
+	return json.Marshal(fields)
+}
+
 type Request struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
@@ -16,7 +217,6 @@ type Request struct {
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
-// Response is a JSON-RPC 2.0 response.
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
@@ -24,230 +224,417 @@ type Response struct {
 	Error   *JSONRPCError   `json:"error,omitempty"`
 }
 
-// JSONRPCError is the JSON-RPC 2.0 error object.
 type JSONRPCError struct {
-	Code    int             `json:"code"`
+	Code    JSONNumber      `json:"code"`
 	Message string          `json:"message"`
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
-// Notification is a JSON-RPC 2.0 notification (no id, no response expected).
+// EmptyResult is an MCP Result object without method-specific fields.
+// Extra preserves additive top-level Result fields.
+type EmptyResult struct {
+	Meta  Meta `json:"_meta,omitempty"`
+	Extra Meta `json:"-"`
+}
+
+func (e JSONRPCError) MarshalJSON() ([]byte, error) {
+	type wireError JSONRPCError
+	return marshalStrict[JSONRPCError](wireError(e))
+}
+
 type Notification struct {
 	JSONRPC string          `json:"jsonrpc"`
 	Method  string          `json:"method"`
 	Params  json.RawMessage `json:"params,omitempty"`
 }
 
-// MCP Initialize.
+type NotificationParams struct {
+	Meta Meta `json:"_meta,omitempty"`
+}
 
-// InitializeParams is sent by the client in the Initialize request.
+type RequestParams struct {
+	Meta *RequestMeta `json:"_meta,omitempty"`
+}
+
+type Icon struct {
+	Src      string   `json:"src"`
+	MIMEType string   `json:"mimeType,omitempty"`
+	Sizes    []string `json:"sizes,omitempty"`
+	Theme    string   `json:"theme,omitempty"`
+}
+
+type Implementation struct {
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"`
+	Icons       []Icon `json:"icons,omitempty"`
+	WebsiteURL  string `json:"websiteUrl,omitempty"`
+}
+
 type InitializeParams struct {
 	ProtocolVersion string             `json:"protocolVersion"`
 	Capabilities    ClientCapabilities `json:"capabilities"`
-	ClientInfo      ClientInfo         `json:"clientInfo"`
+	ClientInfo      Implementation     `json:"clientInfo"`
+	Meta            *RequestMeta       `json:"_meta,omitempty"`
 }
 
-// ClientCapabilities declares what the client supports (e.g. roots for file access).
 type ClientCapabilities struct {
 	Roots *RootsCapability `json:"roots,omitempty"`
 }
 
-// RootsCapability indicates the client supports roots (folder paths).
 type RootsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ClientInfo identifies the client implementation.
-type ClientInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-// InitializeResult is the server response to Initialize.
 type InitializeResult struct {
 	ProtocolVersion string             `json:"protocolVersion"`
 	Capabilities    ServerCapabilities `json:"capabilities"`
-	ServerInfo      ServerInfo         `json:"serverInfo"`
+	ServerInfo      Implementation     `json:"serverInfo"`
 	Instructions    string             `json:"instructions,omitempty"`
+	Meta            Meta               `json:"_meta,omitempty"`
+	Extra           Meta               `json:"-"`
 }
 
-// ServerCapabilities describes what the server provides.
 type ServerCapabilities struct {
-	Tools     *ToolsCapability     `json:"tools,omitempty"`
-	Resources *ResourcesCapability `json:"resources,omitempty"`
-	Prompts   *PromptsCapability   `json:"prompts,omitempty"`
-	Logging   *struct{}            `json:"logging,omitempty"`
+	Tools        *ToolsCapability           `json:"tools,omitempty"`
+	Resources    *ResourcesCapability       `json:"resources,omitempty"`
+	Prompts      *PromptsCapability         `json:"prompts,omitempty"`
+	Logging      json.RawMessage            `json:"logging,omitempty"`
+	Completions  json.RawMessage            `json:"completions,omitempty"`
+	Tasks        json.RawMessage            `json:"tasks,omitempty"`
+	Experimental json.RawMessage            `json:"experimental,omitempty"`
+	Extra        map[string]json.RawMessage `json:"-"`
 }
 
-// ToolsCapability indicates the server supports tools.
+func (c *ServerCapabilities) UnmarshalJSON(data []byte) error {
+	type plain ServerCapabilities
+	fields, err := decodeObjectFields(data)
+	if err != nil {
+		return err
+	}
+	var decoded plain
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	knownCapabilities := []string{
+		capabilityToolsField, capabilityResourcesField, capabilityPromptsField,
+		capabilityLoggingField, capabilityCompleteField, capabilityTasksField,
+		capabilityExperimentField,
+	}
+	if err := validateKnownServerCapabilities(fields); err != nil {
+		return err
+	}
+	for _, known := range knownCapabilities {
+		delete(fields, known)
+	}
+	*c = ServerCapabilities(decoded)
+	if len(fields) > 0 {
+		c.Extra = fields
+	}
+	return nil
+}
+
+func validateKnownServerCapabilities(fields map[string]json.RawMessage) error {
+	for _, name := range []string{
+		capabilityToolsField, capabilityResourcesField, capabilityPromptsField,
+		capabilityLoggingField, capabilityCompleteField, capabilityTasksField,
+		capabilityExperimentField,
+	} {
+		if err := validateOptionalObject(fields, name); err != nil {
+			return fmt.Errorf("mcp: invalid %s capability: %w", name, err)
+		}
+	}
+	if raw, ok := fields[capabilityExperimentField]; ok {
+		experimental, err := decodeObjectFields(raw)
+		if err != nil {
+			return fmt.Errorf("mcp: invalid experimental capability: %w", err)
+		}
+		for name, value := range experimental {
+			if _, err := decodeObjectFields(value); err != nil {
+				return fmt.Errorf("mcp: experimental capability %q must be a non-null object: %w", name, err)
+			}
+		}
+	}
+	if raw, ok := fields[capabilityTasksField]; ok {
+		if err := validateServerTasksCapability(raw); err != nil {
+			return fmt.Errorf("mcp: invalid tasks capability: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateServerTasksCapability(raw json.RawMessage) error {
+	tasks, err := decodeObjectFields(raw)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"cancel", "list"} {
+		if validationErr := validateOptionalObject(tasks, name); validationErr != nil {
+			return validationErr
+		}
+	}
+	requestsRaw, ok := tasks["requests"]
+	if !ok {
+		return nil
+	}
+	requests, err := decodeObjectFields(requestsRaw)
+	if err != nil {
+		return fmt.Errorf("field %q must be a non-null object: %w", "requests", err)
+	}
+	toolsRaw, ok := requests["tools"]
+	if !ok {
+		return nil
+	}
+	tools, err := decodeObjectFields(toolsRaw)
+	if err != nil {
+		return fmt.Errorf("field %q must be a non-null object: %w", "requests.tools", err)
+	}
+	if err := validateOptionalObject(tools, "call"); err != nil {
+		return fmt.Errorf("field %q must be a non-null object: %w", "requests.tools.call", err)
+	}
+	return nil
+}
+
+func (c ServerCapabilities) MarshalJSON() ([]byte, error) {
+	type plain ServerCapabilities
+	base, err := json.Marshal(plain(c))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(base, &fields); err != nil {
+		return nil, err
+	}
+	delete(fields, "Extra")
+	reserved := map[string]struct{}{
+		capabilityToolsField: {}, capabilityResourcesField: {}, capabilityPromptsField: {},
+		capabilityLoggingField: {}, capabilityCompleteField: {}, capabilityTasksField: {},
+		capabilityExperimentField: {},
+	}
+	for name, value := range c.Extra {
+		if _, collision := reserved[name]; collision {
+			return nil, fmt.Errorf("mcp: capability extension %q collides with a reserved field", name)
+		}
+		fields[name] = value
+	}
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	return validateMarshaled[ServerCapabilities](encoded)
+}
+
 type ToolsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ResourcesCapability indicates the server supports resources.
 type ResourcesCapability struct {
 	Subscribe   bool `json:"subscribe,omitempty"`
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// PromptsCapability indicates the server supports prompts.
 type PromptsCapability struct {
 	ListChanged bool `json:"listChanged,omitempty"`
 }
 
-// ServerInfo identifies the server implementation.
-type ServerInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+type CursorParams struct {
+	Cursor string       `json:"cursor,omitempty"`
+	Meta   *RequestMeta `json:"_meta,omitempty"`
 }
 
-// Tools: tools/list, tools/call.
+type ToolsListParams = CursorParams
 
-// ToolsListParams is the optional params for tools/list (pagination).
-type ToolsListParams struct {
-	Cursor string `json:"cursor,omitempty"`
-}
-
-// ToolsListResult is the result of tools/list.
 type ToolsListResult struct {
 	Tools      []MCPTool `json:"tools"`
 	NextCursor string    `json:"nextCursor,omitempty"`
+	Meta       Meta      `json:"_meta,omitempty"`
+	Extra      Meta      `json:"-"`
 }
 
-// MCPTool is a tool descriptor from tools/list. Title is used by UI (e.g. Claude Desktop) and as fallback for description.
-// Name is intentionally MCPTool (not Tool) to avoid stutter and conflict with toolsy.Tool.
-//
-//revive:disable-next-line:exported
-type MCPTool struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description,omitempty"`
-	Title       string           `json:"title,omitempty"`
-	InputSchema json.RawMessage  `json:"inputSchema"`
-	Annotations *ToolAnnotations `json:"annotations,omitempty"`
+type ToolExecution struct {
+	TaskSupport string `json:"taskSupport,omitempty"`
 }
 
-// ToolsCallParams is the params for tools/call.
+type MCPTool struct { //nolint:revive // MCPTool distinguishes the wire descriptor from toolsy.Tool.
+	Name         string           `json:"name"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description,omitempty"`
+	InputSchema  json.RawMessage  `json:"inputSchema"`
+	OutputSchema json.RawMessage  `json:"outputSchema,omitempty"`
+	Annotations  *ToolAnnotations `json:"annotations,omitempty"`
+	Icons        []Icon           `json:"icons,omitempty"`
+	Execution    *ToolExecution   `json:"execution,omitempty"`
+	Meta         Meta             `json:"_meta,omitempty"`
+}
+
 type ToolsCallParams struct {
-	Name          string          `json:"name"`
-	Arguments     json.RawMessage `json:"arguments"`
-	ProgressToken string          `json:"progressToken,omitempty"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
+	Meta      *RequestMeta    `json:"_meta,omitempty"`
 }
 
-// ToolsCallResult is the result of tools/call.
-type ToolsCallResult struct {
-	Content []ContentItem `json:"content"`
-	IsError bool          `json:"isError,omitempty"`
+type Annotations struct {
+	Audience     []string `json:"audience,omitempty"`
+	Priority     *float64 `json:"priority,omitempty"`
+	LastModified string   `json:"lastModified,omitempty"`
 }
 
-// ContentItem is a single content piece (text or base64).
-type ContentItem struct {
-	Type      string `json:"type"` // "text" or "image"
-	Text      string `json:"text,omitempty"`
-	Base64    string `json:"base64,omitempty"`
-	MediaType string `json:"mediaType,omitempty"`
+// ResourceContents represents either TextResourceContents or BlobResourceContents.
+type ResourceContents struct {
+	URI         string  `json:"uri"`
+	MIMEType    string  `json:"mimeType,omitempty"`
+	Text        *string `json:"text,omitempty"`
+	Blob        *string `json:"blob,omitempty"`
+	Meta        Meta    `json:"_meta,omitempty"`
+	textPresent bool
+	blobPresent bool
 }
 
-// Resources: resources/read.
+// ContentBlock is the lossless tagged union used by tool results and prompt messages.
+type ContentBlock struct {
+	Type        string            `json:"type"`
+	Text        string            `json:"text,omitempty"`
+	Data        string            `json:"data,omitempty"`
+	MIMEType    string            `json:"mimeType,omitempty"`
+	URI         string            `json:"uri,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Size        *JSONNumber       `json:"size,omitempty"`
+	Icons       []Icon            `json:"icons,omitempty"`
+	Resource    *ResourceContents `json:"resource,omitempty"`
+	Annotations *Annotations      `json:"annotations,omitempty"`
+	Meta        Meta              `json:"_meta,omitempty"`
+	wireFields  map[string]bool
+}
 
-// ResourcesReadParams is the params for resources/read.
+type CallToolResult struct {
+	Content           []ContentBlock  `json:"content"`
+	StructuredContent json.RawMessage `json:"structuredContent,omitempty"`
+	IsError           bool            `json:"isError,omitempty"`
+	Meta              Meta            `json:"_meta,omitempty"`
+	Extra             Meta            `json:"-"`
+}
+
 type ResourcesReadParams struct {
-	URI string `json:"uri"`
+	URI  string       `json:"uri"`
+	Meta *RequestMeta `json:"_meta,omitempty"`
 }
 
-// ResourcesReadResult is the result of resources/read.
 type ResourcesReadResult struct {
-	Contents []ContentItem `json:"contents"`
+	Contents []ResourceContents `json:"contents"`
+	Meta     Meta               `json:"_meta,omitempty"`
+	Extra    Meta               `json:"-"`
 }
 
-// Prompts: prompts/list, prompts/get.
+type PromptsListParams = CursorParams
 
-// PromptsListParams is the optional params for prompts/list (pagination).
-type PromptsListParams struct {
-	Cursor string `json:"cursor,omitempty"`
-}
-
-// PromptsListResult is the result of prompts/list.
 type PromptsListResult struct {
 	Prompts    []Prompt `json:"prompts"`
 	NextCursor string   `json:"nextCursor,omitempty"`
+	Meta       Meta     `json:"_meta,omitempty"`
+	Extra      Meta     `json:"-"`
 }
 
-// Prompt is a prompt template descriptor from the server.
 type Prompt struct {
 	Name        string           `json:"name"`
+	Title       string           `json:"title,omitempty"`
 	Description string           `json:"description,omitempty"`
 	Arguments   []PromptArgument `json:"arguments,omitempty"`
+	Icons       []Icon           `json:"icons,omitempty"`
+	Meta        Meta             `json:"_meta,omitempty"`
 }
 
-// PromptArgument describes a prompt template argument.
 type PromptArgument struct {
 	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 	Required    bool   `json:"required,omitempty"`
 }
 
-// PromptsGetParams is the params for prompts/get.
 type PromptsGetParams struct {
 	Name      string            `json:"name"`
 	Arguments map[string]string `json:"arguments,omitempty"`
+	Meta      *RequestMeta      `json:"_meta,omitempty"`
 }
 
-// PromptsGetResult is the result of prompts/get (description + messages).
 type PromptsGetResult struct {
 	Description string          `json:"description,omitempty"`
 	Messages    []PromptMessage `json:"messages"`
+	Meta        Meta            `json:"_meta,omitempty"`
+	Extra       Meta            `json:"-"`
 }
 
-// PromptMessageResult is the result of GetPrompt; it contains Description and Messages (alias for PromptsGetResult).
-type PromptMessageResult = PromptsGetResult
-
-// PromptMessage is a single message in a prompt result (role + content).
 type PromptMessage struct {
-	Role    string          `json:"role"` // "user" or "assistant"
-	Content *ContentMessage `json:"content,omitempty"`
+	Role    string       `json:"role"`
+	Content ContentBlock `json:"content"`
 }
 
-// ContentMessage holds text or parts for a message.
-type ContentMessage struct {
-	Type  string        `json:"type,omitempty"` // "text"
-	Text  string        `json:"text,omitempty"`
-	Parts []ContentItem `json:"parts,omitempty"`
-}
-
-// Notifications: progress and cancelled.
-
-// ProgressParams is the params for notifications/progress.
 type ProgressParams struct {
-	ProgressToken   string `json:"progressToken"`
-	Progress        int    `json:"progress,omitempty"` // 0-100
-	Total           int    `json:"total,omitempty"`
-	ProgressMessage string `json:"progressMessage,omitempty"`
+	ProgressToken ProgressToken `json:"progressToken"`
+	Progress      float64       `json:"progress"`
+	Total         *float64      `json:"total,omitempty"`
+	Message       string        `json:"message,omitempty"`
+	Meta          Meta          `json:"_meta,omitempty"`
 }
 
-// CancelledParams is the params for notifications/cancelled.
 type CancelledParams struct {
 	RequestID json.RawMessage `json:"requestId"`
+	Reason    string          `json:"reason,omitempty"`
+	Meta      Meta            `json:"_meta,omitempty"`
+}
+
+type Root struct {
+	URI  string `json:"uri"`
+	Name string `json:"name,omitempty"`
+	Meta Meta   `json:"_meta,omitempty"`
+}
+
+type RootsListResult struct {
+	Roots []Root `json:"roots"`
+	Meta  Meta   `json:"_meta,omitempty"`
+	Extra Meta   `json:"-"`
+}
+
+type ResourceUpdatedParams struct {
+	URI  string `json:"uri"`
+	Meta Meta   `json:"_meta,omitempty"`
+}
+
+type LogMessageParams struct {
+	Level  string          `json:"level"`
+	Logger string          `json:"logger,omitempty"`
+	Data   json.RawMessage `json:"data"`
+	Meta   Meta            `json:"_meta,omitempty"`
 }
 
 const (
-	// JSONRPCVersion is the JSON-RPC version string.
-	JSONRPCVersion = "2.0"
-	// MethodInitialize is the MCP Initialize method.
-	MethodInitialize = "initialize"
-	// MethodInitialized is the notification sent after successful init.
-	MethodInitialized = "notifications/initialized"
-	// MethodToolsList is tools/list.
-	MethodToolsList = "tools/list"
-	// MethodToolsCall is tools/call.
-	MethodToolsCall = "tools/call"
-	// MethodResourcesRead is resources/read.
-	MethodResourcesRead = "resources/read"
-	// MethodPromptsList is prompts/list.
-	MethodPromptsList = "prompts/list"
-	// MethodPromptsGet is prompts/get.
-	MethodPromptsGet = "prompts/get"
-	// MethodProgress is notifications/progress.
-	MethodProgress = "notifications/progress"
-	// MethodCancelled is notifications/cancelled.
-	MethodCancelled = "notifications/cancelled"
+	MethodInitialize           = "initialize"
+	MethodInitialized          = "notifications/initialized"
+	MethodPing                 = "ping"
+	MethodRootsList            = "roots/list"
+	MethodRootsListChanged     = "notifications/roots/list_changed"
+	MethodToolsList            = "tools/list"
+	MethodToolsCall            = "tools/call"
+	MethodToolsListChanged     = "notifications/tools/list_changed"
+	MethodResourcesRead        = "resources/read"
+	MethodResourcesSubscribe   = "resources/subscribe"
+	MethodResourcesListChanged = "notifications/resources/list_changed"
+	MethodResourceUpdated      = "notifications/resources/updated"
+	MethodPromptsList          = "prompts/list"
+	MethodPromptsGet           = "prompts/get"
+	MethodPromptsListChanged   = "notifications/prompts/list_changed"
+	MethodProgress             = "notifications/progress"
+	MethodCancelled            = "notifications/cancelled"
+	MethodLogMessage           = "notifications/message"
+)
+
+const (
+	JSONRPCParseError       JSONNumber = "-32700"
+	JSONRPCInvalidRequest   JSONNumber = "-32600"
+	JSONRPCMethodNotFound   JSONNumber = "-32601"
+	JSONRPCInvalidParams    JSONNumber = "-32602"
+	JSONRPCInternalError    JSONNumber = "-32603"
+	JSONRPCServerOverloaded JSONNumber = "-32000"
 )

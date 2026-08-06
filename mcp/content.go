@@ -1,73 +1,104 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
-// FormatContentResult is the result of FormatContent (formatted bytes + whether the tool reported isError).
-type FormatContentResult struct {
-	Data    []byte
-	IsError bool
+func canonicalJSON(raw json.RawMessage) ([]byte, any, error) {
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return nil, nil, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return nil, nil, errors.New("mcp: multiple JSON values")
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return nil, nil, err
+	}
+	return canonical, value, nil
 }
 
-// FormatContent converts MCP content/contents (raw JSON from tools/call or resources/read)
-// into LLM-friendly text: concatenates text parts and embeds images as Markdown
-// ![image](data:<mediaType>;base64,<base64>). Exported so callers can override the formatting.
-// rawResult may be a tools/call result (has "content" and optionally "isError") or
-// resources/read result (has "contents"). Returns formatted bytes and isError flag, or error.
-func FormatContent(rawResult []byte) (FormatContentResult, error) {
-	var withContent struct {
-		Content  []ContentItem `json:"content"`
-		Contents []ContentItem `json:"contents"`
-		IsError  bool          `json:"isError"`
-	}
-	if err := json.Unmarshal(rawResult, &withContent); err != nil {
-		return FormatContentResult{}, err
-	}
-	items := withContent.Content
-	if items == nil {
-		items = withContent.Contents
-	}
-	out := formatContentItems(items)
-	if withContent.IsError {
-		if len(out) == 0 {
-			out = []byte("Tool error")
-		} else {
-			out = []byte("Tool error: " + string(out))
+func formatContentBlocks(blocks []ContentBlock) ([]byte, error) {
+	var out strings.Builder
+	for index, block := range blocks {
+		if index > 0 {
+			out.WriteByte('\n')
 		}
-	}
-	return FormatContentResult{Data: out, IsError: withContent.IsError}, nil
-}
-
-// formatContentItems builds a single text from content items (text + Markdown image links).
-func formatContentItems(items []ContentItem) []byte {
-	var b strings.Builder
-	for i, item := range items {
-		if i > 0 {
-			b.WriteString("\n")
+		if err := block.validate(); err != nil {
+			return nil, err
 		}
-		switch item.Type {
-		case "text":
-			b.WriteString(item.Text)
-		case "image":
-			mediaType := item.MediaType
-			if mediaType == "" {
-				mediaType = "image/png"
+		switch block.Type {
+		case contentTypeText:
+			out.WriteString(block.Text)
+		case contentTypeImage:
+			fmt.Fprintf(&out, "![image](data:%s;base64,%s)", block.MIMEType, block.Data)
+		case contentTypeAudio:
+			fmt.Fprintf(&out, "[audio](data:%s;base64,%s)", block.MIMEType, block.Data)
+		case contentTypeResourceLink:
+			if block.URI == "" {
+				return nil, errors.New("mcp: resource_link requires uri and name")
 			}
-			_, _ = fmt.Fprintf(&b, "![image](data:%s;base64,%s)", mediaType, item.Base64)
+			fmt.Fprintf(&out, "[%s](%s)", block.Name, block.URI)
+		case contentTypeResource:
+			if block.Resource == nil {
+				return nil, errors.New("mcp: embedded resource requires resource")
+			}
+			projection, err := formatResourceContents([]ResourceContents{*block.Resource})
+			if err != nil {
+				return nil, err
+			}
+			out.Write(projection)
 		default:
-			if item.Text != "" {
-				b.WriteString(item.Text)
-			}
+			return nil, fmt.Errorf("mcp: unsupported content type %q", block.Type)
 		}
 	}
-	return []byte(b.String())
+	return []byte(out.String()), nil
 }
 
-// FormatContentItems is the exported formatter for a slice of ContentItem.
-// Use this to customize how tools/call or resources/read content is presented to the LLM.
-func FormatContentItems(items []ContentItem) []byte {
-	return formatContentItems(items)
+func formatResourceContents(contents []ResourceContents) ([]byte, error) {
+	var out strings.Builder
+	for index, content := range contents {
+		if err := content.validate(); err != nil {
+			return nil, err
+		}
+		if index > 0 {
+			out.WriteByte('\n')
+		}
+		switch {
+		case content.Text != nil && content.Blob == nil:
+			out.WriteString(*content.Text)
+		case content.Blob != nil && content.Text == nil:
+			mimeType := content.MIMEType
+			if mimeType == "" {
+				mimeType = applicationOctetStream
+			}
+			fmt.Fprintf(&out, "[resource](data:%s;base64,%s)", mimeType, *content.Blob)
+		default:
+			return nil, fmt.Errorf(
+				"mcp: resource %q must contain exactly one of text or blob",
+				content.URI,
+			)
+		}
+	}
+	return []byte(out.String()), nil
+}
+
+// FormatContentBlocks creates the deterministic LLM-facing projection while callers
+// retain the original typed blocks separately.
+func FormatContentBlocks(blocks []ContentBlock) ([]byte, error) {
+	return formatContentBlocks(blocks)
+}
+
+// FormatResourceContents creates the deterministic LLM-facing projection of resources.
+func FormatResourceContents(contents []ResourceContents) ([]byte, error) {
+	return formatResourceContents(contents)
 }

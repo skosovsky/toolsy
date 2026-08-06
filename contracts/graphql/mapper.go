@@ -8,6 +8,8 @@ import (
 const (
 	graphqlTypeKindNonNull = "NON_NULL"
 	graphqlTypeKindList    = "LIST"
+	jsonSchemaTypeKey      = "type"
+	jsonSchemaString       = "string"
 )
 
 // graphQLTypeRef matches GraphQL introspection __Type for type references (supports arbitrary depth via OfType).
@@ -35,7 +37,7 @@ func argsToJSONSchema(args []ArgSpec) ([]byte, error) {
 			required = append(required, a.Name)
 		}
 	}
-	out := map[string]any{"type": "object", "properties": props}
+	out := map[string]any{jsonSchemaTypeKey: "object", "properties": props}
 	if len(required) > 0 {
 		out["required"] = required
 	}
@@ -44,26 +46,26 @@ func argsToJSONSchema(args []ArgSpec) ([]byte, error) {
 
 func graphQLTypeToJSONSchemaInner(t *graphQLTypeRef) map[string]any {
 	if t == nil {
-		return map[string]any{"type": "string"}
+		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	}
 	if t.Kind == graphqlTypeKindNonNull && t.OfType != nil {
 		return graphQLTypeToJSONSchemaInner(t.OfType)
 	}
 	if t.Kind == graphqlTypeKindList && t.OfType != nil {
-		return map[string]any{"type": "array", "items": graphQLTypeToJSONSchemaInner(t.OfType)}
+		return map[string]any{jsonSchemaTypeKey: "array", "items": graphQLTypeToJSONSchemaInner(t.OfType)}
 	}
 	// Scalar or named type
 	switch strings.ToLower(t.Name) {
 	case "int", "integer":
-		return map[string]any{"type": "integer"}
+		return map[string]any{jsonSchemaTypeKey: "integer"}
 	case "float":
-		return map[string]any{"type": "number"}
+		return map[string]any{jsonSchemaTypeKey: "number"}
 	case "boolean", "bool":
-		return map[string]any{"type": "boolean"}
+		return map[string]any{jsonSchemaTypeKey: "boolean"}
 	case "id", "string":
-		return map[string]any{"type": "string"}
+		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	default:
-		return map[string]any{"type": "string"}
+		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	}
 }
 

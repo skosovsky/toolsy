@@ -18,6 +18,12 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+const (
+	jsonSchemaTypeKey = "type"
+	jsonSchemaObject  = "object"
+	jsonSchemaString  = "string"
+)
+
 // Reflect uses gRPC server reflection on an existing client connection to discover services/methods
 // and returns one toolsy.Tool per RPC method. The caller must create cc (e.g. grpc.NewClient) and
 // is responsible for closing it. cc must not be nil.
@@ -198,8 +204,8 @@ func buildMessageSchema(md protoreflect.MessageDescriptor) map[string]any {
 		props[string(f.Name())] = fieldToJSONSchema(f)
 	}
 	return map[string]any{
-		"type":       "object",
-		"properties": props,
+		jsonSchemaTypeKey: jsonSchemaObject,
+		"properties":      props,
 	}
 }
 
@@ -210,33 +216,33 @@ func fieldToJSONSchema(fd protoreflect.FieldDescriptor) map[string]any {
 	case protoreflect.Int32Kind, protoreflect.Int64Kind, protoreflect.Uint32Kind, protoreflect.Uint64Kind,
 		protoreflect.Sint32Kind, protoreflect.Sint64Kind, protoreflect.Fixed32Kind, protoreflect.Fixed64Kind,
 		protoreflect.Sfixed32Kind, protoreflect.Sfixed64Kind:
-		baseSchema = map[string]any{"type": "integer"}
+		baseSchema = map[string]any{jsonSchemaTypeKey: "integer"}
 	case protoreflect.FloatKind, protoreflect.DoubleKind:
-		baseSchema = map[string]any{"type": "number"}
+		baseSchema = map[string]any{jsonSchemaTypeKey: "number"}
 	case protoreflect.BoolKind:
-		baseSchema = map[string]any{"type": "boolean"}
+		baseSchema = map[string]any{jsonSchemaTypeKey: "boolean"}
 	case protoreflect.StringKind, protoreflect.BytesKind, protoreflect.EnumKind:
-		baseSchema = map[string]any{"type": "string"}
+		baseSchema = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	case protoreflect.MessageKind, protoreflect.GroupKind:
 		subMd := fd.Message()
 		if subMd == nil {
-			baseSchema = map[string]any{"type": "string"}
+			baseSchema = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 		} else {
 			baseSchema = buildMessageSchema(subMd)
 		}
 	default:
-		baseSchema = map[string]any{"type": "string"}
+		baseSchema = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
 	}
 	if fd.IsMap() {
 		return map[string]any{
-			"type":                 "object",
+			jsonSchemaTypeKey:      jsonSchemaObject,
 			"additionalProperties": fieldToJSONSchema(fd.MapValue()),
 		}
 	}
 	if fd.IsList() {
 		return map[string]any{
-			"type":  "array",
-			"items": baseSchema,
+			jsonSchemaTypeKey: "array",
+			"items":           baseSchema,
 		}
 	}
 	return baseSchema

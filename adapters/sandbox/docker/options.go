@@ -2,6 +2,11 @@ package docker
 
 import "github.com/docker/docker/api/types/container"
 
+const (
+	languageBash   = "bash"
+	languagePython = "python"
+)
+
 // Runtime describes a language-specific Docker execution template.
 type Runtime struct {
 	Image      string
@@ -56,9 +61,9 @@ func WithClient(client dockerClient) Option {
 
 func defaultRuntimes() map[string]Runtime {
 	return map[string]Runtime{
-		"bash": {
+		languageBash: {
 			Image:      "bash:5.2",
-			Command:    []string{"bash", "/workspace/main.sh"},
+			Command:    []string{languageBash, "/workspace/main.sh"},
 			ScriptName: "main.sh",
 		},
 		"node": {
@@ -66,9 +71,9 @@ func defaultRuntimes() map[string]Runtime {
 			Command:    []string{"node", "/workspace/main.js"},
 			ScriptName: "main.js",
 		},
-		"python": {
+		languagePython: {
 			Image:      "python:3.11-alpine",
-			Command:    []string{"python", "/workspace/main.py"},
+			Command:    []string{languagePython, "/workspace/main.py"},
 			ScriptName: "main.py",
 		},
 	}

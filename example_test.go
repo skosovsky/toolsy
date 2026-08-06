@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 )
 
@@ -78,7 +77,7 @@ func ExampleRegistryBuilder_Use() {
 		return
 	}
 	reg, err := NewRegistryBuilder().Use(
-		WithLogging(slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))),
+		WithLogging(slog.New(slog.DiscardHandler)),
 	).Add(tool).Build()
 	if err != nil {
 		return

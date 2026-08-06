@@ -11,7 +11,11 @@ import (
 	"github.com/skosovsky/toolsy/history"
 )
 
-const demoMaxTokens = 23
+const (
+	demoMaxTokens = 23
+	roleAssistant = "assistant"
+	kindRegular   = "regular"
+)
 
 type MyMessage struct {
 	Role    string
@@ -38,7 +42,7 @@ func (mySummarizer) Summarize(_ context.Context, msgs []MyMessage) ([]MyMessage,
 	}
 	return []MyMessage{
 		{
-			Role:    "assistant",
+			Role:    roleAssistant,
 			Kind:    "summary",
 			Content: "Summary: weather requested.",
 		},
@@ -56,11 +60,11 @@ func (myInspector) GetToolCallIDs(m MyMessage) []string {
 
 func main() {
 	msgs := []MyMessage{
-		{Role: "system", Kind: "regular", Content: "You are a helpful assistant."},
-		{Role: "user", Kind: "regular", Content: "Find weather in Moscow for tomorrow morning."},
-		{Role: "assistant", Kind: "tool_call", CallIDs: []string{"call-1"}, Content: "Calling weather API"},
+		{Role: "system", Kind: kindRegular, Content: "You are a helpful assistant."},
+		{Role: "user", Kind: kindRegular, Content: "Find weather in Moscow for tomorrow morning."},
+		{Role: roleAssistant, Kind: "tool_call", CallIDs: []string{"call-1"}, Content: "Calling weather API"},
 		{Role: "tool", Kind: "tool_result", CallIDs: []string{"call-1"}, Content: "Weather API returned 18C"},
-		{Role: "assistant", Kind: "regular", Content: "It will be around 18C with light wind."},
+		{Role: roleAssistant, Kind: kindRegular, Content: "It will be around 18C with light wind."},
 	}
 
 	out, report, err := history.ApplySemanticTruncation(

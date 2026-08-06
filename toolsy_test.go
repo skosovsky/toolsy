@@ -55,12 +55,12 @@ func TestChunk_EventIsErrorMetadata(t *testing.T) {
 	c := Chunk{
 		Event:    EventResult,
 		IsError:  false,
-		Progress: &ProgressInfo{Percent: new(50)},
+		Progress: &ProgressInfo{Current: new(50.0)},
 	}
 	assert.Equal(t, EventResult, c.Event)
 	assert.False(t, c.IsError)
 	require.NotNil(t, c.Progress)
-	assert.Equal(t, 50, *c.Progress.Percent)
+	assert.InDelta(t, 50.0, *c.Progress.Current, 0.0001)
 
 	cErr := Chunk{Event: EventResult, Data: []byte("fail"), MimeType: MimeTypeText, IsError: true}
 	assert.Equal(t, EventResult, cErr.Event)

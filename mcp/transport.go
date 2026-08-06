@@ -1,33 +1,78 @@
 package mcp
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
-// Transport defines the abstraction for MCP JSON-RPC 2.0 communication.
-// It does not know about tools, resources, or prompts—only JSON-RPC method and params/result.
-// Implementations must be safe for concurrent use (e.g. parallel Call from ExecuteBatchStream).
+func contextUntilPendingTerminal(
+	parent context.Context,
+	terminal <-chan struct{},
+) (context.Context, func()) {
+	ctx, cancel := context.WithCancel(parent)
+	watcherDone := make(chan struct{})
+	go func() {
+		defer close(watcherDone)
+		select {
+		case <-terminal:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, func() {
+		cancel()
+		<-watcherDone
+	}
+}
+
+type PendingRequest interface {
+	ID() json.RawMessage
+	Await(ctx context.Context) (json.RawMessage, error)
+}
+
+// CompletionPendingRequest exposes the wire terminal boundary. Callbacks run
+// before Await is released and are used to retire progress routes losslessly.
+type CompletionPendingRequest interface {
+	PendingRequest
+	OnComplete(func())
+}
+
+// DeliveryPendingRequest exposes whether the original request reached the wire.
+// DeliveryDone closes after either successful delivery or a terminal send failure.
+type DeliveryPendingRequest interface {
+	PendingRequest
+	DeliveryDone() <-chan struct{}
+	WasSent() bool
+}
+
+// CancellablePendingRequest atomically claims cancellation while the request is active.
+type CancellablePendingRequest interface {
+	PendingRequest
+	CancelPending() bool
+}
+
+type RequestHandler func(ctx context.Context, request Request) (json.RawMessage, *JSONRPCError)
+
+type NotificationHandler func(params json.RawMessage)
+
+// Transport is a bidirectional JSON-RPC peer transport.
 type Transport interface {
-	// Start starts the transport (e.g. launches child process or opens SSE connection).
-	// Must be called before Call or Notify. Idempotent.
 	Start(ctx context.Context) error
-
-	// Call sends a JSON-RPC request and blocks until the response is received or context is done.
-	// method is the JSON-RPC method name; params is serialized as JSON for the "params" field.
-	// Returns the raw "result" body ([]byte), the request ID used (for notifications/cancelled), or an error.
-	Call(ctx context.Context, method string, params any) (result []byte, requestID string, err error)
-
-	// Notify sends a one-way JSON-RPC notification (no response expected).
+	Request(ctx context.Context, method string, params any) (PendingRequest, error)
 	Notify(ctx context.Context, method string, params any) error
-
-	// OnNotification registers a handler for incoming notifications with the given method name.
-	// Handlers are invoked from the transport's read goroutine; they must not block excessively.
-	OnNotification(method string, handler func(params []byte))
-
-	// Close shuts down the transport and releases resources. Unblocks any pending Call.
+	OnRequest(handler RequestHandler)
+	OnNotification(method string, handler NotificationHandler)
 	Close() error
 }
 
-// StreamByteCapTransport reports the total byte budget for JSON-RPC stream reads.
-// Optional: when not implemented, [Client] falls back to httptool.DefaultMaxSSEStreamBytes.
+type ProtocolVersionTransport interface {
+	SetProtocolVersion(version string)
+}
+
+type OperationPhaseTransport interface {
+	Activate()
+}
+
 type StreamByteCapTransport interface {
 	MaxStreamBytes() int
 }

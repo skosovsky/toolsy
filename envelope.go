@@ -19,6 +19,7 @@ type ToolDeliveryClass string
 const (
 	DeliveryClassStructured ToolDeliveryClass = "structured"
 	DeliveryClassText       ToolDeliveryClass = "text"
+	DeliveryClassBinary     ToolDeliveryClass = "binary"
 )
 
 // ToolAudience describes the intended consumer of a tool payload.

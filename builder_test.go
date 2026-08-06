@@ -276,6 +276,119 @@ func TestNewProxyTool(t *testing.T) {
 	requireClientCorrectable(t, err)
 }
 
+func TestNewProxyTool_PreservesExactNumericConstraints(t *testing.T) {
+	// Arrange.
+	const minimum = "9007199254740993"
+	rawSchema := []byte(
+		`{"type":"object","properties":{"n":{"type":"integer","minimum":` +
+			minimum + `}},"required":["n"]}`,
+	)
+	called := false
+	tool, err := NewProxyTool(
+		"exact_number",
+		"Exact numeric constraint",
+		rawSchema,
+		func(context.Context, *RunEnv, []byte, func(Chunk) error) error {
+			called = true
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	manifest, err := json.Marshal(tool.Manifest().Parameters)
+	require.NoError(t, err)
+	require.Contains(t, string(manifest), `"minimum":`+minimum)
+
+	// Act.
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{"n":9007199254740992}`)},
+		func(Chunk) error { return nil },
+	)
+
+	// Assert.
+	require.Error(t, err)
+	require.False(t, called)
+}
+
+func TestNewProxyTool_DefaultsToDraft202012(t *testing.T) {
+	// Arrange. prefixItems is a draft 2020-12 keyword; no explicit $schema is supplied.
+	rawSchema := []byte(
+		`{"type":"object","properties":{"values":{"type":"array",` +
+			`"prefixItems":[{"type":"string"}],"items":false}},"required":["values"]}`,
+	)
+	tool, err := NewProxyTool(
+		"draft_2020",
+		"Default dialect",
+		rawSchema,
+		func(context.Context, *RunEnv, []byte, func(Chunk) error) error { return nil },
+	)
+	require.NoError(t, err)
+
+	// Act.
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{"values":["first","unexpected"]}`)},
+		func(Chunk) error { return nil },
+	)
+
+	// Assert.
+	require.Error(t, err)
+}
+
+func TestNewProxyTool_PreservesNestedIDsForLocalReferences(t *testing.T) {
+	// Arrange.
+	rawSchema := []byte(
+		`{"$defs":{"node":{"$id":"node","type":"object","properties":` +
+			`{"x":{"type":"integer"}},"required":["x"]}},"$ref":"node"}`,
+	)
+	called := false
+	tool, err := NewProxyTool(
+		"local_id",
+		"Nested identifier",
+		rawSchema,
+		func(context.Context, *RunEnv, []byte, func(Chunk) error) error {
+			called = true
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	manifest, err := json.Marshal(tool.Manifest().Parameters)
+	require.NoError(t, err)
+	require.Contains(t, string(manifest), `"$id":"node"`)
+
+	// Act.
+	err = tool.Execute(
+		context.Background(),
+		NewRunEnv(nil),
+		ToolInput{ArgsJSON: []byte(`{"x":1}`)},
+		func(Chunk) error { return nil },
+	)
+
+	// Assert.
+	require.NoError(t, err)
+	require.True(t, called)
+}
+
+func TestNewProxyTool_DoesNotLoadExternalSchemaReferences(t *testing.T) {
+	// Arrange.
+	rawSchema := []byte(`{"$ref":"https://127.0.0.1:1/schema"}`)
+
+	// Act.
+	tool, err := NewProxyTool(
+		"external_ref",
+		"External reference",
+		rawSchema,
+		func(context.Context, *RunEnv, []byte, func(Chunk) error) error { return nil },
+	)
+
+	// Assert.
+	require.Nil(t, tool)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "external schema reference")
+}
+
 func TestMarshalToolResult_WireJSONResult(t *testing.T) {
 	truncated := json.RawMessage(`{"broken`)
 	res := wireJSONStub{raw: truncated}

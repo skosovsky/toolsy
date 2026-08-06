@@ -74,8 +74,8 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 			asyncOpts = &aw.opts
 			t = aw.next
 		}
-		for i := len(b.middlewares) - 1; i >= 0; i-- {
-			t = b.middlewares[i](t)
+		for _, middleware := range slices.Backward(b.middlewares) {
+			t = middleware(t)
 		}
 		if asyncOpts != nil {
 			t = &asyncTool{

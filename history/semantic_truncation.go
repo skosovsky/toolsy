@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // TokenCounter counts token usage for a history snapshot.
@@ -348,8 +349,7 @@ func chooseSummaryBoundary(
 		return best
 	}
 
-	for i := len(safeBoundaries) - 1; i >= 0; i-- {
-		b := safeBoundaries[i]
+	for _, b := range slices.Backward(safeBoundaries) {
 		if b > protectedEnd {
 			return b
 		}
