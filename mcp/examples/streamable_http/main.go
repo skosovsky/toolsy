@@ -30,10 +30,14 @@ func main() {
 		panic(err)
 	}
 	defer client.Close()
+	serverName, serverVersion := "anonymous", "unknown"
+	if info := client.ServerInfo().Meta.ServerInfo; info != nil {
+		serverName, serverVersion = info.Name, info.Version
+	}
 	fmt.Printf(
 		"connected to %s %s with MCP %s\n",
-		client.ServerInfo().ServerInfo.Name,
-		client.ServerInfo().ServerInfo.Version,
+		serverName,
+		serverVersion,
 		mcp.ProtocolVersion,
 	)
 }

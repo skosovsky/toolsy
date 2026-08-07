@@ -1,0 +1,7 @@
+{
+  "missingTTL": {"resultType": "complete", "tools": [], "cacheScope": "private"},
+  "nullTTL": {"resultType": "complete", "tools": [], "ttlMs": null, "cacheScope": "private"},
+  "fractionalTTL": {"resultType": "complete", "tools": [], "ttlMs": 1.5, "cacheScope": "private"},
+  "negativeTTL": {"resultType": "complete", "tools": [], "ttlMs": -1, "cacheScope": "private"},
+  "unknownScope": {"resultType": "complete", "tools": [], "ttlMs": 1, "cacheScope": "tenant"}
+}

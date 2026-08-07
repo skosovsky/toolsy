@@ -1,0 +1,5 @@
+{
+  "resultType": "complete",
+  "resultType": "input_required",
+  "requestState": "must-fail-before-mapping"
+}

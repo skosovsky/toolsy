@@ -1,10 +1,9 @@
-//nolint:exhaustruct // Wire DTO and state constructors intentionally spell only negotiated/non-zero fields.
+//nolint:exhaustruct // Wire DTO constructors intentionally spell only meaningful fields.
 package mcp
 
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,9 +11,9 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
-	pathpkg "path"
-	"path/filepath"
+	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -33,26 +32,28 @@ const (
 	clientEventBufferSize     = 64
 	maxCancellationRunes      = 256
 	structuredContentSubject  = "tool structuredContent"
-	fileScheme                = "file"
+	discoverResultSubject     = MethodServerDiscover + " result"
+	requestParamsSubject      = "request params"
+	requestLogSubject         = "request log correlation"
+	mcpLogLevelInfo           = "info"
+	mcpLogLevelDebug          = "debug"
+	mcpLogLevelNotice         = "notice"
+	mcpLogLevelWarning        = "warning"
+	mcpLogLevelAlert          = "alert"
+	mcpLogLevelCritical       = "critical"
+	mcpLogLevelEmergency      = "emergency"
+	mcpLogLevelError          = "error"
+	toolsListResultSubject    = "tools/list result"
+	toolOutputSchemaSubject   = "tool outputSchema"
+	defaultClientVersion      = "1.0.0"
 )
 
 type ClientOption func(*ClientOptions)
 
 type ClientOptions struct {
-	Roots      []Root
-	RootPaths  []string
 	Logger     *slog.Logger
 	ClientInfo Implementation
 	Pagination PaginationLimits
-}
-
-func WithClientRoots(paths []string) ClientOption {
-	return func(options *ClientOptions) { options.RootPaths = append([]string(nil), paths...) }
-}
-
-func WithRoots(roots []Root) ClientOption {
-	snapshot := cloneRoots(roots)
-	return func(options *ClientOptions) { options.Roots = cloneRoots(snapshot) }
 }
 
 func WithClientLogger(logger *slog.Logger) ClientOption {
@@ -60,7 +61,8 @@ func WithClientLogger(logger *slog.Logger) ClientOption {
 }
 
 func WithClientInfo(info Implementation) ClientOption {
-	return func(options *ClientOptions) { options.ClientInfo = info }
+	snapshot := cloneImplementation(info)
+	return func(options *ClientOptions) { options.ClientInfo = cloneImplementation(snapshot) }
 }
 
 func WithPaginationLimits(limits PaginationLimits) ClientOption {
@@ -70,16 +72,56 @@ func WithPaginationLimits(limits PaginationLimits) ClientOption {
 type InvalidationKind string
 
 const (
-	InvalidationTools     InvalidationKind = capabilityToolsField
-	InvalidationResources InvalidationKind = capabilityResourcesField
+	InvalidationTools     InvalidationKind = "tools"
+	InvalidationResources InvalidationKind = "resources"
 	InvalidationResource  InvalidationKind = "resource"
-	InvalidationPrompts   InvalidationKind = capabilityPromptsField
+	InvalidationPrompts   InvalidationKind = "prompts"
 )
 
+// Invalidation carries the authoritative generation and subscription provenance.
 type Invalidation struct {
-	Kind       InvalidationKind
-	URI        string
-	Generation uint64
+	Kind           InvalidationKind
+	URI            string
+	Generation     uint64
+	SubscriptionID string
+}
+
+// InputRequiredError exposes a non-terminal MCP MRTR result. The client never
+// retries it automatically; the host may explicitly issue a new request.
+type InputRequiredError struct {
+	Method string
+	Result InputRequiredResult
+}
+
+func (e *InputRequiredError) Error() string {
+	return fmt.Sprintf("mcp: %s requires additional input", e.Method)
+}
+
+// Subscription represents one explicit subscriptions/listen operation.
+type Subscription struct {
+	ID     string
+	Events <-chan Invalidation
+	done   <-chan struct{}
+	err    func() error
+	cancel context.CancelFunc
+}
+
+func (s *Subscription) Done() <-chan struct{} { return s.done }
+func (s *Subscription) Err() error            { return s.err() }
+func (s *Subscription) Close()                { s.cancel() }
+
+type subscriptionState struct {
+	key       string
+	publicID  string
+	requested SubscriptionFilter
+	effective SubscriptionFilter
+	acked     bool
+	closed    bool
+	events    chan Invalidation
+	done      chan struct{}
+	cancel    context.CancelFunc
+	mu        sync.RWMutex
+	err       error
 }
 
 type progressState struct {
@@ -95,11 +137,14 @@ type Client struct {
 	opts      ClientOptions
 	logger    *slog.Logger
 
-	mu          sync.RWMutex
-	initialized bool
-	server      InitializeResult
-	roots       []Root
-	subscribed  map[string]struct{}
+	mu            sync.RWMutex
+	ready         bool
+	closed        bool
+	server        DiscoverResult
+	subscriptions map[string]*subscriptionState
+	toolBindings  map[string]struct{}
+	toolSchemas   map[string]schemaValidator
+	toolBindingMu sync.Mutex
 
 	progressCounter    atomic.Uint64
 	progressCallbacks  sync.Map
@@ -107,234 +152,63 @@ type Client struct {
 	toolGeneration     atomic.Uint64
 	resourceGeneration atomic.Uint64
 	promptGeneration   atomic.Uint64
+	requestLogs        sync.Map
 	invalidations      chan Invalidation
-	logMessages        chan LogMessageParams
 	closeOnce          sync.Once
 	closeErr           error
 }
 
 func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*Client, error) {
 	options := ClientOptions{
-		ClientInfo: Implementation{Name: "toolsy-mcp-client", Version: "0.6.0"},
+		ClientInfo: Implementation{Name: "toolsy-mcp-client", Version: defaultClientVersion},
 	}
 	for _, opt := range opts {
 		opt(&options)
 	}
+	// ClientOption is intentionally open for composition. Re-snapshot the final
+	// value so a custom option cannot retain mutable metadata aliases.
+	options.ClientInfo = cloneImplementation(options.ClientInfo)
 	if options.Logger == nil {
 		options.Logger = slog.Default()
 	}
 	if err := validateImplementation(options.ClientInfo); err != nil {
 		return nil, &InvalidPayloadError{Subject: "clientInfo", Err: err}
 	}
-	roots, err := normalizeRoots(options.RootPaths, options.Roots)
-	if err != nil {
-		return nil, err
-	}
 	client := &Client{
 		transport:     transport,
 		opts:          options,
 		logger:        options.Logger,
-		roots:         roots,
-		subscribed:    make(map[string]struct{}),
+		subscriptions: make(map[string]*subscriptionState),
+		toolBindings:  make(map[string]struct{}),
+		toolSchemas:   make(map[string]schemaValidator),
 		invalidations: make(chan Invalidation, clientEventBufferSize),
-		logMessages:   make(chan LogMessageParams, clientEventBufferSize),
 	}
 	if err := transport.Start(ctx); err != nil {
 		return nil, err
 	}
 	client.registerHandlers()
-	if err := client.initialize(ctx); err != nil {
+	if err := client.discover(ctx); err != nil {
 		_ = transport.Close()
 		return nil, err
 	}
 	return client, nil
 }
 
-func normalizeRoots(paths []string, roots []Root) ([]Root, error) {
-	result := cloneRoots(roots)
-	for _, rootPath := range paths {
-		root, err := rootFromPath(rootPath)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, root)
-	}
-	seen := make(map[string]struct{}, len(result))
-	for index := range result {
-		canonical, err := canonicalRootURI(result[index].URI)
-		if err != nil {
-			return nil, err
-		}
-		result[index].URI = canonical
-		if _, exists := seen[result[index].URI]; exists {
-			return nil, fmt.Errorf("mcp: duplicate root URI %q", result[index].URI)
-		}
-		seen[result[index].URI] = struct{}{}
-	}
-	return result, nil
-}
-
-func cloneRoots(roots []Root) []Root {
-	if roots == nil {
-		return nil
-	}
-	result := make([]Root, len(roots))
-	for index, root := range roots {
-		result[index] = root
-		result[index].Meta = cloneMeta(root.Meta)
-	}
-	return result
-}
-
-func cloneMeta(meta Meta) Meta {
-	if meta == nil {
-		return nil
-	}
-	result := make(Meta, len(meta))
-	for name, raw := range meta {
-		result[name] = bytes.Clone(raw)
-	}
-	return result
-}
-
-func rootFromPath(rootPath string) (Root, error) {
-	if strings.HasPrefix(rootPath, "file://") {
-		return Root{URI: rootPath}, nil
-	}
-	if strings.HasPrefix(rootPath, `\\`) || strings.HasPrefix(rootPath, "//") {
-		return Root{}, fmt.Errorf("mcp: UNC root %q is not supported", rootPath)
-	}
-	if windowsDriveRootPattern.MatchString(rootPath) {
-		slashed := strings.ReplaceAll(rootPath, `\`, "/")
-		uriPath := cleanWindowsDriveURIPath("/" + slashed)
-		return Root{
-			URI:  (&url.URL{Scheme: fileScheme, Path: uriPath}).String(),
-			Name: windowsRootName(uriPath),
-		}, nil
-	}
-	absolute, err := filepath.Abs(rootPath)
-	if err != nil {
-		return Root{}, fmt.Errorf("mcp: normalize root %q: %w", rootPath, err)
-	}
-	uriPath := filepath.ToSlash(absolute)
-	if !strings.HasPrefix(uriPath, "/") {
-		uriPath = "/" + uriPath
-	}
-	return Root{
-		URI:  (&url.URL{Scheme: fileScheme, Path: uriPath}).String(),
-		Name: filepath.Base(absolute),
-	}, nil
-}
-
-func canonicalRootURI(rawURI string) (string, error) {
-	parsed, err := url.Parse(rawURI)
-	if err != nil || parsed.Scheme != fileScheme || parsed.Host != "" || parsed.Path == "" ||
-		!strings.HasPrefix(parsed.Path, "/") || parsed.OmitHost || parsed.Opaque != "" ||
-		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
-		isUNCFileURIPath(parsed.Path) {
-		return "", fmt.Errorf("mcp: root URI %q must be an absolute file:// URI", rawURI)
-	}
-	cleanedPath := pathpkg.Clean(parsed.Path)
-	if windowsDriveURIPathPrefixPattern.MatchString(parsed.Path) {
-		if !windowsDriveURIPathPattern.MatchString(parsed.Path) {
-			return "", fmt.Errorf("mcp: root URI %q must use an absolute Windows drive path", rawURI)
-		}
-		cleanedPath = cleanWindowsDriveURIPath(parsed.Path)
-	}
-	return (&url.URL{Scheme: fileScheme, Path: cleanedPath}).String(), nil
-}
-
-func cleanWindowsDriveURIPath(uriPath string) string {
-	normalized := strings.ReplaceAll(uriPath, `\`, "/")
-	drive := strings.ToUpper(normalized[1:2]) + ":"
-	tail := strings.TrimLeft(normalized[3:], "/")
-	cleanedTail := pathpkg.Clean("/" + tail)
-	if cleanedTail == "/" {
-		return "/" + drive + "/"
-	}
-	return "/" + drive + cleanedTail
-}
-
-func isUNCFileURIPath(uriPath string) bool {
-	normalized := strings.ReplaceAll(uriPath, `\`, "/")
-	return strings.HasPrefix(normalized, "//")
-}
-
-func windowsRootName(uriPath string) string {
-	if windowsDriveRootURIPathPattern.MatchString(strings.TrimSuffix(uriPath, "/")) {
-		return uriPath[1:3]
-	}
-	return pathpkg.Base(uriPath)
-}
-
-var (
-	windowsDriveRootPattern          = regexp.MustCompile(`^[A-Za-z]:[\\/].*`)
-	windowsDriveURIPathPrefixPattern = regexp.MustCompile(`^/[A-Za-z]:`)
-	windowsDriveURIPathPattern       = regexp.MustCompile(`^/[A-Za-z]:[\\/]`)
-	windowsDriveRootURIPathPattern   = regexp.MustCompile(`^/[A-Za-z]:$`)
-)
-
-func (c *Client) registerHandlers() {
-	c.transport.OnRequest(c.handleRequest)
-	c.transport.OnNotification(MethodProgress, c.handleProgress)
-	c.transport.OnNotification(
-		MethodToolsListChanged,
-		func(params json.RawMessage) { c.handleListChanged(InvalidationTools, params) },
-	)
-	c.transport.OnNotification(
-		MethodResourcesListChanged,
-		func(params json.RawMessage) { c.handleListChanged(InvalidationResources, params) },
-	)
-	c.transport.OnNotification(
-		MethodPromptsListChanged,
-		func(params json.RawMessage) { c.handleListChanged(InvalidationPrompts, params) },
-	)
-	c.transport.OnNotification(MethodResourceUpdated, c.handleResourceUpdated)
-	c.transport.OnNotification(MethodLogMessage, c.handleLogMessage)
-}
-
-func (c *Client) initialize(ctx context.Context) error {
-	capabilities := ClientCapabilities{}
-	if len(c.roots) > 0 {
-		capabilities.Roots = &RootsCapability{ListChanged: false}
-	}
-	params := InitializeParams{
-		ProtocolVersion: ProtocolVersion,
-		Capabilities:    capabilities,
-		ClientInfo:      c.opts.ClientInfo,
-	}
-	resultRaw, err := c.requestAndAwait(ctx, MethodInitialize, params)
-	if err != nil {
-		return c.mapCallReadLimitFor(ctx, err, "MCP initialize response")
-	}
-	var result InitializeResult
-	if err := json.Unmarshal(resultRaw, &result); err != nil {
-		return &InvalidPayloadError{Subject: "initialize result", Err: err}
-	}
-	if result.ProtocolVersion != ProtocolVersion {
-		return &ProtocolVersionError{Requested: ProtocolVersion, Selected: result.ProtocolVersion}
-	}
-	if err := validateImplementation(result.ServerInfo); err != nil {
-		return &InvalidPayloadError{Subject: serverInfoField, Err: err}
-	}
-	if versioned, ok := c.transport.(ProtocolVersionTransport); ok {
-		versioned.SetProtocolVersion(result.ProtocolVersion)
-	}
-	if err := c.transport.Notify(ctx, MethodInitialized, struct{}{}); err != nil {
-		return fmt.Errorf("mcp: send initialized notification: %w", err)
-	}
-	c.mu.Lock()
-	c.server = result
-	c.initialized = true
-	c.mu.Unlock()
-	if transport, ok := c.transport.(OperationPhaseTransport); ok {
-		transport.Activate()
-	}
-	return nil
-}
-
 func validateImplementation(info Implementation) error {
+	if info.Name == "" || info.Version == "" {
+		return errors.New("name and version are required")
+	}
 	return validateIcons(info.Icons)
+}
+
+func cloneImplementation(info Implementation) Implementation {
+	info.Extra = cloneMeta(info.Extra)
+	info.Icons = append([]Icon(nil), info.Icons...)
+	for index := range info.Icons {
+		info.Icons[index].Sizes = append([]string(nil), info.Icons[index].Sizes...)
+		info.Icons[index].Extra = cloneMeta(info.Icons[index].Extra)
+	}
+	return info
 }
 
 func validateIcons(icons []Icon) error {
@@ -349,66 +223,292 @@ func validateIcons(icons []Icon) error {
 	return nil
 }
 
-func (c *Client) handleRequest(
-	_ context.Context,
-	request Request,
-) (json.RawMessage, *JSONRPCError) {
-	if request.Method == MethodPing || request.Method == MethodRootsList {
-		if err := validateInboundRequestParams(request.Params); err != nil {
-			return nil, &JSONRPCError{Code: JSONRPCInvalidParams, Message: "Invalid params"}
-		}
+// clientCapabilities intentionally advertises no optional server-to-client
+// capabilities. MRTR requestState continuation is handled by the host, while
+// inputRequests requiring elicitation/sampling are rejected because this
+// bridge implements neither feature. Request-scoped logging is opted into per
+// request through logLevel and therefore has no discovery capability bit.
+func (c *Client) clientCapabilities() ClientCapabilities { return ClientCapabilities{} }
+
+// prepareParams is the sole producer of self-describing request metadata.
+//
+//nolint:nestif // One reserved-key ownership boundary keeps caller metadata validation atomic.
+func (c *Client) prepareParams(params any) (json.RawMessage, error) {
+	params, callerMeta := detachRequestMeta(params)
+	info := cloneImplementation(c.opts.ClientInfo)
+	meta := &RequestMeta{
+		ProtocolVersion:    ProtocolVersion,
+		ClientCapabilities: c.clientCapabilities(),
+		ClientInfo:         &info,
 	}
-	if request.Method == MethodPing {
-		return json.RawMessage(`{}`), nil
-	}
-	c.mu.RLock()
-	initialized := c.initialized
-	c.mu.RUnlock()
-	if !initialized {
-		return nil, &JSONRPCError{Code: JSONRPCMethodNotFound, Message: rpcMethodNotFoundMessage}
-	}
-	switch request.Method {
-	case MethodRootsList:
-		if len(c.roots) == 0 {
-			return nil, &JSONRPCError{
-				Code:    JSONRPCMethodNotFound,
-				Message: rpcMethodNotFoundMessage,
+	if callerMeta != nil {
+		if callerMeta.ProtocolVersion != "" || callerMeta.ClientInfo != nil ||
+			hasClientCapabilityDeclarations(callerMeta.ClientCapabilities) {
+			return nil, &InvalidPayloadError{
+				Subject: "request _meta",
+				Err:     errors.New("caller cannot set core-owned request identity"),
 			}
 		}
-		result, err := json.Marshal(RootsListResult{Roots: append([]Root(nil), c.roots...)})
-		if err != nil {
-			return nil, &JSONRPCError{Code: JSONRPCInternalError, Message: "Internal error"}
+		for key, value := range callerMeta.Extra {
+			if strings.HasPrefix(key, "io.modelcontextprotocol/") || key == progressTokenField {
+				return nil, &InvalidPayloadError{
+					Subject: "request _meta",
+					Err:     fmt.Errorf("caller cannot set reserved key %q", key),
+				}
+			}
+			if meta.Extra == nil {
+				meta.Extra = make(Meta)
+			}
+			meta.Extra[key] = bytes.Clone(value)
 		}
-		return result, nil
+		meta.ProgressToken = callerMeta.ProgressToken
+		if callerMeta.LogLevel != "" {
+			if _, ok := mcpLogLevel(callerMeta.LogLevel); !ok {
+				return nil, &InvalidPayloadError{
+					Subject: "request log level",
+					Err:     fmt.Errorf("unsupported level %q", callerMeta.LogLevel),
+				}
+			}
+			meta.LogLevel = callerMeta.LogLevel
+		}
+	}
+	params, err := attachRequestMeta(params, meta)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(params)
+}
+
+func hasClientCapabilityDeclarations(capabilities ClientCapabilities) bool {
+	return len(capabilities.Experimental) != 0 ||
+		capabilities.Roots != nil ||
+		capabilities.Sampling != nil ||
+		capabilities.Elicitation != nil ||
+		len(capabilities.Extensions) != 0 ||
+		len(capabilities.Extra) != 0
+}
+
+func attachRequestMeta(params any, meta *RequestMeta) (any, error) {
+	value := reflect.ValueOf(params)
+	wasPointer := value.IsValid() && value.Kind() == reflect.Pointer
+	if wasPointer {
+		if value.IsNil() {
+			return nil, &InvalidPayloadError{Subject: requestParamsSubject, Err: errors.New("params must not be nil")}
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() || value.Kind() != reflect.Struct {
+		return nil, &InvalidPayloadError{
+			Subject: requestParamsSubject,
+			Err:     errors.New("params must be a struct with *RequestMeta field"),
+		}
+	}
+	copyValue := reflect.New(value.Type()).Elem()
+	copyValue.Set(value)
+	field := copyValue.FieldByName("Meta")
+	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[*RequestMeta]() {
+		return nil, &InvalidPayloadError{
+			Subject: requestParamsSubject,
+			Err:     errors.New("params must contain a writable *RequestMeta field"),
+		}
+	}
+	field.Set(reflect.ValueOf(meta))
+	if wasPointer {
+		pointer := reflect.New(copyValue.Type())
+		pointer.Elem().Set(copyValue)
+		return pointer.Interface(), nil
+	}
+	return copyValue.Interface(), nil
+}
+
+// detachRequestMeta shallow-copies a params struct and removes its Meta field
+// before JSON marshaling. RequestMeta itself is only valid after core-owned
+// reserved fields have been injected by prepareParams.
+func detachRequestMeta(params any) (any, *RequestMeta) {
+	value := reflect.ValueOf(params)
+	wasPointer := value.IsValid() && value.Kind() == reflect.Pointer
+	if wasPointer {
+		if value.IsNil() {
+			return params, nil
+		}
+		value = value.Elem()
+	}
+	if !value.IsValid() || value.Kind() != reflect.Struct {
+		return params, nil
+	}
+	copyValue := reflect.New(value.Type()).Elem()
+	copyValue.Set(value)
+	field := copyValue.FieldByName("Meta")
+	if !field.IsValid() || !field.CanSet() || field.Type() != reflect.TypeFor[*RequestMeta]() {
+		return params, nil
+	}
+	var meta *RequestMeta
+	if !field.IsNil() {
+		original, ok := field.Interface().(*RequestMeta)
+		if !ok {
+			return params, nil
+		}
+		cloned := *original
+		cloned.Extra = cloneMeta(original.Extra)
+		meta = &cloned
+	}
+	field.Set(reflect.Zero(field.Type()))
+	if wasPointer {
+		pointer := reflect.New(copyValue.Type())
+		pointer.Elem().Set(copyValue)
+		return pointer.Interface(), meta
+	}
+	return copyValue.Interface(), meta
+}
+
+func cloneMeta(meta Meta) Meta {
+	if meta == nil {
+		return nil
+	}
+	cloned := make(Meta, len(meta))
+	for key, value := range meta {
+		cloned[key] = bytes.Clone(value)
+	}
+	return cloned
+}
+
+func (c *Client) discover(ctx context.Context) error {
+	raw, err := c.requestAndAwait(ctx, MethodServerDiscover, DiscoverParams{})
+	if err != nil {
+		return c.mapCallReadLimitFor(ctx, err, "MCP server discovery response")
+	}
+	var result DiscoverResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return &InvalidPayloadError{Subject: discoverResultSubject, Err: err}
+	}
+	seen := make(map[string]struct{}, len(result.SupportedVersions))
+	supported := false
+	for _, version := range result.SupportedVersions {
+		if version == "" {
+			return &InvalidPayloadError{
+				Subject: discoverResultSubject,
+				Err:     errors.New("supportedVersions contains an empty version"),
+			}
+		}
+		if _, duplicate := seen[version]; duplicate {
+			return &InvalidPayloadError{
+				Subject: discoverResultSubject,
+				Err:     fmt.Errorf("duplicate supported version %q", version),
+			}
+		}
+		seen[version] = struct{}{}
+		supported = supported || version == ProtocolVersion
+	}
+	if !supported {
+		return &ProtocolVersionError{Requested: ProtocolVersion, Selected: strings.Join(result.SupportedVersions, ",")}
+	}
+	if result.Meta.ServerInfo != nil {
+		if err := validateImplementation(*result.Meta.ServerInfo); err != nil {
+			return &InvalidPayloadError{Subject: "serverInfo", Err: err}
+		}
+	}
+	c.mu.Lock()
+	c.server = result
+	c.ready = true
+	c.mu.Unlock()
+	return nil
+}
+
+func (c *Client) registerHandlers() {
+	c.transport.OnNotification(MethodProgress, c.handleProgress)
+	if contextual, ok := c.transport.(RequestScopedNotificationTransport); ok {
+		contextual.OnRequestNotification(MethodLogMessage, c.handleRequestLogMessage)
+	}
+	c.transport.OnNotification(MethodSubscriptionsAcknowledged, c.handleSubscriptionAcknowledged)
+	c.transport.OnNotification(
+		MethodToolsListChanged,
+		func(raw json.RawMessage) { c.handleSubscriptionInvalidation(InvalidationTools, raw) },
+	)
+	c.transport.OnNotification(
+		MethodResourcesListChanged,
+		func(raw json.RawMessage) { c.handleSubscriptionInvalidation(InvalidationResources, raw) },
+	)
+	c.transport.OnNotification(
+		MethodPromptsListChanged,
+		func(raw json.RawMessage) { c.handleSubscriptionInvalidation(InvalidationPrompts, raw) },
+	)
+	c.transport.OnNotification(
+		MethodResourceUpdated,
+		func(raw json.RawMessage) { c.handleSubscriptionInvalidation(InvalidationResource, raw) },
+	)
+}
+
+func mcpLogLevel(level string) (slog.Level, bool) {
+	switch level {
+	case mcpLogLevelDebug:
+		return slog.LevelDebug, true
+	case mcpLogLevelInfo, mcpLogLevelNotice:
+		return slog.LevelInfo, true
+	case mcpLogLevelWarning:
+		return slog.LevelWarn, true
+	case mcpLogLevelError, mcpLogLevelCritical, mcpLogLevelAlert, mcpLogLevelEmergency:
+		return slog.LevelError, true
 	default:
-		return nil, &JSONRPCError{Code: JSONRPCMethodNotFound, Message: rpcMethodNotFoundMessage}
+		return 0, false
 	}
 }
 
-func validateInboundRequestParams(raw json.RawMessage) error {
-	if len(raw) == 0 {
-		return nil
+func (c *Client) handleRequestLogMessage(requestID, raw json.RawMessage) {
+	key, err := rpcIDKey(requestID)
+	if err != nil {
+		return
 	}
-	var params RequestParams
-	return json.Unmarshal(raw, &params)
+	if _, active := c.requestLogs.Load("r:" + key); !active {
+		return
+	}
+	message, ok := c.validLogMessage(raw)
+	if !ok {
+		return
+	}
+	c.emitLogMessage(message)
+}
+
+func (c *Client) validLogMessage(raw json.RawMessage) (LogMessageParams, bool) {
+	var message LogMessageParams
+	if err := json.Unmarshal(raw, &message); err != nil {
+		c.logger.Warn("mcp: invalid request-scoped log notification", "err", err)
+		return LogMessageParams{}, false
+	}
+	_, ok := mcpLogLevel(message.Level)
+	if !ok || len(message.Data) == 0 || !json.Valid(message.Data) {
+		c.logger.Warn("mcp: invalid request-scoped log notification")
+		return LogMessageParams{}, false
+	}
+	return message, true
+}
+
+func (c *Client) emitLogMessage(message LogMessageParams) {
+	level, _ := mcpLogLevel(message.Level)
+	c.logger.Log(
+		context.Background(),
+		level,
+		"mcp: request-scoped log",
+		"logger", boundedDiagnostic(message.Logger),
+		"data", boundedDiagnostic(string(message.Data)),
+	)
 }
 
 func (c *Client) requireCapability(name string) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if !c.initialized {
-		return &CapabilityError{Capability: "initialized"}
+	if !c.ready {
+		return &CapabilityError{Capability: MethodServerDiscover}
 	}
 	switch name {
-	case "tools":
+	case string(InvalidationTools):
 		if c.server.Capabilities.Tools == nil {
 			return &CapabilityError{Capability: name}
 		}
-	case "resources":
+	case string(InvalidationResources):
 		if c.server.Capabilities.Resources == nil {
 			return &CapabilityError{Capability: name}
 		}
-	case "prompts":
+	case string(InvalidationPrompts):
 		if c.server.Capabilities.Prompts == nil {
 			return &CapabilityError{Capability: name}
 		}
@@ -416,30 +516,161 @@ func (c *Client) requireCapability(name string) error {
 	return nil
 }
 
-func (c *Client) requestAndAwait(
-	ctx context.Context,
-	method string,
-	params any,
-) (json.RawMessage, error) {
-	result, _, err := c.requestAndAwaitWithID(ctx, method, params)
-	return result, err
+type requestLogScope struct {
+	enabled bool
 }
 
-func (c *Client) requestAndAwaitWithID(
+func requestLogCorrelation(prepared json.RawMessage) (requestLogScope, error) {
+	params, err := decodeObjectFields(prepared)
+	if err != nil {
+		return requestLogScope{}, err
+	}
+	meta, err := decodeObjectFields(params["_meta"])
+	if err != nil {
+		return requestLogScope{}, err
+	}
+	if _, logging := meta[metaLogLevel]; !logging {
+		return requestLogScope{}, nil
+	}
+	return requestLogScope{enabled: true}, nil
+}
+
+func (c *Client) prepareRequest(
 	ctx context.Context,
 	method string,
 	params any,
-) (json.RawMessage, json.RawMessage, error) {
-	pending, err := c.transport.Request(ctx, method, params)
+) (PreparedRequest, requestLogScope, error) {
+	prepared, err := c.prepareParams(params)
 	if err != nil {
-		return nil, nil, err
+		return nil, requestLogScope{}, err
 	}
-	requestID := pending.ID()
+	logScope, err := requestLogCorrelation(prepared)
+	if err != nil {
+		return nil, requestLogScope{}, &InvalidPayloadError{Subject: requestLogSubject, Err: err}
+	}
+	if logScope.enabled {
+		if _, contextual := c.transport.(RequestScopedNotificationTransport); !contextual {
+			return nil, requestLogScope{}, &UnsupportedFeatureError{
+				Feature: "request-scoped logging on a shared transport",
+			}
+		}
+	}
+	pending, err := c.transport.PrepareRequest(ctx, method, prepared)
+	return pending, logScope, err
+}
+
+func (c *Client) deliverPrepared(pending PreparedRequest, scope requestLogScope) error {
+	if !scope.enabled {
+		return pending.Deliver()
+	}
+	requestKey, err := rpcIDKey(pending.ID())
+	if err != nil {
+		_ = pending.Abort(err)
+		return &InvalidPayloadError{Subject: requestLogSubject, Err: err}
+	}
+	logKey := "r:" + requestKey
+	completion, ok := pending.(CompletionPendingRequest)
+	if !ok {
+		_ = pending.Abort(errors.New("request-scoped logging lifecycle is unavailable"))
+		return &UnsupportedFeatureError{Feature: "request-scoped logging lifecycle"}
+	}
+	state := &struct{}{}
+	if _, loaded := c.requestLogs.LoadOrStore(logKey, state); loaded {
+		err := &InvalidPayloadError{
+			Subject: requestLogSubject,
+			Err:     errors.New("correlation token is already active"),
+		}
+		_ = pending.Abort(err)
+		return err
+	}
+	completion.OnComplete(func() { c.requestLogs.CompareAndDelete(logKey, state) })
+	if err := pending.Deliver(); err != nil {
+		c.requestLogs.CompareAndDelete(logKey, state)
+		return err
+	}
+	return nil
+}
+
+func (c *Client) request(ctx context.Context, method string, params any) (PendingRequest, error) {
+	pending, logging, err := c.prepareRequest(ctx, method, params)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.deliverPrepared(pending, logging); err != nil {
+		return nil, err
+	}
+	return pending, nil
+}
+
+func (c *Client) requestWithProgress(
+	ctx context.Context,
+	method string,
+	params any,
+	token ProgressToken,
+) (PendingRequest, error) {
+	prepared, err := c.prepareParams(params)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := decodeObjectFields(prepared)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := decodeObjectFields(fields["_meta"])
+	if err != nil {
+		return nil, err
+	}
+	meta["progressToken"], err = json.Marshal(token)
+	if err != nil {
+		return nil, err
+	}
+	fields["_meta"], err = json.Marshal(meta)
+	if err != nil {
+		return nil, err
+	}
+	prepared, err = json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	logKey, err := requestLogCorrelation(prepared)
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: requestLogSubject, Err: err}
+	}
+	pending, err := c.transport.PrepareRequest(ctx, method, prepared)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.deliverPrepared(pending, logKey); err != nil {
+		return nil, err
+	}
+	return pending, nil
+}
+
+func (c *Client) requestAndAwait(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	pending, err := c.request(ctx, method, params)
+	if err != nil {
+		return nil, err
+	}
+	return c.awaitPending(ctx, pending)
+}
+
+func (c *Client) awaitPending(
+	ctx context.Context,
+	pending PendingRequest,
+) (json.RawMessage, error) {
 	result, err := pending.Await(ctx)
-	if err != nil && ctx.Err() != nil && method != MethodInitialize {
-		c.notifyCancelledPending(ctx, pending, ctx.Err().Error())
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		c.notifyCancelledPending(ctx, pending, ctxErr.Error())
 	}
-	return result, requestID, err
+	return result, mapTypedRPCError(err)
+}
+
+func mapTypedRPCError(err error) error {
+	var rpcErr *RPCError
+	if errors.As(err, &rpcErr) {
+		return TypedRPCError(rpcErr)
+	}
+	return err
 }
 
 func (c *Client) maxStreamBytes() int {
@@ -465,43 +696,256 @@ func (c *Client) mapCallReadLimitFor(ctx context.Context, err error, subject str
 	return err
 }
 
+//nolint:nilnil // A nil result with nil error is the explicit terminal-complete discriminator.
+func requireCompleteResult(raw json.RawMessage, method string, allowInput bool) (*InputRequiredResult, error) {
+	fields, err := decodeObjectFields(raw)
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: method + " result", Err: err}
+	}
+	var resultType string
+	if err := json.Unmarshal(fields["resultType"], &resultType); err != nil || resultType == "" {
+		return nil, &InvalidPayloadError{Subject: method + " result", Err: errors.New("resultType is required")}
+	}
+	switch resultType {
+	case ResultTypeComplete:
+		return nil, nil
+	case ResultTypeInputRequired:
+		if !allowInput {
+			return nil, &InvalidPayloadError{
+				Subject: method + " result",
+				Err:     errors.New("input_required is not allowed for this method"),
+			}
+		}
+		var result InputRequiredResult
+		if err := json.Unmarshal(raw, &result); err != nil {
+			return nil, &InvalidPayloadError{Subject: method + " input_required result", Err: err}
+		}
+		requiresCapability, err := inputRequestsRequireCapability(result.InputRequests)
+		if err != nil {
+			return nil, &InvalidPayloadError{Subject: method + " inputRequests", Err: err}
+		}
+		if requiresCapability {
+			return nil, &UnsupportedFeatureError{
+				Feature: method + " input_required requires undeclared elicitation or sampling capability",
+			}
+		}
+		return &result, nil
+	default:
+		return nil, &InvalidPayloadError{
+			Subject: method + " result",
+			Err:     fmt.Errorf("unknown resultType %q", resultType),
+		}
+	}
+}
+
+func inputRequestsRequireCapability(raw json.RawMessage) (bool, error) {
+	if len(raw) == 0 || rawJSONIsNull(raw) {
+		return false, nil
+	}
+	requests, err := decodeObjectFields(raw)
+	if err != nil {
+		return false, err
+	}
+	return len(requests) > 0, nil
+}
+
+func (c *Client) listToolsPage(
+	ctx context.Context,
+	cursor string,
+	generation uint64,
+) (ToolsListResult, []toolBindingCandidate, error) {
+	raw, err := c.requestAndAwait(ctx, MethodToolsList, ToolsListParams{Cursor: cursor})
+	if err != nil {
+		return ToolsListResult{}, nil, c.mapCallReadLimitFor(ctx, err, "MCP tools list response")
+	}
+	if _, completeErr := requireCompleteResult(raw, MethodToolsList, false); completeErr != nil {
+		return ToolsListResult{}, nil, completeErr
+	}
+	var result ToolsListResult
+	if unmarshalErr := json.Unmarshal(raw, &result); unmarshalErr != nil {
+		return ToolsListResult{}, nil, &InvalidPayloadError{Subject: toolsListResultSubject, Err: unmarshalErr}
+	}
+	if current := c.toolGeneration.Load(); current != generation {
+		return ToolsListResult{}, nil, staleError(InvalidationTools, generation, current)
+	}
+	filtered, candidates, err := c.prepareToolCandidates(ctx, result.Tools)
+	if err != nil {
+		return ToolsListResult{}, nil, err
+	}
+	result.Tools = filtered
+	return result, candidates, nil
+}
+
+type toolBindingCandidate struct {
+	descriptor MCPTool
+	bindings   []HTTPToolHeaderBinding
+	validator  schemaValidator
+}
+
+func (c *Client) prepareToolCandidates(
+	ctx context.Context,
+	descriptors []MCPTool,
+) ([]MCPTool, []toolBindingCandidate, error) {
+	candidates := make([]toolBindingCandidate, 0, len(descriptors))
+	seen := make(map[string]struct{}, len(descriptors))
+	for _, descriptor := range descriptors {
+		if _, duplicate := seen[descriptor.Name]; duplicate {
+			return nil, nil, &InvalidPayloadError{
+				Subject: toolsListResultSubject,
+				Err:     fmt.Errorf("duplicate tool name %q", descriptor.Name),
+			}
+		}
+		seen[descriptor.Name] = struct{}{}
+		if err := validateMCPTool(descriptor); err != nil {
+			return nil, nil, &InvalidPayloadError{Subject: "tool descriptor", Err: err}
+		}
+		if !mcpToolNamePattern.MatchString(descriptor.Name) {
+			return nil, nil, &InvalidPayloadError{
+				Subject: "tool name",
+				Err:     fmt.Errorf("invalid name %q", descriptor.Name),
+			}
+		}
+		if _, err := decodeSchemaObject(descriptor.InputSchema, true); err != nil {
+			return nil, nil, &InvalidPayloadError{Subject: "tool inputSchema", Err: err}
+		}
+		if _, err := decodeSchemaObject(descriptor.OutputSchema, false); err != nil {
+			return nil, nil, &InvalidPayloadError{Subject: toolOutputSchemaSubject, Err: err}
+		}
+		bindings, err := compileHTTPToolHeaderBindings(descriptor.InputSchema)
+		if err != nil {
+			c.logger.WarnContext(
+				ctx,
+				"mcp: excluding tool with invalid x-mcp-header",
+				"tool", boundedDiagnostic(descriptor.Name),
+				"err", err,
+			)
+			continue
+		}
+		validator, err := compileOutputSchema(descriptor.OutputSchema)
+		if err != nil {
+			return nil, nil, &InvalidPayloadError{Subject: toolOutputSchemaSubject, Err: err}
+		}
+		candidates = append(candidates, toolBindingCandidate{
+			descriptor: descriptor,
+			bindings:   bindings,
+			validator:  validator,
+		})
+	}
+	filtered := make([]MCPTool, len(candidates))
+	for index := range candidates {
+		filtered[index] = candidates[index].descriptor
+	}
+	return filtered, candidates, nil
+}
+
+func (c *Client) publishToolAuthority(candidates []toolBindingCandidate, generation uint64) error {
+	bindings := make(map[string][]HTTPToolHeaderBinding, len(candidates))
+	schemas := make(map[string]schemaValidator, len(candidates))
+	names := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		bindings[candidate.descriptor.Name] = cloneHTTPToolHeaderBindings(candidate.bindings)
+		schemas[candidate.descriptor.Name] = candidate.validator
+		names[candidate.descriptor.Name] = struct{}{}
+	}
+	c.toolBindingMu.Lock()
+	defer c.toolBindingMu.Unlock()
+	if current := c.toolGeneration.Load(); current != generation {
+		return staleError(InvalidationTools, generation, current)
+	}
+	if headerTransport, ok := c.transport.(ToolHeaderTransport); ok {
+		if err := headerTransport.ReplaceToolHeaderBindings(bindings); err != nil {
+			return err
+		}
+	}
+	if current := c.toolGeneration.Load(); current != generation {
+		if headerTransport, ok := c.transport.(ToolHeaderTransport); ok {
+			_ = headerTransport.ReplaceToolHeaderBindings(map[string][]HTTPToolHeaderBinding{})
+		}
+		clear(c.toolBindings)
+		clear(c.toolSchemas)
+		return staleError(InvalidationTools, generation, current)
+	}
+	c.toolBindings = names
+	c.toolSchemas = schemas
+	return nil
+}
+
+func (c *Client) toolAuthority(name string) (schemaValidator, error) {
+	_, needsAuthority := c.transport.(ToolHeaderTransport)
+	c.toolBindingMu.Lock()
+	_, known := c.toolBindings[name]
+	validator := c.toolSchemas[name]
+	c.toolBindingMu.Unlock()
+	if needsAuthority && !known {
+		return nil, &InvalidPayloadError{
+			Subject: "tools/call routing authority",
+			Err:     fmt.Errorf("tool %q has no current authoritative descriptor", name),
+		}
+	}
+	return validator, nil
+}
+
+// ListTools exposes the typed cacheable wire snapshot.
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsListResult, error) {
+	if err := c.requireCapability("tools"); err != nil {
+		return ToolsListResult{}, err
+	}
+	generation := c.toolGeneration.Load()
+	result, candidates, err := c.listToolsPage(ctx, cursor, generation)
+	if err != nil {
+		return ToolsListResult{}, err
+	}
+	if cursor == "" && result.NextCursor == "" {
+		if err := c.publishToolAuthority(candidates, generation); err != nil {
+			return ToolsListResult{}, err
+		}
+	}
+	return result, nil
+}
+
+//nolint:gocognit // Full pagination is deliberately collected before one transactional authority publish.
 func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 	if err := c.requireCapability("tools"); err != nil {
 		return errorSequence[toolsy.Tool](err)
 	}
-	discoveredGeneration := c.toolGeneration.Load()
-	fetch := func(ctx context.Context, cursor string) ([]MCPTool, string, error) {
-		if current := c.toolGeneration.Load(); current != discoveredGeneration {
-			return nil, "", &StaleDiscoveryError{
-				Kind:       InvalidationTools,
-				Discovered: discoveredGeneration,
-				Current:    current,
-			}
+	generation := c.toolGeneration.Load()
+	fetch := func(ctx context.Context, cursor string) ([]toolBindingCandidate, string, error) {
+		if current := c.toolGeneration.Load(); current != generation {
+			return nil, "", staleError(InvalidationTools, generation, current)
 		}
-		resultRaw, err := c.requestAndAwait(ctx, MethodToolsList, ToolsListParams{Cursor: cursor})
+		result, candidates, err := c.listToolsPage(ctx, cursor, generation)
 		if err != nil {
-			return nil, "", c.mapCallReadLimitFor(ctx, err, "MCP tools list response")
+			return nil, "", err
 		}
-		var result ToolsListResult
-		if err := json.Unmarshal(resultRaw, &result); err != nil {
-			return nil, "", &InvalidPayloadError{Subject: "tools/list result", Err: err}
+		if current := c.toolGeneration.Load(); current != generation {
+			return nil, "", staleError(InvalidationTools, generation, current)
 		}
-		if current := c.toolGeneration.Load(); current != discoveredGeneration {
-			return nil, "", &StaleDiscoveryError{
-				Kind:       InvalidationTools,
-				Discovered: discoveredGeneration,
-				Current:    current,
-			}
-		}
-		return result.Tools, result.NextCursor, nil
+		return candidates, result.NextCursor, nil
 	}
 	return func(yield func(toolsy.Tool, error) bool) {
-		for descriptor, err := range IterateCursorWithLimits(ctx, c.opts.Pagination, fetch) {
+		all := make([]toolBindingCandidate, 0)
+		seen := make(map[string]struct{})
+		for candidate, err := range IterateCursorWithLimits(ctx, c.opts.Pagination, fetch) {
 			if err != nil {
 				yield(nil, err)
 				return
 			}
-			proxy, err := c.toolToProxyAtGeneration(descriptor, discoveredGeneration)
+			if _, duplicate := seen[candidate.descriptor.Name]; duplicate {
+				yield(nil, &InvalidPayloadError{
+					Subject: toolsListResultSubject,
+					Err:     fmt.Errorf("duplicate tool name %q across pages", candidate.descriptor.Name),
+				})
+				return
+			}
+			seen[candidate.descriptor.Name] = struct{}{}
+			all = append(all, candidate)
+		}
+		if err := c.publishToolAuthority(all, generation); err != nil {
+			yield(nil, err)
+			return
+		}
+		for _, candidate := range all {
+			proxy, err := c.toolToProxyAtGeneration(candidate.descriptor, generation)
 			if err != nil {
 				yield(nil, err)
 				return
@@ -514,44 +958,21 @@ func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 }
 
 func errorSequence[T any](err error) iter.Seq2[T, error] {
-	return func(yield func(T, error) bool) {
-		var zero T
-		yield(zero, err)
-	}
+	return func(yield func(T, error) bool) { var zero T; yield(zero, err) }
+}
+
+func staleError(kind InvalidationKind, discovered, current uint64) error {
+	return &StaleDiscoveryError{Kind: kind, Discovered: discovered, Current: current}
 }
 
 var mcpToolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
-func (c *Client) toolToProxy(descriptor MCPTool) (toolsy.Tool, error) {
-	return c.toolToProxyAtGeneration(descriptor, c.toolGeneration.Load())
-}
-
-func (c *Client) toolToProxyAtGeneration(
-	descriptor MCPTool,
-	discoveredGeneration uint64,
-) (toolsy.Tool, error) {
+func (c *Client) toolToProxyAtGeneration(descriptor MCPTool, generation uint64) (toolsy.Tool, error) {
 	if err := validateMCPTool(descriptor); err != nil {
 		return nil, &InvalidPayloadError{Subject: "tool descriptor", Err: err}
 	}
 	if !mcpToolNamePattern.MatchString(descriptor.Name) {
-		return nil, &InvalidPayloadError{
-			Subject: "tool name",
-			Err:     fmt.Errorf("invalid name %q", descriptor.Name),
-		}
-	}
-	if descriptor.Execution != nil {
-		switch descriptor.Execution.TaskSupport {
-		case "", taskSupportOptional, taskSupportForbidden:
-		case taskSupportRequired:
-			return nil, &UnsupportedFeatureError{
-				Feature: "tasks required by tool " + descriptor.Name,
-			}
-		default:
-			return nil, &InvalidPayloadError{
-				Subject: "tool execution",
-				Err:     fmt.Errorf("unknown taskSupport %q", descriptor.Execution.TaskSupport),
-			}
-		}
+		return nil, &InvalidPayloadError{Subject: "tool name", Err: fmt.Errorf("invalid name %q", descriptor.Name)}
 	}
 	inputSchema, err := decodeSchemaObject(descriptor.InputSchema, true)
 	if err != nil {
@@ -559,11 +980,11 @@ func (c *Client) toolToProxyAtGeneration(
 	}
 	outputSchema, err := decodeSchemaObject(descriptor.OutputSchema, false)
 	if err != nil {
-		return nil, &InvalidPayloadError{Subject: "tool outputSchema", Err: err}
+		return nil, &InvalidPayloadError{Subject: toolOutputSchemaSubject, Err: err}
 	}
 	validator, err := compileOutputSchema(descriptor.OutputSchema)
 	if err != nil {
-		return nil, &InvalidPayloadError{Subject: "tool outputSchema", Err: err}
+		return nil, &InvalidPayloadError{Subject: toolOutputSchemaSubject, Err: err}
 	}
 	description := descriptor.Description
 	if description == "" {
@@ -577,14 +998,10 @@ func (c *Client) toolToProxyAtGeneration(
 	}
 	schemaJSON, _ := json.Marshal(inputSchema)
 	handler := func(ctx context.Context, _ *toolsy.RunEnv, rawArgs []byte, yield func(toolsy.Chunk) error) error {
-		if current := c.toolGeneration.Load(); current != discoveredGeneration {
-			return &StaleDiscoveryError{
-				Kind:       InvalidationTools,
-				Discovered: discoveredGeneration,
-				Current:    current,
-			}
+		if current := c.toolGeneration.Load(); current != generation {
+			return staleError(InvalidationTools, generation, current)
 		}
-		return c.runMCPToolCall(ctx, descriptor.Name, rawArgs, validator, yield)
+		return c.runMCPToolCall(ctx, descriptor.Name, rawArgs, validator, generation, yield)
 	}
 	options := mcpToolPolicyOptions(descriptor.Annotations)
 	if outputSchema != nil {
@@ -594,19 +1011,20 @@ func (c *Client) toolToProxyAtGeneration(
 }
 
 func validateMCPTool(descriptor MCPTool) error {
+	if descriptor.Name == "" {
+		return errors.New("name is required")
+	}
 	return validateIcons(descriptor.Icons)
 }
+func validatePrompt(prompt Prompt) error { return validateIcons(prompt.Icons) }
 
-func validatePrompt(prompt Prompt) error {
-	return validateIcons(prompt.Icons)
-}
-
+//nolint:nilnil // Optional schemas deliberately decode to nil without an error.
 func decodeSchemaObject(raw json.RawMessage, required bool) (map[string]any, error) {
-	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
+	if len(raw) == 0 || rawJSONIsNull(raw) {
 		if required {
 			return nil, errors.New("schema is required and must not be null")
 		}
-		return nil, nil //nolint:nilnil // An absent optional output schema is represented by nil, nil.
+		return nil, nil
 	}
 	decoded, err := jsonschemax.Decode(raw)
 	if err != nil {
@@ -616,8 +1034,10 @@ func decodeSchemaObject(raw json.RawMessage, required bool) (map[string]any, err
 	if !ok || schema == nil {
 		return nil, errors.New("schema must be a JSON object")
 	}
-	if schemaType, ok := schema["type"]; !ok || schemaType != "object" {
-		return nil, errors.New("schema root type must be object")
+	if required {
+		if schemaType, ok := schema["type"]; !ok || schemaType != schemaTypeObject {
+			return nil, errors.New("input schema root type must be object")
+		}
 	}
 	if _, err := jsonschemax.Compile(schema); err != nil {
 		return nil, fmt.Errorf("compile schema: %w", err)
@@ -625,9 +1045,12 @@ func decodeSchemaObject(raw json.RawMessage, required bool) (map[string]any, err
 	return schema, nil
 }
 
+type schemaValidator interface{ Validate(any) error }
+
+//nolint:nilnil // An absent output schema deliberately means no validator.
 func compileOutputSchema(raw json.RawMessage) (schemaValidator, error) {
-	if len(raw) == 0 || string(raw) == jsonNull {
-		return nil, nil //nolint:nilnil // No validator is the valid representation of an absent schema.
+	if len(raw) == 0 || rawJSONIsNull(raw) {
+		return nil, nil
 	}
 	schema, err := jsonschemax.Decode(raw)
 	if err != nil {
@@ -636,49 +1059,45 @@ func compileOutputSchema(raw json.RawMessage) (schemaValidator, error) {
 	return jsonschemax.Compile(schema)
 }
 
-type schemaValidator interface {
-	Validate(any) error
-}
-
-//nolint:gocognit // Select loop keeps response/progress/cancellation ordering explicit.
+//nolint:gocognit // Explicit ordering avoids cancellation/progress races.
 func (c *Client) runMCPToolCall(
 	ctx context.Context,
 	name string,
 	rawArgs []byte,
 	outputSchema schemaValidator,
+	generation uint64,
 	yield func(toolsy.Chunk) error,
 ) error {
+	if _, err := c.toolAuthority(name); err != nil {
+		return err
+	}
 	token := NewStringProgressToken(c.nextProgressToken())
-	progressCh := make(chan toolsy.Chunk, progressChunkBufferSize)
-	done := make(chan struct{})
-	state := &progressState{ch: progressCh, done: done}
-	c.progressCallbacks.Store(token.String(), state)
-	defer func() {
-		c.progressCallbacks.Delete(token.String())
-		close(done)
-	}()
-
-	pending, err := c.transport.Request(ctx, MethodToolsCall, ToolsCallParams{
-		Name:      name,
-		Arguments: json.RawMessage(rawArgs),
-		Meta:      &RequestMeta{ProgressToken: token},
-	})
+	tokenKey, err := progressTokenKey(token)
 	if err != nil {
 		return err
 	}
-	if completable, ok := pending.(CompletionPendingRequest); ok {
-		completable.OnComplete(func() { c.progressCallbacks.Delete(token.String()) })
+	progressCh := make(chan toolsy.Chunk, progressChunkBufferSize)
+	done := make(chan struct{})
+	c.progressCallbacks.Store(tokenKey, &progressState{ch: progressCh, done: done})
+	defer func() { c.progressCallbacks.Delete(tokenKey); close(done) }()
+	pending, err := c.requestWithProgress(
+		ctx,
+		MethodToolsCall,
+		ToolsCallParams{Name: name, Arguments: bytes.Clone(rawArgs)},
+		token,
+	)
+	if err != nil {
+		return err
 	}
 	type finalResult struct {
-		result json.RawMessage
-		err    error
+		raw json.RawMessage
+		err error
 	}
 	finalCh := make(chan finalResult, 1)
 	go func() {
-		result, awaitErr := pending.Await(ctx)
-		finalCh <- finalResult{result: result, err: awaitErr}
+		raw, awaitErr := c.awaitPending(ctx, pending)
+		finalCh <- finalResult{raw: raw, err: awaitErr}
 	}()
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -690,26 +1109,20 @@ func (c *Client) runMCPToolCall(
 				return toolsy.ErrStreamAborted
 			}
 		case final := <-finalCh:
-			for {
-				select {
-				case progress := <-progressCh:
-					if err := yield(progress); err != nil {
-						c.notifyCancelledPending(ctx, pending, "result consumer aborted")
-						return toolsy.ErrStreamAborted
-					}
-				default:
-					goto progressDrained
-				}
-			}
-		progressDrained:
 			if final.err != nil {
-				if ctx.Err() != nil {
-					c.notifyCancelledPending(ctx, pending, ctx.Err().Error())
-					return ctx.Err()
-				}
-				return c.mapCallReadLimitFor(ctx, final.err, "MCP tool response")
+				return c.mapCallReadLimitFor(ctx, mapTypedRPCError(final.err), "MCP tool response")
 			}
-			chunk, err := buildToolResultChunk(name, final.result, outputSchema)
+			if current := c.toolGeneration.Load(); current != generation {
+				return staleError(InvalidationTools, generation, current)
+			}
+			input, err := requireCompleteResult(final.raw, MethodToolsCall, true)
+			if err != nil {
+				return err
+			}
+			if input != nil {
+				return &InputRequiredError{Method: MethodToolsCall, Result: *input}
+			}
+			chunk, err := buildToolResultChunk(name, final.raw, outputSchema)
 			if err != nil {
 				return err
 			}
@@ -722,11 +1135,75 @@ func (c *Client) runMCPToolCall(
 	}
 }
 
-func buildToolResultChunk(
-	name string,
-	raw json.RawMessage,
-	outputSchema schemaValidator,
-) (toolsy.Chunk, error) {
+func progressTokenKey(token ProgressToken) (string, error) {
+	raw, err := json.Marshal(token)
+	if err != nil {
+		return "", err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "", err
+	}
+	switch typed := value.(type) {
+	case string:
+		return "s:" + typed, nil
+	case json.Number:
+		return "n:" + typed.String(), nil
+	default:
+		return "", errors.New("progress token must be a string or number")
+	}
+}
+
+// CallTool executes one explicit MRTR round. A returned input-required result
+// is not retried; the host can populate InputResponses/RequestState and call
+// this method again, which always allocates a new JSON-RPC request ID.
+//
+
+func (c *Client) CallTool(ctx context.Context, params ToolsCallParams) (*CallToolResult, *InputRequiredResult, error) {
+	if err := validateOutboundInputResponses(MethodToolsCall, params.InputResponses); err != nil {
+		return nil, nil, err
+	}
+	if err := c.requireCapability("tools"); err != nil {
+		return nil, nil, err
+	}
+	outputValidator, err := c.toolAuthority(params.Name)
+	if err != nil {
+		return nil, nil, err
+	}
+	generation := c.toolGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodToolsCall, params)
+	if err != nil {
+		return nil, nil, c.mapCallReadLimitFor(ctx, err, "MCP tool response")
+	}
+	if current := c.toolGeneration.Load(); current != generation {
+		return nil, nil, staleError(InvalidationTools, generation, current)
+	}
+	input, err := requireCompleteResult(raw, MethodToolsCall, true)
+	if err != nil || input != nil {
+		return nil, input, err
+	}
+	var result CallToolResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, nil, &InvalidPayloadError{Subject: "tools/call result", Err: err}
+	}
+	if _, err := formatContentBlocks(result.Content); err != nil {
+		return nil, nil, &InvalidPayloadError{Subject: "tool content", Err: err}
+	}
+	if err := validatePresentStructuredContent(result.StructuredContent, outputValidator); err != nil {
+		return nil, nil, err
+	}
+	if result.IsError {
+		return &result, nil, &RemoteToolError{ToolName: params.Name, Result: result}
+	}
+	if outputValidator != nil && len(result.StructuredContent) == 0 {
+		return nil, nil, missingStructuredContentError()
+	}
+	return &result, nil, nil
+}
+
+func buildToolResultChunk(name string, raw json.RawMessage, outputSchema schemaValidator) (toolsy.Chunk, error) {
 	var result CallToolResult
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return toolsy.Chunk{}, &InvalidPayloadError{Subject: "tools/call result", Err: err}
@@ -734,6 +1211,9 @@ func buildToolResultChunk(
 	projection, err := formatContentBlocks(result.Content)
 	if err != nil {
 		return toolsy.Chunk{}, &InvalidPayloadError{Subject: "tool content", Err: err}
+	}
+	if err := validatePresentStructuredContent(result.StructuredContent, outputSchema); err != nil {
+		return toolsy.Chunk{}, err
 	}
 	if result.IsError {
 		remoteErr := &RemoteToolError{ToolName: name, Result: result}
@@ -759,31 +1239,16 @@ func buildToolResultChunk(
 		}, nil
 	}
 	if outputSchema != nil && len(result.StructuredContent) == 0 {
-		return toolsy.Chunk{}, &InvalidPayloadError{
-			Subject: structuredContentSubject,
-			Err:     errors.New("outputSchema requires structuredContent"),
-		}
+		return toolsy.Chunk{}, missingStructuredContentError()
 	}
-	//nolint:nestif // Structured validation is intentionally fail-closed in one branch.
-	if len(
-		result.StructuredContent,
-	) > 0 {
+	if len(result.StructuredContent) > 0 {
 		canonical, value, err := canonicalJSON(result.StructuredContent)
 		if err != nil {
 			return toolsy.Chunk{}, &InvalidPayloadError{Subject: structuredContentSubject, Err: err}
 		}
-		if _, ok := value.(map[string]any); !ok {
-			return toolsy.Chunk{}, &InvalidPayloadError{
-				Subject: structuredContentSubject,
-				Err:     errors.New("must be a JSON object"),
-			}
-		}
 		if outputSchema != nil {
 			if err := outputSchema.Validate(value); err != nil {
-				return toolsy.Chunk{}, &InvalidPayloadError{
-					Subject: structuredContentSubject,
-					Err:     err,
-				}
+				return toolsy.Chunk{}, &InvalidPayloadError{Subject: structuredContentSubject, Err: err}
 			}
 		}
 		return toolsy.Chunk{
@@ -818,44 +1283,50 @@ func buildToolResultChunk(
 	}, nil
 }
 
+func validatePresentStructuredContent(raw json.RawMessage, outputSchema schemaValidator) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	_, value, err := canonicalJSON(raw)
+	if err != nil {
+		return &InvalidPayloadError{Subject: structuredContentSubject, Err: err}
+	}
+	if outputSchema != nil {
+		if err := outputSchema.Validate(value); err != nil {
+			return &InvalidPayloadError{Subject: structuredContentSubject, Err: err}
+		}
+	}
+	return nil
+}
+
+func missingStructuredContentError() error {
+	return &InvalidPayloadError{
+		Subject: structuredContentSubject,
+		Err:     errors.New("outputSchema requires structuredContent"),
+	}
+}
+
 func (c *Client) nextProgressToken() string {
 	return fmt.Sprintf("progress-%d-%d", time.Now().UnixNano(), c.progressCounter.Add(1))
 }
 
-func (c *Client) handleProgress(params json.RawMessage) {
-	fields, fieldsErr := decodeObjectFields(params)
-	if fieldsErr != nil {
-		c.logger.Warn("mcp: invalid progress notification", "err", fieldsErr)
-		return
-	}
-	if err := requireNumberField(fields, "progress"); err != nil {
-		c.logger.Warn("mcp: invalid progress notification", "err", err)
-		return
-	}
-	if _, hasTotal := fields["total"]; hasTotal {
-		if err := requireNumberField(fields, "total"); err != nil {
-			c.logger.Warn("mcp: invalid progress notification", "err", err)
-			return
-		}
-	}
-	if _, hasMessage := fields["message"]; hasMessage {
-		if err := requireStringField(fields, "message", true); err != nil {
-			c.logger.Warn("mcp: invalid progress notification", "err", err)
-			return
-		}
-	}
+func (c *Client) handleProgress(raw json.RawMessage) {
 	var progress ProgressParams
-	if err := json.Unmarshal(params, &progress); err != nil {
+	if err := json.Unmarshal(
+		raw,
+		&progress,
+	); err != nil || progress.ProgressToken.IsZero() || math.IsNaN(progress.Progress) ||
+		math.IsInf(progress.Progress, 0) || progress.Total != nil &&
+		(math.IsNaN(*progress.Total) || math.IsInf(*progress.Total, 0)) {
 		c.logger.Warn("mcp: invalid progress notification", "err", err)
 		return
 	}
-	if progress.ProgressToken.IsZero() || math.IsNaN(progress.Progress) ||
-		math.IsInf(progress.Progress, 0) ||
-		(progress.Total != nil && (math.IsNaN(*progress.Total) || math.IsInf(*progress.Total, 0))) {
-		c.logger.Warn("mcp: invalid progress notification values")
+	key, err := progressTokenKey(progress.ProgressToken)
+	if err != nil {
+		c.logger.Warn("mcp: invalid progress token", "err", err)
 		return
 	}
-	value, ok := c.progressCallbacks.Load(progress.ProgressToken.String())
+	value, ok := c.progressCallbacks.Load(key)
 	if !ok {
 		return
 	}
@@ -866,84 +1337,25 @@ func (c *Client) handleProgress(params json.RawMessage) {
 	state.mu.Lock()
 	if state.started && progress.Progress <= state.last {
 		state.mu.Unlock()
-		c.logger.Warn(
-			"mcp: non-monotonic progress ignored",
-			"token",
-			boundedDiagnostic(progress.ProgressToken.String()),
-		)
 		return
 	}
-	state.started = true
-	state.last = progress.Progress
+	state.started, state.last = true, progress.Progress
 	state.mu.Unlock()
-	info := &toolsy.ProgressInfo{
-		Current: &progress.Progress,
-		Total:   progress.Total,
-		Message: progress.Message,
-		Token:   progress.ProgressToken.String(),
+	chunk := toolsy.Chunk{
+		Event: toolsy.EventProgress,
+		Progress: &toolsy.ProgressInfo{
+			Current: &progress.Progress,
+			Total:   progress.Total,
+			Message: progress.Message,
+			Token:   progress.ProgressToken.String(),
+		},
 	}
 	select {
-	case state.ch <- toolsy.Chunk{Event: toolsy.EventProgress, Progress: info}:
+	case state.ch <- chunk:
 	case <-state.done:
 	default:
-		c.logger.Warn(
-			"mcp: progress notification dropped because consumer is slow",
-			"token",
-			boundedDiagnostic(progress.ProgressToken.String()),
-		)
+		c.logger.Warn("mcp: progress notification dropped")
 	}
-}
-
-func (c *Client) notifyCancelledRequest(
-	parent context.Context,
-	requestID json.RawMessage,
-	reason string,
-) {
-	if len(requestID) == 0 {
-		return
-	}
-	reason = strings.Map(func(char rune) rune {
-		if char == '\n' || char == '\r' || char == '\t' {
-			return ' '
-		}
-		return char
-	}, reason)
-	reasonRunes := []rune(reason)
-	if len(reasonRunes) > maxCancellationRunes {
-		reason = string(reasonRunes[:maxCancellationRunes])
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), cancelNotifyTimeout)
-	defer cancel()
-	if err := c.transport.Notify(
-		ctx,
-		MethodCancelled,
-		CancelledParams{RequestID: requestID, Reason: reason},
-	); err != nil {
-		c.logger.WarnContext(ctx, "mcp: cancellation notification failed", "err", err)
-	}
-}
-
-func (c *Client) notifyCancelledPending(
-	parent context.Context,
-	pending PendingRequest,
-	reason string,
-) {
-	if cancellable, ok := pending.(CancellablePendingRequest); ok && !cancellable.CancelPending() {
-		return
-	}
-	if delivery, ok := pending.(DeliveryPendingRequest); ok {
-		timer := time.NewTimer(cancelDeliveryWaitTimeout)
-		select {
-		case <-delivery.DeliveryDone():
-			timer.Stop()
-		case <-timer.C:
-			return
-		}
-		if !delivery.WasSent() {
-			return
-		}
-	}
-	c.notifyCancelledRequest(parent, pending.ID(), reason)
 }
 
 func (c *Client) GetResourceTool() (toolsy.Tool, error) {
@@ -953,24 +1365,23 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 	schema := []byte(
 		`{"type":"object","properties":{"uri":{"type":"string"}},"required":["uri"],"additionalProperties":false}`,
 	)
+	generation := c.resourceGeneration.Load()
 	handler := func(ctx context.Context, _ *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
+		if current := c.resourceGeneration.Load(); current != generation {
+			return staleError(InvalidationResources, generation, current)
+		}
 		var args struct {
 			URI string `json:"uri"`
 		}
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
 			return err
 		}
-		resultRaw, err := c.requestAndAwait(
-			ctx,
-			MethodResourcesRead,
-			ResourcesReadParams{URI: args.URI},
-		)
+		result, err := c.ReadResource(ctx, args.URI)
 		if err != nil {
-			return c.mapCallReadLimitFor(ctx, err, "MCP resource read response")
+			return err
 		}
-		var result ResourcesReadResult
-		if decodeErr := json.Unmarshal(resultRaw, &result); decodeErr != nil {
-			return &InvalidPayloadError{Subject: "resources/read result", Err: decodeErr}
+		if current := c.resourceGeneration.Load(); current != generation {
+			return staleError(InvalidationResources, generation, current)
 		}
 		projection, err := formatResourceContents(result.Contents)
 		if err != nil {
@@ -994,14 +1405,56 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 	)
 }
 
+func (c *Client) ReadResource(ctx context.Context, uri string) (ResourcesReadResult, error) {
+	result, input, err := c.ReadResourceRound(ctx, ResourcesReadParams{URI: uri})
+	if input != nil {
+		return ResourcesReadResult{}, &InputRequiredError{Method: MethodResourcesRead, Result: *input}
+	}
+	if err != nil {
+		return ResourcesReadResult{}, err
+	}
+	return *result, nil
+}
+
+// ReadResourceRound executes one explicit resources/read MRTR round.
+//
+
+func (c *Client) ReadResourceRound(
+	ctx context.Context,
+	params ResourcesReadParams,
+) (*ResourcesReadResult, *InputRequiredResult, error) {
+	if err := validateOutboundInputResponses(MethodResourcesRead, params.InputResponses); err != nil {
+		return nil, nil, err
+	}
+	if err := c.requireCapability("resources"); err != nil {
+		return nil, nil, err
+	}
+	generation := c.resourceGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodResourcesRead, params)
+	if err != nil {
+		return nil, nil, c.mapCallReadLimitFor(ctx, err, "MCP resource read response")
+	}
+	if current := c.resourceGeneration.Load(); current != generation {
+		return nil, nil, staleError(InvalidationResources, generation, current)
+	}
+	input, err := requireCompleteResult(raw, MethodResourcesRead, true)
+	if err != nil || input != nil {
+		return nil, input, err
+	}
+	var result ResourcesReadResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, nil, &InvalidPayloadError{Subject: "resources/read result", Err: err}
+	}
+	if _, err := formatResourceContents(result.Contents); err != nil {
+		return nil, nil, &InvalidPayloadError{Subject: "resource contents", Err: err}
+	}
+	return &result, nil, nil
+}
+
+//nolint:nestif // A single resource has a lossless text/blob fast path with explicit MIME fallback.
 func buildResourceResultChunk(result ResourcesReadResult, projection []byte) (toolsy.Chunk, error) {
-	data := projection
-	mimeType := toolsy.MimeTypeText
-	delivery := toolsy.DeliveryClassText
-	//nolint:nestif // Single-resource MIME projection has explicit text/blob branches.
-	if len(
-		result.Contents,
-	) == 1 {
+	data, mimeType, delivery := projection, toolsy.MimeTypeText, toolsy.DeliveryClassText
+	if len(result.Contents) == 1 {
 		content := result.Contents[0]
 		mimeType = content.MIMEType
 		if content.Text != nil {
@@ -1012,8 +1465,9 @@ func buildResourceResultChunk(result ResourcesReadResult, projection []byte) (to
 			if mimeType == toolsy.MimeTypeJSON {
 				delivery = toolsy.DeliveryClassStructured
 			}
-		} else if content.Blob != nil {
-			decoded, err := base64.StdEncoding.DecodeString(*content.Blob)
+		}
+		if content.Blob != nil {
+			decoded, err := decodeCanonicalBase64(*content.Blob)
 			if err != nil {
 				return toolsy.Chunk{}, &InvalidPayloadError{Subject: "resource blob", Err: err}
 			}
@@ -1030,381 +1484,597 @@ func buildResourceResultChunk(result ResourcesReadResult, projection []byte) (to
 		MimeType:    mimeType,
 		TypedResult: result,
 		EmptyResult: len(result.Contents) == 0,
-		Envelope: toolsy.NewResultEnvelope(
-			result,
-			data,
-			mimeType,
-			delivery,
-			toolsy.AudienceModel,
-			nil,
-		),
+		Envelope:    toolsy.NewResultEnvelope(result, data, mimeType, delivery, toolsy.AudienceModel, nil),
 	}, nil
 }
 
-func (c *Client) SubscribeResource(ctx context.Context, uri string) error {
+func (c *Client) ListResources(ctx context.Context, cursor string) (ResourcesListResult, error) {
 	if err := c.requireCapability("resources"); err != nil {
-		return err
+		return ResourcesListResult{}, err
 	}
-	c.mu.RLock()
-	canSubscribe := c.server.Capabilities.Resources.Subscribe
-	c.mu.RUnlock()
-	if !canSubscribe {
-		return &UnsupportedFeatureError{Feature: "resource subscriptions"}
-	}
-	resultRaw, err := c.requestAndAwait(ctx, MethodResourcesSubscribe, ResourcesReadParams{URI: uri})
+	generation := c.resourceGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodResourcesList, ResourcesListParams{Cursor: cursor})
 	if err != nil {
-		return err
+		return ResourcesListResult{}, err
 	}
-	var result EmptyResult
-	if err := json.Unmarshal(resultRaw, &result); err != nil {
-		return &InvalidPayloadError{Subject: "resources/subscribe result", Err: err}
+	if current := c.resourceGeneration.Load(); current != generation {
+		return ResourcesListResult{}, staleError(InvalidationResources, generation, current)
 	}
-	c.mu.Lock()
-	c.subscribed[uri] = struct{}{}
-	c.mu.Unlock()
-	return nil
+	if _, err := requireCompleteResult(raw, MethodResourcesList, false); err != nil {
+		return ResourcesListResult{}, err
+	}
+	var result ResourcesListResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return result, &InvalidPayloadError{Subject: "resources/list result", Err: err}
+	}
+	return result, nil
+}
+
+func (c *Client) ListResourceTemplates(ctx context.Context, cursor string) (ResourceTemplatesListResult, error) {
+	if err := c.requireCapability("resources"); err != nil {
+		return ResourceTemplatesListResult{}, err
+	}
+	generation := c.resourceGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodResourceTemplatesList, ResourceTemplatesListParams{Cursor: cursor})
+	if err != nil {
+		return ResourceTemplatesListResult{}, err
+	}
+	if current := c.resourceGeneration.Load(); current != generation {
+		return ResourceTemplatesListResult{}, staleError(InvalidationResources, generation, current)
+	}
+	if _, err := requireCompleteResult(raw, MethodResourceTemplatesList, false); err != nil {
+		return ResourceTemplatesListResult{}, err
+	}
+	var result ResourceTemplatesListResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return result, &InvalidPayloadError{Subject: "resources/templates/list result", Err: err}
+	}
+	return result, nil
 }
 
 func (c *Client) GetPrompts(ctx context.Context) iter.Seq2[Prompt, error] {
 	if err := c.requireCapability("prompts"); err != nil {
 		return errorSequence[Prompt](err)
 	}
-	discoveredGeneration := c.promptGeneration.Load()
+	generation := c.promptGeneration.Load()
 	fetch := func(ctx context.Context, cursor string) ([]Prompt, string, error) {
-		if current := c.promptGeneration.Load(); current != discoveredGeneration {
-			return nil, "", &StaleDiscoveryError{
-				Kind:       InvalidationPrompts,
-				Discovered: discoveredGeneration,
-				Current:    current,
-			}
+		if current := c.promptGeneration.Load(); current != generation {
+			return nil, "", staleError(InvalidationPrompts, generation, current)
 		}
-		resultRaw, err := c.requestAndAwait(
-			ctx,
-			MethodPromptsList,
-			PromptsListParams{Cursor: cursor},
-		)
+		result, err := c.ListPrompts(ctx, cursor)
 		if err != nil {
-			return nil, "", c.mapCallReadLimitFor(ctx, err, "MCP prompts list response")
-		}
-		var result PromptsListResult
-		if err := json.Unmarshal(resultRaw, &result); err != nil {
-			return nil, "", &InvalidPayloadError{Subject: "prompts/list result", Err: err}
-		}
-		if current := c.promptGeneration.Load(); current != discoveredGeneration {
-			return nil, "", &StaleDiscoveryError{
-				Kind:       InvalidationPrompts,
-				Discovered: discoveredGeneration,
-				Current:    current,
-			}
+			return nil, "", err
 		}
 		for _, prompt := range result.Prompts {
 			if err := validatePrompt(prompt); err != nil {
-				return nil, "", &InvalidPayloadError{
-					Subject: "prompt descriptor",
-					Err:     err,
-				}
+				return nil, "", &InvalidPayloadError{Subject: "prompt descriptor", Err: err}
 			}
+		}
+		if current := c.promptGeneration.Load(); current != generation {
+			return nil, "", staleError(InvalidationPrompts, generation, current)
 		}
 		return result.Prompts, result.NextCursor, nil
 	}
 	return IterateCursorWithLimits(ctx, c.opts.Pagination, fetch)
 }
 
-func (c *Client) GetPrompt(
-	ctx context.Context,
-	name string,
-	args map[string]string,
-) (*PromptsGetResult, error) {
+func (c *Client) ListPrompts(ctx context.Context, cursor string) (PromptsListResult, error) {
 	if err := c.requireCapability("prompts"); err != nil {
-		return nil, err
+		return PromptsListResult{}, err
 	}
-	resultRaw, err := c.requestAndAwait(
-		ctx,
-		MethodPromptsGet,
-		PromptsGetParams{Name: name, Arguments: args},
-	)
+	generation := c.promptGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodPromptsList, PromptsListParams{Cursor: cursor})
 	if err != nil {
-		return nil, c.mapCallReadLimitFor(ctx, err, "MCP prompt response")
+		return PromptsListResult{}, err
+	}
+	if current := c.promptGeneration.Load(); current != generation {
+		return PromptsListResult{}, staleError(InvalidationPrompts, generation, current)
+	}
+	if _, err := requireCompleteResult(raw, MethodPromptsList, false); err != nil {
+		return PromptsListResult{}, err
+	}
+	var result PromptsListResult
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return result, &InvalidPayloadError{Subject: "prompts/list result", Err: err}
+	}
+	return result, nil
+}
+
+func (c *Client) GetPrompt(ctx context.Context, name string, args map[string]string) (*PromptsGetResult, error) {
+	result, input, err := c.GetPromptRound(ctx, PromptsGetParams{Name: name, Arguments: args})
+	if input != nil {
+		return nil, &InputRequiredError{Method: MethodPromptsGet, Result: *input}
+	}
+	return result, err
+}
+
+// GetPromptRound executes one explicit prompts/get MRTR round.
+func (c *Client) GetPromptRound(
+	ctx context.Context,
+	params PromptsGetParams,
+) (*PromptsGetResult, *InputRequiredResult, error) {
+	if err := validateOutboundInputResponses(MethodPromptsGet, params.InputResponses); err != nil {
+		return nil, nil, err
+	}
+	if err := c.requireCapability("prompts"); err != nil {
+		return nil, nil, err
+	}
+	generation := c.promptGeneration.Load()
+	raw, err := c.requestAndAwait(ctx, MethodPromptsGet, params)
+	if err != nil {
+		return nil, nil, c.mapCallReadLimitFor(ctx, err, "MCP prompt response")
+	}
+	if current := c.promptGeneration.Load(); current != generation {
+		return nil, nil, staleError(InvalidationPrompts, generation, current)
+	}
+	input, err := requireCompleteResult(raw, MethodPromptsGet, true)
+	if err != nil || input != nil {
+		return nil, input, err
 	}
 	var result PromptsGetResult
-	if err := json.Unmarshal(resultRaw, &result); err != nil {
-		return nil, &InvalidPayloadError{Subject: "prompts/get result", Err: err}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, nil, &InvalidPayloadError{Subject: "prompts/get result", Err: err}
 	}
 	for _, message := range result.Messages {
 		if _, err := formatContentBlocks([]ContentBlock{message.Content}); err != nil {
-			return nil, &InvalidPayloadError{Subject: "prompt content", Err: err}
+			return nil, nil, &InvalidPayloadError{Subject: "prompt content", Err: err}
 		}
 	}
-	return &result, nil
+	return &result, nil, nil
 }
 
-func (c *Client) emitInvalidation(kind InvalidationKind, uri string) {
-	if !c.invalidationAllowed(kind) {
-		c.logger.Warn("mcp: invalidation contradicts negotiated capability", "kind", kind)
+func validateOutboundInputResponses(method string, raw json.RawMessage) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	if err := validateInputResponses(raw); err != nil {
+		return &InvalidPayloadError{Subject: method + " inputResponses", Err: err}
+	}
+	return nil
+}
+
+func subscriptionIdentity(meta Meta) (string, string, bool) {
+	raw, ok := meta[metaSubscriptionID]
+	if !ok {
+		return "", "", false
+	}
+	key, err := rpcIDKey(raw)
+	if err != nil {
+		return "", "", false
+	}
+	var id any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&id) != nil {
+		return "", "", false
+	}
+	switch value := id.(type) {
+	case string:
+		return key, value, true
+	case json.Number:
+		return key, value.String(), true
+	default:
+		return "", "", false
+	}
+}
+
+func (c *Client) Listen(ctx context.Context, filter SubscriptionFilter) (*Subscription, error) {
+	filter = cloneSubscriptionFilter(filter)
+	if !filter.ToolsListChanged && !filter.ResourcesListChanged && !filter.PromptsListChanged &&
+		len(filter.ResourceSubscriptions) == 0 {
+		return nil, &InvalidPayloadError{
+			Subject: "subscriptions/listen",
+			Err:     errors.New("at least one notification must be selected"),
+		}
+	}
+	if err := c.validateSubscriptionFilter(filter); err != nil {
+		return nil, err
+	}
+	listenCtx, cancel := context.WithCancel(ctx)
+	pending, logKey, err := c.prepareRequest(
+		listenCtx,
+		MethodSubscriptionsListen,
+		SubscriptionsListenParams{Notifications: filter},
+	)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	key, err := rpcIDKey(pending.ID())
+	if err != nil {
+		cancel()
+		_ = pending.Abort(err)
+		return nil, &InvalidPayloadError{Subject: "subscriptions/listen request id", Err: err}
+	}
+	_, publicID, _ := subscriptionIdentity(Meta{metaSubscriptionID: pending.ID()})
+	state := &subscriptionState{
+		key:       key,
+		publicID:  publicID,
+		requested: cloneSubscriptionFilter(filter),
+		events:    make(chan Invalidation, clientEventBufferSize),
+		done:      make(chan struct{}),
+		cancel:    cancel,
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		cancel()
+		_ = pending.Abort(ErrTransportClosed)
+		return nil, ErrTransportClosed
+	}
+	if _, duplicate := c.subscriptions[key]; duplicate {
+		c.mu.Unlock()
+		cancel()
+		duplicateErr := &InvalidPayloadError{
+			Subject: "subscriptions/listen request id",
+			Err:     errors.New("duplicate active request id"),
+		}
+		_ = pending.Abort(duplicateErr)
+		return nil, duplicateErr
+	}
+	c.subscriptions[key] = state
+	c.mu.Unlock()
+	if err := c.deliverPrepared(pending, logKey); err != nil {
+		c.mu.Lock()
+		delete(c.subscriptions, key)
+		c.mu.Unlock()
+		cancel()
+		return nil, err
+	}
+	go c.awaitSubscription(listenCtx, pending, state)
+	return &Subscription{
+		ID:     publicID,
+		Events: state.events,
+		done:   state.done,
+		cancel: cancel,
+		err:    func() error { state.mu.RLock(); defer state.mu.RUnlock(); return state.err },
+	}, nil
+}
+
+func (c *Client) awaitSubscription(ctx context.Context, pending PendingRequest, state *subscriptionState) {
+	raw, err := c.awaitPending(ctx, pending)
+	state.mu.RLock()
+	violationErr := state.err
+	state.mu.RUnlock()
+	if violationErr != nil {
+		err = violationErr
+	}
+	if err == nil {
+		_, err = requireCompleteResult(raw, MethodSubscriptionsListen, false)
+	}
+	if err == nil {
+		var result SubscriptionsListenResult
+		if decodeErr := json.Unmarshal(raw, &result); decodeErr != nil {
+			err = decodeErr
+		} else {
+			terminalKey, _, valid := subscriptionIdentity(Meta{metaSubscriptionID: result.Meta.SubscriptionID})
+			if !valid || terminalKey != state.key {
+				err = errors.New("subscription terminal result ID mismatch")
+			}
+		}
+	}
+	state.mu.Lock()
+	if err == nil && !state.acked {
+		err = errors.New("subscription ended before acknowledgment")
+	}
+	state.err = err
+	state.closed = true
+	state.mu.Unlock()
+	c.mu.Lock()
+	delete(c.subscriptions, state.key)
+	c.mu.Unlock()
+	state.mu.Lock()
+	close(state.events)
+	close(state.done)
+	state.mu.Unlock()
+}
+
+func failSubscription(state *subscriptionState, err error) {
+	state.mu.Lock()
+	if state.err == nil {
+		state.err = err
+	}
+	state.mu.Unlock()
+	state.cancel()
+}
+
+func (c *Client) failAllSubscriptions(err error) {
+	c.mu.RLock()
+	states := make([]*subscriptionState, 0, len(c.subscriptions))
+	for _, state := range c.subscriptions {
+		states = append(states, state)
+	}
+	c.mu.RUnlock()
+	for _, state := range states {
+		failSubscription(state, err)
+	}
+}
+
+func (c *Client) validateSubscriptionFilter(filter SubscriptionFilter) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if !c.ready {
+		return &CapabilityError{Capability: "server/discover"}
+	}
+	if filter.ToolsListChanged && (c.server.Capabilities.Tools == nil || !c.server.Capabilities.Tools.ListChanged) {
+		return &CapabilityError{Capability: "tools.listChanged"}
+	}
+	if filter.ResourcesListChanged &&
+		(c.server.Capabilities.Resources == nil || !c.server.Capabilities.Resources.ListChanged) {
+		return &CapabilityError{Capability: "resources.listChanged"}
+	}
+	if filter.PromptsListChanged &&
+		(c.server.Capabilities.Prompts == nil || !c.server.Capabilities.Prompts.ListChanged) {
+		return &CapabilityError{Capability: "prompts.listChanged"}
+	}
+	if len(filter.ResourceSubscriptions) > 0 &&
+		(c.server.Capabilities.Resources == nil || !c.server.Capabilities.Resources.Subscribe) {
+		return &CapabilityError{Capability: "resources.subscribe"}
+	}
+	return nil
+}
+
+func (c *Client) handleSubscriptionAcknowledged(raw json.RawMessage) {
+	var ack SubscriptionsAcknowledgedParams
+	if err := json.Unmarshal(raw, &ack); err != nil {
+		c.logger.Warn("mcp: invalid subscription acknowledgment", "err", err)
+		c.failAllSubscriptions(errors.New("invalid subscription acknowledgment"))
 		return
 	}
+	key, _, ok := subscriptionIdentity(ack.Meta)
+	if !ok {
+		c.logger.Warn("mcp: subscription acknowledgment missing ID")
+		c.failAllSubscriptions(errors.New("subscription acknowledgment missing or invalid ID"))
+		return
+	}
+	c.mu.RLock()
+	state := c.subscriptions[key]
+	c.mu.RUnlock()
+	if state == nil {
+		c.logger.Warn("mcp: unknown subscription acknowledgment")
+		c.failAllSubscriptions(errors.New("subscription acknowledgment has unknown ID"))
+		return
+	}
+	if err := validateEffectiveSubscriptionFilter(state.requested, ack.Notifications); err != nil {
+		failSubscription(state, err)
+		return
+	}
+	state.mu.Lock()
+	if state.closed {
+		state.mu.Unlock()
+		failSubscription(state, errors.New("subscription acknowledgment after close"))
+		return
+	}
+	if state.acked {
+		state.mu.Unlock()
+		failSubscription(state, errors.New("duplicate subscription acknowledgment"))
+		return
+	}
+	state.effective, state.acked = ack.Notifications, true
+	state.mu.Unlock()
+}
+
+func validateEffectiveSubscriptionFilter(requested, effective SubscriptionFilter) error {
+	if effective.ToolsListChanged && !requested.ToolsListChanged ||
+		effective.ResourcesListChanged && !requested.ResourcesListChanged ||
+		effective.PromptsListChanged && !requested.PromptsListChanged {
+		return errors.New("subscription acknowledgment expands the requested filter")
+	}
+	seen := make(map[string]struct{}, len(effective.ResourceSubscriptions))
+	for _, uri := range effective.ResourceSubscriptions {
+		if !slices.Contains(requested.ResourceSubscriptions, uri) {
+			return errors.New("subscription acknowledgment includes an unrequested resource URI")
+		}
+		if _, duplicate := seen[uri]; duplicate {
+			return errors.New("subscription acknowledgment contains a duplicate resource URI")
+		}
+		seen[uri] = struct{}{}
+	}
+	return nil
+}
+
+//nolint:funlen // Fail-closed subscription validation precedes every generation mutation.
+func (c *Client) handleSubscriptionInvalidation(kind InvalidationKind, raw json.RawMessage) {
+	fields, err := decodeObjectFields(raw)
+	if err != nil {
+		c.logger.Warn("mcp: invalid subscription notification", "err", err)
+		c.failAllSubscriptions(errors.New("invalid subscription notification"))
+		return
+	}
+	var meta Meta
+	if err := json.Unmarshal(fields["_meta"], &meta); err != nil {
+		c.logger.Warn("mcp: subscription notification missing metadata")
+		c.failAllSubscriptions(errors.New("subscription notification missing metadata"))
+		return
+	}
+	key, publicID, ok := subscriptionIdentity(meta)
+	if !ok {
+		c.logger.Warn("mcp: subscription notification missing ID")
+		c.failAllSubscriptions(errors.New("subscription notification missing or invalid ID"))
+		return
+	}
+	c.mu.RLock()
+	state := c.subscriptions[key]
+	c.mu.RUnlock()
+	if state == nil {
+		c.logger.Warn("mcp: notification for unknown subscription")
+		c.failAllSubscriptions(errors.New("subscription notification has unknown ID"))
+		return
+	}
+	state.mu.RLock()
+	closed := state.closed
+	acked := state.acked
+	effective := cloneSubscriptionFilter(state.effective)
+	state.mu.RUnlock()
+	allowed := !closed && acked && subscriptionAllows(effective, kind)
+	if !allowed {
+		failSubscription(
+			state,
+			errors.New("subscription notification before acknowledgment or outside effective filter"),
+		)
+		return
+	}
+	uri := ""
+	if kind == InvalidationResource {
+		var updated ResourceUpdatedParams
+		if json.Unmarshal(raw, &updated) != nil || updated.URI == "" {
+			failSubscription(state, errors.New("invalid resource subscription notification"))
+			return
+		}
+		uri = updated.URI
+		allowed = resourceSubscriptionAllows(effective.ResourceSubscriptions, uri)
+		if !allowed {
+			failSubscription(state, errors.New("resource notification outside effective subscription filter"))
+			return
+		}
+	}
+	event := c.advanceInvalidation(kind, uri, publicID)
+	state.mu.RLock()
+	if state.closed {
+		state.mu.RUnlock()
+		return
+	}
+	select {
+	case state.events <- event:
+	default:
+		c.logger.Warn("mcp: subscription event channel full", "subscription", boundedDiagnostic(publicID))
+	}
+	state.mu.RUnlock()
+}
+
+func cloneSubscriptionFilter(filter SubscriptionFilter) SubscriptionFilter {
+	filter.ResourceSubscriptions = append([]string(nil), filter.ResourceSubscriptions...)
+	filter.Extra = cloneMeta(filter.Extra)
+	return filter
+}
+
+func resourceSubscriptionAllows(subscriptions []string, uri string) bool {
+	for _, subscription := range subscriptions {
+		if subscription == uri || isSubresourceURI(subscription, uri) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSubresourceURI(subscription, candidate string) bool {
+	base, baseErr := url.ParseRequestURI(subscription)
+	updated, updatedErr := url.ParseRequestURI(candidate)
+	if baseErr != nil || updatedErr != nil || base.IsAbs() != updated.IsAbs() ||
+		!strings.EqualFold(base.Scheme, updated.Scheme) || base.Host != updated.Host ||
+		base.User.String() != updated.User.String() || base.RawQuery != "" || updated.RawQuery != "" ||
+		base.Fragment != "" || updated.Fragment != "" || base.Opaque != "" || updated.Opaque != "" {
+		return false
+	}
+	if hasDotPathSegment(base.Path) || hasDotPathSegment(updated.Path) {
+		return false
+	}
+	basePath, updatedPath := base.EscapedPath(), updated.EscapedPath()
+	if basePath == "" || updatedPath == basePath {
+		return false
+	}
+	if strings.HasSuffix(basePath, "/") {
+		return strings.HasPrefix(updatedPath, basePath)
+	}
+	return strings.HasPrefix(updatedPath, basePath+"/")
+}
+
+func hasDotPathSegment(path string) bool {
+	for segment := range strings.SplitSeq(path, "/") {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func subscriptionAllows(filter SubscriptionFilter, kind InvalidationKind) bool {
+	switch kind {
+	case InvalidationTools:
+		return filter.ToolsListChanged
+	case InvalidationResources:
+		return filter.ResourcesListChanged
+	case InvalidationPrompts:
+		return filter.PromptsListChanged
+	case InvalidationResource:
+		return len(filter.ResourceSubscriptions) > 0
+	default:
+		return false
+	}
+}
+
+func (c *Client) advanceInvalidation(kind InvalidationKind, uri, subscription string) Invalidation {
 	generation := c.invalidationCount.Add(1)
 	switch kind {
 	case InvalidationTools:
 		c.toolGeneration.Add(1)
+		c.clearToolBindings()
 	case InvalidationResources, InvalidationResource:
 		c.resourceGeneration.Add(1)
 	case InvalidationPrompts:
 		c.promptGeneration.Add(1)
 	}
-	event := Invalidation{Kind: kind, URI: uri, Generation: generation}
+	event := Invalidation{Kind: kind, URI: uri, Generation: generation, SubscriptionID: subscription}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.closed {
+		return event
+	}
 	select {
 	case c.invalidations <- event:
 	default:
-		c.logger.Warn(
-			"mcp: invalidation event channel full",
-			"kind",
-			kind,
-			"generation",
-			generation,
-		)
+		c.logger.Warn("mcp: invalidation event channel full")
 	}
+	return event
 }
 
-func (c *Client) handleListChanged(kind InvalidationKind, params json.RawMessage) {
-	if len(params) > 0 {
-		var decoded NotificationParams
-		if err := json.Unmarshal(params, &decoded); err != nil {
-			c.logger.Warn("mcp: invalid list-changed notification", "kind", kind, "err", err)
+func (c *Client) clearToolBindings() {
+	c.toolBindingMu.Lock()
+	defer c.toolBindingMu.Unlock()
+	if headerTransport, ok := c.transport.(ToolHeaderTransport); ok {
+		_ = headerTransport.ReplaceToolHeaderBindings(map[string][]HTTPToolHeaderBinding{})
+	}
+	clear(c.toolBindings)
+	clear(c.toolSchemas)
+}
+
+func (c *Client) notifyCancelledPending(parent context.Context, pending PendingRequest, reason string) {
+	if notification, ok := pending.(CancellationNotificationPending); ok &&
+		!notification.ClaimCancellationNotification() {
+		return
+	}
+	if cancellable, ok := pending.(CancellablePendingRequest); ok && !cancellable.CancelPending() {
+		return
+	}
+	if delivery, ok := pending.(DeliveryPendingRequest); ok {
+		timer := time.NewTimer(cancelDeliveryWaitTimeout)
+		select {
+		case <-delivery.DeliveryDone():
+			timer.Stop()
+		case <-timer.C:
+			return
+		}
+		if !delivery.WasSent() {
 			return
 		}
 	}
-	c.emitInvalidation(kind, "")
-}
-
-func (c *Client) invalidationAllowed(kind InvalidationKind) bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	switch kind {
-	case InvalidationTools:
-		return c.server.Capabilities.Tools != nil && c.server.Capabilities.Tools.ListChanged
-	case InvalidationResources:
-		return c.server.Capabilities.Resources != nil && c.server.Capabilities.Resources.ListChanged
-	case InvalidationPrompts:
-		return c.server.Capabilities.Prompts != nil && c.server.Capabilities.Prompts.ListChanged
-	case InvalidationResource:
-		return c.server.Capabilities.Resources != nil && c.server.Capabilities.Resources.Subscribe
-	default:
-		return false
-	}
-}
-
-func (c *Client) handleResourceUpdated(params json.RawMessage) {
-	var updated ResourceUpdatedParams
-	if err := json.Unmarshal(params, &updated); err != nil {
-		c.logger.Warn("mcp: invalid resource updated notification", "err", err)
-		return
-	}
-	if updated.URI == "" {
-		c.logger.Warn("mcp: resource updated notification requires uri")
-		return
-	}
-	c.mu.RLock()
-	subscribed := false
-	for subscription := range c.subscribed {
-		if resourceUpdateMatchesSubscription(subscription, updated.URI) {
-			subscribed = true
-			break
+	reason = strings.Map(func(char rune) rune {
+		if char == '\n' || char == '\r' || char == '\t' {
+			return ' '
 		}
+		return char
+	}, reason)
+	runes := []rune(reason)
+	if len(runes) > maxCancellationRunes {
+		reason = string(runes[:maxCancellationRunes])
 	}
-	c.mu.RUnlock()
-	if !subscribed {
-		c.logger.Warn(
-			"mcp: resource update received without an active subscription",
-			"uri",
-			boundedDiagnostic(updated.URI),
-		)
-		return
-	}
-	c.emitInvalidation(InvalidationResource, updated.URI)
-}
-
-func resourceUpdateMatchesSubscription(subscription, updated string) bool {
-	baseURI, baseErr := url.Parse(subscription)
-	updatedURI, updatedErr := url.Parse(updated)
-	if baseErr != nil || updatedErr != nil ||
-		!strings.EqualFold(baseURI.Scheme, updatedURI.Scheme) {
-		return false
-	}
-	if baseURI.Opaque != "" || updatedURI.Opaque != "" {
-		return normalizePercentEncoding(baseURI.Opaque) == normalizePercentEncoding(updatedURI.Opaque) &&
-			normalizePercentEncoding(baseURI.RawQuery) == normalizePercentEncoding(updatedURI.RawQuery) &&
-			normalizePercentEncoding(baseURI.EscapedFragment()) ==
-				normalizePercentEncoding(updatedURI.EscapedFragment())
-	}
-	if !strings.EqualFold(baseURI.Hostname(), updatedURI.Hostname()) ||
-		normalizedURIPort(baseURI) != normalizedURIPort(updatedURI) ||
-		uriUser(baseURI) != uriUser(updatedURI) {
-		return false
-	}
-	basePath := normalizedURIPath(baseURI)
-	updatedPath := normalizedURIPath(updatedURI)
-	if basePath == updatedPath &&
-		normalizePercentEncoding(baseURI.RawQuery) == normalizePercentEncoding(updatedURI.RawQuery) &&
-		normalizePercentEncoding(baseURI.EscapedFragment()) ==
-			normalizePercentEncoding(updatedURI.EscapedFragment()) {
-		return true
-	}
-	if baseURI.RawQuery != "" || baseURI.Fragment != "" {
-		return false
-	}
-	if !strings.HasSuffix(basePath, "/") {
-		basePath += "/"
-	}
-	return strings.HasPrefix(updatedPath, basePath)
-}
-
-func normalizedURIPath(value *url.URL) string {
-	escaped := normalizePercentEncoding(value.EscapedPath())
-	if escaped == "" {
-		return "/"
-	}
-	return removeDotSegments(escaped)
-}
-
-func removeDotSegments(value string) string {
-	segments := strings.Split(value, "/")
-	output := make([]string, 0, len(segments))
-	for _, segment := range segments {
-		switch segment {
-		case ".":
-			continue
-		case "..":
-			if len(output) > 1 {
-				output = output[:len(output)-1]
-			}
-		default:
-			output = append(output, segment)
-		}
-	}
-	result := strings.Join(output, "/")
-	if strings.HasSuffix(value, "/.") || strings.HasSuffix(value, "/..") {
-		result += "/"
-	}
-	if result == "" && strings.HasPrefix(value, "/") {
-		return "/"
-	}
-	return result
-}
-
-func normalizedURIPort(value *url.URL) string {
-	port := value.Port()
-	if (strings.EqualFold(value.Scheme, "http") && port == "80") ||
-		(strings.EqualFold(value.Scheme, "https") && port == "443") {
-		return ""
-	}
-	return port
-}
-
-const (
-	hexNibbleBits = 4
-	hexNibbleMask = 0x0f
-	hexRadixSplit = 10
-)
-
-func normalizePercentEncoding(value string) string {
-	var normalized strings.Builder
-	normalized.Grow(len(value))
-	for index := 0; index < len(value); index++ {
-		if value[index] != '%' || index+2 >= len(value) ||
-			!isHex(value[index+1]) || !isHex(value[index+2]) {
-			normalized.WriteByte(value[index])
-			continue
-		}
-		decoded := fromHex(value[index+1])<<hexNibbleBits | fromHex(value[index+2])
-		if isURIUnreserved(decoded) {
-			normalized.WriteByte(decoded)
-		} else {
-			normalized.WriteByte('%')
-			normalized.WriteByte(upperHex(decoded >> hexNibbleBits))
-			normalized.WriteByte(upperHex(decoded & hexNibbleMask))
-		}
-		index += 2
-	}
-	return normalized.String()
-}
-
-func isHex(value byte) bool {
-	return value >= '0' && value <= '9' ||
-		value >= 'a' && value <= 'f' ||
-		value >= 'A' && value <= 'F'
-}
-
-func fromHex(value byte) byte {
-	if value >= '0' && value <= '9' {
-		return value - '0'
-	}
-	if value >= 'a' && value <= 'f' {
-		return value - 'a' + hexRadixSplit
-	}
-	return value - 'A' + hexRadixSplit
-}
-
-func upperHex(value byte) byte {
-	if value < hexRadixSplit {
-		return '0' + value
-	}
-	return 'A' + value - hexRadixSplit
-}
-
-func isURIUnreserved(value byte) bool {
-	return value >= 'a' && value <= 'z' ||
-		value >= 'A' && value <= 'Z' ||
-		value >= '0' && value <= '9' ||
-		strings.ContainsRune("-._~", rune(value))
-}
-
-func uriUser(value *url.URL) string {
-	if value.User == nil {
-		return ""
-	}
-	return value.User.String()
-}
-
-func (c *Client) handleLogMessage(params json.RawMessage) {
-	c.mu.RLock()
-	loggingNegotiated := len(c.server.Capabilities.Logging) > 0
-	c.mu.RUnlock()
-	if !loggingNegotiated {
-		c.logger.Warn("mcp: logging notification contradicts negotiated capability")
-		return
-	}
-	var message LogMessageParams
-	if err := json.Unmarshal(params, &message); err != nil {
-		c.logger.Warn("mcp: invalid logging notification", "err", err)
-		return
-	}
-	if !validLogLevel(message.Level) || len(message.Data) == 0 {
-		c.logger.Warn("mcp: invalid logging notification fields")
-		return
-	}
-	select {
-	case c.logMessages <- message:
-	default:
-		c.logger.Warn("mcp: logging event channel full")
-	}
-}
-
-func validLogLevel(level string) bool {
-	switch level {
-	case "debug", "info", "notice", "warning", "error", "critical", "alert", "emergency":
-		return true
-	default:
-		return false
-	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), cancelNotifyTimeout)
+	defer cancel()
+	_ = c.transport.Notify(ctx, MethodCancelled, CancelledParams{RequestID: pending.ID(), Reason: reason})
 }
 
 func (c *Client) Invalidations() <-chan Invalidation { return c.invalidations }
-
-func (c *Client) LogMessages() <-chan LogMessageParams { return c.logMessages }
-
-func (c *Client) InvalidationGeneration() uint64 { return c.invalidationCount.Load() }
-
+func (c *Client) InvalidationGeneration() uint64     { return c.invalidationCount.Load() }
 func (c *Client) DiscoveryGeneration(kind InvalidationKind) uint64 {
 	switch kind {
 	case InvalidationTools:
@@ -1418,29 +2088,36 @@ func (c *Client) DiscoveryGeneration(kind InvalidationKind) uint64 {
 	}
 }
 
-func (c *Client) ServerInfo() InitializeResult {
+func (c *Client) ServerInfo() DiscoverResult {
 	c.mu.RLock()
 	raw, err := json.Marshal(c.server)
 	c.mu.RUnlock()
 	if err != nil {
-		return InitializeResult{}
+		return DiscoverResult{}
 	}
-	var result InitializeResult
+	var result DiscoverResult
 	if json.Unmarshal(raw, &result) != nil {
-		return InitializeResult{}
+		return DiscoverResult{}
 	}
 	return result
 }
 
 func (c *Client) Close() error {
 	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		subscriptions := make([]*subscriptionState, 0, len(c.subscriptions))
+		for _, state := range c.subscriptions {
+			subscriptions = append(subscriptions, state)
+		}
+		c.mu.Unlock()
+		for _, state := range subscriptions {
+			state.cancel()
+		}
 		c.closeErr = c.transport.Close()
-		if c.invalidations != nil {
-			close(c.invalidations)
-		}
-		if c.logMessages != nil {
-			close(c.logMessages)
-		}
+		c.mu.Lock()
+		close(c.invalidations)
+		c.mu.Unlock()
 	})
 	return c.closeErr
 }

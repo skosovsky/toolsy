@@ -34,6 +34,7 @@ type stdioWrite struct {
 	result chan error
 	onSent func()
 	state  atomic.Int32
+	budget atomic.Bool
 }
 
 type startedStdioProcess struct {
@@ -59,7 +60,8 @@ func WithLogger(logger *slog.Logger) StdioTransportOption {
 	}
 }
 
-// WithStdioMaxStreamBytes limits protocol bytes read from child stdout.
+// WithStdioMaxStreamBytes limits protocol bytes read from child stdout, each
+// encoded outgoing frame, and aggregate bytes retained in the write queue.
 // Stderr is consumed independently with bounded per-line logging.
 func WithStdioMaxStreamBytes(limit int) StdioTransportOption {
 	return func(transport *StdioTransport) {
@@ -95,7 +97,8 @@ type StdioTransport struct {
 	activeWrites   atomic.Int32
 	peer           *rpcPeer
 	terminalErr    error
-	requestHandler RequestHandler
+	enqueueMu      sync.RWMutex
+	queuedBytes    int
 	notifyHandlers map[string]NotificationHandler
 	closeOnce      sync.Once
 }
@@ -152,7 +155,6 @@ func (t *StdioTransport) Start(ctx context.Context) error {
 	t.stdout = httptool.LimitStreamReadCloserWithContext(lifetimeCtx, process.stdout, t.maxStreamBytes)
 	t.stderr = process.stderr
 	t.peer = newRPCPeer(lifetimeCtx, t.logger, t.send)
-	t.peer.setRequestHandler(t.requestHandler)
 	for method, handler := range t.notifyHandlers {
 		t.peer.setNotificationHandler(method, handler)
 	}
@@ -166,7 +168,7 @@ func (t *StdioTransport) Start(ctx context.Context) error {
 
 func (t *StdioTransport) startProcess(ctx context.Context) (startedStdioProcess, error) {
 	// #nosec G204 -- the executable and arguments are explicitly supplied by the caller.
-	//nolint:gosec // Caller explicitly supplies the executable contract.
+
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), t.executable, t.args...)
 	configureProcessTree(cmd)
 	stdin, err := cmd.StdinPipe()
@@ -224,101 +226,186 @@ func (t *StdioTransport) sendTracked(ctx context.Context, body []byte, onSent fu
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if len(body) >= t.maxStreamBytes {
+		return &InvalidPayloadError{
+			Subject: "stdio outgoing frame",
+			Err:     fmt.Errorf("encoded frame exceeds %d-byte limit", t.maxStreamBytes),
+		}
+	}
+	frame := append(append([]byte(nil), body...), '\n')
+	t.enqueueMu.RLock()
 	t.mu.Lock()
 	if !t.started || t.closed || t.stdin == nil {
 		terminalErr := t.terminalErr
 		t.mu.Unlock()
+		t.enqueueMu.RUnlock()
 		if terminalErr != nil {
 			return terminalErr
 		}
 		return ErrTransportClosed
 	}
+	if len(frame) > t.maxStreamBytes-t.queuedBytes {
+		t.mu.Unlock()
+		t.enqueueMu.RUnlock()
+		return &InvalidPayloadError{
+			Subject: "stdio outgoing queue",
+			Err:     fmt.Errorf("retained frames exceed %d-byte budget", t.maxStreamBytes),
+		}
+	}
+	t.queuedBytes += len(frame)
 	t.mu.Unlock()
 	write := &stdioWrite{
 		ctx:    ctx,
-		body:   append(append([]byte(nil), body...), '\n'),
+		body:   frame,
 		result: make(chan error, 1),
 		onSent: onSent,
 	}
+	write.budget.Store(true)
 	select {
 	case t.writeQueue <- write:
+		t.enqueueMu.RUnlock()
 	case <-ctx.Done():
+		t.releaseQueuedBytes(write)
+		t.enqueueMu.RUnlock()
 		return ctx.Err()
 	case <-t.lifetimeCtx.Done():
+		t.releaseQueuedBytes(write)
+		t.enqueueMu.RUnlock()
 		return t.failureCause(ErrTransportClosed)
 	}
 	select {
 	case err := <-write.result:
 		return err
 	case <-ctx.Done():
-		t.abortWrite(write, ctx.Err())
-		return ctx.Err()
+		if !t.abortWrite(write) {
+			return ctx.Err()
+		}
+		// Once Write has started, cancellation cannot prove that no bytes reached
+		// the peer. Wait for the writer verdict so DeliveryDone/WasSent settle in
+		// wire order. A successful write remains delivered and may be followed by
+		// exactly one notifications/cancelled; a write failure is transport-fatal.
+		select {
+		case err := <-write.result:
+			if err != nil {
+				return err
+			}
+			return ctx.Err()
+		case <-t.lifetimeCtx.Done():
+			return t.failureCause(ErrTransportClosed)
+		}
 	case <-t.lifetimeCtx.Done():
 		return t.failureCause(ErrTransportClosed)
 	}
 }
 
 func (t *StdioTransport) writeLoop(ctx context.Context, stdin io.Writer) {
-	defer close(t.writerDone)
+	defer t.drainWriteQueue()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case write := <-t.writeQueue:
-			if !write.state.CompareAndSwap(stdioWriteQueued, stdioWriteActive) {
-				writeErr := write.ctx.Err()
-				if writeErr == nil {
-					writeErr = context.Canceled
-				}
-				write.result <- writeErr
-				continue
-			}
-			t.activeWrites.Add(1)
-			if err := write.ctx.Err(); err != nil {
-				write.state.Store(stdioWriteCancelled)
-				t.activeWrites.Add(-1)
-				write.result <- err
-				continue
-			}
-			_, err := stdin.Write(write.body)
-			write.state.CompareAndSwap(stdioWriteActive, stdioWriteFinished)
-			t.activeWrites.Add(-1)
-			if err == nil && write.onSent != nil {
-				write.onSent()
-			}
-			write.result <- err
-			if err != nil {
-				t.closeAsync(&TransportCrashError{Transport: "stdio write", Err: err})
+			if t.processStdioWrite(ctx, stdin, write) {
 				return
 			}
 		}
 	}
 }
 
-func (t *StdioTransport) abortWrite(write *stdioWrite, cause error) {
+func (t *StdioTransport) processStdioWrite(ctx context.Context, stdin io.Writer, write *stdioWrite) bool {
+	t.releaseQueuedBytes(write)
+	if err := ctx.Err(); err != nil {
+		write.result <- t.failureCause(err)
+		return true
+	}
+	if !write.state.CompareAndSwap(stdioWriteQueued, stdioWriteActive) {
+		writeErr := write.ctx.Err()
+		if writeErr == nil {
+			writeErr = context.Canceled
+		}
+		write.result <- writeErr
+		return false
+	}
+	t.activeWrites.Add(1)
+	if err := write.ctx.Err(); err != nil {
+		write.state.Store(stdioWriteCancelled)
+		t.activeWrites.Add(-1)
+		write.result <- err
+		return false
+	}
+	_, err := stdin.Write(write.body)
+	write.state.CompareAndSwap(stdioWriteActive, stdioWriteFinished)
+	t.activeWrites.Add(-1)
+	if err == nil && write.onSent != nil {
+		write.onSent()
+	}
+	write.result <- err
+	if err == nil {
+		return false
+	}
+	t.closeAsync(&TransportCrashError{Transport: "stdio write", Err: err})
+	return true
+}
+
+func (t *StdioTransport) drainWriteQueue() {
+	t.enqueueMu.Lock()
+	defer t.enqueueMu.Unlock()
+	defer close(t.writerDone)
 	for {
-		switch write.state.Load() {
-		case stdioWriteQueued:
-			if write.state.CompareAndSwap(stdioWriteQueued, stdioWriteCancelled) {
-				return
-			}
-		case stdioWriteActive:
-			if write.state.CompareAndSwap(stdioWriteActive, stdioWriteCancelled) {
-				t.closeAsync(&TransportCrashError{Transport: "stdio write cancellation", Err: cause})
-				return
-			}
-		case stdioWriteCancelled, stdioWriteFinished:
+		select {
+		case write := <-t.writeQueue:
+			t.releaseQueuedBytes(write)
+			write.result <- t.failureCause(ErrTransportClosed)
+		default:
 			return
 		}
 	}
 }
 
-func (t *StdioTransport) Request(
+func (t *StdioTransport) releaseQueuedBytes(write *stdioWrite) {
+	if write == nil || !write.budget.CompareAndSwap(true, false) {
+		return
+	}
+	t.mu.Lock()
+	t.queuedBytes -= len(write.body)
+	if t.queuedBytes < 0 {
+		t.queuedBytes = 0
+	}
+	t.mu.Unlock()
+}
+
+// abortWrite returns whether the write may already have reached the wire. A
+// queued write is retractable; an active or finished write requires its actual
+// writer verdict and must never close the whole transport merely for caller
+// cancellation.
+func (t *StdioTransport) abortWrite(write *stdioWrite) bool {
+	for {
+		switch write.state.Load() {
+		case stdioWriteQueued:
+			if write.state.CompareAndSwap(stdioWriteQueued, stdioWriteCancelled) {
+				return false
+			}
+		case stdioWriteActive:
+			if write.state.CompareAndSwap(stdioWriteActive, stdioWriteCancelled) {
+				return true
+			}
+		case stdioWriteCancelled:
+			return false
+		case stdioWriteFinished:
+			return true
+		}
+	}
+}
+
+func (t *StdioTransport) PrepareRequest(
 	ctx context.Context,
 	method string,
 	params any,
-) (PendingRequest, error) {
+) (PreparedRequest, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateOutgoingRequest(method, params); err != nil {
 		return nil, err
 	}
 	t.mu.Lock()
@@ -332,18 +419,34 @@ func (t *StdioTransport) Request(
 	if err != nil {
 		return nil, err
 	}
-	go func() {
-		sendCtx, stopSend := contextUntilPendingTerminal(ctx, pending.terminal)
-		defer stopSend()
-		defer pending.finishDelivery()
-		if sendErr := t.sendTracked(sendCtx, body, pending.markSent); sendErr != nil {
-			peer.failPending(pending, t.failureCause(sendErr))
+	if len(body) >= t.maxStreamBytes {
+		frameErr := &InvalidPayloadError{
+			Subject: "stdio outgoing frame",
+			Err:     fmt.Errorf("encoded frame exceeds %d-byte limit", t.maxStreamBytes),
 		}
-	}()
-	return pending, nil
+		peer.failPending(pending, frameErr)
+		return nil, frameErr
+	}
+	return &preparedRequest{
+		pendingRequest: pending,
+		ctx:            ctx,
+		deliver: func() {
+			go func() {
+				sendCtx, stopSend := contextUntilPendingTerminal(ctx, pending.terminal)
+				defer stopSend()
+				defer pending.finishDelivery()
+				if sendErr := t.sendTracked(sendCtx, body, pending.markSent); sendErr != nil {
+					peer.failPending(pending, t.failureCause(sendErr))
+				}
+			}()
+		},
+	}, nil
 }
 
 func (t *StdioTransport) Notify(ctx context.Context, method string, params any) error {
+	if err := validateOutgoingNotification(method, params); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	peer := t.peer
 	started := t.started && !t.closed
@@ -352,16 +455,6 @@ func (t *StdioTransport) Notify(ctx context.Context, method string, params any) 
 		return ErrTransportClosed
 	}
 	return peer.notifyMessage(ctx, method, params)
-}
-
-func (t *StdioTransport) OnRequest(handler RequestHandler) {
-	t.mu.Lock()
-	t.requestHandler = handler
-	peer := t.peer
-	t.mu.Unlock()
-	if peer != nil {
-		peer.setRequestHandler(handler)
-	}
 }
 
 func (t *StdioTransport) OnNotification(method string, handler NotificationHandler) {
@@ -388,7 +481,8 @@ func (t *StdioTransport) readLoop() {
 			continue
 		}
 		if err := t.peer.dispatch(line); err != nil {
-			t.logger.Warn("mcp: invalid stdio message", "err", err, "bytes", len(line))
+			t.closeAsync(err)
+			return
 		}
 	}
 	err := scanner.Err()

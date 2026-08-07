@@ -1,0 +1,14 @@
+{
+  "notificationBeforeAck": [
+    {"jsonrpc": "2.0", "method": "notifications/tools/list_changed", "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}},
+    {"jsonrpc": "2.0", "method": "notifications/subscriptions/acknowledged", "params": {"notifications": {"toolsListChanged": true}, "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}}
+  ],
+  "wrongSubscription": [
+    {"jsonrpc": "2.0", "method": "notifications/subscriptions/acknowledged", "params": {"notifications": {"toolsListChanged": true}, "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}},
+    {"jsonrpc": "2.0", "method": "notifications/tools/list_changed", "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": "listen-2"}}}
+  ],
+  "outsideEffectiveFilter": [
+    {"jsonrpc": "2.0", "method": "notifications/subscriptions/acknowledged", "params": {"notifications": {"toolsListChanged": true}, "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}},
+    {"jsonrpc": "2.0", "method": "notifications/prompts/list_changed", "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}}
+  ]
+}

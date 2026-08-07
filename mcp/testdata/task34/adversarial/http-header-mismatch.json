@@ -1,0 +1,22 @@
+{
+  "headers": {
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "tools/list",
+    "Mcp-Name": "other",
+    "Mcp-Param-Tenant": "south"
+  },
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+      "name": "lookup",
+      "arguments": {"tenant": "north"},
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  },
+  "expectedError": {"httpStatus": 400, "jsonrpcCode": -32020}
+}

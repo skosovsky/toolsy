@@ -18,7 +18,7 @@ func main() {
 
 	ctx := context.Background()
 	transport := mcp.NewStdioTransport(command, os.Args[1:])
-	client, err := mcp.Connect(ctx, transport, mcp.WithClientRoots([]string{"."}))
+	client, err := mcp.Connect(ctx, transport)
 	if err != nil {
 		panic(err)
 	}

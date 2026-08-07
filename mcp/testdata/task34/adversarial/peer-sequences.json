@@ -1,0 +1,15 @@
+{
+  "duplicateTerminal": [
+    {"jsonrpc": "2.0", "id": 1, "result": {"resultType": "complete"}},
+    {"jsonrpc": "2.0", "id": 1, "result": {"resultType": "complete"}}
+  ],
+  "unknownTerminal": [
+    {"jsonrpc": "2.0", "id": "never-issued", "result": {"resultType": "complete"}}
+  ],
+  "fractionalID": [
+    {"jsonrpc": "2.0", "id": 1.5, "result": {"resultType": "complete"}}
+  ],
+  "serverRequest": [
+    {"jsonrpc": "2.0", "id": "server-1", "method": "roots/list", "params": {}}
+  ]
+}

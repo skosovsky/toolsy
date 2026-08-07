@@ -1,0 +1,18 @@
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "lookup",
+    "arguments": {"tenant": "north"},
+    "inputResponses": {
+      "confirm": {"action": "accept", "content": {"confirmed": true}}
+    },
+    "requestState": "opaque-round-1",
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": {},
+      "io.modelcontextprotocol/clientInfo": {"name": "toolsy", "version": "task34"}
+    }
+  }
+}

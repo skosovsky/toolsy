@@ -1,0 +1,8 @@
+{
+  "missingType": {"content": []},
+  "nullType": {"resultType": null, "content": []},
+  "unknownType": {"resultType": "pending", "content": []},
+  "emptyInputRequired": {"resultType": "input_required"},
+  "inputRequiredOnList": {"resultType": "input_required", "requestState": "opaque"},
+  "foreignCompleteFields": {"resultType": "complete", "inputRequests": {"x": {}}}
+}

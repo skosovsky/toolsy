@@ -1,0 +1,6 @@
+{
+  "protocolVersions": ["2025-11-25", "2025-06-18", "2024-11-05"],
+  "methods": ["initialize", "notifications/initialized", "roots/list", "logging/setLevel", "resources/subscribe", "resources/unsubscribe", "ping"],
+  "headers": ["Mcp-Session-Id", "Last-Event-ID"],
+  "httpMethods": ["GET", "DELETE"]
+}

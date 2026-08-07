@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+const (
+	contentTypeText         = "text"
+	contentTypeImage        = "image"
+	contentTypeAudio        = "audio"
+	contentTypeResourceLink = "resource_link"
+	contentTypeResource     = "resource"
+	applicationOctetStream  = "application/octet-stream"
+)
+
 func canonicalJSON(raw json.RawMessage) ([]byte, any, error) {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -67,7 +76,7 @@ func formatContentBlocks(blocks []ContentBlock) ([]byte, error) {
 func formatResourceContents(contents []ResourceContents) ([]byte, error) {
 	var out strings.Builder
 	for index, content := range contents {
-		if err := content.validate(); err != nil {
+		if _, err := json.Marshal(content); err != nil {
 			return nil, err
 		}
 		if index > 0 {

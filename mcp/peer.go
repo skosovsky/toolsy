@@ -25,7 +25,6 @@ const (
 	maxCancelledResponseRanges = 1024
 	decimalBase                = 10
 	maxRPCIDBytes              = 1024
-	maxConcurrentIncoming      = 64
 )
 
 type rpcIDRange struct {
@@ -45,6 +44,7 @@ type pendingRequest struct {
 	deliveryDone chan struct{}
 	sent         atomic.Bool
 	cancelled    atomic.Bool
+	cancelNotify atomic.Bool
 	mu           sync.Mutex
 	done         bool
 	hooks        []func()
@@ -60,6 +60,10 @@ func (p *pendingRequest) CancelPending() bool {
 		return true
 	}
 	return p.peer.cancelPending(p)
+}
+
+func (p *pendingRequest) ClaimCancellationNotification() bool {
+	return p.cancelNotify.CompareAndSwap(false, true)
 }
 
 func (p *pendingRequest) markSent() {
@@ -133,11 +137,6 @@ type rpcPeer struct {
 	pendingMu       sync.Mutex
 	pending         map[string]*pendingRequest
 	cancelledRanges []rpcIDRange
-	incomingSlots   chan struct{}
-	incomingMu      sync.Mutex
-	incomingWG      sync.WaitGroup
-	handlerMu       sync.RWMutex
-	handler         RequestHandler
 	notifyMu        sync.RWMutex
 	notify          map[string]NotificationHandler
 	closeOnce       sync.Once
@@ -153,15 +152,15 @@ func newRPCPeer(
 	if logger == nil {
 		logger = slog.Default()
 	}
+	//nolint:gosec // The peer owns cancel and invokes it exactly once from rpcPeer.close.
 	peerCtx, cancel := context.WithCancel(ctx)
 	return &rpcPeer{
-		logger:        logger,
-		send:          send,
-		ctx:           peerCtx,
-		pending:       make(map[string]*pendingRequest),
-		notify:        make(map[string]NotificationHandler),
-		incomingSlots: make(chan struct{}, maxConcurrentIncoming),
-		cancel:        cancel,
+		logger:  logger,
+		send:    send,
+		ctx:     peerCtx,
+		pending: make(map[string]*pendingRequest),
+		notify:  make(map[string]NotificationHandler),
+		cancel:  cancel,
 	}
 }
 
@@ -277,12 +276,6 @@ func (p *rpcPeer) notifyMessage(ctx context.Context, method string, params any) 
 	return p.send(ctx, body)
 }
 
-func (p *rpcPeer) setRequestHandler(handler RequestHandler) {
-	p.handlerMu.Lock()
-	p.handler = handler
-	p.handlerMu.Unlock()
-}
-
 func (p *rpcPeer) setNotificationHandler(method string, handler NotificationHandler) {
 	p.notifyMu.Lock()
 	if handler == nil {
@@ -303,6 +296,10 @@ type rpcEnvelope struct {
 }
 
 func (p *rpcPeer) dispatch(data []byte) error {
+	return p.dispatchWithNotificationHandler(data, nil)
+}
+
+func (p *rpcPeer) dispatchWithNotificationHandler(data []byte, override NotificationHandler) error {
 	const jsonRPCSubject = "JSON-RPC"
 	if p.closed.Load() {
 		return ErrTransportClosed
@@ -315,9 +312,7 @@ func (p *rpcPeer) dispatch(data []byte) error {
 	var message rpcEnvelope
 	if err := json.Unmarshal(data, &message); err != nil {
 		payloadErr := &InvalidPayloadError{Subject: jsonRPCSubject, Err: err}
-		if _, requestShaped := fields["method"]; requestShaped {
-			p.rejectInvalidRequestIfID(fields, fields["id"])
-		} else {
+		if _, requestShaped := fields["method"]; !requestShaped {
 			p.failCorrelatedResponse(fields["id"], payloadErr)
 		}
 		return payloadErr
@@ -331,36 +326,26 @@ func (p *rpcPeer) dispatch(data []byte) error {
 			Subject: jsonRPCSubject,
 			Err:     fmt.Errorf("invalid jsonrpc version %q", message.JSONRPC),
 		}
-		if hasMethod {
-			p.rejectInvalidRequestIfID(fields, fields["id"])
-		} else {
+		if !hasMethod {
 			p.failCorrelatedResponse(fields["id"], payloadErr)
 		}
 		return payloadErr
 	}
-	return p.dispatchEnvelope(fields, message, hasMethod, hasResult, hasError, hasParams)
+	return p.dispatchEnvelope(fields, message, hasMethod, hasResult, hasError, hasParams, override)
 }
 
 func (p *rpcPeer) decodeRPCObject(data []byte) (map[string]json.RawMessage, error) {
 	const jsonRPCSubject = "JSON-RPC"
 	if !utf8.Valid(data) {
-		p.sendProtocolError(json.RawMessage(jsonNull), JSONRPCParseError, "Parse error")
 		return nil, &InvalidPayloadError{Subject: jsonRPCSubject, Err: errors.New("payload is not valid UTF-8")}
 	}
 
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		var validJSON any
-		if json.Unmarshal(data, &validJSON) == nil {
-			p.rejectInvalidRequest(nil)
-		} else {
-			p.sendProtocolError(json.RawMessage(jsonNull), JSONRPCParseError, "Parse error")
-		}
+	if err := validateJSONValue(data); err != nil {
 		return nil, &InvalidPayloadError{Subject: jsonRPCSubject, Err: err}
 	}
-	if fields == nil {
-		p.rejectInvalidRequest(nil)
-		return nil, &InvalidPayloadError{Subject: jsonRPCSubject, Err: errors.New("payload must be a JSON object")}
+	fields, err := decodeObjectFields(data)
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: jsonRPCSubject, Err: err}
 	}
 	return fields, nil
 }
@@ -373,6 +358,7 @@ func (p *rpcPeer) dispatchEnvelope(
 	hasResult bool,
 	hasError bool,
 	hasParams bool,
+	notificationOverride NotificationHandler,
 ) error {
 	if hasMethod {
 		paramsInvalid := false
@@ -382,22 +368,33 @@ func (p *rpcPeer) dispatchEnvelope(
 			paramsInvalid = paramsErr != nil
 		}
 		if methodInvalid || hasResult || hasError || paramsInvalid {
-			p.rejectInvalidRequestIfID(fields, message.ID)
 			return &InvalidPayloadError{
 				Subject: "JSON-RPC request",
 				Err:     errors.New("request must contain method, object params, and no result/error fields"),
 			}
 		}
 		if len(message.ID) == 0 {
-			p.notifyMu.RLock()
-			handler := p.notify[message.Method]
-			p.notifyMu.RUnlock()
+			if isForbiddenLegacyMethod(message.Method) {
+				return &InvalidPayloadError{
+					Subject: "JSON-RPC notification",
+					Err:     fmt.Errorf("legacy method %q is forbidden", message.Method),
+				}
+			}
+			handler := notificationOverride
+			if handler == nil {
+				p.notifyMu.RLock()
+				handler = p.notify[message.Method]
+				p.notifyMu.RUnlock()
+			}
 			if handler != nil {
 				handler(bytes.Clone(message.Params))
 			}
 			return nil
 		}
-		return p.dispatchIncomingRequest(message)
+		return &InvalidPayloadError{
+			Subject: "JSON-RPC request",
+			Err:     errors.New("server-initiated requests are not supported by MCP 2026-07-28"),
+		}
 	}
 	if hasParams || len(message.ID) == 0 || hasResult == hasError || (hasError && message.Error == nil) {
 		payloadErr := &InvalidPayloadError{
@@ -441,53 +438,20 @@ func (p *rpcPeer) dispatchEnvelope(
 		}
 	}
 	if message.Error != nil {
+		rpcErr := &RPCError{
+			Code:    message.Error.Code,
+			Message: message.Error.Message,
+			Data:    bytes.Clone(message.Error.Data),
+		}
 		pending.complete(
 			callResult{
-				err: &RPCError{
-					Code:    message.Error.Code,
-					Message: message.Error.Message,
-					Data:    bytes.Clone(message.Error.Data),
-				},
+				err: TypedRPCError(rpcErr),
 			},
 		)
 	} else {
 		pending.complete(callResult{result: bytes.Clone(message.Result)})
 	}
 	return nil
-}
-
-func (p *rpcPeer) dispatchIncomingRequest(message rpcEnvelope) error {
-	if _, err := rpcIDKey(message.ID); err != nil {
-		p.sendProtocolError(json.RawMessage(jsonNull), JSONRPCInvalidRequest, "Invalid Request")
-		return &InvalidPayloadError{Subject: "JSON-RPC request id", Err: err}
-	}
-	request := Request{
-		JSONRPC: message.JSONRPC,
-		ID:      bytes.Clone(message.ID),
-		Method:  message.Method,
-		Params:  bytes.Clone(message.Params),
-	}
-	select {
-	case p.incomingSlots <- struct{}{}:
-		if !p.startIncomingRequest(request) {
-			<-p.incomingSlots
-			return ErrTransportClosed
-		}
-	default:
-		p.sendProtocolError(request.ID, JSONRPCServerOverloaded, "Server overloaded")
-	}
-	return nil
-}
-
-func (p *rpcPeer) startIncomingRequest(request Request) bool {
-	p.incomingMu.Lock()
-	defer p.incomingMu.Unlock()
-	if p.closed.Load() {
-		return false
-	}
-	p.incomingWG.Add(1)
-	go p.handleIncomingRequest(request)
-	return true
 }
 
 func (p *rpcPeer) addCancelledLocked(id uint64) bool {
@@ -653,136 +617,13 @@ func validateJSONRPCError(raw json.RawMessage) error {
 	return nil
 }
 
-func (p *rpcPeer) rejectInvalidRequest(id json.RawMessage) {
-	responseID := json.RawMessage(jsonNull)
-	if len(id) > 0 {
-		if _, err := rpcIDKey(id); err == nil {
-			responseID = id
-		}
-	}
-	p.sendProtocolError(responseID, JSONRPCInvalidRequest, "Invalid Request")
-}
-
-func (p *rpcPeer) rejectInvalidRequestIfID(fields map[string]json.RawMessage, id json.RawMessage) {
-	if _, hasID := fields["id"]; hasID {
-		p.rejectInvalidRequest(id)
-	}
-}
-
-func (p *rpcPeer) hasPendingID(id json.RawMessage) bool {
-	key, err := rpcIDKey(id)
-	if err != nil {
-		return false
-	}
-	p.pendingMu.Lock()
-	defer p.pendingMu.Unlock()
-	return p.pending[key] != nil
-}
-
-func (p *rpcPeer) pendingDone(id json.RawMessage) (<-chan struct{}, bool) {
-	key, err := rpcIDKey(id)
-	if err != nil {
-		return nil, false
-	}
-	p.pendingMu.Lock()
-	defer p.pendingMu.Unlock()
-	pending := p.pending[key]
-	if pending == nil {
-		return nil, false
-	}
-	return pending.terminal, true
-}
-
-func (p *rpcPeer) failPendingID(id json.RawMessage, err error) {
-	key, keyErr := rpcIDKey(id)
-	if keyErr != nil {
-		return
-	}
-	p.pendingMu.Lock()
-	pending := p.pending[key]
-	if pending != nil {
-		delete(p.pending, key)
-	}
-	p.pendingMu.Unlock()
-	if pending != nil {
-		pending.complete(callResult{err: err})
-	}
-}
-
-func (p *rpcPeer) handleIncomingRequest(request Request) {
-	defer p.incomingWG.Done()
-	defer func() { <-p.incomingSlots }()
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			p.logger.Error("mcp: incoming request handler panic", "method", boundedDiagnostic(request.Method))
-			p.sendProtocolError(request.ID, JSONRPCInternalError, "Internal error")
-		}
-	}()
-	p.handlerMu.RLock()
-	handler := p.handler
-	p.handlerMu.RUnlock()
-	var result json.RawMessage
-	var rpcErr *JSONRPCError
-	if handler == nil {
-		rpcErr = &JSONRPCError{Code: JSONRPCMethodNotFound, Message: rpcMethodNotFoundMessage}
-	} else {
-		result, rpcErr = handler(p.ctx, request)
-	}
-	if rpcErr == nil && result == nil {
-		result = json.RawMessage(jsonNull)
-	}
-	response := Response{
-		JSONRPC: JSONRPCVersion,
-		ID:      bytes.Clone(request.ID),
-		Result:  result,
-		Error:   rpcErr,
-	}
-	body, err := json.Marshal(response)
-	if err != nil {
-		p.logger.Error(
-			"mcp: marshal incoming request response",
-			"method",
-			boundedDiagnostic(request.Method),
-			"err",
-			err,
-		)
-		return
-	}
-	if err := p.send(p.ctx, body); err != nil && !errors.Is(err, context.Canceled) {
-		p.logger.Warn(
-			"mcp: send incoming request response",
-			"method",
-			boundedDiagnostic(request.Method),
-			"err",
-			err,
-		)
-	}
-}
-
-func (p *rpcPeer) sendProtocolError(id json.RawMessage, code JSONNumber, message string) {
-	response := Response{
-		JSONRPC: JSONRPCVersion,
-		ID:      bytes.Clone(id),
-		Error:   &JSONRPCError{Code: code, Message: message},
-	}
-	body, err := json.Marshal(response)
-	if err != nil {
-		return
-	}
-	if err := p.send(p.ctx, body); err != nil && !errors.Is(err, context.Canceled) {
-		p.logger.Warn("mcp: send protocol error", "code", code, "err", err)
-	}
-}
-
 func (p *rpcPeer) close(err error) {
 	if err == nil {
 		err = ErrTransportClosed
 	}
 	p.closeOnce.Do(func() {
-		p.incomingMu.Lock()
 		p.closed.Store(true)
 		p.cancel()
-		p.incomingMu.Unlock()
 		p.pendingMu.Lock()
 		pending := p.pending
 		p.pending = make(map[string]*pendingRequest)
@@ -791,7 +632,6 @@ func (p *rpcPeer) close(err error) {
 		for _, request := range pending {
 			request.complete(callResult{err: err})
 		}
-		p.incomingWG.Wait()
 	})
 }
 

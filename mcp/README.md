@@ -1,150 +1,93 @@
-# MCP 2025-11-25 client for toolsy
+# MCP 2026-07-28 client for toolsy
 
-`github.com/skosovsky/toolsy/mcp` is a strict MCP client and protocol bridge for `toolsy`.
+`github.com/skosovsky/toolsy/mcp` is a strict MCP client and protocol bridge. It supports exactly `2026-07-28`; there is no legacy negotiation, fallback, compatibility mode or MCP server implementation.
 
-The module supports exactly protocol revision `2025-11-25`. Older revisions, legacy HTTP+SSE endpoint discovery, compatibility aliases and automatic fallbacks are intentionally absent.
-
-## Supported surface
-
-- stdio and single-endpoint Streamable HTTP;
-- bidirectional JSON-RPC requests, responses and notifications;
-- strict lifecycle/version/capability negotiation;
-- roots via `roots/list` using canonical `file://` URIs;
-- tools with annotations, `outputSchema`, `structuredContent`, icons and task metadata;
-- text, image, audio, resource-link and embedded-resource content blocks;
-- text and binary resource contents;
-- prompts with current tagged content blocks;
-- fractional progress through `_meta.progressToken`;
-- typed `RequestMeta` with lossless non-reserved extension fields on every request DTO;
-- lossless non-reserved extension fields on every MCP result DTO through `Extra`;
-- cancellation with the exact active JSON-RPC request ID, emitted only after the request reaches the wire and wins the atomic terminal race;
-- tools/resources/prompts invalidation and URI-normalized subscribed resource updates, including sub-resources;
-- structured logging notifications whose required `data` may contain any JSON value, including `null`;
-- bounded reads and SSRF-safe Streamable HTTP defaults.
-- schema-equivalent validation on both decode and encode for every exported wire DTO, including required fields, tagged unions and nested metadata.
-- exact envelope/extension collision checks plus enum, URI, tool-name, full JSON Schema 2020-12 compilation and base64 validation; required strings remain empty-capable unless the schema defines a stronger constraint.
-- icon sources restricted to HTTPS URLs with a hostname or RFC 2397 image data URIs, plus finite monotonic progress without an invented non-negative constraint.
-
-Tasks, sampling, elicitation, MCP Apps, full OAuth orchestration and MCP server implementation are outside this module. They are not advertised as capabilities.
-
-## Stdio
+## Connect
 
 ```go
-transport := mcp.NewStdioTransport(
-    "npx",
-    []string{"-y", "@modelcontextprotocol/server-postgres", databaseURL},
-    mcp.WithStdioMaxStreamBytes(16<<20),
-)
-
-client, err := mcp.Connect(
-    ctx,
-    transport,
-    mcp.WithClientRoots([]string{workspace}),
-    mcp.WithPaginationLimits(mcp.PaginationLimits{
-        MaxPages:       100,
-        MaxCursorBytes: 64 << 10,
-    }),
-)
-if err != nil {
-    return err
-}
-defer client.Close()
-```
-
-`Start` does not wait for unsolicited server output. The client sends `initialize` first, as required by MCP. Cancelling the handshake context after a successful connection does not kill the child; `Close` owns transport shutdown and terminates the complete child process tree. On Windows the child starts suspended, is attached to a kill-on-close Job Object, and only then resumes. A pre-cancelled request is rejected before allocating an ID.
-
-Request IDs accept strings or mathematically integral JSON numbers; exact forms such as `1.0` and `1e0` correlate without a `float64` round-trip, while fractional IDs fail closed. Cancelled numeric request IDs are retained in an exact bounded range set, so long contiguous cancellation runs stay compact and one late terminal response is consumed safely; an actual duplicate response still fails closed. If pathological range fragmentation exhausts exact correlation state, the peer closes fail closed instead of guessing whether an old ID was cancelled. Cancellation completes every waiter and cancels the request-scoped transport operation. Delivery waits are bounded, and cancelling a queued stdio write cannot abort another request's active write. Shutdown cancels and joins active server-to-client request handlers before transport close returns.
-
-## Streamable HTTP
-
-```go
-transport := mcp.NewStreamableHTTPTransport(
-    "https://example.com/mcp",
-    mcp.WithStreamableHTTPRequestDecorator(func(req *http.Request) error {
-        token, err := tokens.Token(req.Context())
-        if err != nil {
-            return err
-        }
-        req.Header.Set("Authorization", "Bearer "+token)
-        return nil
-    }),
-)
+transport := mcp.NewStdioTransport("my-mcp-server", nil)
+// or: transport := mcp.NewStreamableHTTPTransport("https://example.com/mcp")
 
 client, err := mcp.Connect(ctx, transport)
 if err != nil {
-    return err
+	return err
 }
 defer client.Close()
 ```
 
-The transport uses one endpoint for POST and optional GET polling. JSON POST responses must be terminal and correlated to the original request ID. A terminal SSE response cancels its request-scoped POST even if the server keeps the stream open. Interrupted POST SSE streams resume independently with their own `Last-Event-ID`, honoring SSE `retry` before reconnect; retry delays are clamped to 100 ms–5 min to prevent server-driven reconnect storms. POST cursors never leak into the independent operation-phase GET stream. The SSE parser accepts CR/LF/CRLF framing, one leading BOM, and the specified event-ID plus empty-`data` priming event. A terminal POST/GET contract failure autonomously cancels every active HTTP operation. The transport also handles `202 Accepted`, `MCP-Session-Id`, `MCP-Protocol-Version` and best-effort DELETE on close.
+`Connect` sends `server/discover` first and accepts the server only when `supportedVersions` contains exact `2026-07-28`. The discovery result includes capabilities, extensions, cache metadata and optional server identity from result `_meta`. `initialize` and `notifications/initialized` do not exist in this implementation, and a failed discovery never falls back to them.
 
-The custom HTTP client option only imports safe timeout settings; custom transports cannot replace the SSRF-safe dialer. Use the request decorator for authentication headers. The decorator receives a bodyless temporary request; method, URL, Host and body-related fields are protected, and the final request is detached from the callback's pointer. OAuth discovery, consent and token storage belong to the host.
+Every request carries the protocol version, actual client capabilities and client identity in reserved `_meta.io.modelcontextprotocol/*` fields. Caller `Meta.Extra` cannot create a MetaObject key whose second DNS label is `mcp` or `modelcontextprotocol`; the protocol builder exclusively owns those namespaces. Duplicate JSON keys and malformed tagged unions fail closed.
 
-`ContentBlock.Size` uses `JSONNumber`, preserving exact integral JSON number forms (including exponent notation) without a `float64` round-trip. Fractional values are rejected because the MCP JSON Schema defines resource size as an integer byte count.
+Set `RequestMeta.LogLevel` to opt a single request into bounded `notifications/message` diagnostics; no session-wide logging state exists. `ExtensionRegistry` and `ExtensionCodec` are the BYO-types boundary for typed extension payloads. Vendor IDs and official capability extension IDs such as `io.modelcontextprotocol/*` may be registered. Unknown declarations remain lossless and inert; registration does not advertise or enable a capability by itself. `logging`, `completions` and `experimental` advertisements are likewise inert data and expose no legacy runtime API.
 
-## Registering tools
+## Results
+
+Every wire result requires `resultType`. `complete` is returned as a method-specific typed result. `input_required` is accepted only from `tools/call`, `resources/read` and `prompts/get` and is surfaced distinctly; the library does not automatically answer or retry MRTR rounds. A host-driven retry uses a fresh request ID, current-round `inputResponses` and the server's byte-exact opaque `requestState`. Use `CallTool`, `ReadResourceRound` and `GetPromptRound` for explicit rounds; convenience APIs return `InputRequiredError` rather than hiding interim results.
+
+Discovery and cacheable list/read results expose typed `ttlMs` and `cacheScope` (`public` or `private`). Missing, null, fractional, negative or unknown values are protocol errors. Cache hints do not enable hidden caching or refresh.
+
+Use `ComputeSnapshotDigest` when a host needs a stable identity for a discovery, tools, resources, resource-templates, resource-read or prompts snapshot. It first runs the strict wire encoder, rejects encodings above 8 MiB before canonical decoding, then hashes a bounded canonical JSON representation with explicit version and snapshot-type domain separation. The digest includes `ttlMs`, `cacheScope`, ordered list entries and all lossless wire metadata; pointer and value forms are identical. `SnapshotDigest.String` returns the 64-character lowercase SHA-256 hex value.
+
+Tool schemas default to JSON Schema 2020-12 when `$schema` is absent and respect explicitly supported dialects. Local `$ref` is supported with bounded evaluation; arbitrary network fetch is not. `structuredContent` may be any JSON value. Content and resource unions, binary Base64 data and output schemas are validated symmetrically.
+
+## Streamable HTTP
+
+Streamable HTTP uses one endpoint and POST only. Each request includes:
+
+- `MCP-Protocol-Version: 2026-07-28`;
+- `Mcp-Method`, equal to the JSON-RPC method;
+- `Mcp-Name` exactly for `tools/call`, `prompts/get` and `resources/read`, derived from `params.name` or `params.uri` so its decoded value matches the body value;
+- `Mcp-Param-*` for a present non-null tool argument whose static top-level property has a valid `x-mcp-header` annotation.
+
+`x-mcp-header` supports `string`, `integer` and `boolean`; integers must fit the JSON safe-integer range. Header suffixes are non-empty RFC 9110 `tchar` strings and case-insensitively unique. A malformed annotation removes that tool from a `tools/list` snapshot without discarding valid siblings. Unsafe values and values resembling the sentinel are UTF-8/Base64 encoded as `=?base64?{value}?=`. Base64 provides no confidentiality.
+
+Responses may be terminal JSON or request-scoped SSE. Cancelling an HTTP request closes that request's response stream; it does not send `notifications/cancelled`. A broken stream is not resumed or automatically retried. Sessions, `Mcp-Session-Id`, GET polling, DELETE-on-close, `Last-Event-ID` and SSE redelivery are absent. A correlated HTTP 400 JSON-RPC `HeaderMismatch` (`-32020`) is returned as a typed protocol error.
+
+The request decorator is for authentication and trace headers. It cannot replace protocol-derived `Mcp-*`/`Mcp-Param-*`, method, URL, Host or body fields. The transport retains SSRF-safe dialing and redirects, bounded responses and secret-safe diagnostics.
+
+## Stdio and cancellation
+
+Stdio uses one JSON-RPC message per line and sends `server/discover` first. Writes are serialized; stdout is protocol-only and stderr is bounded logging. After a request reaches the wire, context cancellation sends `notifications/cancelled` with the exact raw request ID. Cancellation before delivery sends no notification. Process failure unblocks all waiters, and `Close` terminates the complete child process tree.
+
+This is intentionally different from HTTP cancellation: stdio has no per-request response stream, while HTTP does.
+
+## Subscriptions and invalidation
+
+Use `subscriptions/listen` for list changes and resource updates. The first SSE message must acknowledge the subscription with the effective filter and `_meta.io.modelcontextprotocol/subscriptionId`; notifications before acknowledgment are rejected. Later notifications must match both the active subscription ID and effective filter. The library does not silently reconnect a failed listen stream. Discovery generation counters remain authoritative if a bounded consumer channel overflows.
+
+## Tool registration
 
 ```go
 builder := toolsy.NewRegistryBuilder()
 for proxy, err := range client.GetTools(ctx) {
-    if err != nil {
-        return err
-    }
-    builder.Add(proxy)
+	if err != nil {
+		return err
+	}
+	builder.Add(proxy)
 }
-
-resourceTool, err := client.GetResourceTool()
-if err == nil { // resources capability is optional
-    builder.Add(resourceTool)
-}
-
 registry, err := builder.Build()
 ```
 
-MCP `inputSchema` becomes `ToolManifest.Parameters`; `outputSchema` becomes `ToolManifest.OutputSchema`. Both schemas default to JSON Schema 2020-12 and preserve numeric constraints exactly beyond IEEE-754 precision. Structured results are validated before delivery. `isError: true` becomes `CodeRemoteExecution`, distinct from schema, JSON-RPC and transport errors.
+`inputSchema` maps to `ToolManifest.Parameters`; `outputSchema` maps to `ToolManifest.OutputSchema`. `isError: true` becomes a remote execution error, distinct from JSON-RPC, schema and transport errors. Annotations remain hints, not authorization policy.
 
-## Invalidation
+## Removed APIs
 
-Discovery snapshots are versioned. After `notifications/tools/list_changed`, proxies created from the previous tools snapshot fail with `StaleDiscoveryError` until the host reloads and rebuilds its registry.
+The clear break removes initialize DTOs/lifecycle, `WithClientRoots`, `WithRoots`, roots handlers, `logging/setLevel`, base `ping`, `ErrSessionExpired`, server-request dispatch, resource subscribe/unsubscribe, session/GET/resume internals and every older protocol revision. No deprecated aliases are provided.
 
-```go
-go func() {
-    for event := range client.Invalidations() {
-        scheduleRegistryReload(event)
-    }
-}()
+See [migration-task34.md](../docs/migration-task34.md) for the full migration checklist.
+
+## Limits and verification
+
+I/O, pagination, schema composition and diagnostics remain bounded. Context cancellation takes precedence over transport/read-limit mapping. Errors do not expose authorization/cookie headers, full binary blocks or unbounded bodies.
+
+The Contract-First test anchor is the byte-exact official `2026-07-28` schema at `testdata/task34/schema/mcp-2026-07-28.schema.json`, pinned to upstream commit `271ecc9accafdd9b83a3c869fa67c22953b2af80` with SHA-256 `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203`. Its provenance manifest cites all 19 wire fixtures, and `make task34-preflight` verifies the trust anchor without network access.
+
+```text
+go test -race ./...
+make test
+make lint
+make task34-preflight
 ```
 
-`InvalidationGeneration` and `DiscoveryGeneration` are authoritative even if a slow event consumer overflows the bounded notification channel.
-`Client.Close` is concurrent-safe and closes both `Invalidations()` and `LogMessages()` after transport dispatch has stopped, so range consumers terminate normally.
-
-## Migration from the old module
-
-This is a breaking migration:
-
-- remove `NewSSETransport`, `SSETransport`, `SSETransportOption` and every `WithSSE*` option;
-- replace remote setup with `NewStreamableHTTPTransport`;
-- remove protocol negotiation for `2024-11-05`, `2025-03-26` and `2025-06-18`;
-- remove top-level `roots` from initialize; roots are returned from `roots/list`;
-- move progress tokens to `params._meta.progressToken`;
-- use fractional `ProgressInfo.Current` and `ProgressInfo.Total`;
-- replace content fields `base64`/`mediaType` with `data`/`mimeType`;
-- consume `CallToolResult`, `ContentBlock` and `ResourceContents` instead of shape-sniffing raw JSON;
-- use `PromptsGetResult`; the legacy `PromptMessageResult` alias is removed;
-- handle typed `ProtocolVersionError`, `CapabilityError`, `UnsupportedFeatureError`, `StaleDiscoveryError`, `RPCError`, `HTTPError`, `RemoteToolError` and `ErrSessionExpired`.
-
-No deprecated aliases or compatibility shims are provided.
-
-## Limits
-
-| Path | Default | Configuration |
-| --- | ---: | --- |
-| stdio JSON line | 1 MiB | fixed |
-| stdio protocol stdout stream | 16 MiB | `WithStdioMaxStreamBytes` |
-| stdio stderr logged line | 256 bytes | fixed; excess is discarded without closing transport |
-| Streamable HTTP JSON/SSE response | 16 MiB | `WithStreamableHTTPMaxStreamBytes` |
-| discovery pages | 1000 | `WithPaginationLimits` |
-| cumulative discovery cursor bytes | 1 MiB | `WithPaginationLimits` |
-
-Context interruption wins over read-limit mapping. Errors never include Authorization headers, full binary blocks or unbounded response bodies.
+`make release-break` is the actual destructive release workflow: after lint, tests and preflight it may create a release commit, create tags and push tags. Run it only when intentionally publishing the clear break.

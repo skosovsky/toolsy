@@ -1,0 +1,23 @@
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "resultType": "input_required",
+    "inputRequests": {
+      "confirm": {
+        "method": "elicitation/create",
+        "params": {
+          "message": "Continue?",
+          "requestedSchema": {
+            "type": "object",
+            "properties": {
+              "confirmed": {"type": "boolean"}
+            },
+            "required": ["confirmed"]
+          }
+        }
+      }
+    },
+    "requestState": "opaque-round-1"
+  }
+}

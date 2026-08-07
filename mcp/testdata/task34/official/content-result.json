@@ -1,0 +1,12 @@
+{
+  "resultType": "complete",
+  "content": [
+    {"type": "text", "text": "ok"},
+    {"type": "image", "data": "aW1hZ2U=", "mimeType": "image/png"},
+    {"type": "audio", "data": "YXVkaW8=", "mimeType": "audio/wav"},
+    {"type": "resource_link", "uri": "file:///a.txt", "name": "a.txt", "size": 9007199254740993},
+    {"type": "resource", "resource": {"uri": "file:///a.txt", "mimeType": "text/plain", "text": "hello"}},
+    {"type": "resource", "resource": {"uri": "file:///a.bin", "mimeType": "application/octet-stream", "blob": "AAE="}}
+  ],
+  "structuredContent": [1, true, null, {"nested": "value"}]
+}

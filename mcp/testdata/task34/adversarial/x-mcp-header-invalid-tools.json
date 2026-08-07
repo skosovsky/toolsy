@@ -1,0 +1,12 @@
+{
+  "resultType": "complete",
+  "tools": [
+    {"name": "valid", "inputSchema": {"type": "object", "properties": {"tenant": {"type": "string", "x-mcp-header": "Tenant"}}}},
+    {"name": "nested", "inputSchema": {"type": "object", "properties": {"outer": {"type": "object", "properties": {"inner": {"type": "string", "x-mcp-header": "Inner"}}}}}},
+    {"name": "number", "inputSchema": {"type": "object", "properties": {"ratio": {"type": "number", "x-mcp-header": "Ratio"}}}},
+    {"name": "bad-name", "inputSchema": {"type": "object", "properties": {"tenant": {"type": "string", "x-mcp-header": "Bad Header"}}}},
+    {"name": "collision", "inputSchema": {"type": "object", "properties": {"a": {"type": "string", "x-mcp-header": "Tenant"}, "b": {"type": "boolean", "x-mcp-header": "tenant"}}}}
+  ],
+  "ttlMs": 0,
+  "cacheScope": "private"
+}

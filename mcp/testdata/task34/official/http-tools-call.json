@@ -1,0 +1,26 @@
+{
+  "headers": {
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "tools/call",
+    "Mcp-Name": "lookup",
+    "Mcp-Param-Tenant": "north",
+    "Mcp-Param-Label": "=?base64?SGVsbG8sIOS4lueVjA==?="
+  },
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+      "name": "lookup",
+      "arguments": {
+        "tenant": "north",
+        "label": "Hello, 世界"
+      },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "toolsy", "version": "task34"}
+      }
+    }
+  }
+}

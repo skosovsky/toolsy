@@ -9,6 +9,11 @@ import (
 
 const maxDiagnosticBytes = 256
 
+const (
+	missingCapabilityErrorDataSubject  = "missing-required-client-capability error data"
+	unsupportedVersionErrorDataSubject = "unsupported-protocol-version error data"
+)
+
 func boundedDiagnostic(value string) string {
 	if len(value) <= maxDiagnosticBytes {
 		return value
@@ -21,8 +26,8 @@ func boundedDiagnostic(value string) string {
 }
 
 var (
-	ErrTransportClosed = errors.New("mcp: transport closed")
-	ErrSessionExpired  = errors.New("mcp: HTTP session expired")
+	ErrTransportClosed   = errors.New("mcp: transport closed")
+	ErrProtocolViolation = errors.New("mcp: protocol violation")
 )
 
 type ProtocolVersionError struct {
@@ -80,10 +85,102 @@ func (e *InvalidPayloadError) Error() string {
 
 func (e *InvalidPayloadError) Unwrap() error { return e.Err }
 
+func (e *InvalidPayloadError) Is(target error) bool { return target == ErrProtocolViolation }
+
 type RPCError struct {
 	Code    JSONNumber
 	Message string
 	Data    json.RawMessage
+}
+
+// HeaderMismatchError is the typed form of MCP error -32020.
+type HeaderMismatchError struct{ Message string }
+
+func (e *HeaderMismatchError) Error() string {
+	return fmt.Sprintf("mcp: request headers do not match the request body: %s", boundedDiagnostic(e.Message))
+}
+
+// MissingRequiredClientCapabilityError is the typed form of MCP error -32021.
+type MissingRequiredClientCapabilityError struct {
+	Message              string
+	RequiredCapabilities ClientCapabilities
+}
+
+func (e *MissingRequiredClientCapabilityError) Error() string {
+	return fmt.Sprintf("mcp: request requires an undeclared client capability: %s", boundedDiagnostic(e.Message))
+}
+
+// UnsupportedProtocolVersionError is the typed form of MCP error -32022.
+type UnsupportedProtocolVersionError struct {
+	Message   string
+	Requested string
+	Supported []string
+}
+
+func (e *UnsupportedProtocolVersionError) Error() string {
+	return fmt.Sprintf(
+		"mcp: unsupported protocol version %q: %s",
+		boundedDiagnostic(e.Requested),
+		boundedDiagnostic(e.Message),
+	)
+}
+
+// TypedRPCError converts MCP-reserved JSON-RPC failures into stable error
+// types. Malformed reserved error data remains a protocol violation.
+func TypedRPCError(rpc *RPCError) error {
+	if rpc == nil {
+		return nil
+	}
+	switch rpc.Code {
+	case JSONRPCHeaderMismatch:
+		return &HeaderMismatchError{Message: rpc.Message}
+	case JSONRPCMissingRequiredClientCapability:
+		fields, err := decodeObjectFields(rpc.Data)
+		if err != nil {
+			return &InvalidPayloadError{Subject: missingCapabilityErrorDataSubject, Err: err}
+		}
+		if err = rejectUnknownFields(fields, "requiredCapabilities"); err != nil {
+			return &InvalidPayloadError{Subject: missingCapabilityErrorDataSubject, Err: err}
+		}
+		if err = required(fields, "requiredCapabilities"); err != nil {
+			return &InvalidPayloadError{Subject: missingCapabilityErrorDataSubject, Err: err}
+		}
+		var data struct {
+			RequiredCapabilities ClientCapabilities `json:"requiredCapabilities"`
+		}
+		if err = json.Unmarshal(rpc.Data, &data); err != nil {
+			return &InvalidPayloadError{Subject: missingCapabilityErrorDataSubject, Err: err}
+		}
+		return &MissingRequiredClientCapabilityError{
+			Message:              rpc.Message,
+			RequiredCapabilities: data.RequiredCapabilities,
+		}
+	case JSONRPCUnsupportedProtocolVersion:
+		fields, err := decodeObjectFields(rpc.Data)
+		if err != nil {
+			return &InvalidPayloadError{Subject: unsupportedVersionErrorDataSubject, Err: err}
+		}
+		if err = rejectUnknownFields(fields, "requested", "supported"); err != nil {
+			return &InvalidPayloadError{Subject: unsupportedVersionErrorDataSubject, Err: err}
+		}
+		var data struct {
+			Requested string   `json:"requested"`
+			Supported []string `json:"supported"`
+		}
+		if err = json.Unmarshal(rpc.Data, &data); err != nil || data.Requested == "" || len(data.Supported) == 0 {
+			if err == nil {
+				err = errors.New("requested and supported are required")
+			}
+			return &InvalidPayloadError{Subject: unsupportedVersionErrorDataSubject, Err: err}
+		}
+		return &UnsupportedProtocolVersionError{
+			Message:   rpc.Message,
+			Requested: data.Requested,
+			Supported: append([]string(nil), data.Supported...),
+		}
+	default:
+		return rpc
+	}
 }
 
 func (e *RPCError) Error() string {

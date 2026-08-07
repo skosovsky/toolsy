@@ -1,0 +1,7 @@
+{
+  "resultType": "complete",
+  "supportedProtocolVersions": ["2026-07-28"],
+  "capabilities": {},
+  "ttlMs": 0,
+  "cacheScope": "private"
+}

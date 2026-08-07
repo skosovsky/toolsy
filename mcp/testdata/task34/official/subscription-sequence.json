@@ -1,0 +1,53 @@
+{
+  "request": {
+    "jsonrpc": "2.0",
+    "id": "listen-1",
+    "method": "subscriptions/listen",
+    "params": {
+      "notifications": {
+        "toolsListChanged": true,
+        "promptsListChanged": true,
+        "resourceSubscriptions": ["file:///workspace"]
+      },
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "toolsy", "version": "task34"}
+      }
+    }
+  },
+  "stream": [
+    {
+      "jsonrpc": "2.0",
+      "method": "notifications/subscriptions/acknowledged",
+      "params": {
+        "notifications": {
+          "toolsListChanged": true,
+          "resourceSubscriptions": ["file:///workspace"]
+        },
+        "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "notifications/tools/list_changed",
+      "params": {"_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}}
+    },
+    {
+      "jsonrpc": "2.0",
+      "method": "notifications/resources/updated",
+      "params": {
+        "uri": "file:///workspace/a.txt",
+        "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}
+      }
+    },
+    {
+      "jsonrpc": "2.0",
+      "id": "listen-1",
+      "result": {
+        "resultType": "complete",
+        "_meta": {"io.modelcontextprotocol/subscriptionId": "listen-1"}
+      }
+    }
+  ]
+}

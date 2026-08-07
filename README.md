@@ -530,17 +530,22 @@ Implications for external executor wrappers:
 
 ## MCP integration
 
-Use eager lifecycle:
+The MCP bridge supports exactly protocol revision `2026-07-28`. `Connect` performs strict `server/discover` up front and returns a ready client only when the server's `supportedVersions` contains that exact revision.
 
 ```go
-client, err := mcp.Connect(ctx, transport, mcp.WithClientRoots([]string{"/workspace"}))
+transport := mcp.NewStreamableHTTPTransport("https://example.com/mcp")
+client, err := mcp.Connect(ctx, transport)
 if err != nil {
 	return err
 }
 defer client.Close()
 ```
 
-`Connect` performs handshake during creation and returns ready client.
+There is no `initialize` fallback, session ID, HTTP GET/resume/DELETE path or automatic retry. HTTP uses POST with exact version/method routing headers; `Mcp-Name` is emitted for tool calls, prompt gets and resource reads, and `x-mcp-header` tool arguments are mirrored as validated `Mcp-Param-*` fields. Stdio cancellation sends `notifications/cancelled` after delivery; HTTP cancellation closes the request-scoped response stream. Results are tagged with `resultType`, cacheable results expose `ttlMs`/`cacheScope`, and invalidations use explicit `subscriptions/listen`.
+
+For stable host-side cache identity, `mcp.ComputeSnapshotDigest` validates and hashes supported discovery/list/read snapshots using canonical, snapshot-type-separated encoding that includes cache metadata and ordered entries. Official MCP capability extensions are preserved inert and may use explicit BYO codecs; caller `_meta` still cannot forge MCP-reserved MetaObject namespaces.
+
+See [the module README](mcp/README.md) and [task34 migration guide](docs/migration-task34.md).
 
 ## Historical Migration Notes
 
@@ -549,6 +554,7 @@ defer client.Close()
 - Replace runtime `reg.Register(...)` / `reg.Use(...)` with `RegistryBuilder`.
 - Replace `ToolManifest`-based logic with `tool.Manifest()` and `ToolRequirements`.
 - Replace `NewClient + Initialize` in `mcp` with `Connect`.
+- Replace MCP `2025-11-25`, roots/session/GET-resume assumptions with the strict `2026-07-28` contract in [docs/migration-task34.md](docs/migration-task34.md).
 - Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
 - `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
 

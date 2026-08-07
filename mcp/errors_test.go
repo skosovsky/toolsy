@@ -30,5 +30,5 @@ func TestJSONRPCErrorRejectsFractionalCodeOnMarshal(t *testing.T) {
 	_, err := wireErr.MarshalJSON()
 
 	// Assert.
-	require.ErrorContains(t, err, "must be an integer")
+	require.ErrorContains(t, err, "must be integer")
 }

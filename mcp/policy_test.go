@@ -111,8 +111,8 @@ func TestMcpToolPolicyOptions_ExplicitNonDestructive(t *testing.T) {
 func TestGetResourceTool_ReadOnlyManifest(t *testing.T) {
 	// Arrange.
 	client := &Client{
-		initialized: true,
-		server: InitializeResult{Capabilities: ServerCapabilities{
+		ready: true,
+		server: DiscoverResult{Capabilities: ServerCapabilities{
 			Resources: &ResourcesCapability{},
 		}},
 	}

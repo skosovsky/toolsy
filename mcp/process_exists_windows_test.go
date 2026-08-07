@@ -20,5 +20,5 @@ func processExists(pid int) bool {
 }
 
 func newLongLivedDescendant() *exec.Cmd {
-	return exec.Command(os.Args[0], "-test.run=TestStdioHelperProcess", "--", "long-lived-descendant")
+	return exec.Command(os.Args[0], "-test.run=TestTask34StdioHelperProcess", "--", "long-lived-descendant")
 }

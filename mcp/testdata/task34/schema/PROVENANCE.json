@@ -1,0 +1,37 @@
+{
+  "protocolRevision": "2026-07-28",
+  "artifact": "mcp-2026-07-28.schema.json",
+  "artifactBytes": 181474,
+  "sha256": "ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203",
+  "sourceRepository": "https://github.com/modelcontextprotocol/modelcontextprotocol",
+  "sourceCommit": "271ecc9accafdd9b83a3c869fa67c22953b2af80",
+  "sourcePath": "schema/2026-07-28/schema.json",
+  "sourceURL": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/271ecc9accafdd9b83a3c869fa67c22953b2af80/schema/2026-07-28/schema.json",
+  "sourceBrowseURL": "https://github.com/modelcontextprotocol/modelcontextprotocol/blob/271ecc9accafdd9b83a3c869fa67c22953b2af80/schema/2026-07-28/schema.json",
+  "retrievedAt": "2026-08-07",
+  "fixtureContract": {
+    "official": [
+      "../official/content-result.json",
+      "../official/discover-request.json",
+      "../official/discover-response.json",
+      "../official/http-tools-call.json",
+      "../official/input-required-response.json",
+      "../official/input-retry-request.json",
+      "../official/subscription-sequence.json",
+      "../official/tools-list-response.json"
+    ],
+    "adversarial": [
+      "../adversarial/cache-invalid.json",
+      "../adversarial/discover-legacy-only.json",
+      "../adversarial/discover-wrong-version-field.json",
+      "../adversarial/duplicate-result-key.json",
+      "../adversarial/http-header-mismatch.json",
+      "../adversarial/legacy-forbidden.json",
+      "../adversarial/peer-sequences.json",
+      "../adversarial/result-unions.json",
+      "../adversarial/schema-and-content-invalid.json",
+      "../adversarial/subscription-invalid-sequences.json",
+      "../adversarial/x-mcp-header-invalid-tools.json"
+    ]
+  }
+}

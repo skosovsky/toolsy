@@ -1,0 +1,24 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "resultType": "complete",
+    "tools": [
+      {
+        "name": "lookup",
+        "inputSchema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "type": "object",
+          "properties": {
+            "tenant": {"type": "string", "x-mcp-header": "Tenant"},
+            "label": {"type": "string", "x-mcp-header": "Label"},
+            "attempt": {"type": "integer", "x-mcp-header": "Attempt"}
+          }
+        },
+        "outputSchema": {"type": ["object", "array", "string", "number", "boolean", "null"]}
+      }
+    ],
+    "ttlMs": 30000,
+    "cacheScope": "private"
+  }
+}

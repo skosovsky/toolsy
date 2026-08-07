@@ -1,0 +1,7 @@
+{
+  "resultType": "complete",
+  "supportedVersions": ["2025-11-25"],
+  "capabilities": {},
+  "ttlMs": 0,
+  "cacheScope": "private"
+}

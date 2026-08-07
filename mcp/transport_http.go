@@ -1,56 +1,43 @@
-//nolint:exhaustruct // Transport options deliberately initialize only configured runtime state.
+//nolint:exhaustruct // Internal transport values intentionally omit optional fields.
 package mcp
 
 import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"mime"
 	"net/http"
 	"net/http/httptrace"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"unicode/utf8"
 
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 const (
-	httpPollRetryDelay = 100 * time.Millisecond
-	httpMaxRetryDelay  = 5 * time.Minute
-)
-
-const (
-	mcpProtocolVersionHeader          = "Mcp-Protocol-Version"
-	mcpSessionIDHeader                = "Mcp-Session-Id"
-	httpCloseTimeout                  = 5 * time.Second
+	mcpProtocolVersionHeader          = "MCP-Protocol-Version"
+	mcpMethodHeader                   = "Mcp-Method"
+	mcpNameHeader                     = "Mcp-Name"
+	mcpParamHeaderPrefix              = "Mcp-Param-"
 	eventStreamMediaType              = "text/event-stream"
 	streamableHTTPResponseSubject     = "Streamable HTTP response"
 	streamableHTTPSSESubject          = "Streamable HTTP SSE"
 	streamableHTTPJSONResponseSubject = "Streamable HTTP JSON response"
+	streamableHTTPRequestSubject      = "Streamable HTTP request"
+	httpDecoratorSubject              = "HTTP request decorator"
+	maxSafeInteger                    = int64(1<<53 - 1)
 )
 
-var errSSEPollingBoundary = errors.New("mcp: SSE polling boundary")
-
-type sseResumeState struct {
-	lastEventID string
-	retryDelay  time.Duration
-}
-
-type sseBoundaryError struct{ state sseResumeState }
-
-func (e *sseBoundaryError) Error() string { return errSSEPollingBoundary.Error() }
-func (e *sseBoundaryError) Unwrap() error { return errSSEPollingBoundary }
-
 type HTTPRequestDecorator func(*http.Request) error
-
 type StreamableHTTPOption func(*StreamableHTTPTransport)
 
 func WithStreamableHTTPLogger(logger *slog.Logger) StreamableHTTPOption {
@@ -70,17 +57,13 @@ func WithStreamableHTTPMaxStreamBytes(limit int) StreamableHTTPOption {
 }
 
 func WithStreamableHTTPAllowPrivateIPs(allow bool) StreamableHTTPOption {
-	return func(transport *StreamableHTTPTransport) {
-		transport.allowPrivateIPs = allow
-	}
+	return func(transport *StreamableHTTPTransport) { transport.allowPrivateIPs = allow }
 }
 
-// WithStreamableHTTPClient applies safe timeout settings from client. Its Transport is
-// intentionally ignored so SSRF-safe dialing and redirect validation remain enforced.
+// WithStreamableHTTPClient copies safe client settings. Its Transport is ignored
+// so SSRF-safe dialing and redirect checks cannot be replaced.
 func WithStreamableHTTPClient(client *http.Client) StreamableHTTPOption {
-	return func(transport *StreamableHTTPTransport) {
-		transport.baseClient = client
-	}
+	return func(transport *StreamableHTTPTransport) { transport.baseClient = client }
 }
 
 func WithStreamableHTTPRequestDecorator(decorator HTTPRequestDecorator) StreamableHTTPOption {
@@ -90,9 +73,7 @@ func WithStreamableHTTPRequestDecorator(decorator HTTPRequestDecorator) Streamab
 func defaultStreamableHTTPClient(allowPrivateIPs bool) *http.Client {
 	validateRedirect := httptool.CheckRedirectRemote(allowPrivateIPs, nil)
 	client := httptool.NewSafeHTTPClient(
-		httptool.SafeDialOptions{
-			AllowPrivateIPs: allowPrivateIPs,
-		}, //nolint:exhaustruct // blacklist mode
+		httptool.SafeDialOptions{AllowPrivateIPs: allowPrivateIPs},
 		func(request *http.Request, via []*http.Request) error {
 			if len(via) > 0 && request.Method != via[len(via)-1].Method {
 				return errors.New("mcp: redirect must preserve HTTP method")
@@ -121,34 +102,25 @@ type StreamableHTTPTransport struct {
 	lifetimeCtx     context.Context
 	cancel          context.CancelFunc
 	peer            *rpcPeer
-	protocolVersion string
-	sessionID       string
-	lastEventID     string
-	getStarted      bool
-	getDone         chan struct{}
-	pollRetryDelay  time.Duration
-	requestHandler  RequestHandler
 	notifyHandlers  map[string]NotificationHandler
+	requestHandlers map[string]RequestScopedNotificationHandler
+	toolHeaders     map[string][]HTTPToolHeaderBinding
 	activePosts     map[uint64]context.CancelFunc
 	nextPostID      uint64
 	postWG          sync.WaitGroup
-	resumeWG        sync.WaitGroup
 	closeOnce       sync.Once
 }
 
-func NewStreamableHTTPTransport(
-	endpoint string,
-	opts ...StreamableHTTPOption,
-) *StreamableHTTPTransport {
+func NewStreamableHTTPTransport(endpoint string, opts ...StreamableHTTPOption) *StreamableHTTPTransport {
 	transport := &StreamableHTTPTransport{
-		endpoint:       endpoint,
-		logger:         slog.Default(),
-		client:         defaultStreamableHTTPClient(false),
-		maxStreamBytes: httptool.DefaultMaxSSEStreamBytes,
-		getDone:        make(chan struct{}),
-		pollRetryDelay: httpPollRetryDelay,
-		notifyHandlers: make(map[string]NotificationHandler),
-		activePosts:    make(map[uint64]context.CancelFunc),
+		endpoint:        endpoint,
+		logger:          slog.Default(),
+		client:          defaultStreamableHTTPClient(false),
+		maxStreamBytes:  httptool.DefaultMaxSSEStreamBytes,
+		notifyHandlers:  make(map[string]NotificationHandler),
+		requestHandlers: make(map[string]RequestScopedNotificationHandler),
+		toolHeaders:     make(map[string][]HTTPToolHeaderBinding),
+		activePosts:     make(map[uint64]context.CancelFunc),
 	}
 	for _, opt := range opts {
 		opt(transport)
@@ -175,9 +147,11 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	if err := httptool.ValidateRemoteURL(ctx, t.endpoint, t.allowPrivateIPs); err != nil {
 		return err
 	}
+	//nolint:gosec // The transport owns cancel and invokes it from terminate or Close.
 	t.lifetimeCtx, t.cancel = context.WithCancel(context.WithoutCancel(ctx))
-	t.peer = newRPCPeer(t.lifetimeCtx, t.logger, t.postMessage)
-	t.peer.setRequestHandler(t.requestHandler)
+	t.peer = newRPCPeer(t.lifetimeCtx, t.logger, func(context.Context, []byte) error {
+		return errors.New("mcp: HTTP transport cannot send server responses")
+	})
 	for method, handler := range t.notifyHandlers {
 		t.peer.setNotificationHandler(method, handler)
 	}
@@ -185,35 +159,15 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	return nil
 }
 
-func (t *StreamableHTTPTransport) SetProtocolVersion(version string) {
-	t.mu.Lock()
-	if t.closed {
-		t.mu.Unlock()
-		return
-	}
-	t.protocolVersion = version
-	t.mu.Unlock()
-}
-
-func (t *StreamableHTTPTransport) Activate() { t.ensureGETStarted() }
-
-func (t *StreamableHTTPTransport) ensureGETStarted() {
-	t.mu.Lock()
-	if t.getStarted || !t.started || t.closed || t.terminating {
-		t.mu.Unlock()
-		return
-	}
-	t.getStarted = true
-	t.mu.Unlock()
-	go t.getLoop()
-}
-
-func (t *StreamableHTTPTransport) Request(
+func (t *StreamableHTTPTransport) PrepareRequest(
 	ctx context.Context,
 	method string,
 	params any,
-) (PendingRequest, error) {
+) (PreparedRequest, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateOutgoingRequest(method, params); err != nil {
 		return nil, err
 	}
 	t.mu.RLock()
@@ -227,35 +181,41 @@ func (t *StreamableHTTPTransport) Request(
 	if err != nil {
 		return nil, err
 	}
-	go func() {
-		postCtx, stopPost := contextUntilPendingTerminal(ctx, pending.terminal)
-		defer stopPost()
-		defer pending.finishDelivery()
-		if postErr := t.postMessageTracked(postCtx, body, pending.markSent); postErr != nil {
-			peer.failPending(pending, t.failureCause(postErr))
-		}
-	}()
-	return pending, nil
-}
-
-func (t *StreamableHTTPTransport) Notify(ctx context.Context, method string, params any) error {
-	t.mu.RLock()
-	peer := t.peer
-	started := t.started && !t.closed && !t.terminating
-	t.mu.RUnlock()
-	if peer == nil || !started {
-		return ErrTransportClosed
+	routingHeaders, err := t.routingHeaders(body)
+	if err != nil {
+		peer.failPending(pending, err)
+		return nil, err
 	}
-	return peer.notifyMessage(ctx, method, params)
+	return &preparedRequest{
+		pendingRequest: pending,
+		ctx:            ctx,
+		deliver: func() {
+			go func() {
+				postCtx, stopPost := contextUntilPendingTerminal(ctx, pending.terminal)
+				defer stopPost()
+				defer pending.finishDelivery()
+				if postErr := t.postMessageTracked(
+					postCtx,
+					body,
+					routingHeaders,
+					pending.markSent,
+				); postErr != nil {
+					peer.failPending(pending, t.failureCause(postErr))
+				}
+			}()
+		},
+	}, nil
 }
 
-func (t *StreamableHTTPTransport) OnRequest(handler RequestHandler) {
-	t.mu.Lock()
-	t.requestHandler = handler
-	peer := t.peer
-	t.mu.Unlock()
-	if peer != nil {
-		peer.setRequestHandler(handler)
+// Notify is intentionally unavailable on Streamable HTTP in MCP 2026-07-28.
+// HTTP cancellation is represented solely by closing the request response body.
+func (t *StreamableHTTPTransport) Notify(_ context.Context, method string, params any) error {
+	if err := validateOutgoingNotification(method, params); err != nil {
+		return err
+	}
+	return &InvalidPayloadError{
+		Subject: "Streamable HTTP notification",
+		Err:     errors.New("client notifications are not defined for MCP 2026-07-28 Streamable HTTP"),
 	}
 }
 
@@ -273,88 +233,86 @@ func (t *StreamableHTTPTransport) OnNotification(method string, handler Notifica
 	}
 }
 
-func (t *StreamableHTTPTransport) buildRequest(
-	ctx context.Context,
+func (t *StreamableHTTPTransport) OnRequestNotification(
 	method string,
-	body io.Reader,
-) (*http.Request, error) {
-	request, err := http.NewRequestWithContext(ctx, method, t.endpoint, nil)
-	if err != nil {
-		return nil, err
+	handler RequestScopedNotificationHandler,
+) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if handler == nil {
+		delete(t.requestHandlers, method)
+		return
 	}
-	t.mu.RLock()
-	version := t.protocolVersion
-	sessionID := t.sessionID
-	lastEventID := t.lastEventID
-	decorator := t.decorator
-	t.mu.RUnlock()
-	if decorator != nil {
-		if decoratorErr := applyRequestDecorator(request, decorator); decoratorErr != nil {
-			return nil, decoratorErr
+	t.requestHandlers[method] = handler
+}
+
+func validateHTTPToolHeaderBindings(bindings []HTTPToolHeaderBinding) ([]HTTPToolHeaderBinding, error) {
+	validated := make([]HTTPToolHeaderBinding, len(bindings))
+	seen := make(map[string]struct{}, len(bindings))
+	for index, binding := range bindings {
+		if !validHTTPToken(binding.Header) {
+			return nil, fmt.Errorf("mcp: invalid x-mcp-header %q", binding.Header)
+		}
+		key := strings.ToLower(binding.Header)
+		if _, duplicate := seen[key]; duplicate {
+			return nil, fmt.Errorf("mcp: duplicate x-mcp-header %q", binding.Header)
+		}
+		seen[key] = struct{}{}
+		if len(binding.Path) != 1 || binding.Path[0] == "" {
+			return nil, fmt.Errorf("mcp: x-mcp-header %q must use one top-level property", binding.Header)
+		}
+		switch binding.Type {
+		case schemaTypeString, schemaTypeInteger, schemaTypeBoolean:
+		default:
+			return nil, fmt.Errorf("mcp: x-mcp-header %q has unsupported type %q", binding.Header, binding.Type)
+		}
+		validated[index] = HTTPToolHeaderBinding{
+			Header: binding.Header,
+			Path:   append([]string(nil), binding.Path...),
+			Type:   binding.Type,
 		}
 	}
-	decoratedHeaders := request.Header.Clone()
-	request, err = http.NewRequestWithContext(ctx, method, t.endpoint, body)
-	if err != nil {
-		return nil, err
-	}
-	request.Header = decoratedHeaders
-	request.Header.Set("Accept", "application/json, text/event-stream")
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	if version != "" {
-		request.Header.Set(mcpProtocolVersionHeader, version)
-	}
-	if sessionID != "" {
-		request.Header.Set(mcpSessionIDHeader, sessionID)
-	}
-	if method == http.MethodGet && lastEventID != "" {
-		request.Header.Set("Last-Event-ID", lastEventID)
-	}
-	return request, nil
+	return validated, nil
 }
 
-func applyRequestDecorator(request *http.Request, decorator HTTPRequestDecorator) error {
-	originalURL := request.URL.String()
-	originalMethod := request.Method
-	originalHost := request.Host
-	if err := decorator(request); err != nil {
-		return err
+func (t *StreamableHTTPTransport) ReplaceToolHeaderBindings(
+	bindings map[string][]HTTPToolHeaderBinding,
+) error {
+	validated := make(map[string][]HTTPToolHeaderBinding, len(bindings))
+	for tool, descriptors := range bindings {
+		if tool == "" {
+			return errors.New("mcp: tool header binding requires a tool name")
+		}
+		toolBindings, err := validateHTTPToolHeaderBindings(descriptors)
+		if err != nil {
+			return fmt.Errorf("mcp: tool %q header bindings: %w", tool, err)
+		}
+		validated[tool] = toolBindings
 	}
-	if request.URL.String() != originalURL || request.Method != originalMethod || request.Host != originalHost {
-		return &InvalidPayloadError{
-			Subject: "HTTP request decorator",
-			Err:     errors.New("decorator must not change request method, URL, or Host override"),
+	t.mu.Lock()
+	t.toolHeaders = validated
+	t.mu.Unlock()
+	return nil
+}
+
+func validHTTPToken(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index := range len(value) {
+		char := value[index]
+		if (char < '0' || char > '9') && (char < 'A' || char > 'Z') &&
+			(char < 'a' || char > 'z') && !strings.ContainsRune("!#$%&'*+-.^_`|~", rune(char)) {
+			return false
 		}
 	}
-	if !requestDecoratorChangedBody(request) {
-		return nil
-	}
-	if request.Body != nil {
-		_ = request.Body.Close()
-	}
-	return &InvalidPayloadError{
-		Subject: "HTTP request decorator",
-		Err:     errors.New("decorator must not set request body fields"),
-	}
-}
-
-func requestDecoratorChangedBody(request *http.Request) bool {
-	return request.Body != nil || request.GetBody != nil || request.ContentLength != 0 ||
-		len(request.TransferEncoding) > 0 || len(request.Trailer) > 0 ||
-		request.Header.Get("Content-Length") != "" ||
-		request.Header.Get("Transfer-Encoding") != "" ||
-		request.Header.Get("Trailer") != ""
-}
-
-func (t *StreamableHTTPTransport) postMessage(ctx context.Context, body []byte) error {
-	return t.postMessageTracked(ctx, body, nil)
+	return true
 }
 
 func (t *StreamableHTTPTransport) postMessageTracked(
 	ctx context.Context,
 	body []byte,
+	routingHeaders map[string]string,
 	onSent func(),
 ) error {
 	postCtx, cancelPost := context.WithCancel(ctx)
@@ -380,17 +338,17 @@ func (t *StreamableHTTPTransport) postMessageTracked(
 		cancelPost()
 		t.postWG.Done()
 	}()
-	err := t.postMessageOnce(postCtx, body, onSent)
+	err := t.postMessageOnce(postCtx, body, routingHeaders, onSent)
 	if isTerminalHTTPTransportError(err) {
 		go t.terminate(err)
 	}
 	return err
 }
 
-//nolint:funlen,gocognit // HTTP status, session, JSON and SSE branches are explicit fail-closed paths.
 func (t *StreamableHTTPTransport) postMessageOnce(
 	ctx context.Context,
 	body []byte,
+	routingHeaders map[string]string,
 	onSent func(),
 ) error {
 	if onSent != nil {
@@ -402,90 +360,64 @@ func (t *StreamableHTTPTransport) postMessageOnce(
 		}}
 		ctx = httptrace.WithClientTrace(ctx, trace)
 	}
-	request, err := t.buildRequest(ctx, http.MethodPost, bytes.NewReader(body))
+	request, err := t.buildRequest(ctx, body, routingHeaders)
+	if err != nil {
+		return err
+	}
+	provenance, err := newSSERequestProvenance(body)
 	if err != nil {
 		return err
 	}
 	// #nosec G704 -- endpoint validation and safe dialing are enforced in Start/default client.
 	//nolint:bodyclose // Closed through httptool.CloseResponseBody below.
-	response, err := t.client.Do(
-		request,
-	)
+	response, err := t.client.Do(request)
 	if err != nil {
 		return err
 	}
 	defer httptool.CloseResponseBody(ctx, response.Body)
-	if response.StatusCode == http.StatusNotFound && t.hasSession() {
-		return ErrSessionExpired
-	}
-	if response.StatusCode == http.StatusUnauthorized ||
-		response.StatusCode == http.StatusForbidden {
+	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
 		return &HTTPError{StatusCode: response.StatusCode, Operation: "POST authentication"}
 	}
-	if response.StatusCode == http.StatusAccepted {
-		if isJSONRPCRequest(body) {
-			return &InvalidPayloadError{
-				Subject: streamableHTTPResponseSubject,
-				Err:     errors.New("202 Accepted is invalid for a JSON-RPC request"),
-			}
-		}
-		payload, readErr := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
-		if readErr != nil {
-			return readErr
-		}
-		if len(payload) != 0 {
-			return &InvalidPayloadError{
-				Subject: "Streamable HTTP 202 response",
-				Err:     errors.New("202 Accepted response body must be empty"),
-			}
-		}
-		return nil
-	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return &HTTPError{StatusCode: response.StatusCode, Operation: "POST"}
+		return t.consumeHTTPError(ctx, response, body)
 	}
-	if !isJSONRPCRequest(body) {
+	if response.StatusCode == http.StatusAccepted {
 		return &InvalidPayloadError{
 			Subject: streamableHTTPResponseSubject,
-			Err:     errors.New("notification and response POSTs require 202 Accepted"),
+			Err:     errors.New("202 Accepted is invalid for a JSON-RPC request"),
 		}
 	}
-	sessionHeader := response.Header.Get(mcpSessionIDHeader)
-	if sessionErr := t.acceptSessionHeader(sessionHeader, isInitializeRequest(body)); sessionErr != nil {
-		return sessionErr
-	}
+	return t.consumeSuccessfulHTTPResponse(ctx, response, body, provenance)
+}
+
+func (t *StreamableHTTPTransport) consumeSuccessfulHTTPResponse(
+	ctx context.Context,
+	response *http.Response,
+	requestBody []byte,
+	provenance *sseRequestProvenance,
+) error {
 	contentType, err := exactMediaType(response.Header.Get("Content-Type"))
 	if err != nil {
 		return &InvalidPayloadError{Subject: "Streamable HTTP Content-Type", Err: err}
 	}
 	switch contentType {
 	case "application/json":
-		payload, err := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
-		if err != nil {
-			return err
+		payload, readErr := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
+		if readErr != nil {
+			return readErr
 		}
 		if len(bytes.TrimSpace(payload)) == 0 {
-			return &InvalidPayloadError{
-				Subject: streamableHTTPJSONResponseSubject,
-				Err:     errors.New("empty body"),
-			}
+			return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: errors.New("empty body")}
 		}
-		if err := validateJSONPostCorrelation(body, payload); err != nil {
+		if err := validateJSONPostCorrelation(requestBody, payload); err != nil {
+			return err
+		}
+		if err := rejectReservedRPCErrorOutsideHTTP400(payload); err != nil {
 			return err
 		}
 		return t.peer.dispatch(payload)
 	case eventStreamMediaType:
-		defaults := t.snapshotResumeState()
-		initial := sseResumeState{retryDelay: defaults.retryDelay}
-		_, err := t.consumeSSEState(ctx, response.Body, initial, false)
-		var boundary *sseBoundaryError
-		if errors.As(err, &boundary) {
-			if requestID, ok := jsonRPCRequestID(body); ok && t.peer.hasPendingID(requestID) {
-				t.startResumeLoop(boundary.state, requestID)
-			}
-			return nil
-		}
-		return err
+		return t.consumeRequestSSE(ctx, response.Body, provenance)
 	default:
 		return &InvalidPayloadError{
 			Subject: streamableHTTPResponseSubject,
@@ -494,24 +426,357 @@ func (t *StreamableHTTPTransport) postMessageOnce(
 	}
 }
 
+func (t *StreamableHTTPTransport) consumeHTTPError(
+	ctx context.Context,
+	response *http.Response,
+	requestBody []byte,
+) error {
+	payload, err := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
+	if err == nil && len(bytes.TrimSpace(payload)) > 0 &&
+		validateNon2xxRPCError(response.StatusCode, requestBody, payload) == nil &&
+		t.peer.dispatch(payload) == nil {
+		return nil
+	}
+	return &HTTPError{StatusCode: response.StatusCode, Operation: "POST"}
+}
+
+func (t *StreamableHTTPTransport) buildRequest(
+	ctx context.Context,
+	body []byte,
+	routingHeaders map[string]string,
+) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, t.endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	t.mu.RLock()
+	decorator := t.decorator
+	t.mu.RUnlock()
+	if decorator != nil {
+		if decoratorErr := applyRequestDecorator(request, decorator); decoratorErr != nil {
+			return nil, decoratorErr
+		}
+	}
+	for name := range request.Header {
+		if isReservedMCPHeader(name) {
+			return nil, &InvalidPayloadError{
+				Subject: httpDecoratorSubject,
+				Err:     fmt.Errorf("decorator must not set reserved MCP header %q", name),
+			}
+		}
+	}
+	decoratedHeaders := request.Header.Clone()
+	request, err = http.NewRequestWithContext(ctx, http.MethodPost, t.endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.Header = decoratedHeaders
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	request.Header.Set("Content-Type", "application/json")
+	for name, value := range routingHeaders {
+		request.Header.Set(name, value)
+	}
+	return request, nil
+}
+
+func isReservedMCPHeader(name string) bool {
+	lowerName := strings.ToLower(name)
+	return strings.HasPrefix(lowerName, "mcp-") || strings.HasPrefix(lowerName, "last-event-")
+}
+
+func applyRequestDecorator(request *http.Request, decorator HTTPRequestDecorator) error {
+	originalURL := request.URL.String()
+	originalMethod := request.Method
+	originalHost := request.Host
+	if err := decorator(request); err != nil {
+		return err
+	}
+	if request.URL.String() != originalURL || request.Method != originalMethod || request.Host != originalHost {
+		return &InvalidPayloadError{
+			Subject: httpDecoratorSubject,
+			Err:     errors.New("decorator must not change request method, URL, or Host override"),
+		}
+	}
+	if !requestDecoratorChangedBody(request) {
+		return nil
+	}
+	if request.Body != nil {
+		_ = request.Body.Close()
+	}
+	return &InvalidPayloadError{
+		Subject: httpDecoratorSubject,
+		Err:     errors.New("decorator must not set request body fields"),
+	}
+}
+
+func requestDecoratorChangedBody(request *http.Request) bool {
+	return request.Body != nil || request.GetBody != nil || request.ContentLength != 0 ||
+		len(request.TransferEncoding) > 0 || len(request.Trailer) > 0 ||
+		request.Header.Get("Content-Length") != "" || request.Header.Get("Transfer-Encoding") != "" ||
+		request.Header.Get("Trailer") != ""
+}
+
+func (t *StreamableHTTPTransport) routingHeaders(body []byte) (map[string]string, error) {
+	fields, err := decodeObjectFields(body)
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: streamableHTTPRequestSubject, Err: err}
+	}
+	var method string
+	if unmarshalErr := json.Unmarshal(fields["method"], &method); unmarshalErr != nil || method == "" {
+		return nil, &InvalidPayloadError{Subject: mcpMethodHeader, Err: errors.New("body method is required")}
+	}
+	params, err := decodeObjectFields(fields["params"])
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: "Streamable HTTP params", Err: err}
+	}
+	if err := validateProtocolMeta(params["_meta"]); err != nil {
+		return nil, err
+	}
+	headers := map[string]string{mcpProtocolVersionHeader: ProtocolVersion, mcpMethodHeader: method}
+	nameField := ""
+	switch method {
+	case "tools/call", "prompts/get":
+		nameField = "name"
+	case "resources/read":
+		nameField = "uri"
+	}
+	var name string
+	if nameField != "" {
+		if err := json.Unmarshal(params[nameField], &name); err != nil || name == "" {
+			return nil, &InvalidPayloadError{
+				Subject: mcpNameHeader,
+				Err:     fmt.Errorf("params.%s must be a non-empty string", nameField),
+			}
+		}
+		headers[mcpNameHeader] = encodeMCPHeaderValue(name)
+	}
+	if method == "tools/call" {
+		t.mu.RLock()
+		bindings, bindingsKnown := t.toolHeaders[name]
+		bindings = append([]HTTPToolHeaderBinding(nil), bindings...)
+		t.mu.RUnlock()
+		if !bindingsKnown {
+			return nil, &InvalidPayloadError{
+				Subject: "tools/call HTTP header authority",
+				Err:     fmt.Errorf("tool %q has no current tools/list header descriptor", name),
+			}
+		}
+		if err := addToolParameterHeadersForBindings(headers, bindings, params["arguments"]); err != nil {
+			return nil, err
+		}
+	}
+	return headers, nil
+}
+
+func validateProtocolMeta(raw json.RawMessage) error {
+	meta, err := decodeObjectFields(raw)
+	if err != nil {
+		return &InvalidPayloadError{Subject: subjectMCPRequestMeta, Err: err}
+	}
+	var version string
+	if err := json.Unmarshal(meta["io.modelcontextprotocol/protocolVersion"], &version); err != nil {
+		return &InvalidPayloadError{
+			Subject: "MCP request protocol version",
+			Err:     errors.New("missing or invalid value"),
+		}
+	}
+	if version != ProtocolVersion {
+		return &InvalidPayloadError{
+			Subject: "MCP request protocol version",
+			Err:     fmt.Errorf("body version %q does not match %q", version, ProtocolVersion),
+		}
+	}
+	return nil
+}
+
+func (t *StreamableHTTPTransport) addToolParameterHeaders(
+	headers map[string]string,
+	tool string,
+	arguments json.RawMessage,
+) error {
+	t.mu.RLock()
+	bindings := append([]HTTPToolHeaderBinding(nil), t.toolHeaders[tool]...)
+	t.mu.RUnlock()
+	return addToolParameterHeadersForBindings(headers, bindings, arguments)
+}
+
+func addToolParameterHeadersForBindings(
+	headers map[string]string,
+	bindings []HTTPToolHeaderBinding,
+	arguments json.RawMessage,
+) error {
+	if len(bindings) == 0 {
+		return nil
+	}
+	if len(bytes.TrimSpace(arguments)) == 0 || rawJSONIsNull(arguments) {
+		return nil
+	}
+	root, err := decodeObjectFields(arguments)
+	if err != nil {
+		return &InvalidPayloadError{Subject: "tools/call arguments", Err: err}
+	}
+	for _, binding := range bindings {
+		value, found, err := extractHeaderPath(root, binding.Path)
+		if err != nil {
+			return err
+		}
+		if !found || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			continue
+		}
+		encoded, err := encodeTypedHeaderValue(value, binding.Type)
+		if err != nil {
+			return &InvalidPayloadError{
+				Subject: mcpParamHeaderPrefix + binding.Header,
+				Err:     err,
+			}
+		}
+		headers[mcpParamHeaderPrefix+binding.Header] = encodeMCPHeaderValue(encoded)
+	}
+	return nil
+}
+
+func extractHeaderPath(root map[string]json.RawMessage, path []string) (json.RawMessage, bool, error) {
+	current := root
+	for index, segment := range path {
+		value, ok := current[segment]
+		if !ok {
+			return nil, false, nil
+		}
+		if index == len(path)-1 {
+			return value, true, nil
+		}
+		next, err := decodeObjectFields(value)
+		if err != nil {
+			return nil, false, fmt.Errorf(
+				"mcp: x-mcp-header path %q is not an object",
+				strings.Join(path[:index+1], "."),
+			)
+		}
+		current = next
+	}
+	return nil, false, nil
+}
+
+func encodeTypedHeaderValue(raw json.RawMessage, expectedType string) (string, error) {
+	switch expectedType {
+	case schemaTypeString:
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", errors.New("value must be a string")
+		}
+		return value, nil
+	case schemaTypeBoolean:
+		var value bool
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", errors.New("value must be a boolean")
+		}
+		return strconv.FormatBool(value), nil
+	case schemaTypeInteger:
+		var value json.Number
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&value); err != nil || !isIntegralJSONNumber(JSONNumber(value.String())) {
+			return "", errors.New("value must be an integer")
+		}
+		var rational big.Rat
+		if _, ok := rational.SetString(value.String()); !ok || !rational.IsInt() {
+			return "", errors.New("value must be an integer")
+		}
+		integer := rational.Num()
+		limit := big.NewInt(maxSafeInteger)
+		if integer.Cmp(limit) > 0 || integer.Cmp(new(big.Int).Neg(limit)) < 0 {
+			return "", errors.New("integer value is outside the JavaScript safe range")
+		}
+		return integer.String(), nil
+	default:
+		return "", fmt.Errorf("unsupported primitive type %q", expectedType)
+	}
+}
+
+func encodeMCPHeaderValue(value string) string {
+	safe := strings.Trim(value, " \t") == value &&
+		(!strings.HasPrefix(value, "=?base64?") || !strings.HasSuffix(value, "?="))
+	for index := 0; safe && index < len(value); index++ {
+		char := value[index]
+		safe = char >= ' ' && char <= '~'
+	}
+	if safe {
+		return value
+	}
+	return "=?base64?" + base64.StdEncoding.EncodeToString([]byte(value)) + "?="
+}
+
+func requestMethod(body []byte) (string, error) {
+	var request struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || request.Method == "" {
+		return "", &InvalidPayloadError{Subject: streamableHTTPRequestSubject, Err: errors.New("method is required")}
+	}
+	return request.Method, nil
+}
+
+type sseRequestProvenance struct {
+	requestID     json.RawMessage
+	method        string
+	progressToken json.RawMessage
+	hasProgress   bool
+	logging       bool
+	acknowledged  bool
+}
+
+func newSSERequestProvenance(body []byte) (*sseRequestProvenance, error) {
+	fields, err := decodeObjectFields(body)
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: streamableHTTPRequestSubject, Err: err}
+	}
+	id, hasID := fields["id"]
+	if !hasID {
+		return nil, &InvalidPayloadError{
+			Subject: streamableHTTPRequestSubject,
+			Err:     errors.New("request id is required"),
+		}
+	}
+	if _, keyErr := rpcIDKey(id); keyErr != nil {
+		return nil, &InvalidPayloadError{Subject: streamableHTTPRequestSubject, Err: keyErr}
+	}
+	method, err := requestMethod(body)
+	if err != nil {
+		return nil, err
+	}
+	params, err := decodeObjectFields(fields["params"])
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: "Streamable HTTP params", Err: err}
+	}
+	meta, err := decodeObjectFields(params["_meta"])
+	if err != nil {
+		return nil, &InvalidPayloadError{Subject: subjectMCPRequestMeta, Err: err}
+	}
+	progressToken, hasProgress := meta[progressTokenField]
+	if hasProgress {
+		if _, err := notificationCorrelationKey(progressToken); err != nil {
+			return nil, &InvalidPayloadError{Subject: "MCP progress token", Err: err}
+		}
+	}
+	_, logging := meta[metaLogLevel]
+	return &sseRequestProvenance{
+		requestID:     bytes.Clone(id),
+		method:        method,
+		progressToken: bytes.Clone(progressToken),
+		hasProgress:   hasProgress,
+		logging:       logging,
+	}, nil
+}
+
 func exactMediaType(value string) (string, error) {
 	mediaType, _, err := mime.ParseMediaType(value)
-	if err != nil {
-		return "", err
-	}
-	return mediaType, nil
+	return mediaType, err
 }
 
 func validateJSONPostCorrelation(requestBody, responseBody []byte) error {
-	if !isJSONRPCRequest(requestBody) {
-		return &InvalidPayloadError{
-			Subject: streamableHTTPJSONResponseSubject,
-			Err:     errors.New("JSON response is only valid for a JSON-RPC request"),
-		}
-	}
 	requestFields, err := decodeObjectFields(requestBody)
 	if err != nil {
-		return &InvalidPayloadError{Subject: "Streamable HTTP request", Err: err}
+		return &InvalidPayloadError{Subject: streamableHTTPRequestSubject, Err: err}
 	}
 	responseFields, err := decodeObjectFields(responseBody)
 	if err != nil {
@@ -520,7 +785,7 @@ func validateJSONPostCorrelation(requestBody, responseBody []byte) error {
 	if _, hasMethod := responseFields["method"]; hasMethod {
 		return &InvalidPayloadError{
 			Subject: streamableHTTPJSONResponseSubject,
-			Err:     errors.New("POST request requires a terminal JSON-RPC response"),
+			Err:     errors.New("terminal response required"),
 		}
 	}
 	requestKey, err := rpcIDKey(requestFields["id"])
@@ -534,18 +799,486 @@ func validateJSONPostCorrelation(requestBody, responseBody []byte) error {
 	if requestKey != responseKey {
 		return &InvalidPayloadError{
 			Subject: streamableHTTPJSONResponseSubject,
-			Err:     errors.New("response id does not match POST request id"),
+			Err:     errors.New("response id does not match request id"),
 		}
 	}
 	return nil
 }
 
-func isTerminalHTTPTransportError(err error) bool {
-	if err == nil {
-		return false
+func validateNon2xxRPCError(status int, requestBody, responseBody []byte) error {
+	if err := validateJSONPostCorrelation(requestBody, responseBody); err != nil {
+		return err
 	}
-	if errors.Is(err, ErrSessionExpired) {
-		return true
+	fields, err := decodeObjectFields(responseBody)
+	if err != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: err}
+	}
+	var version string
+	versionErr := json.Unmarshal(fields["jsonrpc"], &version)
+	if versionErr != nil || version != JSONRPCVersion {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPJSONResponseSubject,
+			Err:     errors.New("valid jsonrpc version is required"),
+		}
+	}
+	_, hasError := fields["error"]
+	_, hasResult := fields["result"]
+	_, hasParams := fields["params"]
+	if !hasError || hasResult || hasParams {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPJSONResponseSubject,
+			Err:     errors.New("non-success HTTP status requires a JSON-RPC error response"),
+		}
+	}
+	errorValidationErr := validateJSONRPCError(fields["error"])
+	if errorValidationErr != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: errorValidationErr}
+	}
+	reserved, err := hasReservedHTTP400RPCError(fields)
+	if err != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: err}
+	}
+	if reserved && status != http.StatusBadRequest {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPJSONResponseSubject,
+			Err:     fmt.Errorf("reserved MCP error requires HTTP 400, got %d", status),
+		}
+	}
+	if reserved {
+		if err := validateReservedMCPRPCError(fields["error"]); err != nil {
+			return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: err}
+		}
+	}
+	return nil
+}
+
+func validateReservedMCPRPCError(raw json.RawMessage) error {
+	var wireError JSONRPCError
+	if err := json.Unmarshal(raw, &wireError); err != nil {
+		return err
+	}
+	mapped := TypedRPCError(&RPCError{
+		Code:    wireError.Code,
+		Message: wireError.Message,
+		Data:    bytes.Clone(wireError.Data),
+	})
+	var invalid *InvalidPayloadError
+	if errors.As(mapped, &invalid) {
+		return invalid
+	}
+	return nil
+}
+
+func rejectReservedRPCErrorOutsideHTTP400(responseBody []byte) error {
+	fields, err := decodeObjectFields(responseBody)
+	if err != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: err}
+	}
+	reserved, err := hasReservedHTTP400RPCError(fields)
+	if err != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPJSONResponseSubject, Err: err}
+	}
+	if !reserved {
+		return nil
+	}
+	return &InvalidPayloadError{
+		Subject: streamableHTTPJSONResponseSubject,
+		Err:     errors.New("reserved MCP error requires HTTP 400, got successful HTTP status"),
+	}
+}
+
+func hasReservedHTTP400RPCError(fields map[string]json.RawMessage) (bool, error) {
+	raw, hasError := fields["error"]
+	if !hasError {
+		return false, nil
+	}
+	errorFields, err := decodeObjectFields(raw)
+	if err != nil {
+		return false, err
+	}
+	var code JSONNumber
+	if err := json.Unmarshal(errorFields["code"], &code); err != nil {
+		return false, err
+	}
+	switch code {
+	case JSONRPCHeaderMismatch, JSONRPCMissingRequiredClientCapability, JSONRPCUnsupportedProtocolVersion:
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+//nolint:funlen,gocognit // SSE framing and terminal correlation are kept in one fail-closed parser.
+func (t *StreamableHTTPTransport) consumeRequestSSE(
+	ctx context.Context,
+	reader io.Reader,
+	provenance *sseRequestProvenance,
+) error {
+	limited := httptool.LimitStreamReaderWithContext(ctx, reader, t.maxStreamBytes)
+	scanner := bufio.NewScanner(limited)
+	scanner.Buffer(nil, t.maxStreamBytes)
+	scanner.Split(splitSSELines)
+	var data strings.Builder
+	dataSeen := false
+	terminal := false
+	dispatch := func() error {
+		defer data.Reset()
+		if !dataSeen {
+			return nil
+		}
+		dataSeen = false
+		if data.Len() == 0 {
+			return nil
+		}
+		payload := []byte(data.String())
+		isTerminal, acknowledged, err := validateSSEProvenance(payload, provenance)
+		if err != nil {
+			return err
+		}
+		if terminal {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("message after terminal response"),
+			}
+		}
+		handler := t.requestNotificationHandler(payload, provenance.requestID)
+		if err := t.peer.dispatchWithNotificationHandler(payload, handler); err != nil {
+			return err
+		}
+		if acknowledged {
+			provenance.acknowledged = true
+		}
+		terminal = isTerminal
+		return nil
+	}
+	firstLine := true
+	for scanner.Scan() {
+		lineBytes := scanner.Bytes()
+		if firstLine {
+			lineBytes = bytes.TrimPrefix(lineBytes, []byte{0xef, 0xbb, 0xbf})
+			firstLine = false
+		}
+		if !utf8.Valid(lineBytes) {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("event stream is not valid UTF-8"),
+			}
+		}
+		line := string(lineBytes)
+		if line == "" {
+			if err := dispatch(); err != nil {
+				return err
+			}
+			continue
+		}
+		if strings.HasPrefix(line, ":") {
+			continue
+		}
+		field, value, hasColon := strings.Cut(line, ":")
+		if !hasColon {
+			value = ""
+		}
+		value = strings.TrimPrefix(value, " ")
+		if field == "data" {
+			if dataSeen {
+				data.WriteByte('\n')
+			}
+			dataSeen = true
+			data.WriteString(value)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: err}
+	}
+	if err := dispatch(); err != nil {
+		return err
+	}
+	if !terminal {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("stream ended before terminal response"),
+		}
+	}
+	return nil
+}
+
+func (t *StreamableHTTPTransport) requestNotificationHandler(
+	payload []byte,
+	requestID json.RawMessage,
+) NotificationHandler {
+	fields, err := decodeObjectFields(payload)
+	if err != nil {
+		return nil
+	}
+	var method string
+	if err := json.Unmarshal(fields["method"], &method); err != nil || method == "" {
+		return nil
+	}
+	t.mu.RLock()
+	handler := t.requestHandlers[method]
+	t.mu.RUnlock()
+	if handler == nil {
+		return nil
+	}
+	originID := bytes.Clone(requestID)
+	return func(params json.RawMessage) { handler(bytes.Clone(originID), params) }
+}
+
+func validateSSEProvenance(
+	payload []byte,
+	provenance *sseRequestProvenance,
+) (bool, bool, error) {
+	fields, err := decodeObjectFields(payload)
+	if err != nil {
+		return false, false, &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: err}
+	}
+	if _, hasMethod := fields["method"]; hasMethod {
+		if _, hasID := fields["id"]; hasID {
+			return false, false, &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("server-initiated request is forbidden"),
+			}
+		}
+		var method string
+		if unmarshalErr := json.Unmarshal(fields["method"], &method); unmarshalErr != nil ||
+			!allowedSSEMethod(provenance.method, method) {
+			return false, false, &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     fmt.Errorf("notification is not valid for request %q", provenance.method),
+			}
+		}
+		if validationErr := validateSSENotificationParams(fields["params"], method, provenance); validationErr != nil {
+			return false, false, validationErr
+		}
+		return false, method == MethodSubscriptionsAcknowledged, nil
+	}
+	key, err := rpcIDKey(fields["id"])
+	if err != nil {
+		return false, false, &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("terminal response id is required"),
+		}
+	}
+	expected, _ := rpcIDKey(provenance.requestID)
+	if key != expected {
+		return false, false, &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("response id does not match request stream"),
+		}
+	}
+	return validateSSETerminal(payload, fields, provenance)
+}
+
+func validateSSETerminal(
+	payload []byte,
+	fields map[string]json.RawMessage,
+	provenance *sseRequestProvenance,
+) (bool, bool, error) {
+	if provenance.method == MethodSubscriptionsListen {
+		return validateSubscriptionSSETerminal(payload, fields, provenance)
+	}
+	if err := rejectReservedRPCErrorOutsideHTTP400(payload); err != nil {
+		return false, false, err
+	}
+	return true, false, nil
+}
+
+func validateSubscriptionSSETerminal(
+	payload []byte,
+	fields map[string]json.RawMessage,
+	provenance *sseRequestProvenance,
+) (bool, bool, error) {
+	if _, hasError := fields["error"]; hasError {
+		if err := rejectReservedRPCErrorOutsideHTTP400(payload); err != nil {
+			return false, false, err
+		}
+		return true, false, nil
+	}
+	if !provenance.acknowledged {
+		return false, false, &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("subscription terminated before acknowledgement"),
+		}
+	}
+	if err := validateSubscriptionTerminal(fields["result"], provenance.requestID); err != nil {
+		return false, false, err
+	}
+	return true, false, nil
+}
+
+//nolint:gocognit // Stream-specific provenance is validated in one pre-dispatch boundary.
+func validateSSENotificationParams(
+	raw json.RawMessage,
+	method string,
+	provenance *sseRequestProvenance,
+) error {
+	params, err := decodeObjectFields(raw)
+	if err != nil {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("notification params are required"),
+		}
+	}
+	if provenance.method == MethodSubscriptionsListen {
+		meta, metaErr := decodeObjectFields(params["_meta"])
+		if metaErr != nil {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("subscription metadata is required"),
+			}
+		}
+		if err := matchRPCID(meta[metaSubscriptionID], provenance.requestID); err != nil {
+			return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: fmt.Errorf("subscription id: %w", err)}
+		}
+		if !provenance.acknowledged && method != MethodSubscriptionsAcknowledged {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("subscription acknowledgement must be first"),
+			}
+		}
+		if provenance.acknowledged && method == MethodSubscriptionsAcknowledged {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("duplicate subscription acknowledgement"),
+			}
+		}
+		return nil
+	}
+	if metaRaw, hasMeta := params["_meta"]; hasMeta {
+		meta, metaErr := decodeObjectFields(metaRaw)
+		if metaErr != nil {
+			return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: metaErr}
+		}
+		if _, hasSubscriptionID := meta[metaSubscriptionID]; hasSubscriptionID {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("subscription id on request-scoped notification"),
+			}
+		}
+	}
+	switch method {
+	case MethodProgress:
+		if !provenance.hasProgress {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("unsolicited progress notification"),
+			}
+		}
+		expected, _ := notificationCorrelationKey(provenance.progressToken)
+		actual, keyErr := notificationCorrelationKey(params[progressTokenField])
+		if keyErr != nil || actual != expected {
+			return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: errors.New("progress token mismatch")}
+		}
+	case MethodLogMessage:
+		if !provenance.logging {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     errors.New("unsolicited logging notification"),
+			}
+		}
+	}
+	return nil
+}
+
+func validateSubscriptionTerminal(raw, requestID json.RawMessage) error {
+	if len(raw) == 0 {
+		return nil // Error responses do not carry subscription result metadata.
+	}
+	result, err := decodeObjectFields(raw)
+	if err != nil {
+		return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: err}
+	}
+	meta, err := decodeObjectFields(result["_meta"])
+	if err != nil {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     errors.New("subscription terminal metadata is required"),
+		}
+	}
+	if err := matchRPCID(meta[metaSubscriptionID], requestID); err != nil {
+		return &InvalidPayloadError{
+			Subject: streamableHTTPSSESubject,
+			Err:     fmt.Errorf("terminal subscription id: %w", err),
+		}
+	}
+	return nil
+}
+
+func matchRPCID(actual, expected json.RawMessage) error {
+	actualKey, err := rpcIDKey(actual)
+	if err != nil {
+		return errors.New("missing or invalid value")
+	}
+	expectedKey, _ := rpcIDKey(expected)
+	if actualKey != expectedKey {
+		return errors.New("value does not match request id")
+	}
+	return nil
+}
+
+func notificationCorrelationKey(raw json.RawMessage) (string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "", err
+	}
+	switch typed := value.(type) {
+	case string:
+		return "s:" + typed, nil
+	case json.Number:
+		canonical, ok := canonicalJSONNumber(typed.String())
+		if !ok {
+			return "", errors.New("token must be a string or number")
+		}
+		return "n:" + canonical, nil
+	default:
+		return "", errors.New("token must be a string or number")
+	}
+}
+
+func allowedSSEMethod(originMethod, notificationMethod string) bool {
+	if originMethod == "subscriptions/listen" {
+		switch notificationMethod {
+		case "notifications/subscriptions/acknowledged", "notifications/tools/list_changed",
+			"notifications/resources/list_changed",
+			"notifications/resources/updated", "notifications/prompts/list_changed":
+			return true
+		default:
+			return false
+		}
+	}
+	return notificationMethod == "notifications/progress" || notificationMethod == "notifications/message"
+}
+
+func splitSSELines(data []byte, atEOF bool) (int, []byte, error) {
+	for index, char := range data {
+		switch char {
+		case '\n':
+			return index + 1, data[:index], nil
+		case '\r':
+			if index+1 == len(data) && !atEOF {
+				return 0, nil, nil
+			}
+			advance := index + 1
+			if index+1 < len(data) && data[index+1] == '\n' {
+				advance++
+			}
+			return advance, data[:index], nil
+		}
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+func isTerminalHTTPTransportError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
 	}
 	var invalid *InvalidPayloadError
 	if errors.As(err, &invalid) {
@@ -579,430 +1312,7 @@ func (t *StreamableHTTPTransport) terminate(cause error) {
 	if cancel != nil {
 		cancel()
 	}
-	go func() {
-		_ = t.Close()
-	}()
-}
-
-func (t *StreamableHTTPTransport) getLoop() {
-	defer close(t.getDone)
-	state := t.snapshotResumeState()
-	for {
-		if err := t.lifetimeCtx.Err(); err != nil {
-			return
-		}
-		var err error
-		state, err = t.pollGET(t.lifetimeCtx, state, true)
-		var boundary *sseBoundaryError
-		if errors.As(err, &boundary) {
-			state = boundary.state
-			t.storeResumeState(state)
-			err = nil
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, ErrTransportClosed) {
-			return
-		}
-		if errors.Is(err, ErrSessionExpired) {
-			t.terminate(err)
-			return
-		}
-		if errors.Is(err, errGETNotSupported) {
-			return
-		}
-		var invalid *InvalidPayloadError
-		var httpErr *HTTPError
-		if errors.As(err, &invalid) ||
-			(errors.As(err, &httpErr) && httpErr.StatusCode < http.StatusInternalServerError) {
-			t.terminate(err)
-			return
-		}
-		if err != nil {
-			t.logger.Warn("mcp: Streamable HTTP GET poll", "err", err)
-		}
-		if !waitForRetry(t.lifetimeCtx, state.retryDelay) {
-			return
-		}
-	}
-}
-
-func (t *StreamableHTTPTransport) startResumeLoop(
-	state sseResumeState,
-	requestID json.RawMessage,
-) {
-	pendingDone, ok := t.peer.pendingDone(requestID)
-	if !ok {
-		return
-	}
-	t.mu.Lock()
-	if t.closed || t.terminating {
-		t.mu.Unlock()
-		return
-	}
-	t.resumeWG.Add(1)
-	t.mu.Unlock()
-	go func() {
-		defer t.resumeWG.Done()
-		t.resumeLoop(state, bytes.Clone(requestID), pendingDone)
-	}()
-}
-
-//nolint:gocognit // Resume termination and retry outcomes are intentionally explicit.
-func (t *StreamableHTTPTransport) resumeLoop(
-	state sseResumeState,
-	requestID json.RawMessage,
-	pendingDone <-chan struct{},
-) {
-	resumeCtx, cancelResume := context.WithCancel(t.lifetimeCtx)
-	watcherDone := make(chan struct{})
-	go func() {
-		defer close(watcherDone)
-		select {
-		case <-pendingDone:
-			cancelResume()
-		case <-resumeCtx.Done():
-		}
-	}()
-	defer func() {
-		cancelResume()
-		<-watcherDone
-	}()
-	for {
-		if !t.peer.hasPendingID(requestID) {
-			return
-		}
-		if !waitForRetry(resumeCtx, state.retryDelay) {
-			return
-		}
-		next, err := t.pollGET(resumeCtx, state, false)
-		var boundary *sseBoundaryError
-		if errors.As(err, &boundary) {
-			state = boundary.state
-			continue
-		}
-		if !t.peer.hasPendingID(requestID) {
-			return
-		}
-		state = next
-		if errors.Is(err, errGETNotSupported) {
-			t.peer.failPendingID(
-				requestID,
-				&HTTPError{StatusCode: http.StatusMethodNotAllowed, Operation: "SSE resume GET"},
-			)
-			return
-		}
-		if errors.Is(err, context.Canceled) || errors.Is(err, ErrTransportClosed) {
-			return
-		}
-		if errors.Is(err, ErrSessionExpired) {
-			t.terminate(err)
-			return
-		}
-		var invalid *InvalidPayloadError
-		var httpErr *HTTPError
-		if errors.As(err, &invalid) ||
-			(errors.As(err, &httpErr) && httpErr.StatusCode < http.StatusInternalServerError) {
-			t.terminate(err)
-			return
-		}
-		if err != nil {
-			t.logger.Warn("mcp: Streamable HTTP resume", "err", err)
-		}
-	}
-}
-
-func waitForRetry(ctx context.Context, delay time.Duration) bool {
-	if delay < httpPollRetryDelay {
-		delay = httpPollRetryDelay
-	} else if delay > httpMaxRetryDelay {
-		delay = httpMaxRetryDelay
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-timer.C:
-		return true
-	}
-}
-
-var errGETNotSupported = errors.New("mcp: Streamable HTTP GET not supported")
-
-func (t *StreamableHTTPTransport) pollGET(
-	ctx context.Context,
-	state sseResumeState,
-	persist bool,
-) (sseResumeState, error) {
-	request, err := t.buildRequest(ctx, http.MethodGet, nil)
-	if err != nil {
-		return state, err
-	}
-	request.Header.Set("Accept", eventStreamMediaType)
-	request.Header.Del("Last-Event-ID")
-	if state.lastEventID != "" {
-		request.Header.Set("Last-Event-ID", state.lastEventID)
-	}
-	// #nosec G704 -- endpoint validation and safe dialing are enforced in Start/default client.
-	//nolint:bodyclose // Closed through httptool.CloseResponseBody below.
-	response, err := t.client.Do(
-		request,
-	)
-	if err != nil {
-		return state, err
-	}
-	defer httptool.CloseResponseBody(ctx, response.Body)
-	if response.StatusCode == http.StatusMethodNotAllowed {
-		return state, errGETNotSupported
-	}
-	if response.StatusCode == http.StatusNotFound && t.hasSession() {
-		return state, ErrSessionExpired
-	}
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return state, &HTTPError{StatusCode: response.StatusCode, Operation: "GET"}
-	}
-	contentType, mediaErr := exactMediaType(response.Header.Get("Content-Type"))
-	if mediaErr != nil || contentType != eventStreamMediaType {
-		return state, &InvalidPayloadError{
-			Subject: "Streamable HTTP GET",
-			Err:     errors.New("response Content-Type is not text/event-stream"),
-		}
-	}
-	return t.consumeSSEState(ctx, response.Body, state, persist)
-}
-
-func (t *StreamableHTTPTransport) consumeSSE(
-	ctx context.Context,
-	reader io.Reader,
-) error {
-	state, err := t.consumeSSEState(ctx, reader, t.snapshotResumeState(), true)
-	t.storeResumeState(state)
-	return err
-}
-
-//nolint:funlen,gocognit // SSE field folding is intentionally explicit.
-func (t *StreamableHTTPTransport) consumeSSEState(
-	ctx context.Context,
-	reader io.Reader,
-	state sseResumeState,
-	persist bool,
-) (sseResumeState, error) {
-	limited := httptool.LimitStreamReaderWithContext(ctx, reader, t.maxStreamBytes)
-	scanner := bufio.NewScanner(limited)
-	scanner.Buffer(nil, t.maxStreamBytes)
-	scanner.Split(splitSSELines)
-	var data strings.Builder
-	var eventType, eventID string
-	var eventIDSeen, dataSeen bool
-	dispatch := func() error {
-		defer data.Reset()
-		if eventIDSeen {
-			if strings.ContainsAny(eventID, "\x00\r\n") {
-				return &InvalidPayloadError{
-					Subject: "Streamable HTTP SSE event id",
-					Err:     errors.New("contains forbidden characters"),
-				}
-			}
-			state.lastEventID = eventID
-			if persist {
-				t.storeResumeState(state)
-			}
-		}
-		if !dataSeen {
-			eventType, eventID, eventIDSeen = "", "", false
-			return nil
-		}
-		if data.Len() == 0 {
-			eventType, eventID, eventIDSeen, dataSeen = "", "", false, false
-			return nil
-		}
-		if eventType == "endpoint" {
-			return &InvalidPayloadError{
-				Subject: streamableHTTPSSESubject,
-				Err:     errors.New("legacy endpoint event is not supported"),
-			}
-		}
-		err := t.peer.dispatch([]byte(data.String()))
-		eventType, eventID, eventIDSeen, dataSeen = "", "", false, false
-		return err
-	}
-	firstLine := true
-	for scanner.Scan() {
-		lineBytes := scanner.Bytes()
-		if firstLine {
-			lineBytes = bytes.TrimPrefix(lineBytes, []byte{0xef, 0xbb, 0xbf})
-			firstLine = false
-		}
-		if !utf8.Valid(lineBytes) {
-			return state, &InvalidPayloadError{
-				Subject: streamableHTTPSSESubject,
-				Err:     errors.New("event stream is not valid UTF-8"),
-			}
-		}
-		line := string(lineBytes)
-		if line == "" {
-			if err := dispatch(); err != nil {
-				return state, err
-			}
-			continue
-		}
-		field, value, hasColon := strings.Cut(line, ":")
-		if !hasColon {
-			value = ""
-		}
-		value = strings.TrimPrefix(value, " ")
-		switch field {
-		case dataField:
-			if dataSeen {
-				data.WriteByte('\n')
-			}
-			dataSeen = true
-			data.WriteString(value)
-		case "event":
-			eventType = value
-		case "id":
-			eventID = value
-			eventIDSeen = true
-		case "retry":
-			if delay, ok := parseSSERetry(value); ok {
-				state.retryDelay = delay
-			}
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return state, ctxErr
-		}
-		return state, &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: err}
-	}
-	return state, &sseBoundaryError{state: state}
-}
-
-func splitSSELines(data []byte, atEOF bool) (int, []byte, error) {
-	for index, char := range data {
-		switch char {
-		case '\n':
-			return index + 1, data[:index], nil
-		case '\r':
-			if index+1 == len(data) && !atEOF {
-				return 0, nil, nil
-			}
-			advance := index + 1
-			if index+1 < len(data) && data[index+1] == '\n' {
-				advance++
-			}
-			return advance, data[:index], nil
-		}
-	}
-	if atEOF && len(data) > 0 {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
-}
-
-func parseSSERetry(value string) (time.Duration, bool) {
-	if value == "" {
-		return 0, false
-	}
-	for index := range len(value) {
-		if value[index] < '0' || value[index] > '9' {
-			return 0, false
-		}
-	}
-	milliseconds, err := strconv.ParseUint(value, 10, 64)
-	if err != nil || milliseconds > uint64((1<<63-1)/int64(time.Millisecond)) {
-		return 0, false
-	}
-	delay := time.Duration(milliseconds) * time.Millisecond
-	if delay < httpPollRetryDelay {
-		delay = httpPollRetryDelay
-	} else if delay > httpMaxRetryDelay {
-		delay = httpMaxRetryDelay
-	}
-	return delay, true
-}
-
-func (t *StreamableHTTPTransport) snapshotResumeState() sseResumeState {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return sseResumeState{lastEventID: t.lastEventID, retryDelay: t.pollRetryDelay}
-}
-
-func (t *StreamableHTTPTransport) storeResumeState(state sseResumeState) {
-	t.mu.Lock()
-	t.lastEventID = state.lastEventID
-	t.pollRetryDelay = state.retryDelay
-	t.mu.Unlock()
-}
-
-func isInitializeRequest(body []byte) bool {
-	var request struct {
-		Method string `json:"method"`
-	}
-	return json.Unmarshal(body, &request) == nil && request.Method == MethodInitialize
-}
-
-func isJSONRPCRequest(body []byte) bool {
-	_, ok := jsonRPCRequestID(body)
-	return ok
-}
-
-func jsonRPCRequestID(body []byte) (json.RawMessage, bool) {
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(body, &fields) != nil {
-		return nil, false
-	}
-	id, hasID := fields["id"]
-	_, hasMethod := fields["method"]
-	return id, hasID && hasMethod
-}
-
-func (t *StreamableHTTPTransport) acceptSessionHeader(sessionID string, initialize bool) error {
-	if sessionID == "" {
-		return nil
-	}
-	if err := validateSessionID(sessionID); err != nil {
-		return err
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.sessionID == "" {
-		if !initialize {
-			return &InvalidPayloadError{
-				Subject: mcpSessionIDHeader,
-				Err:     errors.New("session may only be established by initialize"),
-			}
-		}
-		t.sessionID = sessionID
-		return nil
-	}
-	if t.sessionID != sessionID {
-		return &InvalidPayloadError{
-			Subject: mcpSessionIDHeader,
-			Err:     errors.New("server attempted to replace active session"),
-		}
-	}
-	return nil
-}
-
-func validateSessionID(value string) error {
-	if !utf8.ValidString(value) {
-		return &InvalidPayloadError{Subject: mcpSessionIDHeader, Err: errors.New("not valid UTF-8")}
-	}
-	for _, char := range []byte(value) {
-		if char < 0x21 || char > 0x7e {
-			return &InvalidPayloadError{
-				Subject: mcpSessionIDHeader,
-				Err:     errors.New("contains non-visible ASCII"),
-			}
-		}
-	}
-	return nil
-}
-
-func (t *StreamableHTTPTransport) hasSession() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	return t.sessionID != ""
+	go func() { _ = t.Close() }()
 }
 
 func (t *StreamableHTTPTransport) MaxStreamBytes() int { return t.maxStreamBytes }
@@ -1031,11 +1341,8 @@ func (t *StreamableHTTPTransport) Close() error {
 		for _, cancelPost := range t.activePosts {
 			cancelPosts = append(cancelPosts, cancelPost)
 		}
-		started := t.started
-		getStarted := t.getStarted
 		cancel := t.cancel
 		peer := t.peer
-		sessionID := t.sessionID
 		t.mu.Unlock()
 		if peer != nil {
 			peer.close(ErrTransportClosed)
@@ -1043,38 +1350,14 @@ func (t *StreamableHTTPTransport) Close() error {
 		for _, cancelPost := range cancelPosts {
 			cancelPost()
 		}
-		t.deleteSession(sessionID)
 		if cancel != nil {
 			cancel()
 		}
 		t.postWG.Wait()
-		t.resumeWG.Wait()
-		if started && getStarted {
-			<-t.getDone
-		}
 	})
 	return nil
 }
 
-func (t *StreamableHTTPTransport) deleteSession(sessionID string) {
-	if sessionID == "" {
-		return
-	}
-	ctx, stop := context.WithTimeout(context.Background(), httpCloseTimeout)
-	defer stop()
-	request, err := t.buildRequest(ctx, http.MethodDelete, nil)
-	if err != nil {
-		return
-	}
-	// #nosec G704 -- endpoint validation and safe dialing are enforced in Start/default client.
-	//nolint:bodyclose // Closed immediately through httptool helper.
-	response, err := t.client.Do(request)
-	if err == nil {
-		httptool.CloseResponseBody(ctx, response.Body)
-	}
-}
-
 var _ Transport = (*StreamableHTTPTransport)(nil)
-var _ ProtocolVersionTransport = (*StreamableHTTPTransport)(nil)
-var _ OperationPhaseTransport = (*StreamableHTTPTransport)(nil)
+var _ ToolHeaderTransport = (*StreamableHTTPTransport)(nil)
 var _ StreamByteCapTransport = (*StreamableHTTPTransport)(nil)

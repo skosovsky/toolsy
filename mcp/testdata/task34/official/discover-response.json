@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": "discover-1",
+  "result": {
+    "resultType": "complete",
+    "supportedVersions": ["2026-07-28"],
+    "capabilities": {
+      "tools": {"listChanged": true},
+      "resources": {"listChanged": true},
+      "prompts": {"listChanged": true}
+    },
+    "ttlMs": 3600000,
+    "cacheScope": "public",
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": {
+        "name": "fixture-server",
+        "version": "1.0.0"
+      }
+    }
+  }
+}

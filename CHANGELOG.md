@@ -1,14 +1,18 @@
 # Changelog
 
-## Unreleased (task31/task32/task33 contracts)
+## Unreleased (task31/task32/task33/task34 contracts)
 
 ### Breaking
 
-- MCP client now supports only protocol revision `2025-11-25`; older revisions and compatibility fallback are removed.
+- MCP client now supports only protocol revision `2026-07-28`; `2025-11-25`, older revisions, downgrade and compatibility fallback are removed.
+- MCP lifecycle is stateless: `Connect` uses strict `server/discover` and exact `supportedVersions`; initialize/initialized, protocol sessions, `Mcp-Session-Id`, HTTP GET/resume/DELETE and `ErrSessionExpired` are removed.
+- Roots, session logging, base ping, server-request dispatch and resource subscribe/unsubscribe APIs are removed without deprecated aliases.
+- All MCP results require `resultType`; cacheable discover/list/read results require typed `ttlMs`/`cacheScope`. `input_required` is surfaced only for tools/call, resources/read and prompts/get, without automatic MRTR retry.
+- Streamable HTTP is POST-only and emits exact protocol/method/name routing headers. Valid `x-mcp-header` tool arguments are mirrored through `Mcp-Param-*`, including the `=?base64?...?=` sentinel encoding.
 - Legacy `SSETransport`, `NewSSETransport`, `SSETransportOption` and `WithSSE*` APIs are removed in favor of single-endpoint `StreamableHTTPTransport`.
-- MCP `Transport` is now a bidirectional JSON-RPC peer using `Request`/`PendingRequest`; request IDs are available before awaiting a result.
-- MCP roots, progress, content and prompt DTOs use their `2025-11-25` wire shapes. `ProgressInfo.Current` and `Total` preserve fractional wire values.
-- Non-standard `ResourceContents.annotations` is removed; annotations remain only on content blocks where the `2025-11-25` schema defines them.
+- MCP transport is request-oriented and no longer exposes server-to-client request dispatch; request IDs remain available before awaiting a result.
+- MCP progress, content and prompt DTOs use their `2026-07-28` wire shapes. `ProgressInfo.Current` and `Total` preserve fractional wire values.
+- Non-standard `ResourceContents.annotations` is removed; annotations remain only where the `2026-07-28` schema defines them.
 - MCP `resource_link.size` now uses lossless `JSONNumber`; mathematically integral forms such as `1`, `1.0` and `1e3` retain their exact wire representation, while fractional values and present `null` fail strict encoding and decoding.
 
 - `Registry.View` is the primary capability boundary; `Subset` now delegates to a capability-backed view.
@@ -22,16 +26,20 @@
 
 ### Added
 
-- Strict MCP lifecycle/capability negotiation, Streamable HTTP sessions/version headers/resume, roots requests and discovery invalidation.
-- Correlated terminal JSON POST responses, independent POST-SSE resume state, retry-before-reconnect, and queued stdio writes with request IDs available before I/O completes.
+- Strict MCP `2026-07-28` discovery/capability validation, self-describing request metadata and stateless stdio/Streamable HTTP transports.
+- `subscriptions/listen` invalidation streams with acknowledgment-first subscription ID/effective-filter validation.
+- Typed current-revision result/cache/MRTR/error contracts, including `HeaderMismatch` (`-32020`), missing client capability (`-32021`) and unsupported protocol (`-32022`).
+- `ComputeSnapshotDigest` and the closed `Snapshot` set for strict, canonical, type-separated discovery/list/read snapshot identity including cache metadata.
+- HTTP `x-mcp-header` validation, invalid-tool filtering, safe-integer primitive mirroring and exact Base64 sentinel encoding.
+- Correlated terminal JSON/POST-SSE responses and queued stdio writes with request IDs available before I/O completes; interrupted HTTP streams are terminal and never resumed implicitly.
 - Exact range-based cancelled-ID correlation, WHATWG-complete SSE framing, and independent stdio process/pipe shutdown with typed terminal-cause propagation.
 - MCP structured tool outputs with output-schema validation and lossless text/image/audio/resource content blocks.
-- Typed MCP protocol, capability, stale discovery, JSON-RPC, HTTP/session and remote execution errors.
+- Typed MCP protocol, capability, stale discovery/subscription, JSON-RPC, HTTP/stdio and remote execution errors.
 - Symmetric schema validation for decoded and programmatically constructed exported MCP wire DTOs.
-- JSON-RPC union fields and reserved extensions now fail closed; MCP enums, file roots, tool names, complete object schemas and binary base64 are validated at the DTO boundary.
-- Operation state is published only after `notifications/initialized` has been delivered; schema-valid empty implementation and prompt strings are preserved.
+- JSON-RPC union fields, duplicate keys and reserved extensions now fail closed; MCP enums, tool names, complete schemas and binary Base64 are validated at the DTO boundary.
+- Operation state is published only after strict discovery succeeds; schema-valid empty implementation and prompt strings are preserved.
 - Icon metadata uses parser-flag-independent component URI grammar for HTTPS authority/scoped IPv6/IPvFuture/port and US-ASCII structural RFC 2397 media parameters, and icon sizes contain strings only; finite negative progress values remain valid and participate in monotonic ordering.
-- Server capability extensions preserve arbitrary JSON values losslessly, while known experimental and task capability branches follow their schema-defined object shapes.
+- Server capability extensions preserve arbitrary JSON values losslessly; official `io.modelcontextprotocol/*` IDs are accepted and explicitly codec-registrable but inert by default. Logging/completions/experimental advertisements remain inert raw data with no legacy runtime API, and no Tasks core capability is modeled or advertised. Caller `Meta.Extra` cannot forge MetaObject namespaces whose second DNS label is `mcp` or `modelcontextprotocol`.
 
 - Typed call context, typed tool policy, structured tool effects, and `ToolResult` helpers.
 - Registry view snapshots with manifest digest, required tool validation, and restore-time mismatch checks.
@@ -43,6 +51,7 @@
 - `NewPolicyTool` for binder/policy/requirements hardening around existing generic tools.
 - Migration notes in [docs/migration-task31.md](docs/migration-task31.md).
 - Migration notes in [docs/migration-task32.md](docs/migration-task32.md).
+- MCP clear-break migration notes in [docs/migration-task34.md](docs/migration-task34.md).
 
 ## v1.0 (task28 hardening)
 

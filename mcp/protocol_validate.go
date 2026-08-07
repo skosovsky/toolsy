@@ -6,48 +6,93 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
+	"io"
+	"math"
 	"net/url"
-	"strconv"
 	"strings"
+
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 )
 
+const (
+	descriptionField = "description"
+	mimeTypeField    = "mimeType"
+	metaObjectField  = "_meta"
+	titleField       = "title"
+	annotationsField = "annotations"
+)
+
+// decodeObjectFields is the fail-closed object decoder used by every control
+// object. Unlike [json.Unmarshal] into a map it rejects duplicate member names.
 func decodeObjectFields(data []byte) (map[string]json.RawMessage, error) {
-	if bytes.Equal(bytes.TrimSpace(data), []byte(jsonNull)) {
-		return nil, errors.New("object must not be null")
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	start, err := dec.Token()
+	if err != nil {
 		return nil, err
 	}
-	if fields == nil {
-		return nil, errors.New("expected JSON object")
+	if delim, ok := start.(json.Delim); !ok || delim != '{' {
+		return nil, errors.New("expected non-null JSON object")
+	}
+	fields := make(map[string]json.RawMessage)
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		name, ok := tok.(string)
+		if !ok {
+			return nil, errors.New("object key must be a string")
+		}
+		if _, duplicate := fields[name]; duplicate {
+			return nil, fmt.Errorf("duplicate field %q", name)
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return nil, err
+		}
+		fields[name] = bytes.Clone(raw)
+	}
+	if _, err := dec.Token(); err != nil {
+		return nil, err
+	}
+	if tok, err := dec.Token(); err != io.EOF {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("unexpected trailing token %v", tok)
 	}
 	return fields, nil
 }
 
 func rejectUnknownFields(fields map[string]json.RawMessage, allowed ...string) error {
-	allowedSet := make(map[string]struct{}, len(allowed))
-	for _, name := range allowed {
-		allowedSet[name] = struct{}{}
+	set := make(map[string]struct{}, len(allowed))
+	for _, k := range allowed {
+		set[k] = struct{}{}
 	}
-	for name := range fields {
-		if _, ok := allowedSet[name]; !ok {
-			return fmt.Errorf("unknown field %q", name)
+	for k := range fields {
+		if _, ok := set[k]; !ok {
+			return fmt.Errorf("unknown field %q", k)
 		}
 	}
 	return nil
 }
-
-func captureExtraFields(fields map[string]json.RawMessage, known ...string) Meta {
-	knownSet := make(map[string]struct{}, len(known))
-	for _, name := range known {
-		knownSet[name] = struct{}{}
+func rejectPresentFields(fields map[string]json.RawMessage, forbidden ...string) error {
+	for _, name := range forbidden {
+		if _, present := fields[name]; present {
+			return fmt.Errorf("field %q belongs to a different result variant", name)
+		}
 	}
-	extra := make(Meta)
-	for name, raw := range fields {
-		if _, ok := knownSet[name]; !ok {
-			extra[name] = bytes.Clone(raw)
+	return nil
+}
+func captureExtraFields(fields map[string]json.RawMessage, known ...string) Meta {
+	set := make(map[string]struct{}, len(known))
+	for _, k := range known {
+		set[k] = struct{}{}
+	}
+	extra := Meta{}
+	for k, v := range fields {
+		if _, ok := set[k]; !ok {
+			extra[k] = bytes.Clone(v)
 		}
 	}
 	if len(extra) == 0 {
@@ -55,1885 +100,2322 @@ func captureExtraFields(fields map[string]json.RawMessage, known ...string) Meta
 	}
 	return extra
 }
-
-func marshalResultWithExtra(base any, extra Meta, reserved ...string) ([]byte, error) {
-	encoded, err := json.Marshal(base)
-	if err != nil {
-		return nil, err
-	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(encoded, &fields); err != nil {
-		return nil, err
-	}
-	reservedSet := make(map[string]struct{}, len(reserved))
-	for _, name := range reserved {
-		reservedSet[name] = struct{}{}
-	}
-	for name, raw := range extra {
-		if _, reserved := reservedSet[name]; reserved {
-			return nil, fmt.Errorf("result extension field %q collides with a reserved field", name)
+func required(fields map[string]json.RawMessage, names ...string) error {
+	for _, n := range names {
+		if raw, ok := fields[n]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
+			return fmt.Errorf("required field %q is missing or null", n)
 		}
-		fields[name] = bytes.Clone(raw)
-	}
-	return json.Marshal(fields)
-}
-
-func validateMarshaled[T any](encoded []byte) ([]byte, error) {
-	var validated T
-	if err := json.Unmarshal(encoded, &validated); err != nil {
-		return nil, fmt.Errorf("mcp: refusing to marshal invalid wire value: %w", err)
-	}
-	return encoded, nil
-}
-
-func marshalStrict[T any](wire any) ([]byte, error) {
-	encoded, err := json.Marshal(wire)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[T](encoded)
-}
-
-func requireArrayField(fields map[string]json.RawMessage, name string) error {
-	raw, ok := fields[name]
-	if !ok || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
-		return fmt.Errorf("result requires non-null %s array", name)
 	}
 	return nil
 }
-
-func requireStringField(fields map[string]json.RawMessage, name string, allowEmpty bool) error {
-	raw, ok := fields[name]
-	if !ok {
-		return fmt.Errorf("required string field %q is missing", name)
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
+func requireString(fields map[string]json.RawMessage, name string, nonempty bool) error {
+	if err := required(fields, name); err != nil {
 		return err
 	}
-	stringValue, ok := value.(string)
-	if !ok || (!allowEmpty && stringValue == "") {
+	var v string
+	if json.Unmarshal(fields[name], &v) != nil || nonempty && v == "" {
 		return fmt.Errorf("field %q must be a non-null string", name)
 	}
 	return nil
 }
 
-func requireNumberField(fields map[string]json.RawMessage, name string) error {
-	raw, ok := fields[name]
-	if !ok {
-		return fmt.Errorf("required number field %q is missing", name)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return err
-	}
-	if _, ok := value.(json.Number); !ok {
-		return fmt.Errorf("field %q must be a non-null number", name)
-	}
-	return nil
+// requireStringField is retained internally for peer validation call sites.
+func requireStringField(fields map[string]json.RawMessage, name string, allowEmpty bool) error {
+	return requireString(fields, name, !allowEmpty)
 }
 
-func requireBoolField(fields map[string]json.RawMessage, name string) error {
+func optionalString(fields map[string]json.RawMessage, name string) error {
+	if _, ok := fields[name]; !ok {
+		return nil
+	}
+	return requireString(fields, name, false)
+}
+func optionalRequestState(fields map[string]json.RawMessage) error {
+	const name = "requestState"
 	raw, ok := fields[name]
 	if !ok {
-		return fmt.Errorf("required boolean field %q is missing", name)
+		return nil
 	}
 	if bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
-		return fmt.Errorf("field %q must be a non-null boolean", name)
+		return fmt.Errorf("field %q must not be null", name)
 	}
-	var value bool
+	var value string
 	if err := json.Unmarshal(raw, &value); err != nil {
-		return fmt.Errorf("field %q must be a non-null boolean: %w", name, err)
+		return fmt.Errorf("field %q must be a JSON string", name)
 	}
 	return nil
 }
-
-func requireObjectField(fields map[string]json.RawMessage, name string) error {
-	raw, ok := fields[name]
-	if !ok {
-		return fmt.Errorf("required object field %q is missing", name)
-	}
-	if _, err := decodeObjectFields(raw); err != nil {
-		return fmt.Errorf("field %q must be a non-null object: %w", name, err)
-	}
-	return nil
-}
-
-func validateOptionalString(fields map[string]json.RawMessage, name string) error {
-	if _, ok := fields[name]; !ok {
-		return nil
-	}
-	return requireStringField(fields, name, true)
-}
-
-func validateOptionalBool(fields map[string]json.RawMessage, name string) error {
-	if _, ok := fields[name]; !ok {
-		return nil
-	}
-	return requireBoolField(fields, name)
-}
-
-func validateOptionalObject(fields map[string]json.RawMessage, name string) error {
-	if _, ok := fields[name]; !ok {
-		return nil
-	}
-	return requireObjectField(fields, name)
-}
-
-func validateOptionalArray(fields map[string]json.RawMessage, name string) error {
+func optionalBool(fields map[string]json.RawMessage, name string) error {
 	raw, ok := fields[name]
 	if !ok {
 		return nil
 	}
-	if bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) || len(bytes.TrimSpace(raw)) == 0 ||
-		bytes.TrimSpace(raw)[0] != '[' {
-		return fmt.Errorf("field %q must be a non-null array", name)
+	var v bool
+	if json.Unmarshal(raw, &v) != nil || bytes.Equal(raw, []byte(jsonNull)) {
+		return fmt.Errorf("field %q must be boolean", name)
 	}
 	return nil
 }
-
-func validateOptionalStringArray(fields map[string]json.RawMessage, name string) error {
-	raw, ok := fields[name]
-	if !ok {
+func validateLoggingLevel(value string) error {
+	switch value {
+	case mcpLogLevelAlert,
+		mcpLogLevelCritical,
+		mcpLogLevelDebug,
+		mcpLogLevelEmergency,
+		mcpLogLevelError,
+		mcpLogLevelInfo,
+		mcpLogLevelNotice,
+		mcpLogLevelWarning:
 		return nil
+	default:
+		return fmt.Errorf("invalid logging level %q", value)
 	}
-	if err := validateOptionalArray(fields, name); err != nil {
+}
+func requireArray(fields map[string]json.RawMessage, name string) error {
+	if err := required(fields, name); err != nil {
 		return err
 	}
-	var items []json.RawMessage
-	if err := json.Unmarshal(raw, &items); err != nil {
-		return fmt.Errorf("field %q must be an array of strings: %w", name, err)
-	}
-	for index, item := range items {
-		var value string
-		if bytes.Equal(bytes.TrimSpace(item), []byte(jsonNull)) || json.Unmarshal(item, &value) != nil {
-			return fmt.Errorf("field %q item %d must be a non-null string", name, index)
-		}
+	var a []json.RawMessage
+	if json.Unmarshal(fields[name], &a) != nil {
+		return fmt.Errorf("field %q must be an array", name)
 	}
 	return nil
 }
-
-func validateOptionalJSONInteger(fields map[string]json.RawMessage, name string) error {
-	raw, ok := fields[name]
-	if !ok {
+func optionalArray(fields map[string]json.RawMessage, name string) error {
+	if _, present := fields[name]; !present {
 		return nil
 	}
-	value := JSONNumber(bytes.TrimSpace(raw))
-	if !isIntegralJSONNumber(value) {
-		return fmt.Errorf("field %q must be a JSON integer", name)
-	}
-	return nil
+	return requireArray(fields, name)
 }
-
-func validateURI(field, value string) error {
-	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme == "" {
-		return fmt.Errorf("field %q must be an absolute URI", field)
-	}
-	return nil
-}
-
-func validateIconURI(value string) error {
-	if err := validateRawURICharacters(value); err != nil {
-		return err
-	}
-	schemeEnd := strings.IndexByte(value, ':')
-	if schemeEnd < 0 {
-		return errors.New("field \"src\" must be a valid HTTPS or data URI")
-	}
-	scheme := value[:schemeEnd]
-	if strings.EqualFold(scheme, "https") {
-		return validateHTTPSIconURI(value, schemeEnd)
-	}
-	if !strings.EqualFold(scheme, "data") {
-		return errors.New("field \"src\" must use the https or data scheme")
-	}
-	parsed, err := url.Parse(value)
-	if err != nil {
-		return errors.New("field \"src\" must be a valid HTTPS or data URI")
-	}
-	return validateDataIconURI(value, parsed)
-}
-
-func validateHTTPSIconURI(value string, schemeEnd int) error {
-	if !strings.HasPrefix(value[schemeEnd+1:], "//") {
-		return errors.New("HTTPS icon src must have a valid authority and hostname")
-	}
-	if strings.Count(value, "#") > 1 {
-		return errors.New("HTTPS icon src contains an invalid fragment delimiter")
-	}
-	authorityStart := schemeEnd + len("://")
-	authorityEnd := len(value)
-	if separator := strings.IndexAny(value[authorityStart:], "/?#"); separator >= 0 {
-		authorityEnd = authorityStart + separator
-	}
-	if err := validateHTTPSAuthority(value[authorityStart:authorityEnd]); err != nil {
-		return err
-	}
-	if strings.ContainsAny(value[authorityEnd:], "[]") {
-		return errors.New("HTTPS icon src brackets outside an IP-literal authority must be percent-encoded")
-	}
-	return nil
-}
-
-func validateHTTPSAuthority(authority string) error {
-	if authority == "" || strings.Count(authority, "@") > 1 {
-		return errors.New("HTTPS icon src must have a valid authority and hostname")
-	}
-	hostPort := authority
-	if userinfoEnd := strings.LastIndexByte(authority, '@'); userinfoEnd >= 0 {
-		if !validURIComponent(authority[:userinfoEnd], "-._~!$&'()*+,;=:") {
-			return errors.New("HTTPS icon src contains invalid userinfo")
-		}
-		hostPort = authority[userinfoEnd+1:]
-	}
-	if strings.HasPrefix(hostPort, "[") {
-		return validateBracketedHTTPSHost(hostPort)
-	}
-	if strings.ContainsAny(hostPort, "[]") || strings.Count(hostPort, ":") > 1 {
-		return errors.New("HTTPS icon src IPv6 hosts must use bracketed IP-literal syntax")
-	}
-	host, port, hasPort := strings.Cut(hostPort, ":")
-	if host == "" || !validURIComponent(host, "-._~!$&'()*+,;=") {
-		return errors.New("HTTPS icon src must have a valid hostname")
-	}
-	return validateHTTPSPort(port, hasPort)
-}
-
-func validateBracketedHTTPSHost(hostPort string) error {
-	closeBracket := strings.IndexByte(hostPort, ']')
-	if closeBracket < 0 || strings.ContainsAny(hostPort[1:closeBracket], "[]") {
-		return errors.New("HTTPS icon src contains an invalid IP-literal authority")
-	}
-	literal := hostPort[1:closeBracket]
-	if !validIPv6Literal(literal) && !validIPvFutureLiteral(literal) {
-		return errors.New("HTTPS icon src contains an invalid IP-literal authority")
-	}
-	remainder := hostPort[closeBracket+1:]
-	if remainder == "" {
-		return nil
-	}
-	if !strings.HasPrefix(remainder, ":") {
-		return errors.New("HTTPS icon src contains invalid data after its IP-literal host")
-	}
-	return validateHTTPSPort(remainder[1:], true)
-}
-
-func validateHTTPSPort(port string, present bool) error {
+func optionalObject(fields map[string]json.RawMessage, name string) error {
+	raw, present := fields[name]
 	if !present {
 		return nil
 	}
-	if port == "" {
-		return errors.New("HTTPS icon src must not contain an empty port")
+	return requireObjectRaw(raw, name)
+}
+func requireObjectRaw(raw json.RawMessage, name string) error {
+	if err := validateJSONValue(raw); err != nil {
+		return fmt.Errorf("field %q contains invalid JSON: %w", name, err)
 	}
-	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
-		return errors.New("HTTPS icon src port must be between 0 and 65535")
+	if _, err := decodeObjectFields(raw); err != nil {
+		return fmt.Errorf("field %q must be an object: %w", name, err)
+	}
+	return nil
+}
+func validResultType(v string, completeOnly bool) error {
+	if v == ResultTypeComplete {
+		return nil
+	}
+	if !completeOnly && v == ResultTypeInputRequired {
+		return nil
+	}
+	return fmt.Errorf("mcp: unsupported resultType %q", v)
+}
+func validCache(fields map[string]json.RawMessage, c CacheInfo) error {
+	if err := required(fields, "ttlMs", "cacheScope"); err != nil {
+		return err
+	}
+	if !isIntegralJSONNumber(c.TTLMS) {
+		return errors.New("ttlMs must be a JSON integer")
+	}
+	canonical, ok := canonicalJSONNumber(c.TTLMS.String())
+	if !ok || strings.HasPrefix(canonical, "-") {
+		return errors.New("ttlMs must be non-negative")
+	}
+	if c.CacheScope != CacheScopePrivate && c.CacheScope != CacheScopePublic {
+		return fmt.Errorf("invalid cacheScope %q", c.CacheScope)
+	}
+	return nil
+}
+func validateURI(name, value string) error {
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" {
+		return fmt.Errorf("field %q must be an absolute URI", name)
+	}
+	return nil
+}
+func decodeAlias(data []byte, dst any) (map[string]json.RawMessage, error) {
+	fields, err := decodeObjectFields(data)
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(data, dst); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+func marshalChecked[T any](wire any) ([]byte, error) {
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		return nil, err
+	}
+	var out T
+	if err = json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("mcp: refusing to marshal invalid wire value: %w", err)
+	}
+	return raw, nil
+}
+
+func (m *RequestMeta) UnmarshalJSON(data []byte) error {
+	type alias RequestMeta
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = required(fields, metaProtocolVersion, metaClientCapabilities, metaClientInfo); err != nil {
+		return err
+	}
+	if v.ProtocolVersion != ProtocolVersion {
+		return fmt.Errorf("protocolVersion must be exactly %q", ProtocolVersion)
+	}
+	if v.ClientInfo == nil {
+		return errors.New("clientInfo must not be null")
+	}
+	if err = optionalString(fields, metaLogLevel); err != nil {
+		return err
+	}
+	if _, present := fields[metaLogLevel]; present {
+		if err = validateLoggingLevel(v.LogLevel); err != nil {
+			return err
+		}
+	}
+	known := []string{metaProtocolVersion, metaClientCapabilities, metaClientInfo, metaLogLevel, progressTokenField}
+	v.Extra = captureExtraFields(fields, known...)
+	if err = validateMetaKeys(v.Extra); err != nil {
+		return err
+	}
+	*m = RequestMeta(v)
+	return nil
+}
+func (m RequestMeta) MarshalJSON() ([]byte, error) {
+	type alias RequestMeta
+	for key := range m.Extra {
+		if isReservedMCPMetaKey(key) {
+			return nil, fmt.Errorf("mcp: caller metadata must not use reserved key %q", key)
+		}
+	}
+	requestMetaFields := []string{
+		metaProtocolVersion,
+		metaClientCapabilities,
+		metaClientInfo,
+		metaLogLevel,
+		"progressToken",
+	}
+	for _, k := range requestMetaFields {
+		if _, ok := m.Extra[k]; ok {
+			return nil, fmt.Errorf("mcp: RequestMeta.Extra collides with reserved key %q", k)
+		}
+	}
+	raw, err := mergeExtra(
+		alias(m),
+		m.Extra,
+		metaProtocolVersion,
+		metaClientCapabilities,
+		metaClientInfo,
+		metaLogLevel,
+		"progressToken",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var checked RequestMeta
+	if err = json.Unmarshal(raw, &checked); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
+func isReservedMCPMetaKey(key string) bool {
+	prefix, _, hasPrefix := strings.Cut(key, "/")
+	if !hasPrefix {
+		return false
+	}
+	labels := strings.Split(prefix, ".")
+	return len(labels) > 1 && (labels[1] == "mcp" || labels[1] == "modelcontextprotocol")
+}
+func (m *ResultMeta) UnmarshalJSON(data []byte) error {
+	f, e := decodeObjectFields(data)
+	if e != nil {
+		return e
+	}
+	v := ResultMeta{ServerInfo: nil, Extra: captureExtraFields(f, metaServerInfo)}
+	if raw, ok := f[metaServerInfo]; ok {
+		var info Implementation
+		if json.Unmarshal(raw, &info) == nil {
+			v.ServerInfo = &info
+		}
+	}
+	if e = validateMetaKeys(v.Extra); e != nil {
+		return e
+	}
+	*m = v
+	return nil
+}
+func (m ResultMeta) MarshalJSON() ([]byte, error) {
+	type alias ResultMeta
+	return mergeExtra(alias(m), m.Extra, metaServerInfo)
+}
+func (m *SubscriptionResultMeta) UnmarshalJSON(data []byte) error {
+	f, e := decodeObjectFields(data)
+	if e != nil {
+		return e
+	}
+	if e = required(f, metaSubscriptionID); e != nil {
+		return e
+	}
+	v := SubscriptionResultMeta{
+		SubscriptionID: bytes.Clone(f[metaSubscriptionID]),
+		ServerInfo:     nil,
+		Extra:          captureExtraFields(f, metaSubscriptionID, metaServerInfo),
+	}
+	if e = validateRequestID(v.SubscriptionID); e != nil {
+		return e
+	}
+	if raw, ok := f[metaServerInfo]; ok {
+		var info Implementation
+		if json.Unmarshal(raw, &info) == nil {
+			v.ServerInfo = &info
+		}
+	}
+	*m = v
+	return validateMetaKeys(v.Extra)
+}
+func (m SubscriptionResultMeta) MarshalJSON() ([]byte, error) {
+	type alias SubscriptionResultMeta
+	raw, e := mergeExtra(alias(m), m.Extra, metaSubscriptionID, metaServerInfo)
+	if e != nil {
+		return nil, e
+	}
+	var x SubscriptionResultMeta
+	if e = json.Unmarshal(raw, &x); e != nil {
+		return nil, e
+	}
+	return raw, nil
+}
+
+func validateJSONObjectMaps(values map[string]json.RawMessage, prefixed bool) error {
+	for k, v := range values {
+		if prefixed {
+			if !strings.Contains(k, "/") {
+				return fmt.Errorf("extension key %q must have a prefix", k)
+			}
+			if !metaKeyPattern.MatchString(k) {
+				return fmt.Errorf("invalid extension key %q", k)
+			}
+		}
+		if err := requireObjectRaw(v, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (c *ClientCapabilities) UnmarshalJSON(data []byte) error {
+	type alias ClientCapabilities
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	for _, field := range []string{"experimental", "roots", "sampling", "elicitation", "extensions"} {
+		if e = optionalObject(f, field); e != nil {
+			return e
+		}
+	}
+	v.Extra = captureExtraFields(f, "experimental", "roots", "sampling", "elicitation", "extensions")
+	if e = validateJSONObjectMaps(v.Experimental, false); e != nil {
+		return e
+	}
+	if e = validateJSONObjectMaps(v.Extensions, true); e != nil {
+		return e
+	}
+	*c = ClientCapabilities(v)
+	return nil
+}
+func (c ClientCapabilities) MarshalJSON() ([]byte, error) {
+	type alias ClientCapabilities
+	raw, e := mergeExtra(
+		alias(c),
+		Meta(c.Extra),
+		"experimental",
+		"roots",
+		"sampling",
+		"elicitation",
+		"extensions",
+	)
+	if e != nil {
+		return nil, e
+	}
+	var x ClientCapabilities
+	if e = json.Unmarshal(raw, &x); e != nil {
+		return nil, e
+	}
+	return raw, nil
+}
+
+func (c *RootsCapability) UnmarshalJSON(data []byte) error {
+	f, err := decodeObjectFields(data)
+	if err != nil {
+		return err
+	}
+	c.Extra = captureExtraFields(f)
+	return nil
+}
+
+func (c RootsCapability) MarshalJSON() ([]byte, error) {
+	type alias RootsCapability
+	return marshalExtraChecked[RootsCapability](alias(c), c.Extra)
+}
+
+func (c *SamplingCapability) UnmarshalJSON(data []byte) error {
+	type alias SamplingCapability
+	var value alias
+	fields, err := decodeAlias(data, &value)
+	if err != nil {
+		return err
+	}
+	for _, field := range []string{"context", string(InvalidationTools)} {
+		if err = optionalObject(fields, field); err != nil {
+			return err
+		}
+	}
+	value.Extra = captureExtraFields(fields, "context", string(InvalidationTools))
+	*c = SamplingCapability(value)
+	return nil
+}
+
+func (c SamplingCapability) MarshalJSON() ([]byte, error) {
+	type alias SamplingCapability
+	return marshalExtraChecked[SamplingCapability](alias(c), c.Extra, "context", string(InvalidationTools))
+}
+
+func (c *ElicitationCapability) UnmarshalJSON(data []byte) error {
+	type alias ElicitationCapability
+	var value alias
+	fields, err := decodeAlias(data, &value)
+	if err != nil {
+		return err
+	}
+	for _, field := range []string{"form", "url"} {
+		if err = optionalObject(fields, field); err != nil {
+			return err
+		}
+	}
+	value.Extra = captureExtraFields(fields, "form", "url")
+	*c = ElicitationCapability(value)
+	return nil
+}
+
+func (c ElicitationCapability) MarshalJSON() ([]byte, error) {
+	type alias ElicitationCapability
+	return marshalExtraChecked[ElicitationCapability](alias(c), c.Extra, "form", "url")
+}
+func (c *ServerCapabilities) UnmarshalJSON(data []byte) error {
+	type alias ServerCapabilities
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	capabilityFields := []string{
+		"tools", "resources", "prompts", "logging", "completions", "experimental", "extensions",
+	}
+	for _, field := range capabilityFields {
+		if e = optionalObject(f, field); e != nil {
+			return e
+		}
+	}
+	for _, k := range []string{"logging", "completions"} {
+		if raw, present := f[k]; present {
+			if e = requireObjectRaw(raw, k); e != nil {
+				return e
+			}
+		}
+	}
+	if raw, present := f["experimental"]; present {
+		var values map[string]json.RawMessage
+		if e = json.Unmarshal(raw, &values); e != nil {
+			return fmt.Errorf("experimental must be an object: %w", e)
+		}
+		if e = validateJSONObjectMaps(values, false); e != nil {
+			return e
+		}
+	}
+	if e = validateJSONObjectMaps(v.Extensions, true); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "tools", "resources", "prompts", "extensions")
+	*c = ServerCapabilities(v)
+	return nil
+}
+func (c ServerCapabilities) MarshalJSON() ([]byte, error) {
+	type alias ServerCapabilities
+	raw, e := mergeExtra(
+		alias(c),
+		Meta(c.Extra),
+		"tools",
+		"resources",
+		"prompts",
+		"extensions",
+	)
+	if e != nil {
+		return nil, e
+	}
+	var x ServerCapabilities
+	if e = json.Unmarshal(raw, &x); e != nil {
+		return nil, e
+	}
+	return raw, nil
+}
+
+func (p *RequestParams) UnmarshalJSON(data []byte) error {
+	type alias RequestParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, metaObjectField); e != nil {
+		return e
+	}
+	if e = required(f, metaObjectField); e != nil {
+		return e
+	}
+	*p = RequestParams(v)
+	return nil
+}
+func (p RequestParams) MarshalJSON() ([]byte, error) {
+	type alias RequestParams
+	return marshalChecked[RequestParams](alias(p))
+}
+func (p *CursorParams) UnmarshalJSON(data []byte) error {
+	type alias CursorParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, "cursor", metaObjectField); e != nil {
+		return e
+	}
+	if e = required(f, metaObjectField); e != nil {
+		return e
+	}
+	if e = optionalString(f, "cursor"); e != nil {
+		return e
+	}
+	*p = CursorParams(v)
+	return nil
+}
+func (p CursorParams) MarshalJSON() ([]byte, error) {
+	type alias CursorParams
+	return marshalChecked[CursorParams](alias(p))
+}
+func (p *ToolsCallParams) UnmarshalJSON(data []byte) error {
+	type alias ToolsCallParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, "name", "arguments", "inputResponses", "requestState", metaObjectField); e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	if e = required(f, metaObjectField); e != nil {
+		return e
+	}
+	if raw, ok := f["arguments"]; ok {
+		if e = requireObjectRaw(raw, "arguments"); e != nil {
+			return e
+		}
+	}
+	if raw, ok := f["inputResponses"]; ok {
+		if e = validateInputResponses(raw); e != nil {
+			return e
+		}
+	}
+	if e = optionalRequestState(f); e != nil {
+		return e
+	}
+	*p = ToolsCallParams(v)
+	return nil
+}
+func (p ToolsCallParams) MarshalJSON() ([]byte, error) {
+	type alias ToolsCallParams
+	return marshalChecked[ToolsCallParams](alias(p))
+}
+func (p *ResourcesReadParams) UnmarshalJSON(data []byte) error {
+	type alias ResourcesReadParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, "uri", "inputResponses", "requestState", metaObjectField); e != nil {
+		return e
+	}
+	if e = requireString(f, "uri", true); e != nil {
+		return e
+	}
+	if e = validateURI("uri", v.URI); e != nil {
+		return e
+	}
+	if e = required(f, metaObjectField); e != nil {
+		return e
+	}
+	if raw, ok := f["inputResponses"]; ok {
+		if e = validateInputResponses(raw); e != nil {
+			return e
+		}
+	}
+	if e = optionalRequestState(f); e != nil {
+		return e
+	}
+	*p = ResourcesReadParams(v)
+	return nil
+}
+func (p ResourcesReadParams) MarshalJSON() ([]byte, error) {
+	type alias ResourcesReadParams
+	return marshalChecked[ResourcesReadParams](alias(p))
+}
+func (p *PromptsGetParams) UnmarshalJSON(data []byte) error {
+	type alias PromptsGetParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, "name", "arguments", "inputResponses", "requestState", metaObjectField); e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	if e = required(f, metaObjectField); e != nil {
+		return e
+	}
+	if e = optionalObject(f, "arguments"); e != nil {
+		return e
+	}
+	if raw, ok := f["inputResponses"]; ok {
+		if e = validateInputResponses(raw); e != nil {
+			return e
+		}
+	}
+	if e = optionalRequestState(f); e != nil {
+		return e
+	}
+	*p = PromptsGetParams(v)
+	return nil
+}
+func (p PromptsGetParams) MarshalJSON() ([]byte, error) {
+	type alias PromptsGetParams
+	return marshalChecked[PromptsGetParams](alias(p))
+}
+func (p *SubscriptionsListenParams) UnmarshalJSON(data []byte) error {
+	type alias SubscriptionsListenParams
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "notifications", metaObjectField); e != nil {
+		return e
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "notifications", metaObjectField)
+	*p = SubscriptionsListenParams(v)
+	return nil
+}
+func (p SubscriptionsListenParams) MarshalJSON() ([]byte, error) {
+	type alias SubscriptionsListenParams
+	return marshalExtraChecked[SubscriptionsListenParams](alias(p), p.Extra, "notifications", metaObjectField)
+}
+
+func (f *SubscriptionFilter) UnmarshalJSON(data []byte) error {
+	type alias SubscriptionFilter
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"toolsListChanged", "resourcesListChanged", "promptsListChanged"} {
+		if err = optionalBool(fields, name); err != nil {
+			return err
+		}
+	}
+	if raw, ok := fields["resourceSubscriptions"]; ok {
+		if err = optionalArray(fields, "resourceSubscriptions"); err != nil {
+			return err
+		}
+		var values []string
+		if json.Unmarshal(raw, &values) != nil {
+			return errors.New("resourceSubscriptions must be an array of strings")
+		}
+		seen := make(map[string]bool, len(values))
+		for _, value := range values {
+			if value == "" || seen[value] {
+				return errors.New("resourceSubscriptions must contain unique non-empty URIs")
+			}
+			if err = validateURI("resourceSubscriptions", value); err != nil {
+				return err
+			}
+			seen[value] = true
+		}
+	}
+	v.Extra = captureExtraFields(
+		fields,
+		"toolsListChanged",
+		"resourcesListChanged",
+		"promptsListChanged",
+		"resourceSubscriptions",
+	)
+	*f = SubscriptionFilter(v)
+	return nil
+}
+func (f SubscriptionFilter) MarshalJSON() ([]byte, error) {
+	type alias SubscriptionFilter
+	return marshalExtraChecked[SubscriptionFilter](
+		alias(f),
+		f.Extra,
+		"toolsListChanged",
+		"resourcesListChanged",
+		"promptsListChanged",
+		"resourceSubscriptions",
+	)
+}
+
+func (r *SubscriptionsListenResult) UnmarshalJSON(data []byte) error {
+	type alias SubscriptionsListenResult
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = required(fields, "resultType", metaObjectField); err != nil {
+		return err
+	}
+	if err = validResultType(v.ResultType, true); err != nil {
+		return err
+	}
+	if err = rejectPresentFields(fields, "inputRequests", "requestState"); err != nil {
+		return err
+	}
+	v.Extra = captureExtraFields(fields, "resultType", metaObjectField)
+	*r = SubscriptionsListenResult(v)
+	return nil
+}
+func (r SubscriptionsListenResult) MarshalJSON() ([]byte, error) {
+	type alias SubscriptionsListenResult
+	return marshalExtraChecked[SubscriptionsListenResult](alias(r), r.Extra, "resultType", metaObjectField)
+}
+
+func (p *SubscriptionsAcknowledgedParams) UnmarshalJSON(data []byte) error {
+	type alias SubscriptionsAcknowledgedParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = required(fields, "notifications"); err != nil {
+		return err
+	}
+	if err = optionalObject(fields, metaObjectField); err != nil {
+		return err
+	}
+	v.Extra = captureExtraFields(fields, "notifications", metaObjectField)
+	*p = SubscriptionsAcknowledgedParams(v)
+	return nil
+}
+func (p SubscriptionsAcknowledgedParams) MarshalJSON() ([]byte, error) {
+	type alias SubscriptionsAcknowledgedParams
+	return marshalExtraChecked[SubscriptionsAcknowledgedParams](alias(p), p.Extra, "notifications", metaObjectField)
+}
+
+func (i *Implementation) UnmarshalJSON(data []byte) error {
+	type alias Implementation
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	if e = requireString(f, "version", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField, "websiteUrl"} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalArray(f, "icons"); e != nil {
+		return e
+	}
+	if v.WebsiteURL != "" {
+		if e = validateURI("websiteUrl", v.WebsiteURL); e != nil {
+			return e
+		}
+	}
+	v.Extra = captureExtraFields(f, "name", titleField, "version", descriptionField, "icons", "websiteUrl")
+	*i = Implementation(v)
+	return nil
+}
+func (i Implementation) MarshalJSON() ([]byte, error) {
+	type alias Implementation
+	return marshalExtraChecked[Implementation](
+		alias(i), i.Extra, "name", titleField, "version", descriptionField, "icons", "websiteUrl",
+	)
+}
+func (i *Icon) UnmarshalJSON(data []byte) error {
+	type alias Icon
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "src", true); e != nil {
+		return e
+	}
+	for _, field := range []string{mimeTypeField, "theme"} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalArray(f, "sizes"); e != nil {
+		return e
+	}
+	if v.Theme != "" && v.Theme != "light" && v.Theme != "dark" {
+		return fmt.Errorf("invalid icon theme %q", v.Theme)
+	}
+	if e = validateURI("src", v.Src); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "src", mimeTypeField, "sizes", "theme")
+	*i = Icon(v)
+	return nil
+}
+func (i Icon) MarshalJSON() ([]byte, error) {
+	type alias Icon
+	return marshalExtraChecked[Icon](alias(i), i.Extra, "src", mimeTypeField, "sizes", "theme")
+}
+func (c *ToolsCapability) UnmarshalJSON(data []byte) error {
+	type alias ToolsCapability
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = optionalBool(f, "listChanged"); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "listChanged")
+	*c = ToolsCapability(v)
+	return nil
+}
+func (c ToolsCapability) MarshalJSON() ([]byte, error) {
+	type alias ToolsCapability
+	return marshalExtraChecked[ToolsCapability](alias(c), c.Extra, "listChanged")
+}
+func (c *ResourcesCapability) UnmarshalJSON(data []byte) error {
+	type alias ResourcesCapability
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = optionalBool(f, "subscribe"); e != nil {
+		return e
+	}
+	if e = optionalBool(f, "listChanged"); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "subscribe", "listChanged")
+	*c = ResourcesCapability(v)
+	return nil
+}
+func (c ResourcesCapability) MarshalJSON() ([]byte, error) {
+	type alias ResourcesCapability
+	return marshalExtraChecked[ResourcesCapability](alias(c), c.Extra, "subscribe", "listChanged")
+}
+func (c *PromptsCapability) UnmarshalJSON(data []byte) error {
+	type alias PromptsCapability
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = optionalBool(f, "listChanged"); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "listChanged")
+	*c = PromptsCapability(v)
+	return nil
+}
+func (c PromptsCapability) MarshalJSON() ([]byte, error) {
+	type alias PromptsCapability
+	return marshalExtraChecked[PromptsCapability](alias(c), c.Extra, "listChanged")
+}
+
+func (r *DiscoverResult) UnmarshalJSON(data []byte) error {
+	type alias DiscoverResult
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "resultType", "supportedVersions", "capabilities", "ttlMs", "cacheScope"); e != nil {
+		return e
+	}
+	if e = rejectPresentFields(f, "inputRequests", "requestState"); e != nil {
+		return e
+	}
+	if e = validResultType(v.ResultType, true); e != nil {
+		return e
+	}
+	if e = validCache(f, v.CacheInfo); e != nil {
+		return e
+	}
+	if e = requireArray(f, "supportedVersions"); e != nil {
+		return e
+	}
+	if e = optionalString(f, "instructions"); e != nil {
+		return e
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return e
+	}
+	seen := map[string]bool{}
+	for _, x := range v.SupportedVersions {
+		if x == "" || seen[x] {
+			return errors.New("supportedVersions must be non-empty and unique")
+		}
+		seen[x] = true
+	}
+	if len(seen) == 0 {
+		return errors.New("supportedVersions must not be empty")
+	}
+	v.Extra = captureExtraFields(
+		f,
+		"resultType",
+		"supportedVersions",
+		"capabilities",
+		"instructions",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	*r = DiscoverResult(v)
+	return nil
+}
+func (r DiscoverResult) MarshalJSON() ([]byte, error) {
+	type alias DiscoverResult
+	raw, e := mergeExtra(
+		alias(r),
+		r.Extra,
+		"resultType",
+		"supportedVersions",
+		"capabilities",
+		"instructions",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e != nil {
+		return nil, e
+	}
+	var x DiscoverResult
+	if e = json.Unmarshal(raw, &x); e != nil {
+		return nil, e
+	}
+	return raw, nil
+}
+
+func validateCompleteResult(
+	data []byte,
+	dst any,
+	arrayField string,
+	cache bool,
+	_ ...string,
+) (map[string]json.RawMessage, error) {
+	f, e := decodeAlias(data, dst)
+	if e != nil {
+		return nil, e
+	}
+	var h struct {
+		CacheInfo
+
+		ResultType string `json:"resultType"`
+	}
+	if e = json.Unmarshal(data, &h); e != nil {
+		return nil, e
+	}
+	if e = required(f, "resultType"); e != nil {
+		return nil, e
+	}
+	if e = validResultType(h.ResultType, true); e != nil {
+		return nil, e
+	}
+	if e = rejectPresentFields(f, "inputRequests", "requestState"); e != nil {
+		return nil, e
+	}
+	if e = optionalString(f, "nextCursor"); e != nil {
+		return nil, e
+	}
+	if e = optionalString(f, descriptionField); e != nil {
+		return nil, e
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return nil, e
+	}
+	if arrayField != "" {
+		if e = requireArray(f, arrayField); e != nil {
+			return nil, e
+		}
+	}
+	if cache {
+		if e = validCache(f, h.CacheInfo); e != nil {
+			return nil, e
+		}
+	}
+	return f, nil
+}
+func unmarshalExtraResult(data []byte, dst any, extra *Meta, array string, cache bool, known ...string) error {
+	f, e := validateCompleteResult(data, dst, array, cache, known...)
+	if e != nil {
+		return e
+	}
+	*extra = captureExtraFields(f, known...)
+	return nil
+}
+
+func (r *ToolsListResult) UnmarshalJSON(data []byte) error {
+	type alias ToolsListResult
+	var v alias
+	e := unmarshalExtraResult(
+		data,
+		&v,
+		&v.Extra,
+		"tools",
+		true,
+		"resultType",
+		"tools",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e == nil {
+		*r = ToolsListResult(v)
+	}
+	return e
+}
+func (r ToolsListResult) MarshalJSON() ([]byte, error) {
+	type alias ToolsListResult
+	return marshalExtraChecked[ToolsListResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"tools",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+}
+func (r *ResourcesListResult) UnmarshalJSON(data []byte) error {
+	type alias ResourcesListResult
+	var v alias
+	e := unmarshalExtraResult(
+		data,
+		&v,
+		&v.Extra,
+		"resources",
+		true,
+		"resultType",
+		"resources",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e == nil {
+		*r = ResourcesListResult(v)
+	}
+	return e
+}
+func (r ResourcesListResult) MarshalJSON() ([]byte, error) {
+	type alias ResourcesListResult
+	return marshalExtraChecked[ResourcesListResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"resources",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+}
+func (r *ResourceTemplatesListResult) UnmarshalJSON(data []byte) error {
+	type alias ResourceTemplatesListResult
+	var v alias
+	e := unmarshalExtraResult(
+		data,
+		&v,
+		&v.Extra,
+		"resourceTemplates",
+		true,
+		"resultType",
+		"resourceTemplates",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e == nil {
+		*r = ResourceTemplatesListResult(v)
+	}
+	return e
+}
+func (r ResourceTemplatesListResult) MarshalJSON() ([]byte, error) {
+	type alias ResourceTemplatesListResult
+	return marshalExtraChecked[ResourceTemplatesListResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"resourceTemplates",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+}
+func (r *ResourcesReadResult) UnmarshalJSON(data []byte) error {
+	type alias ResourcesReadResult
+	var v alias
+	e := unmarshalExtraResult(
+		data,
+		&v,
+		&v.Extra,
+		"contents",
+		true,
+		"resultType",
+		"contents",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e == nil {
+		*r = ResourcesReadResult(v)
+	}
+	return e
+}
+func (r ResourcesReadResult) MarshalJSON() ([]byte, error) {
+	type alias ResourcesReadResult
+	return marshalExtraChecked[ResourcesReadResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"contents",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+}
+func (r *PromptsListResult) UnmarshalJSON(data []byte) error {
+	type alias PromptsListResult
+	var v alias
+	e := unmarshalExtraResult(
+		data,
+		&v,
+		&v.Extra,
+		"prompts",
+		true,
+		"resultType",
+		"prompts",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+	if e == nil {
+		*r = PromptsListResult(v)
+	}
+	return e
+}
+func (r PromptsListResult) MarshalJSON() ([]byte, error) {
+	type alias PromptsListResult
+	return marshalExtraChecked[PromptsListResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"prompts",
+		"nextCursor",
+		"ttlMs",
+		"cacheScope",
+		metaObjectField,
+	)
+}
+func (r *PromptsGetResult) UnmarshalJSON(data []byte) error {
+	type alias PromptsGetResult
+	var v alias
+	e := unmarshalExtraResult(
+		data, &v, &v.Extra, "messages", false, "resultType", descriptionField, "messages", metaObjectField,
+	)
+	if e == nil {
+		*r = PromptsGetResult(v)
+	}
+	return e
+}
+func (r PromptsGetResult) MarshalJSON() ([]byte, error) {
+	type alias PromptsGetResult
+	return marshalExtraChecked[PromptsGetResult](
+		alias(r), r.Extra, "resultType", descriptionField, "messages", metaObjectField,
+	)
+}
+func marshalExtraChecked[T any](base any, extra Meta, known ...string) ([]byte, error) {
+	raw, e := mergeExtra(base, extra, known...)
+	if e != nil {
+		return nil, e
+	}
+	var x T
+	if e = json.Unmarshal(raw, &x); e != nil {
+		return nil, e
+	}
+	return raw, nil
+}
+
+func (r *CallToolResult) UnmarshalJSON(data []byte) error {
+	type alias CallToolResult
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "resultType", "content"); e != nil {
+		return e
+	}
+	if e = validResultType(v.ResultType, false); e != nil {
+		return e
+	}
+	if v.ResultType != ResultTypeComplete {
+		return errors.New("input_required must be decoded as InputRequiredResult")
+	}
+	if e = rejectPresentFields(f, "inputRequests", "requestState"); e != nil {
+		return e
+	}
+	if e = requireArray(f, "content"); e != nil {
+		return e
+	}
+	if e = optionalBool(f, "isError"); e != nil {
+		return e
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return e
+	}
+	if raw, ok := f["structuredContent"]; ok {
+		if e = validateJSONValue(raw); e != nil {
+			return fmt.Errorf("invalid structuredContent: %w", e)
+		}
+	}
+	v.Extra = captureExtraFields(f, "resultType", "content", "structuredContent", "isError", metaObjectField)
+	*r = CallToolResult(v)
+	return nil
+}
+func (r CallToolResult) MarshalJSON() ([]byte, error) {
+	type alias CallToolResult
+	return marshalExtraChecked[CallToolResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"content",
+		"structuredContent",
+		"isError",
+		metaObjectField,
+	)
+}
+func (r *InputRequiredResult) UnmarshalJSON(data []byte) error {
+	type alias InputRequiredResult
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "resultType"); e != nil {
+		return e
+	}
+	if v.ResultType != ResultTypeInputRequired {
+		return fmt.Errorf("invalid input-required resultType %q", v.ResultType)
+	}
+	if e = rejectPresentFields(
+		f,
+		"supportedVersions", "capabilities", "instructions", "ttlMs", "cacheScope",
+		"tools", "resources", "resourceTemplates", "prompts", "nextCursor",
+		"content", "structuredContent", "isError", "contents", "messages", descriptionField,
+	); e != nil {
+		return e
+	}
+	_, hasInputs := f["inputRequests"]
+	_, hasState := f["requestState"]
+	if !hasInputs && !hasState {
+		return errors.New("input_required requires inputRequests or requestState")
+	}
+	if hasInputs {
+		if e = validateInputRequests(f["inputRequests"]); e != nil {
+			return e
+		}
+	}
+	if e = optionalRequestState(f); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "resultType", "inputRequests", "requestState", metaObjectField)
+	*r = InputRequiredResult(v)
+	return nil
+}
+func (r InputRequiredResult) MarshalJSON() ([]byte, error) {
+	type alias InputRequiredResult
+	return marshalExtraChecked[InputRequiredResult](
+		alias(r),
+		r.Extra,
+		"resultType",
+		"inputRequests",
+		"requestState",
+		metaObjectField,
+	)
+}
+func (r *CompleteResult) UnmarshalJSON(data []byte) error {
+	type alias CompleteResult
+	var v alias
+	e := unmarshalExtraResult(data, &v, &v.Extra, "", false, "resultType", metaObjectField)
+	if e == nil {
+		*r = CompleteResult(v)
+	}
+	return e
+}
+func (r CompleteResult) MarshalJSON() ([]byte, error) {
+	type alias CompleteResult
+	return marshalExtraChecked[CompleteResult](alias(r), r.Extra, "resultType", metaObjectField)
+}
+
+//nolint:gocognit // Recursive token validation must track nested delimiters and duplicate object keys.
+func validateJSONValue(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var walk func() error
+	walk = func() error {
+		tok, e := dec.Token()
+		if e != nil {
+			return e
+		}
+		d, ok := tok.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch d {
+		case '{':
+			seen := map[string]bool{}
+			for dec.More() {
+				k, e := dec.Token()
+				if e != nil {
+					return e
+				}
+				s, ok := k.(string)
+				if !ok {
+					return errors.New("object key not string")
+				}
+				if seen[s] {
+					return fmt.Errorf("duplicate field %q", s)
+				}
+				seen[s] = true
+				if e = walk(); e != nil {
+					return e
+				}
+			}
+			end, e := dec.Token()
+			if e != nil || end != json.Delim('}') {
+				return errors.New("invalid object")
+			}
+		case '[':
+			for dec.More() {
+				if e := walk(); e != nil {
+					return e
+				}
+			}
+			end, e := dec.Token()
+			if e != nil || end != json.Delim(']') {
+				return errors.New("invalid array")
+			}
+		default:
+			return errors.New("unexpected delimiter")
+		}
+		return nil
+	}
+	if e := walk(); e != nil {
+		return e
+	}
+	if _, e := dec.Token(); e != io.EOF {
+		return errors.New("trailing JSON value")
 	}
 	return nil
 }
 
-func validIPv6Literal(value string) bool {
-	address := value
-	if zoneDelimiter := strings.Index(strings.ToLower(value), "%25"); zoneDelimiter >= 0 {
-		address = value[:zoneDelimiter]
-		zoneID := value[zoneDelimiter+len("%25"):]
-		if !validIPv6ZoneID(zoneID) {
-			return false
+func (t *MCPTool) UnmarshalJSON(data []byte) error {
+	type alias MCPTool
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "name", "inputSchema"); e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField} {
+		if e = optionalString(f, field); e != nil {
+			return e
 		}
 	}
-	return strings.Contains(address, ":") && net.ParseIP(address) != nil
+	for _, field := range []string{annotationsField, metaObjectField} {
+		if e = optionalObject(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalArray(f, "icons"); e != nil {
+		return e
+	}
+	inputSchema, e := validateToolSchema(v.InputSchema, "inputSchema")
+	if e != nil {
+		return e
+	}
+	if inputSchema["type"] != schemaTypeObject {
+		return errors.New("inputSchema root type must be object")
+	}
+	if len(v.OutputSchema) > 0 {
+		if _, e = validateToolSchema(v.OutputSchema, "outputSchema"); e != nil {
+			return e
+		}
+	}
+	v.Extra = captureExtraFields(
+		f,
+		"name", titleField, descriptionField, "inputSchema", "outputSchema", annotationsField, "icons", metaObjectField,
+	)
+	*t = MCPTool(v)
+	return nil
 }
 
-func validIPv6ZoneID(value string) bool {
-	if value == "" {
+func validateToolSchema(raw json.RawMessage, field string) (map[string]any, error) {
+	decoded, err := jsonschemax.Decode(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", field, err)
+	}
+	schema, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s must be a JSON Schema object", field)
+	}
+	if _, err = jsonschemax.Compile(schema); err != nil {
+		return nil, fmt.Errorf("invalid %s: %w", field, err)
+	}
+	return schema, nil
+}
+func (t MCPTool) MarshalJSON() ([]byte, error) {
+	type alias MCPTool
+	return marshalExtraChecked[MCPTool](
+		alias(t),
+		t.Extra,
+		"name", titleField, descriptionField, "inputSchema", "outputSchema", annotationsField, "icons", metaObjectField,
+	)
+}
+func (r *ResourceContents) UnmarshalJSON(data []byte) error {
+	type alias ResourceContents
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "uri", true); e != nil {
+		return e
+	}
+	if e = validateURI("uri", v.URI); e != nil {
+		return e
+	}
+	if e = optionalString(f, mimeTypeField); e != nil {
+		return e
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return e
+	}
+	_, v.textPresent = f["text"]
+	_, v.blobPresent = f["blob"]
+	if v.textPresent == v.blobPresent {
+		return errors.New("resource contents requires exactly one of text or blob")
+	}
+	if v.textPresent {
+		if e = requireString(f, "text", false); e != nil {
+			return e
+		}
+	}
+	if v.blobPresent {
+		if e = requireString(f, "blob", false); e != nil {
+			return e
+		}
+		if _, e = decodeCanonicalBase64(*v.Blob); e != nil {
+			return errors.New("blob must be canonical base64")
+		}
+	}
+	v.Extra = captureExtraFields(f, "uri", mimeTypeField, "text", "blob", metaObjectField)
+	*r = ResourceContents(v)
+	return nil
+}
+func (r ResourceContents) MarshalJSON() ([]byte, error) {
+	type alias ResourceContents
+	return marshalExtraChecked[ResourceContents](
+		alias(r), r.Extra, "uri", mimeTypeField, "text", "blob", metaObjectField,
+	)
+}
+
+func (r *Resource) UnmarshalJSON(data []byte) error {
+	type alias Resource
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "uri", true); e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField, mimeTypeField} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalArray(f, "icons"); e != nil {
+		return e
+	}
+	for _, field := range []string{annotationsField, metaObjectField} {
+		if e = optionalObject(f, field); e != nil {
+			return e
+		}
+	}
+	if raw, present := f["size"]; present {
+		var size JSONNumber
+		if e = json.Unmarshal(raw, &size); e != nil || !isIntegralJSONNumber(size) {
+			return errors.New("resource size must be a JSON integer")
+		}
+	}
+	if e = validateURI("uri", v.URI); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(
+		f,
+		"uri",
+		"name",
+		titleField,
+		descriptionField,
+		mimeTypeField,
+		"size",
+		"icons",
+		annotationsField,
+		metaObjectField,
+	)
+	*r = Resource(v)
+	return nil
+}
+func (r Resource) MarshalJSON() ([]byte, error) {
+	type alias Resource
+	return marshalExtraChecked[Resource](
+		alias(r),
+		r.Extra,
+		"uri",
+		"name",
+		titleField,
+		descriptionField,
+		mimeTypeField,
+		"size",
+		"icons",
+		annotationsField,
+		metaObjectField,
+	)
+}
+func (r *ResourceTemplate) UnmarshalJSON(data []byte) error {
+	type alias ResourceTemplate
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "uriTemplate", true); e != nil {
+		return e
+	}
+	if e = validateURITemplate(v.URITemplate); e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField, mimeTypeField} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalArray(f, "icons"); e != nil {
+		return e
+	}
+	for _, field := range []string{annotationsField, metaObjectField} {
+		if e = optionalObject(f, field); e != nil {
+			return e
+		}
+	}
+	v.Extra = captureExtraFields(
+		f,
+		"uriTemplate",
+		"name",
+		titleField,
+		descriptionField,
+		mimeTypeField,
+		"icons",
+		annotationsField,
+		metaObjectField,
+	)
+	*r = ResourceTemplate(v)
+	return nil
+}
+
+func validateURITemplate(value string) error {
+	for offset := 0; offset < len(value); {
+		open := strings.IndexByte(value[offset:], '{')
+		closingBrace := strings.IndexByte(value[offset:], '}')
+		if closingBrace >= 0 && (open < 0 || closingBrace < open) {
+			return errors.New("uriTemplate contains an unmatched closing brace")
+		}
+		if open < 0 {
+			return nil
+		}
+		open += offset
+		end := strings.IndexByte(value[open+1:], '}')
+		if end < 0 {
+			return errors.New("uriTemplate contains an unmatched opening brace")
+		}
+		end += open + 1
+		if err := validateURITemplateExpression(value[open+1 : end]); err != nil {
+			return err
+		}
+		offset = end + 1
+	}
+	return nil
+}
+
+func validateURITemplateExpression(expression string) error {
+	if expression == "" || strings.ContainsAny(expression, "{}") {
+		return errors.New("uriTemplate contains an invalid expression")
+	}
+	if strings.ContainsRune("+#./;?&", rune(expression[0])) {
+		expression = expression[1:]
+	}
+	if expression == "" {
+		return errors.New("uriTemplate expression requires a variable")
+	}
+	for variable := range strings.SplitSeq(expression, ",") {
+		if !validURITemplateVariable(variable) {
+			return fmt.Errorf("uriTemplate contains invalid variable %q", variable)
+		}
+	}
+	return nil
+}
+
+func validURITemplateVariable(variable string) bool {
+	if name, exploded := strings.CutSuffix(variable, "*"); exploded {
+		variable = name
+	}
+	if name, prefix, present := strings.Cut(variable, ":"); present {
+		if !validURITemplatePrefix(prefix) {
+			return false
+		}
+		variable = name
+	}
+	return validURITemplateVariableName(variable)
+}
+
+func validURITemplatePrefix(prefix string) bool {
+	if len(prefix) == 0 || len(prefix) > 4 || prefix[0] == '0' {
 		return false
 	}
-	for index := 0; index < len(value); index++ {
-		char := value[index]
-		if char == '%' {
-			index += 2 // validateRawURICharacters already checked the escape.
-			continue
+	for _, digit := range prefix {
+		if digit < '0' || digit > '9' {
+			return false
 		}
-		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' ||
-			strings.ContainsRune("-._~", rune(char)) {
-			continue
-		}
-		return false
 	}
 	return true
 }
 
-func validIPvFutureLiteral(value string) bool {
-	if len(value) < len("v1.x") || value[0] != 'v' && value[0] != 'V' || strings.Contains(value, "%") {
+func validURITemplateVariableName(variable string) bool {
+	if variable == "" {
 		return false
 	}
-	dot := strings.IndexByte(value, '.')
-	if dot < 2 || dot == len(value)-1 {
-		return false
-	}
-	for index := 1; index < dot; index++ {
-		if !isHexDigit(value[index]) {
-			return false
-		}
-	}
-	return validURIComponent(value[dot+1:], "-._~!$&'()*+,;=:")
-}
-
-func validURIComponent(value, punctuation string) bool {
-	for index := 0; index < len(value); index++ {
-		char := value[index]
-		if char == '%' {
-			index += 2 // validateRawURICharacters already checked the escape.
+	segmentEmpty := true
+	for index := 0; index < len(variable); index++ {
+		char := variable[index]
+		if char == '.' {
+			if segmentEmpty || index == len(variable)-1 {
+				return false
+			}
+			segmentEmpty = true
 			continue
 		}
-		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
-			continue
-		}
-		if !strings.ContainsRune(punctuation, rune(char)) {
-			return false
-		}
-	}
-	return true
-}
-
-func validateRawURICharacters(value string) error {
-	for index := 0; index < len(value); index++ {
-		char := value[index]
 		if char == '%' {
-			if index+2 >= len(value) || !isHexDigit(value[index+1]) || !isHexDigit(value[index+2]) {
-				return errors.New("field \"src\" contains invalid percent encoding")
+			if index+2 >= len(variable) || !isHexDigit(variable[index+1]) || !isHexDigit(variable[index+2]) {
+				return false
 			}
 			index += 2
+			segmentEmpty = false
 			continue
 		}
-		if char > 0x7f || !isURICharacter(char) {
-			return errors.New("field \"src\" contains a character that must be percent-encoded")
+		if !isURITemplateVariableChar(char) {
+			return false
 		}
+		segmentEmpty = false
 	}
-	return nil
+	return true
+}
+
+func isURITemplateVariableChar(char byte) bool {
+	return char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_'
 }
 
 func isHexDigit(value byte) bool {
 	return value >= '0' && value <= '9' || value >= 'a' && value <= 'f' || value >= 'A' && value <= 'F'
 }
 
-func isURICharacter(value byte) bool {
-	if value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9' {
-		return true
-	}
-	return strings.ContainsRune("-._~:/?#[]@!$&'()*+,;=", rune(value))
-}
-
-func validateDataIconURI(value string, parsed *url.URL) error {
-	if parsed.Host != "" || parsed.User != nil || parsed.Opaque == "" || parsed.Fragment != "" {
-		return errors.New("data icon src must use RFC 2397 opaque syntax")
-	}
-	if err := validateDataURLCharacters(value[len(parsed.Scheme)+1:]); err != nil {
-		return err
-	}
-	opaque := parsed.Opaque
-	if parsed.ForceQuery || parsed.RawQuery != "" {
-		opaque += "?" + parsed.RawQuery
-	}
-	metadata, payload, ok := strings.Cut(opaque, ",")
-	if !ok {
-		return errors.New("data icon src must contain a comma-separated payload")
-	}
-	base64Encoded := strings.HasSuffix(strings.ToLower(metadata), ";base64")
-	if base64Encoded {
-		metadata = metadata[:len(metadata)-len(";base64")]
-	}
-	if err := validateDataMediaType(metadata); err != nil {
-		return err
-	}
-	decodedPayload, err := url.PathUnescape(payload)
-	if err != nil {
-		return errors.New("data icon src contains invalid percent encoding")
-	}
-	if base64Encoded {
-		if _, err := base64.StdEncoding.DecodeString(decodedPayload); err != nil {
-			return errors.New("data icon src contains invalid base64")
-		}
-	}
-	return nil
-}
-
-func validateDataMediaType(metadata string) error {
-	parts := strings.Split(metadata, ";")
-	typeParts := strings.Split(parts[0], "/")
-	if len(typeParts) != 2 {
-		return errors.New("data icon src must declare an image media type")
-	}
-	mediaType, err := url.PathUnescape(typeParts[0])
-	if err != nil || !strings.EqualFold(mediaType, "image") {
-		return errors.New("data icon src must declare an image media type")
-	}
-	subtype, err := url.PathUnescape(typeParts[1])
-	if err != nil || !validMIMEToken(subtype) {
-		return errors.New("data icon src contains an invalid image media subtype")
-	}
-	seen := make(map[string]struct{}, len(parts)-1)
-	for _, rawParameter := range parts[1:] {
-		if strings.Count(rawParameter, "=") != 1 {
-			return errors.New("data icon src media parameters must use attribute=value syntax")
-		}
-		rawAttribute, rawValue, _ := strings.Cut(rawParameter, "=")
-		attribute, attributeErr := url.PathUnescape(rawAttribute)
-		value, valueErr := url.PathUnescape(rawValue)
-		if attributeErr != nil || !validMIMEToken(attribute) || valueErr != nil ||
-			!validRawMIMEParameterValue(rawValue) || !validMIMEParameterValue(value) {
-			return errors.New("data icon src contains an invalid media parameter")
-		}
-		canonicalAttribute := strings.ToLower(attribute)
-		if _, duplicate := seen[canonicalAttribute]; duplicate {
-			return errors.New("data icon src contains duplicate media parameters")
-		}
-		seen[canonicalAttribute] = struct{}{}
-	}
-	return nil
-}
-
-func validMIMEToken(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, char := range []byte(value) {
-		if char <= 0x20 || char >= 0x7f || strings.ContainsRune("()<>@,;:\\\"/[]?=", rune(char)) {
-			return false
-		}
-	}
-	return true
-}
-
-func validMIMEParameterValue(value string) bool {
-	for _, char := range []byte(value) {
-		if char < 0x20 || char >= 0x7f {
-			return false
-		}
-	}
-	return true
-}
-
-func validRawMIMEParameterValue(value string) bool {
-	if value == "" {
-		return false
-	}
-	for index := 0; index < len(value); index++ {
-		if value[index] == '%' {
-			index += 2 // validateRawURICharacters already checked the escape.
-			continue
-		}
-		if !validMIMEToken(value[index : index+1]) {
-			return false
-		}
-	}
-	return true
-}
-
-func validateDataURLCharacters(value string) error {
-	for index := 0; index < len(value); index++ {
-		char := value[index]
-		if char == '%' {
-			index += 2 // validateRawURICharacters already checked the escape.
-			continue
-		}
-		if char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
-			continue
-		}
-		if !strings.ContainsRune("-_.!~*'();/?:@&=+$,", rune(char)) {
-			return errors.New("data icon src contains a character that must be percent-encoded")
-		}
-	}
-	return nil
-}
-
-func (i *Icon) UnmarshalJSON(data []byte) error {
-	type plain Icon
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "src", false); err != nil {
-		return err
-	}
-	for _, name := range []string{mimeTypeField, "theme"} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalStringArray(fields, "sizes"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if _, present := fields["theme"]; present && decoded.Theme != "light" && decoded.Theme != "dark" {
-		return errors.New("field \"theme\" must be \"light\" or \"dark\"")
-	}
-	if err := validateIconURI(decoded.Src); err != nil {
-		return err
-	}
-	*i = Icon(decoded)
-	return nil
-}
-
-func (p *NotificationParams) UnmarshalJSON(data []byte) error {
-	type plain NotificationParams
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*p = NotificationParams(decoded)
-	return nil
-}
-
-func (p *RequestParams) UnmarshalJSON(data []byte) error {
-	type plain RequestParams
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*p = RequestParams(decoded)
-	return nil
-}
-
-func decodeTypedRequestParams(data []byte, decoded any) (map[string]json.RawMessage, error) {
-	fields, err := decodeObjectFields(data)
+func decodeCanonicalBase64(value string) ([]byte, error) {
+	decoded, err := base64.StdEncoding.Strict().DecodeString(value)
 	if err != nil {
 		return nil, err
 	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return nil, err
+	if base64.StdEncoding.EncodeToString(decoded) != value {
+		return nil, errors.New("non-canonical base64 encoding")
 	}
-	if err := json.Unmarshal(data, decoded); err != nil {
-		return nil, err
-	}
-	return fields, nil
+	return decoded, nil
 }
 
-func (p *InitializeParams) UnmarshalJSON(data []byte) error {
-	type plain InitializeParams
-	var decoded plain
-	fields, err := decodeTypedRequestParams(data, &decoded)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "protocolVersion", true); err != nil {
-		return err
-	}
-	for _, name := range []string{capabilitiesField, clientInfoField} {
-		if err := requireObjectField(fields, name); err != nil {
-			return err
-		}
-	}
-	*p = InitializeParams(decoded)
-	return nil
-}
-
-func (p *CursorParams) UnmarshalJSON(data []byte) error {
-	type plain CursorParams
-	var decoded plain
-	fields, err := decodeTypedRequestParams(data, &decoded)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "cursor"); err != nil {
-		return err
-	}
-	*p = CursorParams(decoded)
-	return nil
-}
-
-func (p *ToolsCallParams) UnmarshalJSON(data []byte) error {
-	type plain ToolsCallParams
-	var decoded plain
-	fields, err := decodeTypedRequestParams(data, &decoded)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, nameField, false); err != nil {
-		return err
-	}
-	if !mcpToolNamePattern.MatchString(decoded.Name) {
-		return fmt.Errorf("invalid tool name %q", decoded.Name)
-	}
-	if err := validateOptionalObject(fields, "arguments"); err != nil {
-		return err
-	}
-	*p = ToolsCallParams(decoded)
-	return nil
-}
-
-func (p *ResourcesReadParams) UnmarshalJSON(data []byte) error {
-	type plain ResourcesReadParams
-	var decoded plain
-	fields, err := decodeTypedRequestParams(data, &decoded)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "uri", false); err != nil {
-		return err
-	}
-	if err := validateURI("uri", decoded.URI); err != nil {
-		return err
-	}
-	*p = ResourcesReadParams(decoded)
-	return nil
-}
-
-func (p *PromptsGetParams) UnmarshalJSON(data []byte) error {
-	type plain PromptsGetParams
-	var decoded plain
-	fields, err := decodeTypedRequestParams(data, &decoded)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, nameField, true); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "arguments"); err != nil {
-		return err
-	}
-	*p = PromptsGetParams(decoded)
-	return nil
-}
-
-func (p *ResourceUpdatedParams) UnmarshalJSON(data []byte) error {
-	type plain ResourceUpdatedParams
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "uri", false); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if err := validateURI("uri", decoded.URI); err != nil {
-		return err
-	}
-	*p = ResourceUpdatedParams(decoded)
-	return nil
-}
-
-func (p *LogMessageParams) UnmarshalJSON(data []byte) error {
-	type plain LogMessageParams
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "level", false); err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "logger"); err != nil {
-		return err
-	}
-	if _, ok := fields[dataField]; !ok {
-		return errors.New("logging data is required")
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if !validLogLevel(decoded.Level) {
-		return fmt.Errorf("invalid logging level %q", decoded.Level)
-	}
-	*p = LogMessageParams(decoded)
-	return nil
-}
-
-func (i *Implementation) UnmarshalJSON(data []byte) error {
-	type plain Implementation
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	for _, name := range []string{nameField, "version"} {
-		if err := requireStringField(fields, name, true); err != nil {
-			return err
-		}
-	}
-	for _, name := range []string{titleField, descriptionField, "websiteUrl"} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalArray(fields, "icons"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if _, present := fields["websiteUrl"]; present {
-		if err := validateURI("websiteUrl", decoded.WebsiteURL); err != nil {
-			return err
-		}
-	}
-	*i = Implementation(decoded)
-	return nil
-}
-
-func (r *InitializeResult) UnmarshalJSON(data []byte) error {
-	type plain InitializeResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	for _, name := range []string{"protocolVersion", capabilitiesField, serverInfoField} {
-		if raw, ok := fields[name]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
-			return fmt.Errorf("initialize result requires %s", name)
-		}
-	}
-	if err := requireStringField(fields, "protocolVersion", true); err != nil {
-		return err
-	}
-	for _, name := range []string{capabilitiesField, serverInfoField} {
-		if err := requireObjectField(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalString(fields, "instructions"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = InitializeResult(decoded)
-	r.Extra = captureExtraFields(
-		fields,
-		"protocolVersion", capabilitiesField, serverInfoField, "instructions", metaField,
+func (r ResourceTemplate) MarshalJSON() ([]byte, error) {
+	type alias ResourceTemplate
+	return marshalExtraChecked[ResourceTemplate](
+		alias(r),
+		r.Extra,
+		"uriTemplate",
+		"name",
+		titleField,
+		descriptionField,
+		mimeTypeField,
+		"icons",
+		annotationsField,
+		metaObjectField,
 	)
-	return nil
-}
-
-func (c *ToolsCapability) UnmarshalJSON(data []byte) error {
-	type plain ToolsCapability
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalBool(fields, "listChanged"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = ToolsCapability(decoded)
-	return nil
-}
-
-func (c *ResourcesCapability) UnmarshalJSON(data []byte) error {
-	type plain ResourcesCapability
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	for _, name := range []string{"subscribe", "listChanged"} {
-		if err := validateOptionalBool(fields, name); err != nil {
-			return err
-		}
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = ResourcesCapability(decoded)
-	return nil
-}
-
-func (c *PromptsCapability) UnmarshalJSON(data []byte) error {
-	type plain PromptsCapability
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalBool(fields, "listChanged"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = PromptsCapability(decoded)
-	return nil
-}
-
-func (a *ToolAnnotations) UnmarshalJSON(data []byte) error {
-	type plain ToolAnnotations
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "title"); err != nil {
-		return err
-	}
-	for _, name := range []string{"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"} {
-		if err := validateOptionalBool(fields, name); err != nil {
-			return err
-		}
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*a = ToolAnnotations(decoded)
-	return nil
-}
-
-func (e *ToolExecution) UnmarshalJSON(data []byte) error {
-	type plain ToolExecution
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "taskSupport"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if _, present := fields["taskSupport"]; present && decoded.TaskSupport != taskSupportForbidden &&
-		decoded.TaskSupport != taskSupportOptional && decoded.TaskSupport != taskSupportRequired {
-		return fmt.Errorf("invalid taskSupport %q", decoded.TaskSupport)
-	}
-	*e = ToolExecution(decoded)
-	return nil
-}
-
-func (t *MCPTool) UnmarshalJSON(data []byte) error {
-	type plain MCPTool
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, nameField, false); err != nil {
-		return err
-	}
-	if err := requireObjectField(fields, "inputSchema"); err != nil {
-		return err
-	}
-	for _, name := range []string{titleField, descriptionField} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	for _, name := range []string{"outputSchema", annotationsField, "execution", metaField} {
-		if err := validateOptionalObject(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalArray(fields, "icons"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if !mcpToolNamePattern.MatchString(decoded.Name) {
-		return fmt.Errorf("invalid tool name %q", decoded.Name)
-	}
-	if _, err := decodeSchemaObject(decoded.InputSchema, true); err != nil {
-		return fmt.Errorf("invalid inputSchema: %w", err)
-	}
-	if _, err := decodeSchemaObject(decoded.OutputSchema, false); err != nil {
-		return fmt.Errorf("invalid outputSchema: %w", err)
-	}
-	*t = MCPTool(decoded)
-	return nil
-}
-
-//nolint:gocognit // Tagged-union field validation is kept at one strict decoding boundary.
-func (b *ContentBlock) UnmarshalJSON(data []byte) error {
-	type plain ContentBlock
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "type", false); err != nil {
-		return err
-	}
-	for _, name := range []string{contentTypeText, dataField, mimeTypeField, "uri", nameField, titleField, descriptionField} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalJSONInteger(fields, "size"); err != nil {
-		return err
-	}
-	if err := validateOptionalArray(fields, "icons"); err != nil {
-		return err
-	}
-	for _, name := range []string{"resource", annotationsField, metaField} {
-		if err := validateOptionalObject(fields, name); err != nil {
-			return err
-		}
-	}
-	switch decoded.Type {
-	case contentTypeText:
-		if err := requireStringField(fields, contentTypeText, true); err != nil {
-			return err
-		}
-	case contentTypeImage, contentTypeAudio:
-		if err := requireStringField(fields, "data", true); err != nil {
-			return err
-		}
-		if err := requireStringField(fields, mimeTypeField, true); err != nil {
-			return err
-		}
-	case contentTypeResourceLink:
-		if err := requireStringField(fields, "uri", false); err != nil {
-			return err
-		}
-		if err := requireStringField(fields, "name", true); err != nil {
-			return err
-		}
-	}
-	*b = ContentBlock(decoded)
-	b.wireFields = make(map[string]bool, len(fields))
-	for name := range fields {
-		b.wireFields[name] = true
-	}
-	return b.validate()
-}
-
-func (b ContentBlock) MarshalJSON() ([]byte, error) {
-	type plain ContentBlock
-	encoded, err := json.Marshal(plain(b))
-	if err != nil {
-		return nil, err
-	}
-	var fields map[string]json.RawMessage
-	if err = json.Unmarshal(encoded, &fields); err != nil {
-		return nil, err
-	}
-	switch b.Type {
-	case contentTypeText:
-		fields[contentTypeText], _ = json.Marshal(b.Text)
-	case contentTypeImage, contentTypeAudio:
-		fields[dataField], _ = json.Marshal(b.Data)
-		fields[mimeTypeField], _ = json.Marshal(b.MIMEType)
-	case contentTypeResourceLink:
-		fields[nameField], _ = json.Marshal(b.Name)
-	}
-	encoded, err = json.Marshal(fields)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[ContentBlock](encoded)
-}
-
-func (b *ContentBlock) validate() error {
-	allowed := map[string]map[string]bool{
-		contentTypeText:  {contentTypeText: true},
-		contentTypeImage: {dataField: true, mimeTypeField: true},
-		contentTypeAudio: {dataField: true, mimeTypeField: true},
-		contentTypeResourceLink: {
-			"uri":            true,
-			"name":           true,
-			titleField:       true,
-			descriptionField: true,
-			mimeTypeField:    true,
-			"size":           true,
-			"icons":          true,
-		},
-		contentTypeResource: {contentTypeResource: true},
-	}
-	variant, ok := allowed[b.Type]
-	if !ok {
-		return fmt.Errorf("unsupported content type %q", b.Type)
-	}
-	for name := range b.wireFields {
-		if name == "type" || name == annotationsField || name == metaField || variant[name] {
-			continue
-		}
-		return fmt.Errorf("content type %q contains field %q from another variant", b.Type, name)
-	}
-	switch b.Type {
-	case contentTypeText:
-	case contentTypeImage, contentTypeAudio:
-		if _, err := base64.StdEncoding.DecodeString(b.Data); err != nil {
-			return fmt.Errorf("%s content data must be base64: %w", b.Type, err)
-		}
-	case contentTypeResourceLink:
-		if b.URI == "" {
-			return errors.New("resource_link requires uri and name")
-		}
-		if err := validateURI("uri", b.URI); err != nil {
-			return err
-		}
-	case contentTypeResource:
-		if b.Resource == nil {
-			return errors.New("embedded resource requires resource")
-		}
-		if err := b.Resource.validate(); err != nil {
-			return err
-		}
-	}
-	return validateAnnotations(b.Annotations)
-}
-
-func (r *ResourceContents) UnmarshalJSON(data []byte) error {
-	type plain ResourceContents
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := rejectUnknownFields(fields, "uri", mimeTypeField, contentTypeText, "blob", metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "uri", false); err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, mimeTypeField); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	_, hasText := fields[contentTypeText]
-	_, hasBlob := fields["blob"]
-	if hasText == hasBlob {
-		return errors.New("resource must contain exactly one of text or blob")
-	}
-	if hasText {
-		if err := requireStringField(fields, contentTypeText, true); err != nil {
-			return err
-		}
-	} else if err := requireStringField(fields, "blob", true); err != nil {
-		return err
-	}
-	*r = ResourceContents(decoded)
-	r.textPresent = fields["text"] != nil
-	r.blobPresent = fields["blob"] != nil
-	return r.validate()
-}
-
-func (r *ResourceContents) validate() error {
-	if r.URI == "" {
-		return errors.New("resource URI is required")
-	}
-	if err := validateURI("uri", r.URI); err != nil {
-		return err
-	}
-	textPresent := r.textPresent || r.Text != nil
-	blobPresent := r.blobPresent || r.Blob != nil
-	if textPresent == blobPresent {
-		return errors.New("resource must contain exactly one of text or blob")
-	}
-	if blobPresent && r.Blob != nil {
-		if _, err := base64.StdEncoding.DecodeString(*r.Blob); err != nil {
-			return fmt.Errorf("resource blob must be base64: %w", err)
-		}
-	}
-	return nil
-}
-
-func validateAnnotations(a *Annotations) error {
-	if a == nil {
-		return nil
-	}
-	for _, audience := range a.Audience {
-		if audience != audienceUser && audience != audienceAssistant {
-			return fmt.Errorf("invalid annotation audience %q", audience)
-		}
-	}
-	if a.Priority != nil && (*a.Priority < 0 || *a.Priority > 1) {
-		return errors.New("annotation priority must be between 0 and 1")
-	}
-	return nil
 }
 
 func (a *Annotations) UnmarshalJSON(data []byte) error {
-	type plain Annotations
-	fields, err := decodeObjectFields(data)
+	type alias Annotations
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = optionalArray(f, "audience"); e != nil {
+		return e
+	}
+	if e = optionalString(f, "lastModified"); e != nil {
+		return e
+	}
+	if raw, present := f["priority"]; present {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
+			return errors.New("priority must not be null")
+		}
+		var priority float64
+		if e = json.Unmarshal(raw, &priority); e != nil {
+			return errors.New("priority must be a number")
+		}
+	}
+	for _, role := range v.Audience {
+		if role != "user" && role != "assistant" {
+			return fmt.Errorf("invalid audience %q", role)
+		}
+	}
+	if v.Priority != nil && (*v.Priority < 0 || *v.Priority > 1 || math.IsNaN(*v.Priority)) {
+		return errors.New("priority must be between 0 and 1")
+	}
+	v.Extra = captureExtraFields(f, "audience", "priority", "lastModified")
+	*a = Annotations(v)
+	return nil
+}
+func (a Annotations) MarshalJSON() ([]byte, error) {
+	type alias Annotations
+	return marshalExtraChecked[Annotations](alias(a), a.Extra, "audience", "priority", "lastModified")
+}
+
+func (a *ToolAnnotations) UnmarshalJSON(data []byte) error {
+	type alias ToolAnnotations
+	var v alias
+	fields, err := decodeAlias(data, &v)
 	if err != nil {
 		return err
 	}
-	if err := validateOptionalArray(fields, "audience"); err != nil {
+	if err = optionalString(fields, titleField); err != nil {
 		return err
 	}
-	if _, ok := fields["priority"]; ok {
-		if err := requireNumberField(fields, "priority"); err != nil {
+	for _, field := range []string{"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"} {
+		if err = optionalBool(fields, field); err != nil {
 			return err
 		}
 	}
-	if err := validateOptionalString(fields, "lastModified"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*a = Annotations(decoded)
-	return validateAnnotations(a)
-}
-
-func (p *PromptArgument) UnmarshalJSON(data []byte) error {
-	type plain PromptArgument
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "name", true); err != nil {
-		return err
-	}
-	for _, name := range []string{"title", "description"} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalBool(fields, "required"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*p = PromptArgument(decoded)
-	return nil
-}
-
-func (p *Prompt) UnmarshalJSON(data []byte) error {
-	type plain Prompt
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireStringField(fields, "name", true); err != nil {
-		return err
-	}
-	for _, name := range []string{"title", "description"} {
-		if err := validateOptionalString(fields, name); err != nil {
-			return err
-		}
-	}
-	for _, name := range []string{"arguments", "icons"} {
-		if err := validateOptionalArray(fields, name); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*p = Prompt(decoded)
-	return nil
-}
-
-func (p *ProgressParams) UnmarshalJSON(data []byte) error {
-	type plain ProgressParams
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if raw, ok := fields["progressToken"]; !ok || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
-		return errors.New("progressToken is required and must not be null")
-	}
-	if err := requireNumberField(fields, "progress"); err != nil {
-		return err
-	}
-	if _, exists := fields["total"]; exists {
-		if err := requireNumberField(fields, "total"); err != nil {
-			return err
-		}
-	}
-	if _, exists := fields["message"]; exists {
-		if err := requireStringField(fields, "message", true); err != nil {
-			return err
-		}
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*p = ProgressParams(decoded)
-	return nil
-}
-
-func (r *CallToolResult) UnmarshalJSON(data []byte) error {
-	type plain CallToolResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "content"); err != nil {
-		return err
-	}
-	if _, ok := fields["isError"]; ok {
-		if err := requireBoolField(fields, "isError"); err != nil {
-			return err
-		}
-	}
-	for _, name := range []string{"structuredContent", "_meta"} {
-		if err := validateOptionalObject(fields, name); err != nil {
-			return err
-		}
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = CallToolResult(decoded)
-	r.Extra = captureExtraFields(fields, "content", "structuredContent", "isError", metaField)
-	return nil
-}
-
-func (r *ResourcesReadResult) UnmarshalJSON(data []byte) error {
-	type plain ResourcesReadResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "contents"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = ResourcesReadResult(decoded)
-	r.Extra = captureExtraFields(fields, "contents", metaField)
-	return nil
-}
-
-func (r *EmptyResult) UnmarshalJSON(data []byte) error {
-	type plain EmptyResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = EmptyResult(decoded)
-	r.Extra = captureExtraFields(fields, metaField)
-	return nil
-}
-
-func (r *ToolsListResult) UnmarshalJSON(data []byte) error {
-	type plain ToolsListResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "tools"); err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "nextCursor"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = ToolsListResult(decoded)
-	r.Extra = captureExtraFields(fields, "tools", "nextCursor", metaField)
-	return nil
-}
-
-func (r *PromptsListResult) UnmarshalJSON(data []byte) error {
-	type plain PromptsListResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "prompts"); err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "nextCursor"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = PromptsListResult(decoded)
-	r.Extra = captureExtraFields(fields, "prompts", "nextCursor", metaField)
-	return nil
-}
-
-func (r *PromptsGetResult) UnmarshalJSON(data []byte) error {
-	type plain PromptsGetResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "messages"); err != nil {
-		return err
-	}
-	if err := validateOptionalString(fields, "description"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "_meta"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = PromptsGetResult(decoded)
-	r.Extra = captureExtraFields(fields, "description", "messages", metaField)
-	for _, message := range r.Messages {
-		if message.Role != audienceUser && message.Role != audienceAssistant {
-			return fmt.Errorf("invalid prompt role %q", message.Role)
-		}
-		if err := message.Content.validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r InitializeResult) MarshalJSON() ([]byte, error) {
-	type plain InitializeResult
-	encoded, err := marshalResultWithExtra(
-		plain(r), r.Extra,
-		"protocolVersion", capabilitiesField, serverInfoField, "instructions", metaField,
+	v.Extra = captureExtraFields(
+		fields, titleField, "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint",
 	)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[InitializeResult](encoded)
-}
-
-func (r CallToolResult) MarshalJSON() ([]byte, error) {
-	type plain CallToolResult
-	encoded, err := marshalResultWithExtra(
-		plain(r), r.Extra,
-		"content", "structuredContent", "isError", metaField,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[CallToolResult](encoded)
-}
-
-func (r ResourcesReadResult) MarshalJSON() ([]byte, error) {
-	type plain ResourcesReadResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, "contents", metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[ResourcesReadResult](encoded)
-}
-
-func (r EmptyResult) MarshalJSON() ([]byte, error) {
-	type plain EmptyResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[EmptyResult](encoded)
-}
-
-func (r ToolsListResult) MarshalJSON() ([]byte, error) {
-	type plain ToolsListResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, "tools", "nextCursor", metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[ToolsListResult](encoded)
-}
-
-func (r PromptsListResult) MarshalJSON() ([]byte, error) {
-	type plain PromptsListResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, "prompts", "nextCursor", metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[PromptsListResult](encoded)
-}
-
-func (r PromptsGetResult) MarshalJSON() ([]byte, error) {
-	type plain PromptsGetResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, "description", "messages", metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[PromptsGetResult](encoded)
-}
-
-func (r *RootsListResult) UnmarshalJSON(data []byte) error {
-	type plain RootsListResult
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := requireArrayField(fields, "roots"); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = RootsListResult(decoded)
-	r.Extra = captureExtraFields(fields, "roots", metaField)
+	*a = ToolAnnotations(v)
 	return nil
-}
-
-func (r RootsListResult) MarshalJSON() ([]byte, error) {
-	type plain RootsListResult
-	encoded, err := marshalResultWithExtra(plain(r), r.Extra, "roots", metaField)
-	if err != nil {
-		return nil, err
-	}
-	return validateMarshaled[RootsListResult](encoded)
-}
-
-// The marshal methods below deliberately round-trip through the corresponding
-// strict decoder. This keeps the public construction path subject to the same
-// executable wire contract as data received from an MCP peer.
-
-func (i Icon) MarshalJSON() ([]byte, error) {
-	type plain Icon
-	return marshalStrict[Icon](plain(i))
-}
-
-func (p NotificationParams) MarshalJSON() ([]byte, error) {
-	type plain NotificationParams
-	return marshalStrict[NotificationParams](plain(p))
-}
-
-func (p RequestParams) MarshalJSON() ([]byte, error) {
-	type plain RequestParams
-	return marshalStrict[RequestParams](plain(p))
-}
-
-func (p InitializeParams) MarshalJSON() ([]byte, error) {
-	type plain InitializeParams
-	return marshalStrict[InitializeParams](plain(p))
-}
-
-func (p CursorParams) MarshalJSON() ([]byte, error) {
-	type plain CursorParams
-	return marshalStrict[CursorParams](plain(p))
-}
-
-func (p ToolsCallParams) MarshalJSON() ([]byte, error) {
-	type plain ToolsCallParams
-	return marshalStrict[ToolsCallParams](plain(p))
-}
-
-func (p ResourcesReadParams) MarshalJSON() ([]byte, error) {
-	type plain ResourcesReadParams
-	return marshalStrict[ResourcesReadParams](plain(p))
-}
-
-func (p PromptsGetParams) MarshalJSON() ([]byte, error) {
-	type plain PromptsGetParams
-	return marshalStrict[PromptsGetParams](plain(p))
-}
-
-func (p ResourceUpdatedParams) MarshalJSON() ([]byte, error) {
-	type plain ResourceUpdatedParams
-	return marshalStrict[ResourceUpdatedParams](plain(p))
-}
-
-func (p LogMessageParams) MarshalJSON() ([]byte, error) {
-	type plain LogMessageParams
-	return marshalStrict[LogMessageParams](plain(p))
-}
-
-func (i Implementation) MarshalJSON() ([]byte, error) {
-	type plain Implementation
-	return marshalStrict[Implementation](plain(i))
-}
-
-func (c ToolsCapability) MarshalJSON() ([]byte, error) {
-	type plain ToolsCapability
-	return marshalStrict[ToolsCapability](plain(c))
-}
-
-func (c ResourcesCapability) MarshalJSON() ([]byte, error) {
-	type plain ResourcesCapability
-	return marshalStrict[ResourcesCapability](plain(c))
-}
-
-func (c PromptsCapability) MarshalJSON() ([]byte, error) {
-	type plain PromptsCapability
-	return marshalStrict[PromptsCapability](plain(c))
 }
 
 func (a ToolAnnotations) MarshalJSON() ([]byte, error) {
-	type plain ToolAnnotations
-	return marshalStrict[ToolAnnotations](plain(a))
+	type alias ToolAnnotations
+	return marshalExtraChecked[ToolAnnotations](
+		alias(a), a.Extra, titleField, "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint",
+	)
 }
 
-func (e ToolExecution) MarshalJSON() ([]byte, error) {
-	type plain ToolExecution
-	return marshalStrict[ToolExecution](plain(e))
+func (b *ContentBlock) UnmarshalJSON(data []byte) error {
+	type alias ContentBlock
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = required(f, "type"); e != nil {
+		return e
+	}
+	if e = requireString(f, "type", true); e != nil {
+		return e
+	}
+	if e = validateContentBlockFields(f, v.Type); e != nil {
+		return e
+	}
+	v.wireFields = map[string]bool{}
+	for k := range f {
+		v.wireFields[k] = true
+	}
+	*b = ContentBlock(v)
+	return b.validate()
 }
 
-func (t MCPTool) MarshalJSON() ([]byte, error) {
-	type plain MCPTool
-	return marshalStrict[MCPTool](plain(t))
+func validateContentBlockFields(fields map[string]json.RawMessage, contentType string) error {
+	for _, field := range []string{annotationsField, metaObjectField} {
+		if err := optionalObject(fields, field); err != nil {
+			return err
+		}
+	}
+	switch contentType {
+	case contentTypeText:
+		return requireString(fields, "text", false)
+	case contentTypeImage, contentTypeAudio:
+		if err := requireString(fields, "data", false); err != nil {
+			return err
+		}
+		return requireString(fields, mimeTypeField, false)
+	case contentTypeResourceLink:
+		return validateResourceLinkFields(fields)
+	case contentTypeResource:
+		raw, present := fields["resource"]
+		if !present {
+			return errors.New("resource content requires resource")
+		}
+		return requireObjectRaw(raw, "resource")
+	default:
+		return fmt.Errorf("unknown content type %q", contentType)
+	}
 }
 
-func (r ResourceContents) MarshalJSON() ([]byte, error) {
-	type plain ResourceContents
-	return marshalStrict[ResourceContents](plain(r))
+func validateResourceLinkFields(fields map[string]json.RawMessage) error {
+	if err := requireString(fields, "uri", true); err != nil {
+		return err
+	}
+	if err := requireString(fields, "name", false); err != nil {
+		return err
+	}
+	for _, field := range []string{titleField, descriptionField, mimeTypeField} {
+		if err := optionalString(fields, field); err != nil {
+			return err
+		}
+	}
+	if err := optionalArray(fields, "icons"); err != nil {
+		return err
+	}
+	if raw, present := fields["size"]; present {
+		var size JSONNumber
+		if err := json.Unmarshal(raw, &size); err != nil || !isIntegralJSONNumber(size) {
+			return errors.New("resource_link size must be a JSON integer")
+		}
+	}
+	return nil
+}
+func (b ContentBlock) MarshalJSON() ([]byte, error) {
+	type alias ContentBlock
+	fields := map[string]json.RawMessage{}
+	raw, err := json.Marshal(alias(b))
+	if err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	fields["type"], _ = json.Marshal(b.Type)
+	switch b.Type {
+	case contentTypeText:
+		fields["text"], _ = json.Marshal(b.Text)
+	case contentTypeImage, contentTypeAudio:
+		fields["data"], _ = json.Marshal(b.Data)
+		fields[mimeTypeField], _ = json.Marshal(b.MIMEType)
+	case contentTypeResourceLink:
+		fields["uri"], _ = json.Marshal(b.URI)
+		fields["name"], _ = json.Marshal(b.Name)
+	case contentTypeResource:
+		if b.Resource == nil {
+			return nil, errors.New("resource content requires resource")
+		}
+	default:
+		return nil, fmt.Errorf("unknown content type %q", b.Type)
+	}
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return nil, err
+	}
+	var checked ContentBlock
+	if err = json.Unmarshal(encoded, &checked); err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
-func (a Annotations) MarshalJSON() ([]byte, error) {
-	type plain Annotations
-	return marshalStrict[Annotations](plain(a))
+//nolint:gocognit // Tagged-union validation intentionally keeps all variant invariants in one switch.
+func (b ContentBlock) validate() error {
+	present := func(name, value string) bool {
+		if b.wireFields != nil {
+			return b.wireFields[name]
+		}
+		return value != ""
+	}
+	switch b.Type {
+	case contentTypeText:
+		if err := b.rejectContentFields("type", "text", annotationsField, metaObjectField); err != nil {
+			return err
+		}
+		if !present("text", b.Text) {
+			return errors.New("text content requires text")
+		}
+	case contentTypeImage, contentTypeAudio:
+		if err := b.rejectContentFields("type", "data", mimeTypeField, annotationsField, metaObjectField); err != nil {
+			return err
+		}
+		if !present("data", b.Data) || !present(mimeTypeField, b.MIMEType) {
+			return fmt.Errorf("%s content requires data and mimeType", b.Type)
+		}
+		if _, e := decodeCanonicalBase64(b.Data); e != nil {
+			return errors.New("content data must be base64")
+		}
+	case contentTypeResourceLink:
+		if err := b.rejectContentFields(
+			"type",
+			"uri",
+			"name",
+			titleField,
+			descriptionField,
+			mimeTypeField,
+			"size",
+			"icons",
+			annotationsField,
+			metaObjectField,
+		); err != nil {
+			return err
+		}
+		if !present("uri", b.URI) || !present("name", b.Name) {
+			return errors.New("resource_link requires uri and name")
+		}
+		if e := validateURI("uri", b.URI); e != nil {
+			return e
+		}
+	case contentTypeResource:
+		if err := b.rejectContentFields("type", "resource", annotationsField, metaObjectField); err != nil {
+			return err
+		}
+		if b.Resource == nil {
+			return errors.New("resource content requires resource")
+		}
+	default:
+		return fmt.Errorf("unknown content type %q", b.Type)
+	}
+	return nil
 }
 
+func (b ContentBlock) rejectContentFields(allowed ...string) error {
+	if b.wireFields == nil {
+		return nil
+	}
+	set := make(map[string]struct{}, len(allowed))
+	for _, field := range allowed {
+		set[field] = struct{}{}
+	}
+	for field := range b.wireFields {
+		if _, ok := set[field]; !ok {
+			return fmt.Errorf("content type %q contains foreign field %q", b.Type, field)
+		}
+	}
+	return nil
+}
+
+func (p *PromptArgument) UnmarshalJSON(data []byte) error {
+	type alias PromptArgument
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalBool(f, "required"); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "name", titleField, descriptionField, "required")
+	*p = PromptArgument(v)
+	return nil
+}
 func (p PromptArgument) MarshalJSON() ([]byte, error) {
-	type plain PromptArgument
-	return marshalStrict[PromptArgument](plain(p))
+	type alias PromptArgument
+	return marshalExtraChecked[PromptArgument](alias(p), p.Extra, "name", titleField, descriptionField, "required")
 }
-
+func (p *Prompt) UnmarshalJSON(data []byte) error {
+	type alias Prompt
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "name", true); e != nil {
+		return e
+	}
+	for _, field := range []string{titleField, descriptionField} {
+		if e = optionalString(f, field); e != nil {
+			return e
+		}
+	}
+	for _, field := range []string{"arguments", "icons"} {
+		if e = optionalArray(f, field); e != nil {
+			return e
+		}
+	}
+	if e = optionalObject(f, metaObjectField); e != nil {
+		return e
+	}
+	v.Extra = captureExtraFields(f, "name", titleField, descriptionField, "arguments", "icons", metaObjectField)
+	*p = Prompt(v)
+	return nil
+}
 func (p Prompt) MarshalJSON() ([]byte, error) {
-	type plain Prompt
-	return marshalStrict[Prompt](plain(p))
+	type alias Prompt
+	return marshalExtraChecked[Prompt](
+		alias(p), p.Extra, "name", titleField, descriptionField, "arguments", "icons", metaObjectField,
+	)
 }
-
-func (p ProgressParams) MarshalJSON() ([]byte, error) {
-	type plain ProgressParams
-	return marshalStrict[ProgressParams](plain(p))
-}
-
-func (c *ClientCapabilities) UnmarshalJSON(data []byte) error {
-	type plain ClientCapabilities
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "roots"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = ClientCapabilities(decoded)
-	return nil
-}
-
-func (c ClientCapabilities) MarshalJSON() ([]byte, error) {
-	type plain ClientCapabilities
-	return marshalStrict[ClientCapabilities](plain(c))
-}
-
-func (c *RootsCapability) UnmarshalJSON(data []byte) error {
-	type plain RootsCapability
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
-	}
-	if err := validateOptionalBool(fields, "listChanged"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = RootsCapability(decoded)
-	return nil
-}
-
-func (c RootsCapability) MarshalJSON() ([]byte, error) {
-	type plain RootsCapability
-	return marshalStrict[RootsCapability](plain(c))
-}
-
 func (p *PromptMessage) UnmarshalJSON(data []byte) error {
-	type plain PromptMessage
-	fields, err := decodeObjectFields(data)
+	type alias PromptMessage
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = requireString(f, "role", true); e != nil {
+		return e
+	}
+	if e = required(f, "content"); e != nil {
+		return e
+	}
+	if v.Role != "user" && v.Role != "assistant" {
+		return fmt.Errorf("invalid role %q", v.Role)
+	}
+	v.Extra = captureExtraFields(f, "role", "content")
+	*p = PromptMessage(v)
+	return nil
+}
+func (p PromptMessage) MarshalJSON() ([]byte, error) {
+	type alias PromptMessage
+	return marshalExtraChecked[PromptMessage](alias(p), p.Extra, "role", "content")
+}
+
+func (p *NotificationParams) UnmarshalJSON(data []byte) error {
+	type alias NotificationParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
 	if err != nil {
 		return err
 	}
-	if err := requireStringField(fields, "role", false); err != nil {
+	if err = optionalObject(fields, metaObjectField); err != nil {
 		return err
 	}
-	if err := requireObjectField(fields, "content"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if decoded.Role != audienceUser && decoded.Role != audienceAssistant {
-		return fmt.Errorf("invalid prompt role %q", decoded.Role)
-	}
-	*p = PromptMessage(decoded)
+	v.Extra = captureExtraFields(fields, metaObjectField)
+	*p = NotificationParams(v)
 	return nil
 }
+func (p NotificationParams) MarshalJSON() ([]byte, error) {
+	type alias NotificationParams
+	return marshalExtraChecked[NotificationParams](alias(p), p.Extra, metaObjectField)
+}
 
-func (p PromptMessage) MarshalJSON() ([]byte, error) {
-	type plain PromptMessage
-	return marshalStrict[PromptMessage](plain(p))
+func (p *ResourceUpdatedParams) UnmarshalJSON(data []byte) error {
+	type alias ResourceUpdatedParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = requireString(fields, "uri", true); err != nil {
+		return err
+	}
+	if err = validateURI("uri", v.URI); err != nil {
+		return err
+	}
+	if err = optionalObject(fields, metaObjectField); err != nil {
+		return err
+	}
+	v.Extra = captureExtraFields(fields, "uri", metaObjectField)
+	*p = ResourceUpdatedParams(v)
+	return nil
+}
+func (p ResourceUpdatedParams) MarshalJSON() ([]byte, error) {
+	type alias ResourceUpdatedParams
+	return marshalExtraChecked[ResourceUpdatedParams](alias(p), p.Extra, "uri", metaObjectField)
+}
+
+func (p *LogMessageParams) UnmarshalJSON(data []byte) error {
+	type alias LogMessageParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = requireString(fields, "level", true); err != nil {
+		return err
+	}
+	if err = validateLoggingLevel(v.Level); err != nil {
+		return err
+	}
+	data, present := fields["data"]
+	if !present {
+		return errors.New("required field \"data\" is missing")
+	}
+	if err = validateJSONValue(data); err != nil {
+		return err
+	}
+	if err = optionalString(fields, "logger"); err != nil {
+		return err
+	}
+	if err = optionalObject(fields, metaObjectField); err != nil {
+		return err
+	}
+	v.Extra = captureExtraFields(fields, "level", "logger", "data", metaObjectField)
+	*p = LogMessageParams(v)
+	return nil
+}
+func (p LogMessageParams) MarshalJSON() ([]byte, error) {
+	type alias LogMessageParams
+	return marshalExtraChecked[LogMessageParams](alias(p), p.Extra, "level", "logger", "data", metaObjectField)
+}
+
+func (p *ProgressParams) UnmarshalJSON(data []byte) error {
+	type alias ProgressParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
+	if err != nil {
+		return err
+	}
+	if err = required(fields, "progressToken", "progress"); err != nil {
+		return err
+	}
+	if err = optionalString(fields, "message"); err != nil {
+		return err
+	}
+	if err = optionalObject(fields, metaObjectField); err != nil {
+		return err
+	}
+	if raw, present := fields["total"]; present && bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
+		return errors.New("total must not be null")
+	}
+	v.Extra = captureExtraFields(fields, "progressToken", "progress", "total", "message", metaObjectField)
+	*p = ProgressParams(v)
+	return nil
+}
+func (p ProgressParams) MarshalJSON() ([]byte, error) {
+	type alias ProgressParams
+	return marshalExtraChecked[ProgressParams](
+		alias(p), p.Extra, "progressToken", "progress", "total", "message", metaObjectField,
+	)
 }
 
 func (p *CancelledParams) UnmarshalJSON(data []byte) error {
-	type plain CancelledParams
-	fields, err := decodeObjectFields(data)
+	type alias CancelledParams
+	var v alias
+	fields, err := decodeAlias(data, &v)
 	if err != nil {
 		return err
 	}
-	raw, ok := fields["requestId"]
-	if !ok {
-		return errors.New("cancelled notification requires requestId")
-	}
-	if _, err := rpcIDKey(raw); err != nil {
-		return fmt.Errorf("invalid cancelled requestId: %w", err)
-	}
-	if err := validateOptionalString(fields, "reason"); err != nil {
+	if err = required(fields, "requestId"); err != nil {
 		return err
 	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
+	if err = validateRequestID(v.RequestID); err != nil {
 		return err
 	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
+	if err = optionalString(fields, "reason"); err != nil {
 		return err
 	}
-	*p = CancelledParams(decoded)
+	if err = optionalObject(fields, metaObjectField); err != nil {
+		return err
+	}
+	v.Extra = captureExtraFields(fields, "requestId", "reason", metaObjectField)
+	*p = CancelledParams(v)
 	return nil
 }
-
 func (p CancelledParams) MarshalJSON() ([]byte, error) {
-	type plain CancelledParams
-	return marshalStrict[CancelledParams](plain(p))
+	type alias CancelledParams
+	return marshalExtraChecked[CancelledParams](alias(p), p.Extra, "requestId", "reason", metaObjectField)
 }
 
-func (r *Root) UnmarshalJSON(data []byte) error {
-	type plain Root
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
+func validateRequestID(raw json.RawMessage) error {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte(jsonNull)) {
+		return errors.New("request id must not be null")
 	}
-	if err := requireStringField(fields, "uri", false); err != nil {
-		return err
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return nil
 	}
-	if err := validateOptionalString(fields, "name"); err != nil {
-		return err
+	var n JSONNumber
+	if json.Unmarshal(raw, &n) == nil && isIntegralJSONNumber(n) {
+		return nil
 	}
-	if err := validateOptionalObject(fields, metaField); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	if _, err := canonicalRootURI(decoded.URI); err != nil {
-		return err
-	}
-	*r = Root(decoded)
-	return nil
+	return errors.New("request id must be a string or integer")
 }
-
-func (r Root) MarshalJSON() ([]byte, error) {
-	type plain Root
-	return marshalStrict[Root](plain(r))
-}
-
-func validateJSONRPCVersion(fields map[string]json.RawMessage) error {
-	if err := requireStringField(fields, "jsonrpc", false); err != nil {
-		return err
-	}
-	var version string
-	if err := json.Unmarshal(fields["jsonrpc"], &version); err != nil {
-		return err
-	}
-	if version != JSONRPCVersion {
-		return fmt.Errorf("invalid jsonrpc version %q", version)
-	}
-	return nil
-}
-
 func (r *Request) UnmarshalJSON(data []byte) error {
-	type plain Request
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
+	type alias Request
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
 	}
-	if err := validateJSONRPCVersion(fields); err != nil {
-		return err
+	if e = rejectUnknownFields(f, "jsonrpc", "id", "method", "params"); e != nil {
+		return e
 	}
-	if err := rejectUnknownFields(fields, "jsonrpc", "id", "method", "params"); err != nil {
-		return err
+	if e = required(f, "jsonrpc", "id", "method", "params"); e != nil {
+		return e
 	}
-	rawID, ok := fields["id"]
-	if !ok {
-		return errors.New("request id is required")
+	if v.JSONRPC != JSONRPCVersion || v.Method == "" {
+		return errors.New("invalid JSON-RPC request")
 	}
-	if _, err := rpcIDKey(rawID); err != nil {
-		return fmt.Errorf("invalid request id: %w", err)
+	if e = validateRequestID(v.ID); e != nil {
+		return e
 	}
-	if err := requireStringField(fields, "method", true); err != nil {
-		return err
-	}
-	if err := validateOptionalObject(fields, "params"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = Request(decoded)
+	*r = Request(v)
 	return nil
 }
-
 func (r Request) MarshalJSON() ([]byte, error) {
-	type plain Request
-	return marshalStrict[Request](plain(r))
+	type alias Request
+	return marshalChecked[Request](alias(r))
 }
-
 func (n *Notification) UnmarshalJSON(data []byte) error {
-	type plain Notification
-	fields, err := decodeObjectFields(data)
-	if err != nil {
-		return err
+	type alias Notification
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
 	}
-	if err := validateJSONRPCVersion(fields); err != nil {
-		return err
+	if e = rejectUnknownFields(f, "jsonrpc", "method", "params"); e != nil {
+		return e
 	}
-	if err := rejectUnknownFields(fields, "jsonrpc", "method", "params"); err != nil {
-		return err
+	if e = required(f, "jsonrpc", "method"); e != nil {
+		return e
 	}
-	if err := requireStringField(fields, "method", true); err != nil {
-		return err
+	if v.JSONRPC != JSONRPCVersion || v.Method == "" {
+		return errors.New("invalid JSON-RPC notification")
 	}
-	if err := validateOptionalObject(fields, "params"); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*n = Notification(decoded)
+	*n = Notification(v)
 	return nil
 }
-
 func (n Notification) MarshalJSON() ([]byte, error) {
-	type plain Notification
-	return marshalStrict[Notification](plain(n))
+	type alias Notification
+	return marshalChecked[Notification](alias(n))
 }
-
 func (e *JSONRPCError) UnmarshalJSON(data []byte) error {
-	type plain JSONRPCError
-	if err := validateJSONRPCError(data); err != nil {
-		return err
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*e = JSONRPCError(decoded)
-	return nil
-}
-
-func (r *Response) UnmarshalJSON(data []byte) error {
-	type plain Response
-	fields, err := decodeObjectFields(data)
+	type alias JSONRPCError
+	var v alias
+	f, err := decodeAlias(data, &v)
 	if err != nil {
 		return err
 	}
-	if err := validateJSONRPCVersion(fields); err != nil {
+	if err = rejectUnknownFields(f, "code", "message", "data"); err != nil {
 		return err
 	}
-	if err := rejectUnknownFields(fields, "jsonrpc", "id", "result", "error"); err != nil {
+	if err = required(f, "code", "message"); err != nil {
 		return err
 	}
-	rawID, ok := fields["id"]
-	if !ok {
-		return errors.New("response id is required")
+	if !isIntegralJSONNumber(v.Code) {
+		return errors.New("JSON-RPC error code must be integer")
 	}
-	hasResult := fields["result"] != nil
-	hasError := fields["error"] != nil
+	*e = JSONRPCError(v)
+	return nil
+}
+func (e JSONRPCError) MarshalJSON() ([]byte, error) {
+	type alias JSONRPCError
+	return marshalChecked[JSONRPCError](alias(e))
+}
+func (r *Response) UnmarshalJSON(data []byte) error {
+	type alias Response
+	var v alias
+	f, e := decodeAlias(data, &v)
+	if e != nil {
+		return e
+	}
+	if e = rejectUnknownFields(f, "jsonrpc", "id", "result", "error"); e != nil {
+		return e
+	}
+	if e = required(f, "jsonrpc", "id"); e != nil {
+		return e
+	}
+	_, hasResult := f["result"]
+	_, hasError := f["error"]
 	if hasResult == hasError {
 		return errors.New("response requires exactly one of result or error")
 	}
-	if bytes.Equal(bytes.TrimSpace(rawID), []byte(jsonNull)) {
-		if !hasError {
-			return errors.New("null response id is only valid for a protocol error")
-		}
-	} else if _, err := rpcIDKey(rawID); err != nil {
-		return fmt.Errorf("invalid response id: %w", err)
+	if v.JSONRPC != JSONRPCVersion {
+		return errors.New("invalid JSON-RPC version")
 	}
-	if hasResult {
-		if err := requireObjectField(fields, "result"); err != nil {
-			return err
-		}
+	if e = validateRequestID(v.ID); e != nil {
+		return e
 	}
-	if hasError {
-		if err := validateJSONRPCError(fields["error"]); err != nil {
-			return err
-		}
-	}
-	var decoded plain
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*r = Response(decoded)
+	*r = Response(v)
 	return nil
 }
-
 func (r Response) MarshalJSON() ([]byte, error) {
-	type plain Response
-	return marshalStrict[Response](plain(r))
+	type alias Response
+	return marshalChecked[Response](alias(r))
 }

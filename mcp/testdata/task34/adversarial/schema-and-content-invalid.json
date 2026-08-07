@@ -1,0 +1,7 @@
+{
+  "remoteRefSchema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "$ref": "https://attacker.invalid/schema.json"},
+  "unknownDialectSchema": {"$schema": "https://example.invalid/custom-draft", "type": "object"},
+  "mixedResourceContents": {"uri": "file:///x", "text": "x", "blob": "eA=="},
+  "invalidImageBase64": {"type": "image", "data": "%%%", "mimeType": "image/png"},
+  "unknownContentType": {"type": "video", "data": "AA==", "mimeType": "video/mp4"}
+}
