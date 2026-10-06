@@ -1,0 +1,22 @@
+=== RUN   TestPublicationScope
+--- PASS: TestPublicationScope (6.25s)
+=== RUN   TestPublicationFailures
+=== RUN   TestPublicationFailures/local_collision
+=== RUN   TestPublicationFailures/push_collision
+=== RUN   TestPublicationFailures/reject_child
+=== RUN   TestPublicationFailures/no_atomic
+=== RUN   TestPublicationFailures/multiple_destinations
+--- PASS: TestPublicationFailures (16.79s)
+    --- PASS: TestPublicationFailures/local_collision (3.37s)
+    --- PASS: TestPublicationFailures/push_collision (3.00s)
+    --- PASS: TestPublicationFailures/reject_child (4.58s)
+    --- PASS: TestPublicationFailures/no_atomic (4.43s)
+    --- PASS: TestPublicationFailures/multiple_destinations (1.40s)
+=== RUN   TestPublicationRechecksAfterPreparation
+--- PASS: TestPublicationRechecksAfterPreparation (4.51s)
+=== RUN   TestReviewerAScopeHostilePushConfig
+--- PASS: TestReviewerAScopeHostilePushConfig (4.52s)
+=== RUN   TestReviewerAConcurrentConflictingTag
+--- PASS: TestReviewerAConcurrentConflictingTag (6.38s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	39.868s

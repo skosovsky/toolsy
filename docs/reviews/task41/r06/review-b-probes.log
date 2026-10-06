@@ -1,0 +1,12 @@
+=== RUN   TestReviewBPublicationConfig
+=== RUN   TestReviewBPublicationConfig/mirror
+=== RUN   TestReviewBPublicationConfig/follow
+=== RUN   TestReviewBPublicationConfig/extra_refspec
+=== RUN   TestReviewBPublicationConfig/separate_push
+--- PASS: TestReviewBPublicationConfig (30.90s)
+    --- PASS: TestReviewBPublicationConfig/mirror (7.58s)
+    --- PASS: TestReviewBPublicationConfig/follow (8.83s)
+    --- PASS: TestReviewBPublicationConfig/extra_refspec (7.35s)
+    --- PASS: TestReviewBPublicationConfig/separate_push (7.14s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	32.418s

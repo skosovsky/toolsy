@@ -189,7 +189,17 @@ counted authentication/identity configuration, strips counted repository, hook,
 fsmonitor and checkout overrides, and rejects GIT_CONFIG_PARAMETERS. These
 overrides cannot redirect its private index/worktree or change verified bytes.
 
-R06 separately defines tag collision checks, explicit publication refspecs and
-atomic publication. R05 acceptance does not certify publication scope. All release
-regressions use disposable local bare remotes; no production publication is used
-for verification.
+Publication uses explicit root/submodule tag refspecs from this invocation, with
+--atomic and --no-follow-tags; mirror configuration is disabled for that command.
+Unrelated local tags never enter the train. Exactly one push destination is
+required; fetch and push destinations may differ. Local and push-remote collisions
+are checked before manifest preparation and again after confirmation. Existing
+refs are never deleted or forced. A server without atomic push support or a
+rejected tag fails the whole train; there is no sequential fallback.
+
+Preflight cannot lock remote refs. Git arbitrates concurrent conflicting updates
+at atomic push; an identical concurrent tag may be reported up-to-date. A transport
+failure after the server accepted a push leaves publication outcome uncertain:
+inspect the remote before retrying. Local cleanup does not roll back remote tags.
+All release regressions use disposable local bare remotes; no production
+publication is used for verification.

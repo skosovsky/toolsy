@@ -1,0 +1,5 @@
+--- FAIL: TestPublicationScope (7.21s)
+    publication_test.go:28: published tags: "private-annotated\nprivate-experiment\nsub/v0.1.1\nv0.1.0\nv0.1.1"
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	7.387s
+FAIL

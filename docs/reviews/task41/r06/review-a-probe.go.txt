@@ -1,0 +1,52 @@
+package release
+
+import (
+ "bytes"
+ "context"
+ "os"
+ "path/filepath"
+ "testing"
+)
+
+func TestReviewerAScopeHostilePushConfig(t *testing.T) {
+ // Arrange.
+ source, remote := releaseFixture(t)
+ before := snapshotSource(t, source)
+ c, err := isolate(context.Background(), source, "")
+ if err != nil { t.Fatal(err) }
+ defer func(){ if err := removeCandidate(c.temp); err != nil {t.Error(err)} }()
+ var out bytes.Buffer
+ if err := c.prepare(context.Background(), "patch", &out); err != nil {t.Fatal(err)}
+ fixtureGit(t,c.checkout,"-c","tag.gpgSign=false","tag","-a","private-new","-m","private")
+ fixtureGit(t,c.checkout,"config","remote.origin.mirror","true")
+ fixtureGit(t,c.checkout,"config","push.followTags","true")
+ fixtureGit(t,c.checkout,"config","remote.origin.push","refs/heads/*:refs/heads/*")
+ // Act.
+ err = c.publish(context.Background(), &out)
+ // Assert.
+ if err != nil {t.Fatalf("publish: %v",err)}
+ if refs := fixtureGit(t,remote,"for-each-ref","--format=%(refname)"); refs != "refs/heads/main\nrefs/tags/sub/v0.1.1\nrefs/tags/v0.1.0\nrefs/tags/v0.1.1" {t.Fatalf("extra refs: %s", refs)}
+ assertSourceUnchanged(t,source,before)
+}
+
+func TestReviewerAConcurrentConflictingTag(t *testing.T) {
+ // Arrange: remote hook creates a conflicting child after collision preflight.
+ source, remote := releaseFixture(t)
+ before := snapshotSource(t, source)
+ original := fixtureGit(t,remote,"rev-parse","refs/heads/main")
+ c, err := isolate(context.Background(), source, "")
+ if err != nil { t.Fatal(err) }
+ defer func(){if err := removeCandidate(c.temp); err != nil {t.Error(err)}}()
+ var out bytes.Buffer
+ if err := c.prepare(context.Background(),"patch",&out); err != nil {t.Fatal(err)}
+ hook := filepath.Join(remote,"hooks/pre-receive")
+ writeFixture(t,hook,"#!/bin/sh\ncat >/dev/null\nenv -u GIT_QUARANTINE_PATH -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES git update-ref refs/tags/sub/v0.1.1 "+original+"\n")
+ if err := os.Chmod(hook,0755); err != nil {t.Fatal(err)}
+ // Act.
+ err = c.publish(context.Background(),&out)
+ // Assert: preserve competing tag, no partial root publication.
+ if err == nil {t.Fatal("unexpected success")}
+ if refs := fixtureGit(t,remote,"for-each-ref","--format=%(refname)"); refs != "refs/heads/main\nrefs/tags/sub/v0.1.1\nrefs/tags/v0.1.0" {t.Fatalf("partial train: %s",refs)}
+ if hash := fixtureGit(t,remote,"rev-parse","refs/tags/sub/v0.1.1"); hash != original {t.Fatal("competing tag rewritten")}
+ assertSourceUnchanged(t,source,before)
+}

@@ -1,0 +1,6 @@
+Independent current-checkout checks, reviewer r06_acceptance_a:
+GOCACHE=/tmp/toolsy-review-gocache go test -race ./internal/release
+ok github.com/skosovsky/toolsy/internal/release 151.213s (exit 0)
+GOCACHE=/tmp/toolsy-review-gocache GOLANGCI_LINT_CACHE=/tmp/toolsy-task41/lint-cache /opt/homebrew/bin/golangci-lint run --allow-serial-runners ./internal/release/...
+0 issues. (exit 0)
+git diff --check: exit 0

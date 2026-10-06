@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is in progress; rows 06–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted awaiting commit; rows 07–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -223,4 +223,30 @@ errors. Final full CLI prepare-only execution exited 0 after exact ZIP compilati
 private make lint/test with race, clean candidate check and cleanup. Earlier lint
 lock and DNS availability failures are recorded; final success uses serial lint,
 pinned installed 2.14.0, and a task-owned external archive cache. Production publish
-was never used. Commit: pending final accepted commit.
+was never used. Commit: `5f80c9e` (`fix: isolated release`).
+
+### 06 — R06 / D37 publication refs (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Publish only explicit root/submodule tag refspecs created by this invocation;
+   unrelated local tags/commits and configured followed tags never publish.
+2. Check local and exact push-destination collisions before manifest rewrites
+   and again before tagging; reject ambiguous multiple push destinations.
+3. One atomic, non-forcing push publishes the entire train; tag rejection or
+   unsupported atomic capability leaves no partial train, with no fallback.
+4. Local bare fixtures prove scope, collision, failure and source preservation;
+   pre-existing remote/local refs are never deleted or rewritten by rollback.
+5. Docs describe concurrency/platform limits; race/lint pass; two independent
+   reviewers accept 100% with no unresolved detected defect.
+
+Decision: explicit root/submodule refs only; check the single exact push
+destination before edits and after confirmation. Require atomic capability,
+without force, followed tags, mirror or sequential fallback. No remote rollback.
+
+Evidence: [R06 acceptance](task41/r06-acceptance.md). Independent reviewers
+`r06_acceptance_a` and `r06_acceptance_b` each accepted 100% (five × 20/20),
+with no unresolved detected defects, independent race/lint and hostile-config /
+concurrent collision probes. The previous-commit regression reproduces unrelated
+tag publication. Final root checks recorded in the acceptance report.
+Commit: pending final accepted commit.

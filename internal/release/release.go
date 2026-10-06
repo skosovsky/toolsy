@@ -127,9 +127,12 @@ func isolate(ctx context.Context, dir, moduleArg string) (*candidate, error) {
 	if err != nil {
 		return nil, err
 	}
-	push, err := read.run(ctx, source, "git", "remote", "get-url", "--push", releaseRemote)
+	push, err := read.run(ctx, source, "git", "remote", "get-url", "--push", "--all", releaseRemote)
 	if err != nil {
 		return nil, err
+	}
+	if push == "" || strings.Contains(push, "\n") {
+		return nil, errors.New("release requires exactly one push destination for atomic publication")
 	}
 	temp, err := os.MkdirTemp("", "toolsy-release-")
 	if err != nil {
@@ -247,6 +250,9 @@ func (c *candidate) prepare(ctx context.Context, mode string, out io.Writer) err
 	}
 	c.version, err = nextVersion(latest, mode)
 	if err != nil {
+		return err
+	}
+	if err = c.checkTagCollisions(ctx); err != nil {
 		return err
 	}
 	ordered, err := orderModules(c.modules, c.root)
@@ -371,21 +377,31 @@ func (c *candidate) commitCandidate(ctx context.Context, out io.Writer) error {
 }
 
 func (c *candidate) publish(ctx context.Context, out io.Writer) error {
-	for _, m := range c.modules {
-		tag := c.version
-		if m.dir != "." {
-			tag = m.dir + "/" + c.version
-		}
-		if _, err := c.commands.run(ctx, c.checkout, "git", "tag", tag); err != nil {
+	if err := c.checkTagCollisions(ctx); err != nil {
+		return err
+	}
+	refs := c.releaseRefs()
+	for _, ref := range refs {
+		if _, err := c.commands.run(
+			ctx,
+			c.checkout,
+			"git",
+			"tag",
+			"--",
+			strings.TrimPrefix(ref, "refs/tags/"),
+		); err != nil {
 			return err
 		}
 	}
-	// Explicit ref scope and atomic publication are the following R06 gate.
-	if _, err := c.commands.run(ctx, c.checkout, "git", "push", releaseRemote, "--tags"); err != nil {
+	args := []string{"-c", "remote.origin.mirror=false", "push", "--atomic", "--no-follow-tags", releaseRemote}
+	for _, ref := range refs {
+		args = append(args, ref+":"+ref)
+	}
+	if _, err := c.commands.run(ctx, c.checkout, "git", args...); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Published %s; source checkout unchanged\n", c.version)
-	return nil
+	_, err := fmt.Fprintf(out, "Published %s; source checkout unchanged\n", c.version)
+	return err
 }
 
 // The input is owned by this release invocation; Close must unblock Read.

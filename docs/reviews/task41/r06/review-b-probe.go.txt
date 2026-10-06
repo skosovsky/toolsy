@@ -1,0 +1,26 @@
+package release
+import("bytes";"context";"io";"path/filepath";"strings";"testing")
+func TestReviewBPublicationConfig(t *testing.T) {
+ for _, kind:=range []string{"mirror","follow","extra_refspec","separate_push"} { t.Run(kind,func(t *testing.T){
+ // Arrange.
+ source,remote:=releaseFixture(t)
+ fixtureGit(t,source,"-c","tag.gpgSign=false","tag","-a","private-review-b","-m","private")
+ fixtureGit(t,source,"branch","private-review-b")
+ before:=snapshotSource(t,source)
+ switch kind {
+ case "mirror":t.Setenv("GIT_CONFIG_COUNT","1");t.Setenv("GIT_CONFIG_KEY_0","remote.origin.mirror");t.Setenv("GIT_CONFIG_VALUE_0","true")
+ case "follow":t.Setenv("GIT_CONFIG_COUNT","1");t.Setenv("GIT_CONFIG_KEY_0","push.followTags");t.Setenv("GIT_CONFIG_VALUE_0","true")
+ case "extra_refspec":t.Setenv("GIT_CONFIG_COUNT","1");t.Setenv("GIT_CONFIG_KEY_0","remote.origin.push");t.Setenv("GIT_CONFIG_VALUE_0","refs/heads/private-review-b:refs/heads/private-review-b")
+ case "separate_push":dest:=filepath.Join(t.TempDir(),"push.git");fixtureGit(t,source,"clone","--bare",remote,dest);fixtureGit(t,source,"remote","set-url","--push","origin",dest);remote=dest;before=snapshotSource(t,source)
+ }
+ refs:=fixtureGit(t,remote,"show-ref");var out bytes.Buffer
+ // Act.
+ err:=Run(context.Background(),Config{Dir:source,Mode:"patch",Input:io.NopCloser(strings.NewReader("y\n")),Output:&out})
+ // Assert.
+ if err!=nil {t.Fatalf("%v\n%s",err,&out)}
+ if got:=fixtureGit(t,remote,"tag","--list");got!="sub/v0.1.1\nv0.1.0\nv0.1.1" {t.Fatalf("unexpected tags: %s",got)}
+ if got:=fixtureGit(t,remote,"branch","--list");strings.Contains(got,"private-review-b"){t.Fatalf("private branch published: %s",got)}
+ after:=fixtureGit(t,remote,"show-ref");for _,ref:=range strings.Split(refs,"\n"){if !strings.Contains(after,ref){t.Fatalf("original ref missing: %s",ref)}}
+ assertSourceUnchanged(t,source,before)
+ }) }
+}
