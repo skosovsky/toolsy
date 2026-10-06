@@ -1,5 +1,7 @@
 # GraphQL contract adapter
 
+Execution and introspection use POST and never follow HTTP redirects, including same-origin 307/308 replay and 301/302/303 method rewriting. Hosts configure the final endpoint explicitly. A refused redirect exposes `*httptool.RedirectError` through the error chain and does not authorize argument correction or retry: the original request may already have produced effects. Credentials and request bodies are never sent to the redirect target. URL and dial-time SSRF checks remain enforced.
+
 The adapter targets the [GraphQL September 2025](https://spec.graphql.org/September2025/) query/mutation and introspection contract.
 Discovery uses a finite type-reference selection (16 wrappers); truncated references
 fail construction. Input projection supports built-in String, ID, Int (signed 32-bit),

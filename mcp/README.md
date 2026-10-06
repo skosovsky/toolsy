@@ -81,6 +81,8 @@ not the removed GET/reconnect transport behavior.
 
 The request decorator is for authentication and trace headers. It cannot replace protocol-derived `Mcp-*`/`Mcp-Param-*`, method, URL, Host or body fields. The transport retains SSRF-safe dialing and redirects, bounded responses and secret-safe diagnostics.
 
+The HTTP transport permits only same-origin GET/HEAD redirects. POST RPCs and DELETE session termination never redirect, including same-origin 307/308 body replay; method-changing redirects are also rejected. Configure the final MCP endpoint explicitly. A redirect failure occurs after the original dispatch and does not establish rollback or permission to repeat an RPC. `httptool.RedirectError` remains inspectable when the shared redirect policy refuses the request.
+
 ## Stdio and cancellation
 
 Stdio uses one JSON-RPC message per line and sends `server/discover` first. Writes are serialized; stdout is protocol-only and stderr is bounded logging. After a request reaches the wire, context cancellation sends `notifications/cancelled` with the exact raw request ID. Cancellation before delivery sends no notification. Process failure unblocks all waiters, and `Close` terminates the complete child process tree.

@@ -34,6 +34,8 @@ Result: search returns a Markdown list of links and snippets; scrape returns `{"
 
 > **Warning:** Scraping validates URLs: only http/https, host required. Private/loopback IPs are blocked unless `WithAllowPrivateIPs(true)` (tests only). Redirects are validated with the same rules and blocked domains. DNS rebinding is mitigated by pinning the connection to the resolved IP at dial time (`SafeDialTransport`); URL validation resolves IPs at validate time with the same `IsBlockedIP` policy.
 
+The default scraper uses `httptool.CheckRedirectRemote`: GET redirects must stay within the original scheme/hostname/effective-port origin. Cross-origin redirects, including a changed port or HTTPS downgrade, fail before the destination receives a request. Configure the final scrape URL explicitly. Redirect refusal exposes `*httptool.RedirectError` with outer nonretryable `CodeRemoteExecution`; it does not authorize argument correction or blind retry. Initial URL rejection remains an input-validation error.
+
 - **WithMaxSearchBytes(n):** Cap `web_search` wire JSON (default 256KB). Applies to default and formatter paths. Search provider count/item/source bounds are separate from this wire budget.
 - **WithMaxPageBytes(n):** Cap `web_scrape` wire JSON (default 2MB). HTML read and markdown conversion are fail-closed; oversized HTML or expanded markdown return `CodeValidationFailed` — raise `WithMaxPageBytes` for larger budgets. Oversized final JSON returns `CodeValidationFailed`; serialized JSON is never sliced.
 - **WithBlockedDomains(domains):** Blacklist of hostnames; exact match and subdomains are blocked (e.g. blocking `evil.com` blocks `api.evil.com`). Checked on initial URL and on redirects.

@@ -15,6 +15,7 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 // adversarialDeliveredDiscovery explicitly exercises the current prepare/deliver
@@ -467,7 +468,13 @@ func TestStreamableHTTP_RejectsMethodChangingRedirect(t *testing.T) {
 	_, err = pending.Await(context.Background())
 
 	// Assert.
-	require.ErrorContains(t, err, "redirect must preserve HTTP method")
+	var refused *httptool.RedirectError
+	require.ErrorAs(t, err, &refused)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeRemoteExecution, te.Code)
+	require.False(t, te.Retryable)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
 	require.Zero(t, targetCalls.Load())
 	require.NoError(t, transport.Close())
 }

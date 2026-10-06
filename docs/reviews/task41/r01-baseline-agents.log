@@ -1,0 +1,104 @@
+--- FAIL: TestRPCRejectsRedirects (0.02s)
+    --- FAIL: TestRPCRejectsRedirects/create/301/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/301/same=false
+    --- FAIL: TestRPCRejectsRedirects/cancel/301/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/301/same=false
+    --- FAIL: TestRPCRejectsRedirects/create/301/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/301/same=true
+    --- FAIL: TestRPCRejectsRedirects/cancel/301/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/301/same=true
+    --- FAIL: TestRPCRejectsRedirects/create/302/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/302/same=false
+    --- FAIL: TestRPCRejectsRedirects/cancel/302/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/302/same=false
+    --- FAIL: TestRPCRejectsRedirects/create/302/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/302/same=true
+    --- FAIL: TestRPCRejectsRedirects/cancel/302/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/302/same=true
+    --- FAIL: TestRPCRejectsRedirects/create/303/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/303/same=false
+    --- FAIL: TestRPCRejectsRedirects/cancel/303/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/303/same=false
+    --- FAIL: TestRPCRejectsRedirects/create/303/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/303/same=true
+    --- FAIL: TestRPCRejectsRedirects/cancel/303/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/303/same=true
+    --- FAIL: TestRPCRejectsRedirects/create/307/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/307/same=false
+    --- FAIL: TestRPCRejectsRedirects/cancel/307/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/307/same=false
+    --- FAIL: TestRPCRejectsRedirects/create/307/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/307/same=true
+    --- FAIL: TestRPCRejectsRedirects/cancel/307/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/307/same=true
+    --- FAIL: TestRPCRejectsRedirects/create/308/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/308/same=false
+    --- FAIL: TestRPCRejectsRedirects/cancel/308/same=false (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/308/same=false
+    --- FAIL: TestRPCRejectsRedirects/create/308/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/create/308/same=true
+    --- FAIL: TestRPCRejectsRedirects/cancel/308/same=true (0.00s)
+        redirect_test.go:52:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/agents/redirect_test.go:52
+                Error:          An error is expected but got nil.
+                Test:           TestRPCRejectsRedirects/cancel/308/same=true
+FAIL
+FAIL    github.com/skosovsky/toolsy/agents      0.447s
+FAIL

@@ -72,15 +72,9 @@ func WithStreamableHTTPRequestDecorator(decorator HTTPRequestDecorator) Streamab
 }
 
 func defaultStreamableHTTPClient(allowPrivateIPs bool) *http.Client {
-	validateRedirect := httptool.CheckRedirectRemote(allowPrivateIPs, nil)
 	client := httptool.NewSafeHTTPClient(
 		httptool.SafeDialOptions{AllowPrivateIPs: allowPrivateIPs},
-		func(request *http.Request, via []*http.Request) error {
-			if len(via) > 0 && request.Method != via[len(via)-1].Method {
-				return errors.New("mcp: redirect must preserve HTTP method")
-			}
-			return validateRedirect(request, via)
-		},
+		httptool.CheckRedirectRemote(allowPrivateIPs, nil),
 	)
 	client.Timeout = 0
 	return client

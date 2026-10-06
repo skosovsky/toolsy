@@ -573,16 +573,19 @@ func TestExtract_Remote_RedirectToLoopbackBlocked(t *testing.T) {
 	fn := httptool.CheckRedirectRemote(false, nil)
 	req, err := http.NewRequest(http.MethodGet, "http://127.0.0.1:9999/file.csv", nil)
 	require.NoError(t, err)
-	err = fn(req, []*http.Request{{URL: req.URL}})
+	err = fn(req, []*http.Request{{Method: http.MethodGet, URL: req.URL}})
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	require.True(t, toolsy.ClientCorrectable(te.Code))
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "private or loopback")
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	require.False(t, te.Retryable)
+	assert.Equal(t, toolsy.CodeRemoteExecution, te.Code)
+	var refused *httptool.RedirectError
+	require.ErrorAs(t, err, &refused)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
-func TestExtract_Remote_Redirect_AllowsLoopbackWhenPrivateAllowed(t *testing.T) {
+func TestExtract_Remote_Redirect_RejectsForeignOriginWhenPrivateAllowed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://127.0.0.1:99999/file.csv", http.StatusFound)
 	}))
@@ -596,7 +599,14 @@ func TestExtract_Remote_Redirect_AllowsLoopbackWhenPrivateAllowed(t *testing.T) 
 		toolsy.ToolInput{ArgsJSON: []byte(`{"url":"` + server.URL + `/doc.csv"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
-	require.Error(t, err) // connection fails, but redirect validation passes with allowPrivateIPs
+	// The private-IP opt-in does not authorize a different origin.
+	var refused *httptool.RedirectError
+	require.ErrorAs(t, err, &refused)
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeRemoteExecution, te.Code)
+	require.False(t, te.Retryable)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
 }
 
 func TestAsTool_WithResultFormatter(t *testing.T) {

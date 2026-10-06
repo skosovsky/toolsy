@@ -10,6 +10,8 @@ PDF is disabled by default. `WithInProcessPDF(true)` opts into the third-party p
 
 Remote reads require `WithAllowRemote(true)` and retain DNS pinning/private-IP validation across redirects through httptool. There is no document-specific host blacklist. `WithHTTPClient` merges only Timeout onto the safe transport; custom transports are not trusted. Private-IP override is host-controlled and intended for tests.
 
+Remote GET redirects must remain within the original scheme/hostname/effective-port origin, including when private IPs are explicitly allowed. Configure the final document URL explicitly. Redirect refusal exposes `*httptool.RedirectError` with outer nonretryable `CodeRemoteExecution` and does not authorize argument correction or blind retry. Initial URL validation remains an input-validation error.
+
 ```go
 root, err := os.OpenRoot("/srv/documents")
 if err != nil { panic(err) }

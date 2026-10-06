@@ -1,0 +1,86 @@
+--- FAIL: TestRemoteRedirectOriginAndMethod (0.00s)
+    --- FAIL: TestRemoteRedirectOriginAndMethod/changed-port (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/changed-port
+    --- FAIL: TestRemoteRedirectOriginAndMethod/subdomain (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/subdomain
+    --- FAIL: TestRemoteRedirectOriginAndMethod/downgrade (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/downgrade
+    --- FAIL: TestRemoteRedirectOriginAndMethod/upgrade (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/upgrade
+    --- FAIL: TestRemoteRedirectOriginAndMethod/post-replay (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/post-replay
+    --- FAIL: TestRemoteRedirectOriginAndMethod/post-rewritten (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/post-rewritten
+    --- FAIL: TestRemoteRedirectOriginAndMethod/put-rewritten (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/put-rewritten
+    --- FAIL: TestRemoteRedirectOriginAndMethod/patch-replay (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/patch-replay
+    --- FAIL: TestRemoteRedirectOriginAndMethod/delete-replay (0.00s)
+        client_redirect_test.go:54:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:54
+                Error:          An error is expected but got nil.
+                Test:           TestRemoteRedirectOriginAndMethod/delete-replay
+--- FAIL: TestAllowedRedirectCredentialsAndMethod (0.00s)
+    --- FAIL: TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next (0.00s)
+        client_redirect_test.go:74:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:74
+                Error:          Should be empty, but was Basic secret
+                Test:           TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next
+                Messages:       Proxy-Authorization
+    --- FAIL: TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next (0.00s)
+        client_redirect_test.go:74:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:74
+                Error:          Should be empty, but was Basic secret
+                Test:           TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next
+                Messages:       Proxy-Authorization
+    --- FAIL: TestAllowedRedirectCredentialsAndMethod/http://example.com/next (0.00s)
+        client_redirect_test.go:74:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:74
+                Error:          Should be empty, but was Basic secret
+                Test:           TestAllowedRedirectCredentialsAndMethod/http://example.com/next
+                Messages:       Proxy-Authorization
+    client_redirect_test.go:85:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:85
+                Error:          An error is expected but got nil.
+                Test:           TestAllowedRedirectCredentialsAndMethod
+--- FAIL: TestOriginNormalizesSchemeAndDefaultPort (0.00s)
+    client_redirect_test.go:126:
+                Error Trace:    /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/httptool/client_redirect_test.go:126
+                Error:          Not equal:
+                                expected: "https://example.com:443"
+                                actual  : "https://example.com:80"
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1 +1 @@
+                                -https://example.com:443
+                                +https://example.com:80
+                Test:           TestOriginNormalizesSchemeAndDefaultPort
+FAIL
+FAIL    github.com/skosovsky/toolsy/toolkits/httptool   0.449s
+FAIL

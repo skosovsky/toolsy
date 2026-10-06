@@ -1,0 +1,26 @@
+--- FAIL: TestPublicToolRejectsRedirects (0.02s)
+    --- FAIL: TestPublicToolRejectsRedirects/301/same=false (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/301/same=true (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/302/same=false (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/302/same=true (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/303/same=false (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/303/same=true (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/307/same=false (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/307/same=true (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/308/same=false (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+    --- FAIL: TestPublicToolRejectsRedirects/308/same=true (0.00s)
+        redirect_test.go:84: err=<nil> sources=1 targets=1 delivered=1
+--- FAIL: TestPublicIntrospectionRejectsRedirect (0.00s)
+    redirect_test.go:112: err=<nil> tools=3 targets=1
+FAIL
+FAIL    github.com/skosovsky/toolsy/contracts/graphql   0.463s
+FAIL

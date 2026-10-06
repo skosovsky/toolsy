@@ -153,15 +153,16 @@ func WithCredentialOrigins(origins []string) Option {
 }
 
 func origin(u *url.URL) string {
+	scheme := strings.ToLower(u.Scheme)
 	port := u.Port()
 	if port == "" {
-		if u.Scheme == "https" {
+		if scheme == "https" {
 			port = "443"
 		} else {
 			port = "80"
 		}
 	}
-	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Hostname()) + ":" + port
+	return scheme + "://" + strings.ToLower(u.Hostname()) + ":" + port
 }
 
 func normalizeCredentialOrigins(o *options) error {

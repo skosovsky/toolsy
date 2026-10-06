@@ -114,6 +114,9 @@ func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options,
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
 	resp, err := o.httpClient.Do(req) //nolint:bodyclose // closed via CloseResponseBody
 	if err != nil {
+		if _, ok := toolsy.AsToolError(err); ok {
+			return httpResult{}, err
+		}
 		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
 	defer CloseResponseBody(ctx, resp.Body)
@@ -179,6 +182,9 @@ func doPOST(
 	// G704: URL is validated by validateURL (allowedDomains + private IP check) before Do.
 	resp, err := o.httpClient.Do(req) //nolint:bodyclose // closed via CloseResponseBody
 	if err != nil {
+		if _, ok := toolsy.AsToolError(err); ok {
+			return httpResult{}, err
+		}
 		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: do request: %w", err))
 	}
 	defer CloseResponseBody(ctx, resp.Body)

@@ -222,7 +222,7 @@ func doScrape(ctx context.Context, o *options, rawURL string) (ScrapeWireResult,
 	}
 	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
-		if toolErrorClientCorrectable(doErr) {
+		if _, ok := toolsy.AsToolError(doErr); ok {
 			return ScrapeWireResult{}, doErr
 		}
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: fetch: %w", doErr))
@@ -235,9 +235,4 @@ func escapeMarkdown(s string) string {
 	s = strings.ReplaceAll(s, "|", "\\|")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
-}
-
-func toolErrorClientCorrectable(err error) bool {
-	te, ok := toolsy.AsToolError(err)
-	return ok && toolsy.ClientCorrectable(te.Code)
 }

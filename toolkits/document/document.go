@@ -235,7 +235,7 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	}
 	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
-		if toolErrorClientCorrectable(doErr) {
+		if _, ok := toolsy.AsToolError(doErr); ok {
 			return "", "", doErr
 		}
 		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: fetch: %w", doErr))
@@ -257,11 +257,6 @@ func documentHTTPClient(o *options) (*http.Client, error) {
 		httptool.CheckRedirectRemote(o.allowPrivateIPs, nil),
 	)
 	return httptool.MergeHTTPClient(safe, o.httpClient), nil
-}
-
-func toolErrorClientCorrectable(err error) bool {
-	te, ok := toolsy.AsToolError(err)
-	return ok && toolsy.ClientCorrectable(te.Code)
 }
 
 func formatFromURL(u string) string {

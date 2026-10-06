@@ -1,0 +1,9 @@
+ok      github.com/skosovsky/toolsy/toolkits/httptool   2.321s
+ok      github.com/skosovsky/toolsy/agents      1.767s
+ok      github.com/skosovsky/toolsy/contracts/openapi   3.384s
+ok      github.com/skosovsky/toolsy/contracts/graphql   1.706s
+ok      github.com/skosovsky/toolsy/toolkits/web        2.193s
+ok      github.com/skosovsky/toolsy/toolkits/document   2.901s
+ok      github.com/skosovsky/toolsy/mcp 21.222s
+?       github.com/skosovsky/toolsy/mcp/examples/stdio  [no test files]
+?       github.com/skosovsky/toolsy/mcp/examples/streamable_http        [no test files]

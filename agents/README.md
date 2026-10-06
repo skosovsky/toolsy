@@ -50,6 +50,8 @@ if err != nil {
 
 Credentials are resolved separately through `RunEnv.Credentials` for `agents.create_task`, `agents.stream_steps` and `agents.cancel_task`. `WithHTTPClient` merges timeout settings onto the SSRF-safe transport; it does not replace that transport. `WithAllowPrivateIPs` is an explicit host choice for private deployments.
 
+Redirects are allowed only for GET/HEAD reads within the original scheme, hostname and effective port. Create/cancel POST requests never redirect, including same-origin redirects and redirects that rewrite POST to GET. Hosts configure the final endpoint explicitly. A refused redirect exposes `*httptool.RedirectError` through the error chain; the original request may have produced effects. Create failures retain their unknown-outcome classification. Redirect refusal never authorizes argument repair or blind redispatch.
+
 ## Verification boundary
 
 Tests use the pinned normative envelopes, a distinct extension terminal table, local HTTP/SSE fixtures, aggregate byte/event limits, resume duplicates, idle deadlines and consumer aborts. No live remote interoperability is claimed. There is no A2A runtime, persistent scheduler, automatic retry permission or hidden status manager here.

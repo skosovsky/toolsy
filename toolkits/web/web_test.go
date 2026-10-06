@@ -18,6 +18,7 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 type mockSearchProvider struct {
@@ -582,9 +583,11 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	require.True(t, toolsy.ClientCorrectable(te.Code))
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "blocked")
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	require.False(t, te.Retryable)
+	assert.Equal(t, toolsy.CodeRemoteExecution, te.Code)
+	var refused *httptool.RedirectError
+	require.ErrorAs(t, err, &refused)
 }
 
 func TestHTMLScraper_StripsLayoutElements(t *testing.T) {

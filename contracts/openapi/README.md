@@ -1,5 +1,7 @@
 # OpenAPI adapter contract
 
+HTTP redirects are allowed only for requests that started as GET/HEAD and stay within the original scheme/hostname/effective-port origin. POST/PUT/PATCH/DELETE/OPTIONS never redirect, even when a redirect rewrites the method to GET. Hosts configure the final specification URL and execution endpoint (`Options.BaseURL` or contract servers) explicitly. A refused redirect exposes `*httptool.RedirectError` through the error chain without authorizing argument correction or retry; the original request may already have produced effects. URL and dial-time SSRF checks remain enforced.
+
 Supported source is JSON OpenAPI 3.0.x. Discovery validates it with kin-openapi before publishing tools. OpenAPI 3.1, YAML, external references and recursive schemas are rejected with `UnsupportedError`; repeated acyclic local schema references are supported. Source nesting is limited to 128 containers / 100,000 JSON tokens, projection to 64 levels / 4,096 nodes per operation. Discovery never fetches references.
 
 Tool arguments are `{ "path": {...}, "query": {...}, "body": <JSON value> }`. Parameter identity is `(in, name)` and operation parameters override path-item parameters with the same identity. Required locations and body presence are enforced; unknown argument keys are rejected. Body can be any JSON shape and is sent only when present. Only `application/json` bodies for POST/PUT/PATCH are supported; other methods with a requestBody declaration are rejected.

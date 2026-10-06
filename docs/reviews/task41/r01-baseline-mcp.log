@@ -1,0 +1,16 @@
+--- FAIL: TestHTTPRPCRejectsSameOriginBodyReplay (0.00s)
+    --- FAIL: TestHTTPRPCRejectsSameOriginBodyReplay/307 (0.00s)
+        redirect_effect_test.go:36:
+                Error Trace:    /tmp/toolsy-task41/r01-original/mcp/redirect_effect_test.go:36
+                Error:          Should be zero, but was 1
+                Test:           TestHTTPRPCRejectsSameOriginBodyReplay/307
+    --- FAIL: TestHTTPRPCRejectsSameOriginBodyReplay/308 (0.00s)
+        redirect_effect_test.go:36:
+                Error Trace:    /tmp/toolsy-task41/r01-original/mcp/redirect_effect_test.go:36
+                Error:          Should be zero, but was 1
+                Test:           TestHTTPRPCRejectsSameOriginBodyReplay/308
+FAIL
+FAIL    github.com/skosovsky/toolsy/mcp 0.460s
+?       github.com/skosovsky/toolsy/mcp/examples/stdio  [no test files]
+?       github.com/skosovsky/toolsy/mcp/examples/streamable_http        [no test files]
+FAIL

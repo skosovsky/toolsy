@@ -1,0 +1,34 @@
+--- FAIL: TestPublicToolRedirectContract (0.02s)
+    --- FAIL: TestPublicToolRedirectContract/get/301/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/get/302/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/get/303/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/get/307/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/get/308/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/301/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/301/same=true (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/302/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/302/same=true (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/303/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/303/same=true (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/307/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/307/same=true (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/308/same=false (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+    --- FAIL: TestPublicToolRedirectContract/post/308/same=true (0.00s)
+        redirect_test.go:68: allowed=false err=<nil> sources=1
+FAIL
+FAIL    github.com/skosovsky/toolsy/contracts/openapi   0.480s
+FAIL

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -99,4 +101,52 @@ func TestPOSTOversizeRejectedBeforeDispatch(t *testing.T) {
 	)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 	require.False(t, called)
+}
+
+func TestPublicToolRedirectRefusalClassification(t *testing.T) {
+	for _, status := range []int{301, 302, 303, 307, 308} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			t.Run(method+"/"+strconv.Itoa(status), func(t *testing.T) {
+				// Arrange.
+				var targets atomic.Int32
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/target" {
+						targets.Add(1)
+						w.WriteHeader(http.StatusOK)
+						return
+					}
+					location := "/target"
+					if method == http.MethodGet {
+						location = "http://localhost:1/target" // Not in the allowed host list.
+					}
+					http.Redirect(w, r, location, status)
+				}))
+				t.Cleanup(server.Close)
+				tools, err := AsTools(WithAllowedDomains([]string{"127.0.0.1"}), WithAllowPrivateIPs(true))
+				require.NoError(t, err)
+				input, err := json.Marshal(postArgs{URL: server.URL, JSONBody: json.RawMessage(`{"secret":"body"}`)})
+				require.NoError(t, err)
+				index := 1
+				if method == http.MethodGet {
+					input, err = json.Marshal(getArgs{URL: server.URL})
+					require.NoError(t, err)
+					index = 0
+				}
+				delivered := false
+				// Act.
+				err = tools[index].Execute(t.Context(), toolsy.NewRunEnv(nil), toolsy.ToolInput{ArgsJSON: input},
+					func(toolsy.Chunk) error { delivered = true; return nil })
+				// Assert.
+				var refused *RedirectError
+				require.ErrorAs(t, err, &refused)
+				te, ok := toolsy.AsToolError(err)
+				require.True(t, ok)
+				require.Equal(t, toolsy.CodeRemoteExecution, te.Code)
+				require.False(t, te.Retryable)
+				require.False(t, toolsy.ClientCorrectable(te.Code))
+				require.False(t, delivered)
+				require.Zero(t, targets.Load())
+			})
+		}
+	}
 }
