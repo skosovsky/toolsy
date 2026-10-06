@@ -780,3 +780,22 @@ Unapproved claims must have an empty `GrantID`; inconsistent claims now fail wit
 `invalid_claim` before dispatch/mutation. Clear irrelevant grant IDs in host inputs.
 Recovery cannot change the original approval mode for the same operation binding;
 a downgrade/upgrade fails with `binding_mismatch`, preserving the old reservation.
+
+## D23 — bounded gRPC reflection before tool publication
+
+The gRPC adapter applies `Options.Services` before requesting any descriptors.
+A broken excluded service no longer prevents discovery of selected services;
+selected dependencies remain included. Duplicate service names fetch once.
+
+New finite inclusive aggregate caps are `MaxDiscoveryServices` (default256 list
+entries, including exclusions), `MaxDescriptorFiles` (default512 received blobs,
+including repeated files/dependencies), and `MaxDiscoveryBytes` (default8MiB sum
+of protobuf response sizes, including list/envelopes). Zero selects defaults;
+negative limits, including `MaxResponseBytes`, now reject before reflection RPC.
+Raise positive finite caps explicitly for a legitimately larger contract.
+Conflicting same-name files fail discovery; no partial tool set is published.
+
+The receive cap bounds each message before adapter processing; aggregate size
+uses `proto.Size`, with additional decoded-memory cost and host deadline/connection
+ownership. See the [gRPC discovery contract](../contracts/grpc/README.md) for quota,
+error and per-message limitations. No discovery scheduler or core dependency added.

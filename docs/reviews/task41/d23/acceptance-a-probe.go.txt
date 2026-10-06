@@ -1,0 +1,343 @@
+package grpc
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"sync/atomic"
+	"testing"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	reflectionpb "google.golang.org/grpc/reflection/grpc_reflection_v1"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/types/descriptorpb"
+)
+
+type discoveryFixture struct {
+	reflectionpb.UnimplementedServerReflectionServer
+
+	names     []string
+	blobs     [][]byte
+	excluded  atomic.Int32
+	requested atomic.Int32
+	listed    atomic.Int32
+}
+
+func (s *discoveryFixture) listResponse() *reflectionpb.ServerReflectionResponse {
+	entries := make([]*reflectionpb.ServiceResponse, len(s.names))
+	for i, name := range s.names {
+		entries[i] = &reflectionpb.ServiceResponse{Name: name}
+	}
+	return &reflectionpb.ServerReflectionResponse{
+		MessageResponse: &reflectionpb.ServerReflectionResponse_ListServicesResponse{
+			ListServicesResponse: &reflectionpb.ListServiceResponse{Service: entries}},
+	}
+}
+
+func (s *discoveryFixture) fileResponse() *reflectionpb.ServerReflectionResponse {
+	return &reflectionpb.ServerReflectionResponse{
+		MessageResponse: &reflectionpb.ServerReflectionResponse_FileDescriptorResponse{
+			FileDescriptorResponse: &reflectionpb.FileDescriptorResponse{FileDescriptorProto: s.blobs}},
+	}
+}
+
+func (s *discoveryFixture) ServerReflectionInfo(
+	stream grpc.BidiStreamingServer[reflectionpb.ServerReflectionRequest, reflectionpb.ServerReflectionResponse],
+) error {
+	for {
+		req, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		response := s.listResponse()
+		if req.GetFileContainingSymbol() == "" {
+			s.listed.Add(1)
+		}
+		if symbol := req.GetFileContainingSymbol(); symbol != "" {
+			s.requested.Add(1)
+			if symbol != "fixture.Service" {
+				s.excluded.Add(1)
+				response = &reflectionpb.ServerReflectionResponse{
+					MessageResponse: &reflectionpb.ServerReflectionResponse_ErrorResponse{
+						ErrorResponse: &reflectionpb.ErrorResponse{
+							ErrorCode:    5,
+							ErrorMessage: "excluded service deliberately broken",
+						},
+					},
+				}
+			} else {
+				response = s.fileResponse()
+			}
+		}
+		if err = stream.Send(response); err != nil {
+			return err
+		}
+	}
+}
+
+func newDiscoveryFixture(t *testing.T, names []string) (*discoveryFixture, *grpc.ClientConn) {
+	t.Helper()
+	raw, err := proto.Marshal(protodesc.ToFileDescriptorProto(fixture(t, false, false)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scripted := &discoveryFixture{
+		UnimplementedServerReflectionServer: reflectionpb.UnimplementedServerReflectionServer{},
+		names:                               names,
+		blobs:                               [][]byte{raw},
+		excluded:                            atomic.Int32{},
+		requested:                           atomic.Int32{},
+	}
+	listener := bufconn.Listen(testBufconnSize)
+	server := grpc.NewServer()
+	reflectionpb.RegisterServerReflectionServer(server, scripted)
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(server.Stop)
+	conn, err := grpc.NewClient(
+		"passthrough:///bufconn",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return scripted, conn
+}
+
+func TestReflectFiltersBeforeDescriptorRequests(t *testing.T) {
+	// Arrange: the excluded service fails reflection if requested.
+	server, conn := newDiscoveryFixture(t, []string{"broken.Service", "fixture.Service", "fixture.Service"})
+	// Act.
+	tools, err := Reflect(t.Context(), conn, Options{Services: []string{"fixture.Service"}})
+	// Assert: excluded failures never affect selected discovery; duplicate names fetch once.
+	if err != nil || len(tools) != 1 {
+		t.Fatalf("selected discovery: tools=%d err=%v", len(tools), err)
+	}
+	if server.excluded.Load() != 0 || server.requested.Load() != 1 {
+		t.Fatalf("excluded=%d requested=%d", server.excluded.Load(), server.requested.Load())
+	}
+}
+
+func TestReflectInclusiveDiscoveryLimits(t *testing.T) {
+	for _, kind := range []string{"services", "files", "bytes"} {
+		for _, exact := range []bool{true, false} {
+			t.Run(kind+"/"+map[bool]string{true: "exact", false: "over"}[exact], func(t *testing.T) {
+				// Arrange: exclusions/duplicates count even though one method is published.
+				server, conn := newDiscoveryFixture(t, []string{"broken.Service", "fixture.Service", "fixture.Service"})
+				server.blobs = append(server.blobs, server.blobs[0])
+				opts := discoveryLimitOptions(server, kind, exact)
+				// Act.
+				tools, err := Reflect(t.Context(), conn, opts)
+				// Assert: inclusive bound succeeds; +1 work refuses the entire snapshot.
+				assertDiscoveryLimitResult(t, kind, exact, server, len(tools), err)
+			})
+		}
+	}
+}
+
+func TestReflectRejectsNegativeLimitsBeforeRPC(t *testing.T) {
+	for _, opts := range []Options{{MaxDiscoveryServices: -1}, {MaxDescriptorFiles: -1}, {MaxDiscoveryBytes: -1}, {MaxResponseBytes: -1}} {
+		// Arrange.
+		server, conn := newDiscoveryFixture(t, []string{"fixture.Service"})
+		// Act.
+		tools, err := Reflect(t.Context(), conn, opts)
+		// Assert: configuration refusal happens before opening/sending reflection RPCs.
+		if err == nil || len(tools) != 0 || server.listed.Load() != 0 {
+			t.Fatalf("negative options: tools=%d err=%v listed=%d", len(tools), err, server.listed.Load())
+		}
+	}
+}
+
+func TestReflectSelectedDependenciesAndConflicts(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		// Arrange: selected service depends on an ordinary imported message.
+		server, conn := newDiscoveryFixture(t, []string{"fixture.Service"})
+		root := protodesc.ToFileDescriptorProto(fixture(t, false, false))
+		dependency := &descriptorpb.FileDescriptorProto{
+			Name:    new("dependency.proto"),
+			Syntax:  new("proto3"),
+			Package: new("dep"),
+			MessageType: []*descriptorpb.DescriptorProto{
+				{
+					Name: new("Payload"),
+					Field: []*descriptorpb.FieldDescriptorProto{
+						{
+							Name:   new("text"),
+							Number: new(int32(1)),
+							Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
+						},
+					},
+				},
+			},
+		}
+		root.Dependency = []string{"dependency.proto"}
+		root.MessageType[0].Field = append(
+			root.MessageType[0].Field,
+			&descriptorpb.FieldDescriptorProto{
+				Name:     new("payload"),
+				Number:   new(int32(3)),
+				Type:     descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+				TypeName: new(".dep.Payload"),
+			},
+		)
+		rawRoot, err := proto.Marshal(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rawDependency, err := proto.Marshal(dependency)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.blobs = [][]byte{rawRoot, rawDependency}
+		if conflict {
+			dependency.Package = new("forged")
+			changed, marshalErr := proto.Marshal(dependency)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			server.blobs = append(server.blobs, changed)
+		}
+		// Act.
+		tools, err := Reflect(t.Context(), conn, Options{Services: []string{"fixture.Service"}})
+		// Assert: dependencies compile with selected service; conflicting same-name files fail atomically.
+		if conflict {
+			if err == nil || len(tools) != 0 {
+				t.Fatalf("conflict: tools=%d err=%v", len(tools), err)
+			}
+		} else {
+			if err != nil || len(tools) != 1 {
+				t.Fatalf("dependency: tools=%d err=%v", len(tools), err)
+			}
+		}
+	}
+}
+
+func TestReflectCancellationAndPerMessageBound(t *testing.T) {
+	// Arrange: caller owns deadline and connection; receive cap acts before aggregate processing.
+	_, conn := newDiscoveryFixture(t, []string{"fixture.Service"})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	// Act/Assert.
+	tools, err := Reflect(ctx, conn, Options{})
+	if !errors.Is(err, context.Canceled) && status.Code(err) != codes.Canceled {
+		t.Fatal("cancelled discovery succeeded")
+	}
+	if len(tools) != 0 {
+		t.Fatal("cancelled discovery published tools")
+	}
+	tools, err = Reflect(t.Context(), conn, Options{MaxDiscoveryBytes: 1})
+	if err == nil || len(tools) != 0 {
+		t.Fatalf("receive bound: tools=%d err=%v", len(tools), err)
+	}
+	// The adapter must not close the borrowed client connection on either failure.
+	tools, err = Reflect(t.Context(), conn, Options{})
+	if err != nil || len(tools) != 1 {
+		t.Fatalf("connection lost: tools=%d err=%v", len(tools), err)
+	}
+}
+
+func discoveryLimitOptions(server *discoveryFixture, kind string, exact bool) Options {
+	difference := 0
+	if !exact {
+		difference = 1
+	}
+	opts := Options{Services: []string{"fixture.Service"}}
+	switch kind {
+	case "services":
+		opts.MaxDiscoveryServices = len(server.names) - difference
+	case "files":
+		opts.MaxDescriptorFiles = len(server.blobs) - difference
+	case "bytes":
+		opts.MaxDiscoveryBytes = proto.Size(server.listResponse()) + proto.Size(server.fileResponse()) - difference
+	}
+	return opts
+}
+
+func assertDiscoveryLimitResult(t *testing.T, kind string, exact bool, server *discoveryFixture, count int, err error) {
+	t.Helper()
+	if exact {
+		if err != nil || count != 1 {
+			t.Fatalf("exact: tools=%d err=%v", count, err)
+		}
+		return
+	}
+	if !errors.Is(err, ErrDiscoveryLimit) || count != 0 {
+		t.Fatalf("over: tools=%d err=%v", count, err)
+	}
+	if kind == "services" && server.requested.Load() != 0 {
+		t.Fatal("fetched descriptors after service cap")
+	}
+}
+
+// Independent acceptance probes, injected through an overlay only.
+type acceptanceRecordingConn struct {
+ *grpc.ClientConn
+ discoveryContext context.Context
+}
+func (c *acceptanceRecordingConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+ c.discoveryContext = ctx
+ return c.ClientConn.NewStream(ctx, desc, method, opts...)
+}
+func TestAcceptanceStreamCleanup(t *testing.T) {
+ for _, broken := range []bool{false,true} {
+  // Arrange: borrow the real connection and capture the context passed into its stream.
+  server, conn := newDiscoveryFixture(t, []string{"fixture.Service"})
+  if broken { server.blobs = [][]byte{{0xff}} }
+  tracked := &acceptanceRecordingConn{ClientConn:conn}
+  // Act.
+  tools, err := Reflect(t.Context(), tracked, Options{})
+  // Assert: both success/error return cancel the child but leave the parent and connection intact.
+  if broken && (err == nil || tools != nil) { t.Fatalf("malformed publishes: %v %v",tools,err) }
+  if !broken && (err != nil || len(tools)!=1) { t.Fatalf("success: %v",err) }
+  if tracked.discoveryContext == nil || tracked.discoveryContext.Err() != context.Canceled { t.Fatal("child stream context not canceled") }
+  if t.Context().Err()!=nil { t.Fatal("parent canceled") }
+ }
+}
+func TestAcceptanceResponseUnknownsDefaultsAndNil(t *testing.T) {
+ // Arrange: unknown protobuf bytes are part of aggregate canonical response size.
+ response := &reflectionpb.ServerReflectionResponse{}
+ response.ProtoReflect().SetUnknown([]byte{0xa0,0x06,0x01})
+ budget, err := newDiscoveryBudget(Options{MaxDiscoveryBytes:6})
+ if err!=nil {t.Fatal(err)}
+ // Act/Assert: nil adds no bytes, repeated unknown fields count, exact is inclusive.
+ if err=budget.response(nil); err!=nil {t.Fatal(err)}
+ if err=budget.response(response); err!=nil {t.Fatal(err)}
+ if err=budget.response(response); err!=nil || budget.bytes!=6 {t.Fatalf("exact bytes %d err %v",budget.bytes,err)}
+ if err=budget.response(response); !errors.Is(err,ErrDiscoveryLimit) {t.Fatalf("unknown bytes unbounded: %v",err)}
+ if _,err=collectDescriptorResponse(nil,budget,map[string]*descriptorpb.FileDescriptorProto{});err==nil {t.Fatal("nil response accepted")}
+ defaults,err:=newDiscoveryBudget(Options{})
+ if err!=nil || defaults.maxServices!=256 || defaults.maxFiles!=512 || defaults.maxBytes!=8<<20 {t.Fatalf("defaults: %+v %v",defaults,err)}
+ maxInt:=int(^uint(0)>>1)
+ budget,err=newDiscoveryBudget(Options{MaxDiscoveryBytes:maxInt})
+ if err!=nil {t.Fatal(err)}
+ budget.bytes=maxInt-2
+ if err=budget.response(response); !errors.Is(err,ErrDiscoveryLimit) {t.Fatal("integer boundary overflow")}
+}
+func TestAcceptanceReflectionNamesAndMissingImport(t *testing.T) {
+ // Arrange: reflection services are excluded even without a host allowlist.
+ server,conn:=newDiscoveryFixture(t,[]string{"grpc.reflection.v1.ServerReflection","fixture.Service",""})
+ // Act.
+ tools,err:=Reflect(t.Context(),conn,Options{})
+ // Assert.
+ if err!=nil || len(tools)!=1 || server.excluded.Load()!=0 {t.Fatalf("reflection name fetched: %v",err)}
+ // Arrange: absent selected dependency cannot produce a partial snapshot.
+ root:=protodesc.ToFileDescriptorProto(fixture(t,false,false))
+ root.Dependency=[]string{"absent.proto"}
+ raw,err:=proto.Marshal(root)
+ if err!=nil {t.Fatal(err)}
+ server.blobs=[][]byte{raw}
+ // Act.
+ tools,err=Reflect(t.Context(),conn,Options{})
+ // Assert.
+ if err==nil || tools!=nil {t.Fatalf("missing dependency published: %v %v",tools,err)}
+}

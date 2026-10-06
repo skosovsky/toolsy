@@ -1,0 +1,5 @@
+--- FAIL: TestReflectFiltersBeforeDescriptorRequests (0.00s)
+    reflection_limits_test.go:78: selected discovery: tools=0 err=grpc: reflection file_containing_symbol error: excluded service deliberately broken
+FAIL
+FAIL	github.com/skosovsky/toolsy/contracts/grpc	0.835s
+FAIL

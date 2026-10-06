@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted (commit pending); rows 29–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted (commit pending); rows 30–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1105,3 +1105,45 @@ root race and targetedrace3/pinnedlint0; retained reports in task41/d14/acceptan
 Accepted for separate signed commit `fix: journal consistency`. Local Restore
 benchmark10/100/1000 approvedrecords observed allocations77KiB/810KiB/8.3MiB;
 retained fixture/log, concurrent timings are not a performance guarantee.
+
+### 29 — D23 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Filter allowed/non-reflection service names before any descriptor request;
+   excluded-service reflection errors cannot fail selected discovery; deduplicate names.
+2. Explicit finite inclusive aggregate discovery service-entry, descriptor-blob and
+   protobuf response-byte budgets; zero defaults, negative rejection before RPC.
+   Count excluded/duplicate entries and repeated descriptor bytes to bound work.
+3. Selected service dependencies retained; consistent duplicate files deduplicate,
+   conflicting file identities reject; no partial publication on limit/unsupported/error.
+4. AAA real reflection fixtures for excluded failures, exact/+1 limits, repeated
+   blobs, selected dependencies and cancellation; affected module race/lint pass.
+5. README/migration/options agree, host owns connection/deadline/authority;
+   per-message receive allocation limitations explicit; both reviewers100%, no
+   unresolved detected errors; no new core dependency or reflection scheduler.
+
+Spec-first: Services is a pre-fetch allowlist, not a post-download tool filter.
+Default finite budgets: 256 listed service entries (including exclusions), 512
+received descriptor blobs (including duplicate files/dependencies), 8MiB aggregate
+protobuf response size across list and descriptor responses. Positive caps inclusive;
+zero uses default, negative fails construction before reflection stream. Aggregate
+bytes count canonical protobuf encoded response size (including envelope/unknowns),
+not transport headers/compression. Per-message gRPC receive cap also applies before
+adapter processing; it cannot promise arbitrary server/resource conformance.
+
+D23 implementation and docs complete: prefetch allowlist/dedup, finite service/blob/
+aggregate protobuf response caps, per-message gRPC receive cap, negative validation,
+conflicting same-name files reject, child stream cancellation without closing cc.
+Real reflection fixture baseline failed due to excluded-service fetch; current full
+module race count3 PASS5.308s and pinnedlint0. Exact/+1 quota, repeated descriptor,
+selected dependency/conflict and cancellation/borrowed connection tests pass.
+Two independent acceptance reviewers pending; no row29 commit yet.
+
+Independent final A and B each100%, five20/20 criteria; no unresolved detected
+errors. A module race3PASS4.796s/adversarialrace3PASS1.965s/lint0; B module race3
+PASS4.742s/additionalrace3PASS1.585s/lint0. A checked malformed/nil/missing imports/
+unknown bytes/defaults/max-int and owned stream cleanup; B independently reproduced
+baseline, checked canonical envelope+unknown accounting and success-path cleanup
+when server ignores CloseSend. Retained reports/probes in task41/d23; local fixtures
+are not live remote conformance/process-heap proof. Accepted for signed separate
+commit `fix: reflection discovery`.

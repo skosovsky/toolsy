@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -31,12 +32,19 @@ func Reflect(ctx context.Context, cc grpc.ClientConnInterface, opts Options) ([]
 	if cc == nil {
 		return nil, errors.New("grpc: ClientConn is nil")
 	}
+	budget, err := newDiscoveryBudget(opts)
+	if err != nil {
+		return nil, err
+	}
+	opts.Services = slices.Clone(opts.Services)
+	discoveryCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	refClient := reflectionpb.NewServerReflectionClient(cc)
-	stream, err := refClient.ServerReflectionInfo(ctx)
+	stream, err := refClient.ServerReflectionInfo(discoveryCtx, grpc.MaxCallRecvMsgSize(budget.maxBytes))
 	if err != nil {
 		return nil, fmt.Errorf("grpc: reflection stream: %w", err)
 	}
-	svcNames, files, err := listServicesAndBuildFiles(stream)
+	svcNames, files, err := listServicesAndBuildFiles(stream, opts.Services, budget)
 	if err != nil {
 		_ = stream.CloseSend()
 		return nil, err
@@ -51,11 +59,6 @@ func buildToolsFromRegistry(
 	files *protoregistry.Files,
 	opts Options,
 ) ([]toolsy.Tool, error) {
-	allowedServices := make(map[string]bool)
-	for _, s := range opts.Services {
-		allowedServices[s] = true
-	}
-
 	var tools []toolsy.Tool
 	usedNames := make(map[string]bool)
 
@@ -63,9 +66,6 @@ func buildToolsFromRegistry(
 	sort.Strings(svcNames)
 	for _, svcName := range svcNames {
 		if strings.HasPrefix(svcName, "grpc.reflection.") {
-			continue
-		}
-		if len(allowedServices) > 0 && !allowedServices[svcName] {
 			continue
 		}
 		desc, err := files.FindDescriptorByName(protoreflect.FullName(svcName))
@@ -94,6 +94,8 @@ func buildToolsFromRegistry(
 // listServicesAndBuildFiles sends ListServicesRequest, then FileContainingSymbol for each service, and returns service names and a merged Files registry.
 func listServicesAndBuildFiles(
 	stream reflectionpb.ServerReflection_ServerReflectionInfoClient,
+	allowed []string,
+	budget *discoveryBudget,
 ) ([]string, *protoregistry.Files, error) {
 	// Request list of services.
 	req := &reflectionpb.ServerReflectionRequest{
@@ -108,6 +110,9 @@ func listServicesAndBuildFiles(
 	if err != nil {
 		return nil, nil, err
 	}
+	if err = budget.response(resp); err != nil {
+		return nil, nil, err
+	}
 	listResp := resp.GetListServicesResponse()
 	if listResp == nil {
 		if errResp := resp.GetErrorResponse(); errResp != nil {
@@ -115,17 +120,25 @@ func listServicesAndBuildFiles(
 		}
 		return nil, nil, errors.New("grpc: reflection: unexpected response type")
 	}
+	if len(listResp.GetService()) > budget.maxServices {
+		return nil, nil, discoveryLimit("services", budget.maxServices)
+	}
 	var svcNames []string
+	seen := make(map[string]bool)
 	for _, s := range listResp.GetService() {
-		if s != nil && s.GetName() != "" && !strings.HasPrefix(s.GetName(), "grpc.reflection.") {
-			svcNames = append(svcNames, s.GetName())
+		name := s.GetName()
+		if name == "" || strings.HasPrefix(name, "grpc.reflection.") || seen[name] ||
+			(len(allowed) > 0 && !slices.Contains(allowed, name)) {
+			continue
 		}
+		seen[name] = true
+		svcNames = append(svcNames, name)
 	}
 	if len(svcNames) == 0 {
 		return nil, nil, errors.New("grpc: reflection: no services")
 	}
 	// Build registry from FileContainingSymbol for each service.
-	files, err := buildRegistry(stream, svcNames)
+	files, err := buildRegistry(stream, svcNames, budget)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -137,8 +150,9 @@ func listServicesAndBuildFiles(
 func buildRegistry(
 	stream reflectionpb.ServerReflection_ServerReflectionInfoClient,
 	services []string,
+	budget *discoveryBudget,
 ) (*protoregistry.Files, error) {
-	seenFiles := make(map[string]bool)
+	seenFiles := make(map[string]*descriptorpb.FileDescriptorProto)
 	var allFiles []*descriptorpb.FileDescriptorProto
 
 	for _, svc := range services {
@@ -154,26 +168,51 @@ func buildRegistry(
 		if err != nil {
 			return nil, err
 		}
-		fdResp := resp.GetFileDescriptorResponse()
-		if fdResp == nil {
-			if errResp := resp.GetErrorResponse(); errResp != nil {
-				return nil, fmt.Errorf("grpc: reflection file_containing_symbol error: %s", errResp.GetErrorMessage())
-			}
-			return nil, errors.New("grpc: reflection: unexpected file response")
+		if err = budget.response(resp); err != nil {
+			return nil, err
 		}
-		for _, fdBytes := range fdResp.GetFileDescriptorProto() {
-			fd := &descriptorpb.FileDescriptorProto{}
-			if err := proto.Unmarshal(fdBytes, fd); err != nil {
-				return nil, err
-			}
-			if !seenFiles[fd.GetName()] {
-				seenFiles[fd.GetName()] = true
-				allFiles = append(allFiles, fd)
-			}
+		decoded, decodeErr := collectDescriptorResponse(resp, budget, seenFiles)
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
+		allFiles = append(allFiles, decoded...)
 	}
 	fdSet := &descriptorpb.FileDescriptorSet{File: allFiles}
 	return protodesc.NewFiles(fdSet)
+}
+
+func collectDescriptorResponse(
+	resp *reflectionpb.ServerReflectionResponse,
+	budget *discoveryBudget,
+	seenFiles map[string]*descriptorpb.FileDescriptorProto,
+) ([]*descriptorpb.FileDescriptorProto, error) {
+	var allFiles []*descriptorpb.FileDescriptorProto
+	var err error
+	fdResp := resp.GetFileDescriptorResponse()
+	if fdResp == nil {
+		if errResp := resp.GetErrorResponse(); errResp != nil {
+			return nil, fmt.Errorf("grpc: reflection file_containing_symbol error: %s", errResp.GetErrorMessage())
+		}
+		return nil, errors.New("grpc: reflection: unexpected file response")
+	}
+	for _, fdBytes := range fdResp.GetFileDescriptorProto() {
+		if err = budget.file(); err != nil {
+			return nil, err
+		}
+		fd := &descriptorpb.FileDescriptorProto{}
+		if err := proto.Unmarshal(fdBytes, fd); err != nil {
+			return nil, err
+		}
+		if previous, exists := seenFiles[fd.GetName()]; exists {
+			if !proto.Equal(previous, fd) {
+				return nil, fmt.Errorf("grpc: conflicting descriptor file %q", fd.GetName())
+			}
+			continue
+		}
+		seenFiles[fd.GetName()] = fd
+		allFiles = append(allFiles, fd)
+	}
+	return allFiles, nil
 }
 
 func buildMethodTool(
