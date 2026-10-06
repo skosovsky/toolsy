@@ -1,5 +1,5 @@
-// Package agents provides an Agent Protocol bridge for toolsy: REST/SSE client,
-// task lifecycle, and delegation as toolsy.Tool (AsTool, AsBackgroundTool).
+// Package agents adapts remote task creation and the toolsy-step-stream-v1
+// SSE/cancel extension to toolsy.Tool. It is not a remote workflow scheduler.
 package agents
 
 import (
@@ -19,13 +19,14 @@ import (
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-// ClientOptions configures the Agent Protocol HTTP client.
+// ClientOptions configures the remote task HTTP/SSE extension adapter.
 type ClientOptions struct {
-	HTTPSettings      httptool.ClientSettings
-	allowPrivateIPs   bool
-	maxResponseBytes  int
-	maxSSEStreamBytes int
-	streamPolicy      StreamPolicy
+	HTTPSettings         httptool.ClientSettings
+	allowPrivateIPs      bool
+	maxResponseBytes     int
+	maxSSEStreamBytes    int
+	streamPolicy         StreamPolicy
+	cancellationObserver CancellationObserver
 }
 
 // WithAllowPrivateIPs relaxes SSRF IP blocking on the default safe transport (tests and private networks).
@@ -35,7 +36,7 @@ func WithAllowPrivateIPs(allow bool) func(*ClientOptions) {
 	}
 }
 
-// Client is the REST client for the Agent Protocol API.
+// Client uses Agent Protocol task envelopes and the custom toolsy step-stream extension.
 type Client struct {
 	baseURL   string
 	opts      ClientOptions
@@ -64,11 +65,12 @@ func WithMaxSSEStreamBytes(n int) func(*ClientOptions) {
 // NewClient creates an Agent Protocol client with one owned safe pool. Invalid HTTP settings fail construction.
 func NewClient(baseURL string, opts ...func(*ClientOptions)) (*Client, error) {
 	o := ClientOptions{
-		HTTPSettings:      httptool.ClientSettings{Timeout: 0, TLSConfig: nil},
-		allowPrivateIPs:   false,
-		maxResponseBytes:  0,
-		maxSSEStreamBytes: 0,
-		streamPolicy:      DefaultStreamPolicy(),
+		HTTPSettings:         httptool.ClientSettings{Timeout: 0, TLSConfig: nil},
+		allowPrivateIPs:      false,
+		maxResponseBytes:     0,
+		maxSSEStreamBytes:    0,
+		streamPolicy:         DefaultStreamPolicy(),
+		cancellationObserver: nil,
 	}
 	for _, opt := range opts {
 		opt(&o)
@@ -171,7 +173,8 @@ func mapCreateTaskReadError(ctx context.Context, err error, maxBytes int) error 
 	return fmt.Errorf("agents: read create task response: %w", err)
 }
 
-// CancelTask sends POST /ap/v1/agent/tasks/{task_id}/cancel to cancel the task on the server.
+// CancelTask requests cancellation through the custom toolsy step-stream extension.
+// A successful HTTP acknowledgement does not prove remote execution stopped.
 func (c *Client) CancelTask(ctx context.Context, taskID string, authHeader string) error {
 	reqURL := c.baseURL + "/ap/v1/agent/tasks/" + url.PathEscape(taskID) + "/cancel"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader([]byte("{}")))

@@ -61,8 +61,8 @@ func resolveAuthHeader(ctx context.Context, run *toolsy.RunEnv, toolName string)
 	return run.Credentials.GetAuth(ctx, toolName)
 }
 
-// AsTool creates a toolsy.Tool that delegates to the Agent Protocol: CreateTask, stream steps, yield progress and final result.
-// inputSchema is the JSON Schema the orchestrator must satisfy; args are sent as task input.
+// AsTool adapts remote task creation and the toolsy-step-stream-v1 observation extension.
+// inputSchema is the JSON Schema the host must satisfy; args are sent as task input.
 //
 //nolint:gocognit
 func AsTool(name, description string, inputSchema []byte, client *Client) (toolsy.Tool, error) {
@@ -192,9 +192,19 @@ func (c *Client) cancelInterruptedTask(ctx context.Context, run *toolsy.RunEnv, 
 	}
 	cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cancelTaskTimeout)
 	defer cancel()
+	diagnostic := CancellationDiagnostic{
+		TaskID: taskID, ParentInterrupt: ctx.Err(), ParentCause: context.Cause(ctx),
+		Stage: CancellationCredentials, Acknowledged: false, Cause: nil,
+	}
 	auth, err := resolveAuthHeader(cancelCtx, run, cancelTaskAuthToolName)
 	if err == nil {
-		_ = c.CancelTask(cancelCtx, taskID, auth)
+		diagnostic.Stage = CancellationRequest
+		err = c.CancelTask(cancelCtx, taskID, auth)
+		diagnostic.Acknowledged = err == nil
+	}
+	diagnostic.Cause = err
+	if observer := c.opts.cancellationObserver; observer != nil {
+		observer(cancelCtx, diagnostic)
 	}
 }
 

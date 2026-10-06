@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted (commit pending); rows 30–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted (commit pending); rows 31–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1147,3 +1147,47 @@ baseline, checked canonical envelope+unknown accounting and success-path cleanup
 when server ignores CloseSend. Retained reports/probes in task41/d23; local fixtures
 are not live remote conformance/process-heap proof. Accepted for signed separate
 commit `fix: reflection discovery`.
+
+### 30 — D24 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Public names/docs distinguish remote task adapter and toolsy-step-stream-v1
+   SSE/cancel extension from normative Agent Protocol; no remote scheduler added.
+2. Optional host-only cancellation observer reports task, parent interrupt cause,
+   credentials/request stage, acknowledgement and exact failure cause, once per
+   attempted interrupted-task cleanup; no credentials/diagnostics in model output.
+3. Parent cancellation triggers bounded detached best-effort cancel. Stream-owned
+   timeout and callback stop do not cancel remote action automatically; preserve
+   their primary error/retry/outcome semantics and borrowed client/host ownership.
+4. AAA local HTTP/SSE tests cover success acknowledgement, HTTP/credential failure,
+   optional observer absence, caller cancel/deadline versus stream timeout/callback
+   stop, original-error preservation and bounded cooperative cancellation context.
+5. README/API/migration agree on synchronous cooperative observer limits, concurrency
+   and cause trust; affected module race/lint pass, two independent reviewers100%,
+   no unresolved detected errors, no live remote cancellation guarantee.
+
+Spec-first: cancellation diagnostics are optional host observability, not a tool
+result, remote completion proof or permission to retry creation. A cancelled parent
+continues to drive one best-effort request under a fresh five-second context; the
+observer receives that context and must cooperate (no forced goroutine/preemption).
+Diagnostics preserve parent context cause separately from credential/cancel-request
+failure and the acknowledged flag. Stream-owned timeout/callback stop remain read
+interruptions, with no implicit remote cancellation or background scheduling.
+
+D24 implementation complete: optional host CancellationObserver, exact parent
+interrupt/customcause, credentials/request stage, acknowledgement and cleanupcause.
+Old parent-only detached5s cancellation remains, stream-only timeout/callback stop
+with active parent cause no remote cancel; primary error stays intact. Docs distinguish
+custom SSE/cancel profile and synchronous cooperative callback/authority limits.
+Final complete agents race count3PASS5.638s/pinnedlint0. Initial timeout fixture
+stalled at server.Close without reading POST body; corrected fixture drains body and
+explicitly releases cleanup, final run passes. Two independent acceptance pending.
+
+Independent final A and B each100%, five20/20 criteria, no unresolved detected
+errors. A fullagentsrace3PASS6.491s/independentconcurrent-budgetprobePASS6.983s/lint0;
+B fullagentsrace3PASS5.707s/independentbudget-combinedprobePASS6.879s/lint0. Both
+inspected latest callback-cause docs: existing core ErrStreamAborted wrapping keeps
+original cause through errors.Is/errors.As. Concurrent12-client calls, actual5s
+cooperative credential deadline, expired observer context, parent values and combined
+callback+parent interruption verified. Reports/probes retained in task41/d24.
+Accepted for separate signed commit `feat: cancellation diagnostics`.

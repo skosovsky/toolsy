@@ -1,0 +1,6 @@
+{
+  "commit": "d9170c1bad1e5268b834924d2f031593f6d9b38e",
+  "agents/client.go": "1a8faa2a026876f2a01d691480a4c994d48f46dfaf3f9d095b6718563bb55719",
+  "agents/delegate.go": "cd61412cf3d0c01fe9f5d42939d19564af77498f1156881927780b4a50efb076",
+  "agents/README.md": "f0766ad5d22ef89b99f0b63a3d912eceab43f6d476d02b9f938f5c940f05c171"
+}

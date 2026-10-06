@@ -1,6 +1,6 @@
 # agents
 
-This optional bridge converts remote task creation and observation into a `toolsy.Tool`. Core does not depend on Agent Protocol. The host supplies credentials, decides whether creation is authorized and owns task persistence and continuation.
+This optional remote task adapter converts creation and observation through the custom toolsy step-stream profile into a `toolsy.Tool`. Core does not depend on Agent Protocol. The host supplies credentials, decides whether creation is authorized and owns task persistence and continuation.
 
 ## Supported contract
 
@@ -67,3 +67,57 @@ cleanup. A zero HTTP timeout leaves requests bounded by their context (logical
 SSE reads additionally use StreamPolicy). A positive HTTP timeout also limits SSE
 responses, so choose it for the intended stream duration. TLS roots, certificates
 and callback state referenced by the cloned TLSConfig must remain immutable.
+
+## Parent interruption and optional cancellation diagnostics
+
+`WithCancellationObserver(agents.CancellationObserver)` adds host-only observations
+for `AsTool` cleanup after successful creation of a known task reference. Nil or an
+absent observer disables diagnostics. Direct `CancelTask` calls already return their
+error to the host and do not invoke this observer. `AsBackgroundTool` acknowledges
+creation and does not acquire observation/cancellation ownership.
+
+| Read interruption | Remote cancellation behavior | Primary execution outcome |
+|---|---|---|
+| Parent cancel/deadline after creation | One best-effort custom cancel request with a fresh five-second context; credential failure prevents the request | Parent interrupt/unknown remote outcome preserved; timeout remains nonretryable |
+| StreamPolicy deadline with active parent | No implicit remote cancel | Nonretryable observation timeout; task reference retained |
+| Consumer callback stops with active parent | No implicit remote cancel | Original callback cause preserved through the error chain; no completion claim |
+
+If the parent is also interrupted when callback handling returns, parent-triggered
+cleanup still applies; diagnostics do not replace the callback cause. Core may wrap
+a consumer error in `ErrStreamAborted`; use `errors.Is`/`errors.As`, not identity
+comparison with the returned execution error. Cleanup uses
+the parent context values with cancellation removed, followed by a five-second
+child deadline. Credential resolution, HTTP request and observer share that budget.
+Credentials/observers are opaque host callbacks and must cooperate with the context;
+there is no forced goroutine, panic recovery or hard preemption of a blocking port.
+
+`CancellationDiagnostic` reports `TaskID`, `ParentInterrupt` (`ctx.Err()`),
+`ParentCause` (`context.Cause(ctx)`, including a custom host cause), `Stage`
+(`CancellationCredentials` or `CancellationRequest`), `Acknowledged`, and the exact
+cleanup `Cause`. Credential failures report the credentials stage and no request;
+request failures preserve their cause and `Acknowledged=false`. A successful HTTP
+response sets `Acknowledged=true`, which is **not** evidence that remote execution
+stopped or an authorization to repeat creation. The host must reconcile uncertainty.
+
+The observer runs synchronously once at the end of the attempt, even after failure,
+using the same cleanup context (which may already have expired). Keep it brief,
+context-aware, safe for concurrent client calls and free of panics. Capture is by
+function reference; its state/lifetime remains host-owned. This option does not
+replace the primary execution error or emit a tool chunk. No implicit logging occurs.
+Task IDs and error causes may contain sensitive/untrusted observations; apply host
+redaction and access controls before persistence or display. Headers/credentials
+are not separate diagnostic fields. A disabled observer intentionally leaves cleanup
+failure unreported, with existing best-effort behavior preserved.
+
+```go
+func newRemoteClient(observe agents.CancellationObserver) (*agents.Client, error) {
+    return agents.NewClient("https://agent.example.com",
+        agents.WithCancellationObserver(observe),
+    )
+}
+```
+
+This remains an adapter for the pinned base envelopes plus the custom SSE/cancel
+extension; it neither runs the normative POST-step loop nor schedules remote task
+retries, durable continuation or cleanup jobs. Local HTTP/SSE tests do not prove
+remote cancellation acknowledgement means stopped execution.

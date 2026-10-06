@@ -1,0 +1,44 @@
+package agents
+import (
+ "context"
+ "errors"
+ "net/http/httptest"
+ "sync/atomic"
+ "testing"
+ "time"
+ "github.com/skosovsky/toolsy"
+)
+type reviewCredentials struct { seen context.Context; marker any; t *testing.T }
+func (c *reviewCredentials) GetAuth(ctx context.Context, name string)(string,error) {
+ if name != cancelTaskAuthToolName { return "",nil }
+ c.seen = ctx
+ if ctx.Value("review-key") != c.marker { c.t.Fatal("parent values lost") }
+ <-ctx.Done()
+ return "",ctx.Err()
+}
+func TestReviewD24SharedBudget(t *testing.T) {
+ // Arrange.
+ marker:=new(int); creds:=&reviewCredentials{marker:marker,t:t}; calls:=0
+ client:=mustClient(t,"http://127.0.0.1:1",WithCancellationObserver(func(ctx context.Context,d CancellationDiagnostic){
+  calls++; if ctx != creds.seen { t.Fatal("cleanup contexts differ") }
+  if !errors.Is(ctx.Err(),context.DeadlineExceeded) || !errors.Is(d.Cause,context.DeadlineExceeded) || d.Stage!=CancellationCredentials || d.Acknowledged { t.Fatalf("wrong expiry diagnostic: %+v",d) }
+ }))
+ parent,cancel:=context.WithCancel(context.WithValue(t.Context(),"review-key",marker)); cancel()
+ start:=time.Now()
+ // Act.
+ client.cancelInterruptedTask(parent,toolsy.NewRunEnv(nil,toolsy.WithCredentials(creds)),"task")
+ // Assert.
+ if calls!=1 || time.Since(start)>6*time.Second { t.Fatal("wrong count or cooperative budget") }
+}
+func TestReviewD24ParentAndCallbackPreserveExactError(t *testing.T) {
+ // Arrange.
+ var cancelled atomic.Int32; server:=httptest.NewServer(cancellationStreamHandler(&cancelled)); t.Cleanup(server.Close)
+ calls:=0; parentCause:=errors.New("parent custom"); callbackCause:=errors.New("callback exact")
+ ctx,cancel:=context.WithCancelCause(t.Context()); defer cancel(nil)
+ client:=mustClient(t,server.URL,WithAllowPrivateIPs(true),WithCancellationObserver(func(_ context.Context,d CancellationDiagnostic){calls++; if d.ParentCause!=parentCause {t.Fatal("custom cause replaced")}}))
+ tool,err:=AsTool("review","review",[]byte(`{"type":"object"}`),client); if err!=nil {t.Fatal(err)}
+ // Act.
+ err=tool.Execute(ctx,toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(chunk toolsy.Chunk)error { if chunk.Event==toolsy.EventProgress {cancel(parentCause);return callbackCause};return nil })
+ // Assert.
+ if !errors.Is(err,callbackCause) || calls!=1 || cancelled.Load()!=1 {t.Fatalf("primary changed/counts: %v %d %d",err,calls,cancelled.Load())}
+}

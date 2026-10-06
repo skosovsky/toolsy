@@ -799,3 +799,26 @@ The receive cap bounds each message before adapter processing; aggregate size
 uses `proto.Size`, with additional decoded-memory cost and host deadline/connection
 ownership. See the [gRPC discovery contract](../contracts/grpc/README.md) for quota,
 error and per-message limitations. No discovery scheduler or core dependency added.
+
+## D24 — custom remote task cancellation diagnostics
+
+The `agents` module uses pinned Agent Protocol task envelopes and the distinct
+**toolsy step-stream v1 extension** for SSE observation and POST cancellation.
+Public comments now describe the remote adapter rather than implying a normative
+Agent Protocol lifecycle or a remote workflow scheduler.
+
+Optional `WithCancellationObserver` supplies host-only `CancellationDiagnostic`:
+task reference, parent interrupt/custom cause, credentials/request stage, HTTP
+acknowledgement and cleanup failure cause. Nil/absence disables the observer.
+Callbacks run synchronously under the same five-second detached cleanup context;
+host code must cooperate, handle concurrent calls and sanitize observations.
+Diagnostics do not replace the original execution cause or become model output.
+Core may wrap callback errors in `ErrStreamAborted`; their original causes remain
+inspectable through `errors.Is`/`errors.As`.
+
+Only an interrupted parent after acknowledged creation triggers this best-effort
+cleanup. A stream-policy timeout or callback stop with an active parent stops reads
+without implicitly cancelling the remote action. Direct `CancelTask` returns errors
+directly and does not invoke this observer. HTTP acknowledgement remains distinct
+from stopped remote execution; unknown outcomes still require host reconciliation.
+See the [remote adapter interruption contract](../agents/README.md).
