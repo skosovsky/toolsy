@@ -51,13 +51,12 @@ func (t *SessionTrack) MaxSteps() int64 {
 
 // Session is a stateful, concurrency-safe executor built on top of a stateless registry.
 type Session struct {
-	reg     *Registry
-	track   *SessionTrack
-	policy  RunPolicy
-	opts    sessionOptions
-	binding SessionBinding
-	stateMu sync.RWMutex
-	state   map[string]any
+	configuration atomic.Pointer[sessionConfiguration]
+	track         *SessionTrack
+	policy        RunPolicy
+	opts          sessionOptions
+	stateMu       sync.RWMutex
+	state         map[string]any
 }
 
 // NewSession creates a new session bound to reg.
@@ -73,14 +72,14 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Session{ //nolint:exhaustruct_v5 // stateMu zero value; state map initialized below
-		reg:     reg,
-		track:   newSessionTrack(cfg),
-		policy:  cfg.policy,
-		opts:    cfg,
-		binding: binding,
-		state:   make(map[string]any),
-	}, nil
+	session := &Session{ //nolint:exhaustruct_v5 // Configuration/state locks have zero values; maps and pointer initialized below
+		track:  newSessionTrack(cfg),
+		policy: cfg.policy,
+		opts:   cfg,
+		state:  make(map[string]any),
+	}
+	session.configuration.Store(&sessionConfiguration{registry: reg, binding: binding})
+	return session, nil
 }
 
 // Track returns the session execution track.
@@ -95,7 +94,19 @@ func (s *Session) Track() *SessionTrack {
 // When call.Env is non-nil, it must be created with NewRunEnv(s) for this session (see ValidateRunEnvSession).
 // call.Env may be nil for DI-only paths; SetState/GetState in tools are then no-ops — prefer NewRunEnv(s) for stateful tracks.
 func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
-	if s == nil || s.reg == nil {
+	if s == nil {
+		return NewToolNotFoundError()
+	}
+	return s.executeWithConfiguration(ctx, call, yield, s.executionConfiguration())
+}
+
+func (s *Session) executeWithConfiguration(
+	ctx context.Context,
+	call ToolCall,
+	yield func(Chunk) error,
+	configuration sessionConfiguration,
+) error {
+	if configuration.registry == nil {
 		return NewToolNotFoundError()
 	}
 	if err := enforceRunPolicy(s.policy, call); err != nil {
@@ -109,7 +120,7 @@ func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) 
 			return err
 		}
 	}
-	return s.reg.execute(ctx, call, yield)
+	return configuration.registry.execute(ctx, call, yield)
 }
 
 func enforceRunPolicy(p RunPolicy, call ToolCall) error {

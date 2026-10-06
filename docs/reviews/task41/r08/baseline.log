@@ -1,0 +1,469 @@
+==================
+WARNING: DATA RACE
+Write at 0x00c00013a8c8 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:60 +0x220
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Previous read at 0x00c00013a8c8 by goroutine 20:
+  github.com/skosovsky/toolsy.(*Session).ImportSnapshot()
+      /private/tmp/toolsy-task41/r08-baseline/state_api.go:69 +0x364
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:55 +0xac8
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 20 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c00013a820 by goroutine 21:
+  github.com/skosovsky/toolsy.(*Session).Execute()
+      /private/tmp/toolsy-task41/r08-baseline/session.go:98 +0x40
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:65 +0x1ac
+
+Previous write at 0x00c00013a820 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 21 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c000242cc0 by goroutine 19:
+  slices.Equal[go.shape.[]string,go.shape.string]()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/slices/slices.go:25 +0x240
+  github.com/skosovsky/toolsy.validateSessionBindingCompatible()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:125 +0x8c
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:56 +0x1d8
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Previous write at 0x00c000242cc0 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Registry).sortedToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:176 +0x178
+  github.com/skosovsky/toolsy.(*Registry).ToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:231 +0xa4
+  github.com/skosovsky/toolsy.newSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:101 +0xa0
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:52 +0xb4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Write at 0x00c00013a820 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Previous read at 0x00c00013a820 by goroutine 21:
+  github.com/skosovsky/toolsy.(*Session).Execute()
+      /private/tmp/toolsy-task41/r08-baseline/session.go:112 +0x408
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:65 +0x1ac
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 21 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c0001a5b10 by goroutine 20:
+  runtime.slicecopy()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/slice.go:392 +0x0
+  github.com/skosovsky/toolsy.cloneSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:134 +0xd80
+  github.com/skosovsky/toolsy.(*Session).Binding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:29 +0xb1c
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:58 +0xaec
+
+Previous write at 0x00c0001a5b10 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Registry).sortedToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:176 +0x178
+  github.com/skosovsky/toolsy.(*Registry).ToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:231 +0xa4
+  github.com/skosovsky/toolsy.newSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:101 +0xa0
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:52 +0xb4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 20 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c000352040 by goroutine 20:
+  runtime.slicecopy()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/slice.go:392 +0x0
+  github.com/skosovsky/toolsy.cloneSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:134 +0x310
+  github.com/skosovsky/toolsy.(*Session).ExportSnapshot()
+      /private/tmp/toolsy-task41/r08-baseline/state_api.go:49 +0xac
+  github.com/skosovsky/toolsy.(*Session).ExportCheckpoint()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:37 +0x8c
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:47 +0x6c0
+
+Previous write at 0x00c000352040 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Registry).sortedToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:176 +0x178
+  github.com/skosovsky/toolsy.(*Registry).ToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:231 +0xa4
+  github.com/skosovsky/toolsy.newSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:101 +0xa0
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:52 +0xb4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 20 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c00013a820 by goroutine 24:
+  github.com/skosovsky/toolsy.(*Session).RunCall()
+      /private/tmp/toolsy-task41/r08-baseline/outcome.go:85 +0x6c
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:70 +0x304
+
+Previous write at 0x00c00013a820 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 24 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c000352340 by goroutine 20:
+  slices.Equal[go.shape.[]string,go.shape.string]()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/slices/slices.go:25 +0x264
+  github.com/skosovsky/toolsy.validateSessionBindingCompatible()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:125 +0x8c
+  github.com/skosovsky/toolsy.(*Session).ImportSnapshot()
+      /private/tmp/toolsy-task41/r08-baseline/state_api.go:69 +0x3ec
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:55 +0xac8
+
+Previous write at 0x00c000352340 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Registry).sortedToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:176 +0x178
+  github.com/skosovsky/toolsy.(*Registry).ToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:231 +0xa4
+  github.com/skosovsky/toolsy.newSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:101 +0xa0
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:52 +0xb4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 20 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c00013a820 by goroutine 21:
+  github.com/skosovsky/toolsy.(*Session).RunCall()
+      /private/tmp/toolsy-task41/r08-baseline/outcome.go:90 +0x134
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:70 +0x304
+
+Previous write at 0x00c00013a820 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 21 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Write at 0x00c00013a820 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Previous read at 0x00c00013a820 by goroutine 24:
+  github.com/skosovsky/toolsy.(*Session).Execute()
+      /private/tmp/toolsy-task41/r08-baseline/session.go:112 +0x408
+  github.com/skosovsky/toolsy.(*Session).RunCall()
+      /private/tmp/toolsy-task41/r08-baseline/outcome.go:95 +0x2d8
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:70 +0x304
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 24 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c00062a9a0 by goroutine 20:
+  runtime.slicecopy()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/slice.go:392 +0x0
+  github.com/skosovsky/toolsy.cloneSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:134 +0x35c
+  github.com/skosovsky/toolsy.(*Session).ExportCheckpoint()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:42 +0xfc
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:47 +0x6c0
+
+Previous write at 0x00c00062a9a0 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Registry).sortedToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:176 +0x178
+  github.com/skosovsky/toolsy.(*Registry).ToolNames()
+      /private/tmp/toolsy-task41/r08-baseline/registry.go:231 +0xa4
+  github.com/skosovsky/toolsy.newSessionBinding()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:101 +0xa0
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:52 +0xb4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 20 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Read at 0x00c00013a820 by goroutine 21:
+  github.com/skosovsky/toolsy.(*Session).Execute()
+      /private/tmp/toolsy-task41/r08-baseline/session.go:98 +0x40
+  github.com/skosovsky/toolsy.(*Session).RunCall()
+      /private/tmp/toolsy-task41/r08-baseline/outcome.go:95 +0x2d8
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:70 +0x304
+
+Previous write at 0x00c00013a820 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 21 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+==================
+WARNING: DATA RACE
+Write at 0x00c00013a820 by goroutine 22:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Previous write at 0x00c00013a820 by goroutine 19:
+  github.com/skosovsky/toolsy.(*Session).Rebind()
+      /private/tmp/toolsy-task41/r08-baseline/session_binding.go:59 +0x1e4
+  github.com/skosovsky/toolsy.TestConcurrentSessionRebindExecutionAndCheckpoint.func1()
+      /private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:43 +0x11b4
+
+Goroutine 22 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+
+Goroutine 19 (running) created at:
+  sync.(*WaitGroup).Go()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/sync/waitgroup.go:238 +0x6c
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x34
+==================
+--- FAIL: TestConcurrentSessionRebindExecutionAndCheckpoint (0.08s)
+    testing.go:1865: race detected during execution of test
+--- FAIL: TestRunCallCapturesRegistryBeforeManifestCallback (0.00s)
+    session_concurrency_test.go:132: 
+        	Error Trace:	/private/tmp/toolsy-task41/r08-baseline/session_concurrency_test.go:132
+        	Error:      	Not equal: 
+        	            	expected: "first"
+        	            	actual  : "second"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-first
+        	            	+second
+        	Test:       	TestRunCallCapturesRegistryBeforeManifestCallback
+--- FAIL: TestSnapshotCallbacksReenterWithoutLocks (2.00s)
+    session_concurrency_test.go:181: snapshot callback blocked under a lock
+--- FAIL: TestSnapshotMarshalCallbackReentersState (2.00s)
+    session_concurrency_test.go:235: MarshalJSON callback blocked under a state lock
+FAIL
+FAIL	github.com/skosovsky/toolsy	4.672s
+FAIL

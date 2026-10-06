@@ -243,3 +243,23 @@ Stream byte caps retain stop-after-budget semantics. An exactly exhausted cap
 without EOF on that Read produces a limit error on the next nonempty Read; the
 reader cannot prove exact EOF without probing past the cap. Empty reads consume
 nothing, and cancellation takes precedence. No speculative EOF read is made.
+
+## Concurrent session rebinding (R08)
+
+Session registry and binding now occupy one immutable configuration snapshot.
+Rebind computes the target outside configuration locks, then atomically validates
+against the current binding and publishes with CAS. Incompatible targets leave
+configuration and state unchanged. Public Binding returns a detached clone.
+Execute and RunCall capture one registry per call; manifest/completion policy and
+dispatch stay on that registry even if a host callback rebinds the session. Later
+calls see the replacement. Existing calls are not canceled or migrated.
+
+ExportSnapshot captures one binding and copies state-map slots, then invokes
+codecs/MarshalJSON without holding state/configuration locks. ExportCheckpoint
+uses that snapshot's binding for its outer metadata, so the two cannot diverge.
+Map replacement on ImportSnapshot remains atomic; decode callbacks run before
+replacement without locks. Snapshot export does not deep-copy host values; their
+referenced data must remain immutable while encoding, or host-synchronized by the
+codec. Registries and codec registrations must remain stable after session setup.
+The exported state map is a captured set of slots, not a transaction across
+external mutable objects or concurrent handler effects.

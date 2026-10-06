@@ -296,6 +296,14 @@ undeclared keys when the source schema permits them. See the full
 ## Session state and RunEnv (DI)
 
 In-memory mutable state lives on `*Session` (`SetSessionState`, `GetSessionState`, `ExportSnapshot`, `ImportSnapshot`).
+Registry and binding are one immutable session configuration. `Rebind` validates
+and publishes atomically; in-flight `Execute`/`RunCall` retain their captured
+registry, while later calls observe the new configuration. Checkpoints export one
+binding for both outer metadata and inner snapshot. Codecs and `MarshalJSON`
+callbacks run without state/configuration locks; state-map slots are copied before
+encoding, while referenced host values must remain immutable during encoding.
+Registry configuration and state codec registrations must remain stable after
+session setup. See [task41 migration](docs/migration-task41.md).
 `*RunEnv` is shared via `ToolCall.Env` for DI and handler access:
 
 - `StateStore` — persisted key/value state (optional)

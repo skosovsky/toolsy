@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted awaiting commit; rows 08–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted awaiting commit; rows 09–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -283,4 +283,35 @@ Evidence: [R07 acceptance](task41/r07-acceptance.md). Independent reviewers
 `r07_acceptance_a` and `r07_acceptance_b`: 100% each (five × 20/20), no unresolved
 detected defects. Seven-module race/lint, real mTLS/SSRF/timeout and active-call
 cleanup probes passed after current README and lint gates were fixed. Previous
-commit reproduces 20 pools for 20 calls. Commit: pending final accepted commit.
+commit reproduces 20 pools for 20 calls. Commit: `d1102f6` (`fix: http pools`).
+
+### 08 — R08 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Registry and binding live in one immutable configuration snapshot; Rebind
+   compatibility validation and publication are atomic under concurrent writers.
+2. Execute/RunCall capture one registry snapshot per call; completion policy and
+   dispatch cannot mix registries. Public Binding returns an independent clone.
+3. ExportCheckpoint outer/inner binding come from the same snapshot; concurrent
+   ExportSnapshot/ImportSnapshot/Rebind remain race-clean and reject incompatible
+   bindings without changing configuration/state.
+4. Host callbacks execute without configuration/state locks. Snapshot export
+   copies the state map under lock, then invokes codecs/marshal outside it; host
+   referenced state values retain their explicit immutability responsibility.
+5. AAA concurrency, coherent-snapshot, callback reentry and incompatible-rebind
+   fixtures pass with race/lint; original race is reproduced; docs are current;
+   both independent reviewers accept 100% with no unresolved detected defect.
+
+Decision: atomic pointer to immutable session configuration, CAS validation and
+replacement for Rebind. Execute/RunCall use a captured configuration. Checkpoint
+uses exported snapshot's binding directly. Do not hold locks across host codecs,
+manifest callbacks, handlers or yield. Session options stay immutable after setup.
+
+Evidence: [R08 acceptance](task41/r08-acceptance.md). Independent reviewers
+`r08_acceptance_a` and `r08_acceptance_b`: 100% each (five ×20/20), no unresolved
+detected defects. Original races/wrong-registry/callback-lock failures reproduce
+on d1102f6. Root race/lint and independent concurrency/reentry/nil/failing-decode
+probes pass. Public benchmarks record unchanged Execute allocation count and
+extra map-clone allocation cost for snapshot export. Commit: pending final
+accepted commit.

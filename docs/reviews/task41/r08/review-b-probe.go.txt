@@ -1,0 +1,28 @@
+package review
+import("context";"encoding/json";"errors";"reflect";"sync";"sync/atomic";"testing";"time"; ts "github.com/skosovsky/toolsy")
+func reg(t *testing.T,v string)*ts.Registry {t.Helper(); tool,e:=ts.NewTool[struct{},string]("v","value",func(context.Context,*ts.RunEnv,struct{})(string,error){return v,nil});if e!=nil{t.Fatal(e)};r,e:=ts.NewRegistry(tool);if e!=nil{t.Fatal(e)};return r}
+func TestManyIndependentOperations(t *testing.T){
+ // Arrange.
+ a,b:=reg(t,"a"),reg(t,"b");s,e:=ts.NewSession(a);if e!=nil{t.Fatal(e)};ts.SetSessionState(s,"n",17); bad,_:=ts.NewRegistry();var wg sync.WaitGroup;fail:=make(chan error,16000)
+ // Act.
+ for k:=0;k<16;k++ {wg.Add(1);go func(k int){defer wg.Done();for i:=0;i<250;i++{switch k%4{case 0:r:=a;if i%2==0{r=b};if e:=s.Rebind(r);e!=nil{fail<-e};case 1:c,e:=s.ExportCheckpoint();if e!=nil{fail<-e;continue};if !reflect.DeepEqual(c.Binding,c.Snapshot.Binding()){fail<-errors.New("binding divergence")};if e=s.ImportSnapshot(c.Snapshot);e!=nil{fail<-e};case 2:o,e:=s.RunCall(context.Background(),ts.ToolCall{ToolName:"v",Input:ts.ToolInput{ArgsJSON:[]byte("{}")}});if e!=nil{fail<-e;continue};v,e:=ts.DecodeOutcomeAs[string](o);if e!=nil{fail<-e}else if *v!="a"&&*v!="b"{fail<-errors.New("bad result")};case 3:before:=s.Binding();if s.Rebind(bad)==nil{fail<-errors.New("accepted bad registry")};if !reflect.DeepEqual(before,s.Binding()){fail<-errors.New("incompatible write")};ts.SetSessionState(s,"concurrent",i)}}}(k)};wg.Wait();close(fail)
+ // Assert.
+ for e:=range fail{t.Error(e)};c,e:=s.ExportCheckpoint();if e!=nil{t.Fatal(e)};c.Binding.ToolNames[0]="mutated";if s.Binding().ToolNames[0]!="v"{t.Fatal("outer binding alias")};inner:=c.Snapshot.Binding();inner.ToolNames[0]="mutated";if c.Snapshot.Binding().ToolNames[0]!="v"{t.Fatal("inner binding alias")}
+}
+type codec struct{ cb func(); fail *atomic.Bool }
+func(c codec)Encode(n int)([]byte,error){c.cb();return json.Marshal(n)}
+func(c codec)Decode(b []byte)(int,error){c.cb();if c.fail.Load(){return 0,errors.New("decode failed")};var n int;e:=json.Unmarshal(b,&n);return n,e}
+func TestDecodeErrorAndCallbackReentry(t *testing.T){
+ // Arrange.
+ a,b:=reg(t,"a"),reg(t,"b");var s *ts.Session;var fail atomic.Bool;cs:=ts.NewStateCodecRegistry();cb:=func(){ts.SetSessionState(s,"reentry",1);if e:=s.Rebind(b);e!=nil{t.Error(e)}};if e:=ts.RegisterStateCodec[int](cs,"n",codec{cb,&fail});e!=nil{t.Fatal(e)};s,_=ts.NewSession(a,ts.WithStateCodecRegistry(cs));ts.SetSessionState(s,"n",17)
+ // Act.
+ done:=make(chan error,1);go func(){snap,e:=s.ExportSnapshot();if e!=nil{done<-e;return};ts.SetSessionState(s,"n",99);fail.Store(true);e=s.ImportSnapshot(snap);if e==nil{done<-errors.New("missing decode error");return};v,_:=ts.GetSessionState[int](s,"n");if v!=99{done<-errors.New("failed import replaced state");return};done<-nil}()
+ // Assert.
+ select{case e:=<-done:if e!=nil{t.Fatal(e)};case <-time.After(3*time.Second):t.Fatal("callback deadlock")}
+}
+func TestNilCases(t *testing.T){
+ // Arrange.
+ var s *ts.Session
+ // Act/Assert.
+ if !reflect.DeepEqual(s.Binding(),ts.SessionBinding{}){t.Fatal("nil Binding")};if s.Rebind(nil)==nil{t.Fatal("nil rebind")};if _,e:=s.ExportCheckpoint();e==nil{t.Fatal("nil export")};if _,e:=s.RunCall(context.Background(),ts.ToolCall{});e==nil{t.Fatal("nil run")};if s.Execute(context.Background(),ts.ToolCall{},nil)==nil{t.Fatal("nil execute")};empty,e:=ts.NewSession(nil);if e!=nil{t.Fatal(e)};if empty.Rebind(nil)!=nil{t.Fatal("nil target for empty")};if empty.Rebind(reg(t,"a"))==nil{t.Fatal("incompatible empty rebind")}
+}

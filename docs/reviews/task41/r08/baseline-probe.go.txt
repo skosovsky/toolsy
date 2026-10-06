@@ -1,0 +1,240 @@
+package toolsy
+
+import (
+	"context"
+	"encoding/json"
+	"reflect"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func sessionConcurrencyRegistry(t *testing.T, value string) *Registry {
+	t.Helper()
+	tool, err := NewTool[struct{}, string]("value", "Return a value", func(context.Context, *RunEnv, struct{}) (string, error) { return value, nil })
+	require.NoError(t, err)
+	registry, err := NewRegistry(tool)
+	require.NoError(t, err)
+	return registry
+}
+
+func TestConcurrentSessionRebindExecutionAndCheckpoint(t *testing.T) {
+	// Arrange: two independently built registries have the same execution contract.
+	first, second := sessionConcurrencyRegistry(t, "first"), sessionConcurrencyRegistry(t, "second")
+	session, err := NewSession(first)
+	require.NoError(t, err)
+	SetSessionState(session, "value", 7)
+	initial := session.Binding()
+	errors := make(chan error, 1000)
+	var workers sync.WaitGroup
+	// Act: independent writers, readers and executions overlap.
+	for worker := range 6 {
+		workers.Go(func() {
+			for iteration := range 100 {
+				switch worker % 3 {
+				case 0:
+					registry := first
+					if iteration%2 == 0 {
+						registry = second
+					}
+					if rebindErr := session.Rebind(registry); rebindErr != nil {
+						errors <- rebindErr
+					}
+				case 1:
+					checkpoint, exportErr := session.ExportCheckpoint()
+					if exportErr != nil {
+						errors <- exportErr
+						continue
+					}
+					if !reflect.DeepEqual(checkpoint.Binding, checkpoint.Snapshot.Binding()) {
+						t.Error("checkpoint binding differs")
+					}
+					if importErr := session.ImportSnapshot(checkpoint.Snapshot); importErr != nil {
+						errors <- importErr
+					}
+					binding := session.Binding()
+					binding.ToolNames[0] = "caller mutation"
+					if !reflect.DeepEqual(initial, session.Binding()) {
+						t.Error("binding not independently cloned")
+					}
+				case 2:
+					if iteration%2 == 0 {
+						if executeErr := session.Execute(t.Context(), ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}}, func(Chunk) error { return nil }); executeErr != nil {
+							errors <- executeErr
+						}
+						continue
+					}
+					outcome, runErr := session.RunCall(t.Context(), ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}})
+					if runErr != nil {
+						errors <- runErr
+						continue
+					}
+					decoded, decodeErr := DecodeOutcomeAs[string](outcome)
+					if decodeErr != nil {
+						errors <- decodeErr
+						continue
+					}
+					if *decoded != "first" && *decoded != "second" {
+						t.Errorf("unexpected output %q", *decoded)
+					}
+				}
+			}
+		})
+	}
+	workers.Wait()
+	close(errors)
+	// Assert.
+	for err := range errors {
+		t.Error(err)
+	}
+	require.Equal(t, initial, session.Binding())
+}
+
+type rebindManifestTool struct {
+	Tool
+	armed atomic.Bool
+	after func()
+}
+
+func (t *rebindManifestTool) Manifest() ToolManifest {
+	manifest := t.Tool.Manifest()
+	if t.armed.CompareAndSwap(true, false) {
+		t.after()
+	}
+	return manifest
+}
+
+func TestRunCallCapturesRegistryBeforeManifestCallback(t *testing.T) {
+	// Arrange: compatible rebind during the manifest callback must affect the next call only.
+	target := sessionConcurrencyRegistry(t, "second")
+	source := sessionConcurrencyRegistry(t, "first")
+	tool, _ := source.GetTool("value")
+	decorated := &rebindManifestTool{Tool: tool}
+	registry, err := NewRegistry(decorated)
+	require.NoError(t, err)
+	session, err := NewSession(registry)
+	require.NoError(t, err)
+	decorated.after = func() { require.NoError(t, session.Rebind(target)) }
+	decorated.armed.Store(true)
+	// Act.
+	first, err := session.RunCall(t.Context(), ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}})
+	require.NoError(t, err)
+	second, err := session.RunCall(t.Context(), ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}})
+	require.NoError(t, err)
+	// Assert.
+	firstValue, err := DecodeOutcomeAs[string](first)
+	require.NoError(t, err)
+	secondValue, err := DecodeOutcomeAs[string](second)
+	require.NoError(t, err)
+	require.Equal(t, "first", *firstValue)
+	require.Equal(t, "second", *secondValue)
+}
+
+type reentryStateCodec struct{ callback func() }
+
+func (c reentryStateCodec) Encode(value int) ([]byte, error) {
+	c.callback()
+	return json.Marshal(value)
+}
+func (c reentryStateCodec) Decode(raw []byte) (int, error) {
+	c.callback()
+	var value int
+	err := json.Unmarshal(raw, &value)
+	return value, err
+}
+
+func TestSnapshotCallbacksReenterWithoutLocks(t *testing.T) {
+	// Arrange.
+	registry := sessionConcurrencyRegistry(t, "first")
+	var session *Session
+	codecs := NewStateCodecRegistry()
+	callback := func() {
+		SetSessionState(session, "callback", 1)
+		_ = session.Binding()
+		if err := session.Rebind(registry); err != nil {
+			t.Error(err)
+		}
+	}
+	require.NoError(t, RegisterStateCodec[int](codecs, "value", reentryStateCodec{callback: callback}))
+	var err error
+	session, err = NewSession(registry, WithStateCodecRegistry(codecs))
+	require.NoError(t, err)
+	SetSessionState(session, "value", 7)
+	finished := make(chan error, 1)
+	// Act: export and import both invoke the host callback.
+	go func() {
+		checkpoint, exportErr := session.ExportCheckpoint()
+		if exportErr != nil {
+			finished <- exportErr
+			return
+		}
+		finished <- session.ImportSnapshot(checkpoint.Snapshot)
+	}()
+	// Assert.
+	select {
+	case err := <-finished:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("snapshot callback blocked under a lock")
+	}
+	value, ok := GetSessionState[int](session, "value")
+	require.True(t, ok)
+	require.Equal(t, 7, value)
+}
+
+func TestIncompatibleRebindPreservesConfigurationAndState(t *testing.T) {
+	// Arrange.
+	registry := sessionConcurrencyRegistry(t, "first")
+	session, err := NewSession(registry)
+	require.NoError(t, err)
+	incompatible, err := NewRegistry()
+	require.NoError(t, err)
+	SetSessionState(session, "value", 7)
+	before := session.Binding()
+	// Act.
+	err = session.Rebind(incompatible)
+	// Assert.
+	require.Error(t, err)
+	require.Equal(t, before, session.Binding())
+	value, ok := GetSessionState[int](session, "value")
+	require.True(t, ok)
+	require.Equal(t, 7, value)
+	outcome, err := session.RunCall(t.Context(), ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}})
+	require.NoError(t, err)
+	decoded, err := DecodeOutcomeAs[string](outcome)
+	require.NoError(t, err)
+	require.Equal(t, "first", *decoded)
+}
+
+type reentryMarshalValue struct {
+	value    int
+	callback func()
+}
+
+func (v reentryMarshalValue) MarshalJSON() ([]byte, error) {
+	v.callback()
+	return json.Marshal(v.value)
+}
+
+func TestSnapshotMarshalCallbackReentersState(t *testing.T) {
+	// Arrange.
+	session, err := NewSession(sessionConcurrencyRegistry(t, "first"))
+	require.NoError(t, err)
+	SetSessionState(session, "value", reentryMarshalValue{value: 7, callback: func() { SetSessionState(session, "callback", 1) }})
+	finished := make(chan error, 1)
+	// Act.
+	go func() { _, exportErr := session.ExportCheckpoint(); finished <- exportErr }()
+	// Assert.
+	select {
+	case err := <-finished:
+		require.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("MarshalJSON callback blocked under a state lock")
+	}
+	value, ok := GetSessionState[int](session, "callback")
+	require.True(t, ok)
+	require.Equal(t, 1, value)
+}

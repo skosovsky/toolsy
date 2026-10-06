@@ -82,20 +82,21 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 	if s == nil {
 		return newInfrastructureOutcome(""), NewValidationError("session is nil")
 	}
-	if s.reg == nil {
+	configuration := s.executionConfiguration()
+	if configuration.registry == nil {
 		return newInfrastructureOutcome(call.ToolName), NewToolNotFoundError()
 	}
 
 	outcome := ToolOutcome{ToolName: call.ToolName} //nolint:exhaustruct_v5 // filled during Execute
-	if tool, ok := s.reg.GetTool(call.ToolName); ok {
+	if tool, ok := configuration.registry.GetTool(call.ToolName); ok {
 		outcome.CompletionPolicy = tool.Manifest().CompletionPolicy
 	}
 
 	var terminalBusiness bool
-	err := s.Execute(ctx, call, func(c Chunk) error {
+	err := s.executeWithConfiguration(ctx, call, func(c Chunk) error {
 		accountRunCallChunk(&outcome, &terminalBusiness, c)
 		return nil
-	})
+	}, configuration)
 
 	if err != nil {
 		if IsControlError(err) {

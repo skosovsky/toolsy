@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 )
 
 // GetSessionState returns in-memory session state for key when present and non-nil.
@@ -31,11 +32,15 @@ func SetSessionState[T any](s *Session, key string, val T) {
 }
 
 // ExportSnapshot returns an opaque snapshot of in-memory session state.
-// Dependencies, attachments, and StateStore are not included.
+// Dependencies, attachments, and StateStore are not included. The state map and
+// execution binding are captured before encoding. Host codecs and MarshalJSON
+// callbacks run without state/configuration locks. Referenced values must remain
+// immutable while encoding; the library does not deep-copy host-owned types.
 func (s *Session) ExportSnapshot() (SessionSnapshot, error) {
 	if s == nil {
 		return SessionSnapshot{}, NewValidationError("session is nil")
 	}
+	configuration := s.executionConfiguration()
 	payload, err := s.encodeStatePayload()
 	if err != nil {
 		return SessionSnapshot{}, err
@@ -46,7 +51,7 @@ func (s *Session) ExportSnapshot() (SessionSnapshot, error) {
 	return SessionSnapshot{
 		version: sessionSnapshotVersion,
 		payload: payload,
-		binding: cloneSessionBinding(s.binding),
+		binding: cloneSessionBinding(configuration.binding),
 	}, nil
 }
 
@@ -66,7 +71,10 @@ func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 			fmt.Errorf("toolsy: unsupported session snapshot version %d", version),
 		)
 	}
-	if bindingErr := validateSessionBindingCompatible(snap.Binding(), s.binding); bindingErr != nil {
+	if bindingErr := validateSessionBindingCompatible(
+		snap.Binding(),
+		s.executionConfiguration().binding,
+	); bindingErr != nil {
 		return bindingErr
 	}
 	newMap, err := s.decodeStatePayload(payload)
@@ -81,12 +89,13 @@ func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 
 func (s *Session) encodeStatePayload() ([]byte, error) {
 	s.stateMu.RLock()
-	defer s.stateMu.RUnlock()
-	if len(s.state) == 0 {
+	state := maps.Clone(s.state)
+	s.stateMu.RUnlock()
+	if len(state) == 0 {
 		return []byte("{}"), nil
 	}
-	wire := make(map[string]json.RawMessage, len(s.state))
-	for k, v := range s.state {
+	wire := make(map[string]json.RawMessage, len(state))
+	for k, v := range state {
 		if v == nil {
 			continue
 		}

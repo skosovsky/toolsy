@@ -1,0 +1,5 @@
+session_bench_test.go:10:1: File is not properly formatted (golines)
+	tool, err := NewTool[struct{}, string]("value", "Return a value", func(context.Context, *RunEnv, struct{}) (string, error) { return "value", nil })
+^
+1 issues:
+* golines: 1

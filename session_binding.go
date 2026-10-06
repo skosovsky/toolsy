@@ -6,6 +6,20 @@ import (
 	"slices"
 )
 
+// sessionConfiguration is immutable after publication. All entry points capture
+// one value; callbacks execute after the capture, without a configuration lock.
+type sessionConfiguration struct {
+	registry *Registry
+	binding  SessionBinding
+}
+
+func (s *Session) executionConfiguration() sessionConfiguration {
+	if configuration := s.configuration.Load(); configuration != nil {
+		return *configuration
+	}
+	return sessionConfiguration{}
+}
+
 // SessionBinding describes the registry/view/state schema boundary a session is bound to.
 type SessionBinding struct {
 	View              RegistryViewSnapshot `json:"view"`
@@ -26,7 +40,7 @@ func (s *Session) Binding() SessionBinding {
 	if s == nil {
 		return SessionBinding{}
 	}
-	return cloneSessionBinding(s.binding)
+	return cloneSessionBinding(s.executionConfiguration().binding)
 }
 
 // ExportCheckpoint exports state together with the binding required to resume it safely.
@@ -39,12 +53,14 @@ func (s *Session) ExportCheckpoint() (SessionCheckpoint, error) {
 		return SessionCheckpoint{}, err
 	}
 	return SessionCheckpoint{
-		Binding:  cloneSessionBinding(s.binding),
+		Binding:  snap.Binding(),
 		Snapshot: snap,
 	}, nil
 }
 
-// Rebind moves this session to a compatible registry or registry view without rebuilding state.
+// Rebind atomically moves this session to a compatible registry/view without rebuilding state.
+// In-flight calls keep their captured registry; subsequent calls see the published
+// configuration. Registry/manifest callbacks run without a configuration lock.
 func (s *Session) Rebind(reg *Registry) error {
 	if s == nil {
 		return NewValidationError("session is nil")
@@ -53,12 +69,20 @@ func (s *Session) Rebind(reg *Registry) error {
 	if err != nil {
 		return err
 	}
-	if err := validateSessionBindingCompatible(s.binding, target); err != nil {
-		return err
+	replacement := &sessionConfiguration{registry: reg, binding: target}
+	for {
+		current := s.configuration.Load()
+		var binding SessionBinding
+		if current != nil {
+			binding = current.binding
+		}
+		if compatibilityErr := validateSessionBindingCompatible(binding, target); compatibilityErr != nil {
+			return compatibilityErr
+		}
+		if s.configuration.CompareAndSwap(current, replacement) {
+			return nil
+		}
 	}
-	s.reg = reg
-	s.binding = target
-	return nil
 }
 
 // NewSessionFromCheckpoint creates a session and imports a checkpoint after binding validation.
@@ -67,7 +91,7 @@ func NewSessionFromCheckpoint(reg *Registry, checkpoint SessionCheckpoint, opts 
 	if err != nil {
 		return nil, err
 	}
-	if err := validateSessionBindingCompatible(checkpoint.Binding, sess.binding); err != nil {
+	if err := validateSessionBindingCompatible(checkpoint.Binding, sess.executionConfiguration().binding); err != nil {
 		return nil, err
 	}
 	if err := sess.ImportSnapshot(checkpoint.Snapshot); err != nil {

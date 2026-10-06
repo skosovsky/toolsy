@@ -1,0 +1,32 @@
+package toolsy_test
+import (
+ "context"
+ "encoding/json"
+ "sync"
+ "testing"
+ toolsy "github.com/skosovsky/toolsy"
+)
+type captureValue struct { callback func() }
+func (v captureValue) MarshalJSON() ([]byte,error) { v.callback(); return []byte(`7`),nil }
+func TestReviewACapturedStateAndCall(t *testing.T) {
+ // Arrange.
+ started, resume := make(chan struct{}),make(chan struct{})
+ var once sync.Once
+ first,err:=toolsy.NewTool[struct{},string]("probe","probe",func(context.Context,*toolsy.RunEnv,struct{})(string,error){ once.Do(func(){close(started)}); <-resume; return "first",nil }); if err!=nil {t.Fatal(err)}
+ second,err:=toolsy.NewTool[struct{},string]("probe","probe",func(context.Context,*toolsy.RunEnv,struct{})(string,error){return "second",nil}); if err!=nil {t.Fatal(err)}
+ a,err:=toolsy.NewRegistry(first); if err!=nil {t.Fatal(err)}
+ b,err:=toolsy.NewRegistry(second); if err!=nil {t.Fatal(err)}
+ s,err:=toolsy.NewSession(a); if err!=nil {t.Fatal(err)}
+ done:=make(chan string,1)
+ go func(){o,e:=s.RunCall(context.Background(),toolsy.ToolCall{ToolName:"probe",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}});if e!=nil {done<-e.Error();return};v,e:=toolsy.DecodeOutcomeAs[string](o);if e!=nil {done<-e.Error();return};done<-*v}()
+ // Act.
+ <-started; if err=s.Rebind(b); err!=nil {t.Fatal(err)}; close(resume)
+ // Assert.
+ if v:=<-done;v!="first" {t.Fatalf("in-flight registry changed: %s",v)}
+ toolsy.SetSessionState(s,"capture",captureValue{callback:func(){toolsy.SetSessionState(s,"late",99);if e:=s.Rebind(a);e!=nil {t.Error(e)}}})
+ checkpoint,err:=s.ExportCheckpoint();if err!=nil {t.Fatal(err)}
+ raw,err:=json.Marshal(checkpoint.Snapshot);if err!=nil {t.Fatal(err)}
+ var snapshot struct{Payload map[string]json.RawMessage `json:"payload"`};if err=json.Unmarshal(raw,&snapshot);err!=nil {t.Fatal(err)}
+ if _,ok:=snapshot.Payload["late"];ok {t.Fatal("encoding mutated captured state map")}
+ if v,ok:=toolsy.GetSessionState[int](s,"late");!ok||v!=99 {t.Fatal("callback didn't reenter state")}
+}

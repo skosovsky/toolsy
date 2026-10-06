@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkSessionConcurrentExecute-10    	   31944	      6322 ns/op	   15354 B/op	     200 allocs/op
+BenchmarkSessionConcurrentExecute-10    	   42283	      8104 ns/op	   15389 B/op	     200 allocs/op
+BenchmarkSessionConcurrentExecute-10    	   23422	      8608 ns/op	   15411 B/op	     200 allocs/op
+BenchmarkSessionExportSnapshot-10       	   23064	     10384 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkSessionExportSnapshot-10       	   23458	     10456 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkSessionExportSnapshot-10       	   22729	     10431 ns/op	    6745 B/op	     108 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	2.202s
