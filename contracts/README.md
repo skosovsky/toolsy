@@ -1,57 +1,43 @@
-# contracts/
+# Contract adapters
 
-Contract-based translators that turn external API specs into [toolsy](..) tools. Each submodule is **isolated** (own `go.mod`); add only the one you need.
+Each module translates a documented subset of an external protocol into
+`[]toolsy.Tool`. Modules have separate `go.mod` files; import only the adapters
+the host needs. Discovery fails before publishing tools when the selected
+contract cannot be represented faithfully.
 
-| Module       | Entry point                       | Input                                          | Output                                         |
-| ------------ | --------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
-| **openapi/** | `ParseURL(ctx, specURL, opts)`    | OpenAPI 3.x spec URL                           | `[]toolsy.Tool` (one per operation)            |
-| **graphql/** | `Introspect(ctx, endpoint, opts)` | GraphQL endpoint URL                           | `[]toolsy.Tool` (one per Query/Mutation field) |
-| **grpc/**    | `Reflect(ctx, cc, opts)`          | Existing `grpc.ClientConnInterface` (you dial) | `[]toolsy.Tool` (one per RPC method)           |
+| Module | Entry point | Source | Supported contract |
+| --- | --- | --- | --- |
+| [openapi](openapi/README.md) | `ParseURL(ctx, specURL, opts)` | OpenAPI document | Schema dialect, parameter locations and serialization subset |
+| [graphql](graphql/README.md) | `Introspect(ctx, endpoint, opts)` | GraphQL introspection | Input types and host-defined output selection |
+| [grpc](grpc/README.md) | `Reflect(ctx, cc, opts)` | Protobuf descriptors from reflection | Unary RPCs and ProtoJSON mapping subset |
 
-Common behavior:
+Read the module contract before enabling operations. An unsupported shape is a
+construction error, rather than a weaker advertised schema. Schema traversal is
+bounded; adapters do not resolve arbitrary network schema references.
 
-- **Tool names** are sanitized to `^[a-zA-Z0-9_-]{1,64}$`; collisions get a numeric suffix (`_2`, `_3`, …).
-- **Response handling:** Spec fetch and introspection use fail-closed `ReadLimitedBytes` (`ErrReadLimitExceeded` on exceed). Tool **execute** paths use opt-in `ReadAndTruncate` with a truncation suffix; gRPC uses post-marshal truncate on the wire payload.
+Discovery and invocation use the supplied context. Hosts provide endpoint
+configuration, credentials, service connections, authentication, authorization,
+timeouts and retry policy. gRPC connection ownership stays with the caller.
+HTTP adapters use the safe transport from `toolkits/httptool`; private addresses
+require explicit host configuration. Credentials are resolved at invocation,
+not captured from model arguments or descriptions.
 
-### Default read budgets (library mode)
+Successful structured responses must remain complete valid JSON and satisfy
+their advertised output contract. Response limits return errors instead of
+slicing JSON. Spec/introspection reads also fail closed when their byte limit is
+exceeded. See [result contracts](../docs/result-contract.md) for delivery,
+persistence and validation rules.
 
-| Path                                        | Default | Notes                                                                       |
-| ------------------------------------------- | ------- | --------------------------------------------------------------------------- |
-| OpenAPI spec fetch (`ParseURL`)             | 8 MB    | `defaultMaxSpecBytes`                                                       |
-| GraphQL introspection (`postIntrospection`) | 512 KB  | `defaultMaxResponseBytes` — intentionally smaller than spec fetch           |
-| OpenAPI / GraphQL tool execute              | 512 KB  | `MaxResponseBytes`; display tier uses `ReadAndTruncate`                     |
-| `agents` REST client (`agents` package)     | 4 MB    | `defaultMaxResponseBytes`; fail-closed `ReadLimitedBytes` on full JSON body |
+Register discovered tools through `NewRegistryBuilder().Add(tools...)`. The
+adapter does not grant business permissions or install an API gateway. The host
+still controls registry views, policy and consent.
 
-Spec fetch and introspection are separate one-shot reads; execute budgets apply per tool call response.
-- **Context**: all network calls use the given `context`; cancellation aborts the request.
+The companion [`toolsy-gen`](../docs/generator-contract.md) generates tools from
+local schema manifests. Its supported schema contract and generated argument
+presence rules are separate from protocol discovery.
 
-Add each tool to setup builder: `builder.Add(tools...)` and then `reg, err := builder.Build()`.
+Protocol references:
 
-## openapi/
-
-- **Requires:** `github.com/getkin/kin-openapi`
-- **Options:** `HTTPClient`, `BaseURL`, `AllowedTags`, `AllowedMethods`, `MaxResponseBytes`
-- **BaseURL:** If empty, the first server from the spec (`doc.Servers[0].URL`) is used. URL placeholders `{variable}` are replaced with `Server.Variables[variable].Default` when defined in the spec. If the spec has no servers and `BaseURL` is empty, **tool execution** returns an error: `openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)`.
-- **Naming:** Prefers `operationId` (sanitized); fallback is method + path (e.g. `get_users_id`).
-- **Path / query / body:** At execution, path parameters go only into the URL path, query parameters only into the query string, and only keys from the operation’s `requestBody` schema are sent in the request body for POST/PUT/PATCH. This avoids 400 from strict APIs (e.g. Spring, ASP.NET) that reject extra body fields.
-- **Spec loading:** The spec is loaded from the fetched bytes; external `$ref` (e.g. to other files) may not resolve. In-document refs (`#/components/...`) are resolved by kin-openapi. Body schema keys for the above split use the resolved `Schema.Value`.
-- **Runtime auth:** Execution-time `Authorization` headers come from `toolsy.ToolCall.Run.Credentials`; no provider means no auth header.
-
-## graphql/
-
-- **Requires:** only stdlib (`net/http`, `encoding/json`)
-- **Options:** `HTTPClient`, `IntrospectionAuthHeader`, `Operations` (e.g. `["query"]` or `["query","mutation"]`), `MaxResponseBytes`
-- **Safety:** Query text is generated once at introspect time with variables; at runtime only `variables` is filled from LLM args (no GraphQL injection).
-- **Introspection errors:** If the introspection response contains GraphQL `errors` or the HTTP status is not 2xx, `Introspect` returns an explicit error (e.g. `graphql: introspection errors: <message>` or `graphql: introspection HTTP 401: ...`), so you get a clear cause instead of an empty tool list.
-- **Selection set:** Each generated query uses a minimal selection set `{ __typename }`; the response is minimal. Building a deeper field graph for the response is a separate feature request.
-- **Type depth:** Argument types use a recursive `graphQLTypeRef` (name, kind, ofType); the introspection query requests full type depth via the `TypeRef` fragment, so nested wrappers like `[String!]` are resolved correctly.
-- **Runtime auth:** Execution-time `Authorization` headers come from `toolsy.ToolCall.Run.Credentials`. `IntrospectionAuthHeader` is used only for the initial schema discovery request.
-
-## grpc/
-
-- **Requires:** `google.golang.org/grpc`, `google.golang.org/protobuf` (reflection: `protoreflect`, `protodesc`, `protoregistry`; dynamic messages: `dynamicpb`; JSON: `protojson`). No third-party reflection libraries.
-- **Options:** `Services` (allowlist of full service names; empty = all), `MaxResponseBytes`
-- **Dialing:** Call `grpc.NewClient` (or your stack) yourself; pass the connection to `Reflect`. Retries, timeouts, and TLS live outside this package.
-- **Reflection:** Uses gRPC Server Reflection over the official stream API: `ListServices` then `FileContainingSymbol` per service; file descriptors are merged and resolved via `protodesc.NewFiles`. No `.proto` files needed at runtime.
-- **Invocation:** RPC calls use `ClientConnInterface.Invoke` with `dynamicpb.NewMessage` and `protojson` (request: `UnmarshalOptions{DiscardUnknown: true}` for LLM output; response: `Marshal`).
-- **Connection lifecycle:** The caller owns `cc`; this package does not close it.
+- [OpenAPI specification](https://spec.openapis.org/oas/v3.0.3.html)
+- [GraphQL specification](https://spec.graphql.org/September2025/)
+- [ProtoJSON mapping](https://protobuf.dev/programming-guides/json/)

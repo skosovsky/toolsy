@@ -10,8 +10,15 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// Selection is a host-owned finite output field tree; no GraphQL source is accepted.
+type Selection struct {
+	Name   string
+	Fields []Selection
+}
+
 // Options configures the GraphQL introspector and executor.
 type Options struct {
+	Selections              map[string][]Selection // keys: query.field or mutation.field
 	HTTPClient              HTTPClient
 	IntrospectionAuthHeader string
 	Operations              []string // e.g. []string{"query"} or []string{"query","mutation"}

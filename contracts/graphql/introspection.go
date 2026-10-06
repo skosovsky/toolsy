@@ -7,20 +7,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
 const (
-	truncationSuffix = textprocessor.ContractsTruncationSuffix
-	operationQuery   = "query"
+	operationQuery = "query"
 )
 
-// introspectionQuery uses fragment TypeRef for full type depth (e.g. [String!] -> NON_NULL(LIST(NON_NULL(SCALAR)))).
-const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind fields { name args { name type { ...TypeRef } } } } } } } fragment TypeRef on __Type { name kind ofType { ...TypeRef } }`
+// Type references are finite; incomplete references are rejected by the mapper.
+const introspectionQuery = `query IntrospectionQuery { __schema { queryType { name } mutationType { name } types { name kind isOneOf enumValues(includeDeprecated: true) { name } inputFields(includeDeprecated: true) { name defaultValue type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } } } } } } } } } } } } fields(includeDeprecated: true) { name type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } } } } } } } } } } } args(includeDeprecated: true) { name defaultValue type { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind ofType { name kind } } } } } } } } } } } } } } } } } } } } } }`
 
 type introResponse struct {
 	Data   *introData   `json:"data"`
@@ -32,9 +33,12 @@ type introTypeName struct {
 }
 
 type introSchemaType struct {
-	Name   string       `json:"name"`
-	Kind   string       `json:"kind"`
-	Fields []introField `json:"fields"`
+	IsOneOf     bool            `json:"isOneOf"`
+	Name        string          `json:"name"`
+	Kind        string          `json:"kind"`
+	Fields      []introField    `json:"fields"`
+	InputFields []ArgSpec       `json:"inputFields"`
+	EnumValues  []introTypeName `json:"enumValues"`
 }
 
 type introSchema struct {
@@ -52,8 +56,9 @@ type introError struct {
 }
 
 type introField struct {
-	Name string    `json:"name"`
-	Args []ArgSpec `json:"args"`
+	Name string         `json:"name"`
+	Args []ArgSpec      `json:"args"`
+	Type graphQLTypeRef `json:"type"`
 }
 
 // Introspect calls the GraphQL endpoint with the introspection query, then builds one tool per root query/mutation.
@@ -73,9 +78,16 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 	}
 	allowedSet := make(map[string]bool)
 	for _, o := range allowedOps {
-		allowedSet[strings.ToLower(o)] = true
+		o = strings.ToLower(o)
+		if o != "query" && o != "mutation" {
+			return nil, fmt.Errorf("graphql: unsupported operation %s", o)
+		}
+		allowedSet[o] = true
 	}
-	typeMap := buildTypeMap(schema.Types)
+	typeMap, err := buildTypeMap(schema.Types)
+	if err != nil {
+		return nil, err
+	}
 	var tools []toolsy.Tool
 	usedNames := make(map[string]bool)
 	tools, err = appendToolsForOperationKind(
@@ -151,6 +163,9 @@ func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]by
 }
 
 func parseIntroResponse(data []byte) (*introResponse, error) {
+	if _, err := jsonschemax.Decode(data); err != nil {
+		return nil, fmt.Errorf("graphql: invalid introspection JSON: %w", err)
+	}
 	var ir introResponse
 	if err := json.Unmarshal(data, &ir); err != nil {
 		return nil, fmt.Errorf("graphql: parse intro: %w", err)
@@ -168,12 +183,34 @@ func parseIntroResponse(data []byte) (*introResponse, error) {
 	return &ir, nil
 }
 
-func buildTypeMap(types []introSchemaType) map[string][]introField {
-	typeMap := make(map[string][]introField)
-	for _, t := range types {
-		typeMap[t.Name] = t.Fields
+func buildTypeMap(types []introSchemaType) (map[string]introSchemaType, error) {
+	if len(types) > maxContractNodes {
+		return nil, errors.New("graphql: type count limit exceeded")
 	}
-	return typeMap
+	nodes := 0
+	typeMap := make(map[string]introSchemaType)
+	for _, t := range types {
+		nodes += 1 + len(t.Fields) + len(t.InputFields) + len(t.EnumValues)
+		seen := map[string]bool{}
+		for _, field := range t.Fields {
+			nodes += len(field.Args)
+			if seen[field.Name] {
+				return nil, errors.New("graphql: duplicate field")
+			}
+			seen[field.Name] = true
+		}
+		if nodes > maxContractNodes {
+			return nil, errors.New("graphql: schema size limit exceeded")
+		}
+		if !graphqlName.MatchString(t.Name) {
+			return nil, errors.New("graphql: invalid type name")
+		}
+		if _, exists := typeMap[t.Name]; exists {
+			return nil, errors.New("graphql: duplicate type name")
+		}
+		typeMap[t.Name] = t
+	}
+	return typeMap, nil
 }
 
 func appendToolsForOperationKind(
@@ -182,7 +219,7 @@ func appendToolsForOperationKind(
 	descPrefix string,
 	root *introTypeName,
 	allowed bool,
-	typeMap map[string][]introField,
+	typeMap map[string]introSchemaType,
 	endpoint string,
 	opts Options,
 	usedNames map[string]bool,
@@ -190,17 +227,32 @@ func appendToolsForOperationKind(
 	if !allowed || root == nil {
 		return tools, nil
 	}
-	fields, ok := typeMap[root.Name]
+	rootType, ok := typeMap[root.Name]
 	if !ok {
-		return tools, nil
+		return nil, fmt.Errorf("graphql: missing root type %s", root.Name)
 	}
+	if rootType.Kind != "OBJECT" {
+		return nil, errors.New("graphql: root must be object")
+	}
+	fields := append([]introField(nil), rootType.Fields...)
+	sort.Slice(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
 	for _, f := range fields {
-		name := toolName(f.Name, usedNames)
-		schemaBytes, err := argsToJSONSchema(f.Args)
+		if !graphqlName.MatchString(f.Name) {
+			return nil, errors.New("graphql: invalid root field name")
+		}
+		name := toolName(kind+"_"+f.Name, usedNames)
+		schemaBytes, err := argsToJSONSchema(f.Args, typeMap)
 		if err != nil {
 			return nil, fmt.Errorf("graphql: schema %s: %w", f.Name, err)
 		}
-		queryText := buildStaticQuery(kind, f.Name, f.Args)
+		selection, output, selectionErr := buildOutputContract(&f.Type, opts.Selections[kind+"."+f.Name], typeMap)
+		if selectionErr != nil {
+			return nil, fmt.Errorf("graphql: output %s.%s: %w", kind, f.Name, selectionErr)
+		}
+		queryText, queryErr := buildStaticQuery(kind, f.Name, f.Args, selection)
+		if queryErr != nil {
+			return nil, queryErr
+		}
 		endpointCopy := endpoint
 		optsCopy := opts
 		tool, err := toolsy.NewProxyTool(
@@ -208,8 +260,9 @@ func appendToolsForOperationKind(
 			descPrefix+f.Name,
 			schemaBytes,
 			func(ctx context.Context, run *toolsy.RunEnv, argsJSON []byte, yield func(toolsy.Chunk) error) error {
-				return executeGraphQL(ctx, run, name, endpointCopy, queryText, argsJSON, &optsCopy, yield)
+				return executeGraphQL(ctx, run, name, endpointCopy, queryText, f.Name, argsJSON, &optsCopy, yield)
 			},
+			toolsy.WithOutputSchema(output),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("graphql: tool %s: %w", name, err)
@@ -223,19 +276,19 @@ func executeGraphQL(
 	ctx context.Context,
 	run *toolsy.RunEnv,
 	toolName string,
-	endpoint, queryText string,
+	endpoint, queryText, rootField string,
 	argsJSON []byte,
 	opts *Options,
 	yield func(toolsy.Chunk) error,
 ) error {
-	var variables map[string]any
+	var variables map[string]json.RawMessage
 	if len(argsJSON) > 0 {
 		if err := json.Unmarshal(argsJSON, &variables); err != nil {
 			return fmt.Errorf("graphql: variables: %w", err)
 		}
 	}
 	if variables == nil {
-		variables = make(map[string]any)
+		variables = make(map[string]json.RawMessage)
 	}
 	body := map[string]any{"query": queryText, "variables": variables}
 	bodyBytes, err := json.Marshal(body)
@@ -265,9 +318,26 @@ func executeGraphQL(
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return fmt.Errorf("graphql: response status %d", resp.StatusCode)
 	}
-	data, err := textprocessor.ReadAndTruncate(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, opts.maxResponseBytes())
 	if err != nil {
 		return fmt.Errorf("graphql: read: %w", err)
 	}
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(data), MimeType: toolsy.MimeTypeText})
+	if _, decodeErr := jsonschemax.Decode(data); decodeErr != nil {
+		return fmt.Errorf("graphql: invalid response JSON: %w", decodeErr)
+	}
+	var response struct {
+		Data   map[string]json.RawMessage `json:"data"`
+		Errors []introError               `json:"errors"`
+	}
+	if err = json.Unmarshal(data, &response); err != nil {
+		return fmt.Errorf("graphql: response: %w", err)
+	}
+	if len(response.Errors) > 0 {
+		return fmt.Errorf("graphql: execution errors: %s", response.Errors[0].Message)
+	}
+	value, ok := response.Data[rootField]
+	if !ok {
+		return errors.New("graphql: missing root result")
+	}
+	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: value, MimeType: toolsy.MimeTypeJSON})
 }

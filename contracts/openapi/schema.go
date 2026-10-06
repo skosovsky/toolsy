@@ -1,226 +1,478 @@
 package openapi
 
 import (
-	"encoding/json"
-	"slices"
+	"reflect"
+	"sort"
 	"strings"
-
-	"github.com/getkin/kin-openapi/openapi3"
 )
 
-const (
-	jsonSchemaTypeKey = "type"
-	jsonSchemaObject  = "object"
-	jsonSchemaString  = "string"
-)
+const locationPath = "path"
+const locationQuery = "query"
+const defaultKeyword = "default"
+const maxProjectionDepth = 64
+const maxProjectionNodes = 4096
 
-// operationParamSets returns path, query, and body parameter name sets for an operation.
-// pathNames: from pathTemplate placeholders {name}. queryNames: from parameters with In=="query".
-// bodyNames: top-level keys from requestBody application/json schema (resolved via Schema.Value); nil if no body.
-func operationParamSets(
-	op *openapi3.Operation,
-	pathItem *openapi3.PathItem,
-	pathTemplate string,
-) ([]string, []string, []string) {
-	pathNames := pathParamNamesFromTemplate(pathTemplate)
-	querySet := make(map[string]bool)
-	mergeQueryParamsFromRefs(op.Parameters, querySet)
-	mergeQueryParamsFromRefs(pathItem.Parameters, querySet)
-	var queryNames []string
-	for k := range querySet {
-		queryNames = append(queryNames, k)
+// UnsupportedError identifies a source contract outside the adapter's declared subset.
+type UnsupportedError struct{ Reason string }
+
+func (e *UnsupportedError) Error() string { return "openapi: unsupported contract: " + e.Reason }
+func unsupported(reason string) error     { return &UnsupportedError{Reason: reason} }
+func object(value any) map[string]any     { result, _ := value.(map[string]any); return result }
+func stringValue(value any) string        { result, _ := value.(string); return result }
+func boolValue(value any) bool            { result, _ := value.(bool); return result }
+func keys(value map[string]any) []string {
+	result := make([]string, 0, len(value))
+	for key := range value {
+		result = append(result, key)
 	}
-	bodyNames := bodyParamNamesFromRequestBody(op)
-	return pathNames, queryNames, bodyNames
+	sort.Strings(result)
+	return result
 }
 
-func mergeQueryParamsFromRefs(refs []*openapi3.ParameterRef, set map[string]bool) {
-	for _, pRef := range refs {
-		if pRef == nil || pRef.Value == nil {
-			continue
+func checkReferences(value any) error {
+	switch typed := value.(type) {
+	case map[string]any:
+		if ref, ok := typed["$ref"]; ok && !strings.HasPrefix(stringValue(ref), "#/components/") {
+			return unsupported("external or non-component reference " + stringValue(ref))
 		}
-		p := pRef.Value
-		if p.In == "query" && p.Name != "" {
-			set[p.Name] = true
+		for _, key := range keys(typed) {
+			if err := checkReferences(typed[key]); err != nil {
+				return err
+			}
 		}
-	}
-}
-
-func bodyParamNamesFromRequestBody(op *openapi3.Operation) []string {
-	if op.RequestBody == nil || op.RequestBody.Value == nil || op.RequestBody.Value.Content == nil {
-		return nil
-	}
-	mt, ok := op.RequestBody.Value.Content["application/json"]
-	if !ok || mt == nil || mt.Schema == nil || mt.Schema.Value == nil {
-		return nil
-	}
-	resolved := mt.Schema.Value
-	if resolved.Properties == nil {
-		return nil
-	}
-	var bodyNames []string
-	for k := range resolved.Properties {
-		bodyNames = append(bodyNames, k)
-	}
-	return bodyNames
-}
-
-func pathParamNamesFromTemplate(pathTemplate string) []string {
-	var names []string
-	for {
-		i := strings.Index(pathTemplate, "{")
-		if i < 0 {
-			break
-		}
-		j := strings.Index(pathTemplate[i:], "}")
-		if j < 0 {
-			break
-		}
-		names = append(names, pathTemplate[i+1:i+j])
-		pathTemplate = pathTemplate[i+j+1:]
-	}
-	return names
-}
-
-// operationToJSONSchema builds a single JSON Schema object from operation parameters and requestBody.
-func operationToJSONSchema(op *openapi3.Operation, pathItem *openapi3.PathItem) ([]byte, error) {
-	props := make(map[string]any)
-	required := []string{}
-	required = appendOperationParametersToProps(op, props, required)
-	required = appendPathItemParametersToProps(pathItem, props, required)
-	required = mergeRequestBodyJSONPropertiesIntoProps(op, props, required)
-
-	out := map[string]any{
-		jsonSchemaTypeKey: jsonSchemaObject,
-		"properties":      props,
-	}
-	if len(required) > 0 {
-		out["required"] = required
-	}
-	return json.Marshal(out)
-}
-
-func appendOperationParametersToProps(op *openapi3.Operation, props map[string]any, required []string) []string {
-	for _, pRef := range op.Parameters {
-		if pRef == nil || pRef.Value == nil {
-			continue
-		}
-		p := pRef.Value
-		name := p.Name
-		if name == "" {
-			continue
-		}
-		if p.Required {
-			required = append(required, name)
-		}
-		schema := p.Schema
-		if schema != nil && schema.Value != nil {
-			props[name] = schemaRefToJSONSchemaMap(schema)
-		} else {
-			props[name] = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
-		}
-	}
-	return required
-}
-
-func appendPathItemParametersToProps(pathItem *openapi3.PathItem, props map[string]any, required []string) []string {
-	for _, pRef := range pathItem.Parameters {
-		if pRef == nil || pRef.Value == nil {
-			continue
-		}
-		p := pRef.Value
-		name := p.Name
-		if name == "" {
-			continue
-		}
-		if _, exists := props[name]; exists {
-			continue
-		}
-		if p.Required {
-			required = append(required, name)
-		}
-		schema := p.Schema
-		if schema != nil && schema.Value != nil {
-			props[name] = schemaRefToJSONSchemaMap(schema)
-		} else {
-			props[name] = map[string]any{jsonSchemaTypeKey: jsonSchemaString}
-		}
-	}
-	return required
-}
-
-func mergeRequestBodyJSONPropertiesIntoProps(op *openapi3.Operation, props map[string]any, required []string) []string {
-	if op.RequestBody == nil || op.RequestBody.Value == nil {
-		return required
-	}
-	content := op.RequestBody.Value.Content
-	if content == nil {
-		return required
-	}
-	mt, ok := content["application/json"]
-	if !ok || mt == nil || mt.Schema == nil || mt.Schema.Value == nil {
-		return required
-	}
-	bodySchema := schemaToJSONSchemaMap(mt.Schema.Value)
-	bodyProps, ok := bodySchema["properties"].(map[string]any)
-	if !ok {
-		return required
-	}
-	for k, v := range bodyProps {
-		if _, exists := props[k]; exists {
-			continue
-		}
-		props[k] = v
-		if req, ok := bodySchema["required"].([]string); ok {
-			if slices.Contains(req, k) {
-				required = append(required, k)
+	case []any:
+		for _, child := range typed {
+			if err := checkReferences(child); err != nil {
+				return err
 			}
 		}
 	}
-	return required
+	return nil
 }
 
-func schemaRefToJSONSchemaMap(s *openapi3.SchemaRef) map[string]any {
-	if s == nil || s.Value == nil {
-		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
-	}
-	return schemaToJSONSchemaMap(s.Value)
+type projector struct {
+	source map[string]any
+	nodes  int
+	active map[string]bool
 }
 
-func schemaToJSONSchemaMap(s *openapi3.Schema) map[string]any {
-	if s == nil {
-		return map[string]any{jsonSchemaTypeKey: jsonSchemaString}
+func (p *projector) resolve(value any, category string) (map[string]any, error) {
+	current := object(value)
+	if current == nil {
+		return nil, unsupported("expected object in " + category)
 	}
-	out := make(map[string]any)
-	if s.Type != nil && len(*s.Type) > 0 {
-		types := *s.Type
-		if len(types) == 1 {
-			out[jsonSchemaTypeKey] = types[0]
-		} else {
-			out[jsonSchemaTypeKey] = types
+	visited := make(map[string]bool)
+	for {
+		ref, ok := current["$ref"]
+		if !ok {
+			return current, nil
+		}
+		pointer := stringValue(ref)
+		prefix := "#/components/" + category + "/"
+		if !strings.HasPrefix(pointer, prefix) || len(current) != 1 {
+			return nil, unsupported("reference shape " + pointer)
+		}
+		if visited[pointer] || len(visited) >= maxProjectionDepth {
+			return nil, unsupported("reference cycle or depth limit " + pointer)
+		}
+		visited[pointer] = true
+		name := strings.TrimPrefix(pointer, prefix)
+		if strings.Contains(name, "/") {
+			return nil, unsupported("nested reference " + pointer)
+		}
+		name = strings.ReplaceAll(strings.ReplaceAll(name, "~1", "/"), "~0", "~")
+		current = object(object(object(p.source["components"])[category])[name])
+		if current == nil {
+			return nil, unsupported("unresolved reference " + pointer)
 		}
 	}
-	if s.Format != "" {
-		out["format"] = s.Format
+}
+
+func (p *projector) schema(value any, depth int) (map[string]any, error) {
+	p.nodes++
+	if depth > maxProjectionDepth || p.nodes > maxProjectionNodes {
+		return nil, unsupported("schema projection complexity limit")
 	}
-	if s.Description != "" {
-		out["description"] = s.Description
+	raw := object(value)
+	if raw == nil {
+		return nil, unsupported("schema must be an object")
 	}
-	if s.Properties != nil {
-		props := make(map[string]any)
-		for k, v := range s.Properties {
-			props[k] = schemaRefToJSONSchemaMap(v)
+	if reference, ok := raw["$ref"]; ok {
+		ref := stringValue(reference)
+		if p.active[ref] {
+			return nil, unsupported("recursive schema " + ref)
 		}
-		out["properties"] = props
+		resolved, err := p.resolve(raw, "schemas")
+		if err != nil {
+			return nil, err
+		}
+		p.active[ref] = true
+		result, err := p.schema(resolved, depth+1)
+		delete(p.active, ref)
+		return result, err
 	}
-	if len(s.Required) > 0 {
-		out["required"] = s.Required
+	result := make(map[string]any)
+	for _, key := range keys(raw) {
+		mapped, keep, err := p.keyword(key, raw[key], depth)
+		if err != nil {
+			return nil, err
+		}
+		if keep {
+			result[key] = mapped
+		}
 	}
-	if s.Items != nil {
-		out["items"] = schemaRefToJSONSchemaMap(s.Items)
+
+	if err := convertOpenAPIBoundsAndNull(raw, result); err != nil {
+		return nil, err
 	}
-	if s.Enum != nil {
-		out["enum"] = s.Enum
+
+	return result, nil
+}
+
+type parameter struct {
+	name, location string
+	explode        bool
+	array          bool
+}
+type operationContract struct {
+	input, output map[string]any
+	parameters    []parameter
+	body          bool
+	responseJSON  map[string]bool
+}
+
+func closedObject(properties map[string]any, required []string) map[string]any {
+	result := map[string]any{"type": "object", "properties": properties, "additionalProperties": false}
+	if len(required) > 0 {
+		result["required"] = required
 	}
-	return out
+	return result
+}
+
+//nolint:gocognit,funlen // Construction checks parameter identity and transport semantics before publishing a single contract.
+func buildOperationContract(source, item, operation map[string]any, method, path string) (*operationContract, error) {
+	projection := &projector{source: source, nodes: 0, active: make(map[string]bool)}
+	merged := make(map[string]map[string]any)
+	for _, owner := range []map[string]any{item, operation} {
+		list, _ := owner["parameters"].([]any)
+		for _, value := range list {
+			param, err := projection.resolve(value, "parameters")
+			if err != nil {
+				return nil, err
+			}
+			identity := stringValue(param["in"]) + "\x00" + stringValue(param["name"])
+			merged[identity] = param
+		}
+	}
+	contract := new(operationContract)
+	groups := map[string]map[string]any{locationPath: {}, locationQuery: {}}
+	required := map[string][]string{locationPath: {}, locationQuery: {}}
+	pathNames := make(map[string]bool)
+	for _, identity := range keysOfParameters(merged) {
+		raw := merged[identity]
+		param, schema, err := projection.parameter(raw)
+		if err != nil {
+			return nil, err
+		}
+		location, name := param.location, param.name
+
+		if location == locationPath {
+			pathNames[name] = true
+		}
+		groups[location][name] = schema
+		if boolValue(raw["required"]) {
+			required[location] = append(required[location], name)
+		}
+		contract.parameters = append(
+			contract.parameters,
+			param,
+		)
+	}
+	for _, name := range pathParamNamesFromTemplate(path) {
+		if !pathNames[name] {
+			return nil, unsupported("path placeholder without parameter " + name)
+		}
+		delete(pathNames, name)
+	}
+	if len(pathNames) > 0 {
+		return nil, unsupported("path parameter without placeholder")
+	}
+	properties := make(map[string]any)
+	var outerRequired []string
+	for _, location := range []string{locationPath, locationQuery} {
+		if len(groups[location]) > 0 {
+			properties[location] = closedObject(groups[location], required[location])
+			if len(required[location]) > 0 {
+				outerRequired = append(outerRequired, location)
+			}
+		}
+	}
+	if body, exists := operation["requestBody"]; exists {
+		schema, isRequired, err := projection.bodySchema(body, method)
+		if err != nil {
+			return nil, err
+		}
+		properties["body"] = schema
+		contract.body = true
+		if isRequired {
+			outerRequired = append(outerRequired, "body")
+		}
+	}
+
+	contract.input = closedObject(properties, outerRequired)
+	output, err := projectOutput(projection, operation, contract)
+	if err != nil {
+		return nil, err
+	}
+	contract.output = output
+	return contract, nil
+}
+func keysOfParameters(parameters map[string]map[string]any) []string {
+	result := make([]string, 0, len(parameters))
+	for key := range parameters {
+		result = append(result, key)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func projectOutput(
+	projection *projector,
+	operation map[string]any,
+	contract *operationContract,
+) (map[string]any, error) {
+	responses := object(operation["responses"])
+	var output map[string]any
+	var untyped bool
+	contract.responseJSON = make(map[string]bool)
+	for _, status := range keys(responses) {
+		if status != defaultKeyword && (len(status) != 3 || status[0] != '2') {
+			continue
+		}
+		response, err := projection.resolve(responses[status], "responses")
+		if err != nil {
+			return nil, err
+		}
+		content := object(response["content"])
+		if len(content) == 0 {
+			untyped = true
+			contract.responseJSON[status] = false
+			continue
+		}
+		if len(content) != 1 || content["application/json"] == nil {
+			return nil, unsupported("successful response must declare only application/json")
+		}
+		schema, err := projection.schema(object(content["application/json"])["schema"], 0)
+		if err != nil {
+			return nil, err
+		}
+		if output != nil && !reflect.DeepEqual(output, schema) {
+			return nil, unsupported("heterogeneous successful response schemas")
+		}
+		output = schema
+		contract.responseJSON[status] = true
+	}
+	if len(contract.responseJSON) == 0 {
+		return nil, unsupported("operation must declare a successful or default response")
+	}
+	if untyped && output != nil {
+		return nil, unsupported("mixed empty and JSON successful response contracts")
+	}
+	return output, nil
+}
+func pathParamNamesFromTemplate(path string) []string {
+	var result []string
+	for {
+		start := strings.IndexByte(path, '{')
+		if start < 0 {
+			return result
+		}
+		end := strings.IndexByte(path[start:], '}')
+		if end < 0 {
+			return result
+		}
+		result = append(result, path[start+1:start+end])
+		path = path[start+end+1:]
+	}
+}
+
+func convertOpenAPIBoundsAndNull(raw, result map[string]any) error {
+	for _, bound := range []struct{ exclusive, ordinary string }{{"exclusiveMinimum", "minimum"}, {"exclusiveMaximum", "maximum"}} {
+		if flag, exists := raw[bound.exclusive]; exists {
+			exclusive, ok := flag.(bool)
+			if !ok {
+				return unsupported("OpenAPI 3.0 exclusive bound must be boolean")
+			}
+			if exclusive {
+				number, exists := result[bound.ordinary]
+				if !exists {
+					return unsupported("exclusive bound without limit")
+				}
+				delete(result, bound.ordinary)
+				result[bound.exclusive] = number
+			}
+		}
+	}
+	if boolValue(raw["nullable"]) {
+		kind := stringValue(raw["type"])
+		if kind == "" {
+			return unsupported("nullable without explicit type")
+		}
+		result["type"] = []any{kind, "null"}
+	}
+	return nil
+}
+
+func (p *projector) parameter(raw map[string]any) (parameter, map[string]any, error) {
+	location, name := stringValue(raw["in"]), stringValue(raw["name"])
+	if location != locationPath && location != locationQuery {
+		return parameter{}, nil, unsupported("parameter location " + location)
+	}
+	if name == "" || raw["content"] != nil || boolValue(raw["allowReserved"]) || boolValue(raw["allowEmptyValue"]) {
+		return parameter{}, nil, unsupported("parameter content/allowReserved/allowEmptyValue")
+	}
+	style := stringValue(raw["style"])
+	defaultStyle := "form"
+	if location == locationPath {
+		defaultStyle = "simple"
+	}
+	if style != "" && style != defaultStyle {
+		return parameter{}, nil, unsupported("parameter style " + style)
+	}
+	schema, err := p.schema(raw["schema"], 0)
+	if err != nil {
+		return parameter{}, nil, err
+	}
+	kind := stringValue(schema["type"])
+	array := kind == "array"
+	if array && location == locationQuery {
+		kind = stringValue(object(schema["items"])["type"])
+	}
+	if (kind != "string" && kind != "integer" && kind != "number" && kind != "boolean") ||
+		(array && location == locationPath) {
+		return parameter{}, nil, unsupported("parameter must be scalar or query scalar array")
+	}
+	explode := location == locationQuery
+	if flag, ok := raw["explode"].(bool); ok {
+		explode = flag
+	}
+	if location == locationPath && !boolValue(raw["required"]) {
+		return parameter{}, nil, unsupported("path parameter must be required")
+	}
+	return parameter{name: name, location: location, explode: explode, array: array}, schema, nil
+}
+
+func (p *projector) accountLiteral(value any, depth int) error {
+	p.nodes++
+	if depth > maxProjectionDepth || p.nodes > maxProjectionNodes {
+		return unsupported("schema literal projection complexity limit")
+	}
+	switch typed := value.(type) {
+	case map[string]any:
+		for _, key := range keys(typed) {
+			if err := p.accountLiteral(typed[key], depth+1); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, entry := range typed {
+			if err := p.accountLiteral(entry, depth+1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+//nolint:gocognit // The bounded keyword switch explicitly separates preserved, converted and unsupported semantics.
+func (p *projector) keyword(key string, value any, depth int) (any, bool, error) {
+	switch key {
+	case "type":
+		if _, ok := value.(string); !ok {
+			return nil, false, unsupported("OpenAPI 3.0 type must be a string")
+		}
+		return value, true, nil
+	case "enum",
+		"minimum",
+		"maximum",
+		"multipleOf",
+		"minLength",
+		"maxLength",
+		"pattern",
+		"minItems",
+		"maxItems",
+		"uniqueItems",
+		"minProperties",
+		"maxProperties",
+		"required",
+		"title",
+		"description",
+		defaultKeyword:
+		if err := p.accountLiteral(value, depth+1); err != nil {
+			return nil, false, err
+		}
+		return value, true, nil
+	case "properties":
+		properties := object(value)
+		if properties == nil {
+			return nil, false, unsupported("properties must be an object")
+		}
+		mapped := make(map[string]any)
+		for _, name := range keys(properties) {
+			child, err := p.schema(properties[name], depth+1)
+			if err != nil {
+				return nil, false, err
+			}
+			mapped[name] = child
+		}
+		return mapped, true, nil
+	case "items", "not":
+		child, err := p.schema(value, depth+1)
+		return child, true, err
+	case "additionalProperties":
+		if flag, ok := value.(bool); ok {
+			return flag, true, nil
+		}
+		child, err := p.schema(value, depth+1)
+		return child, true, err
+	case "allOf", "anyOf", "oneOf":
+		variants, ok := value.([]any)
+		if !ok {
+			return nil, false, unsupported("composition must be an array")
+		}
+		mapped := make([]any, 0, len(variants))
+		for _, variant := range variants {
+			child, err := p.schema(variant, depth+1)
+			if err != nil {
+				return nil, false, err
+			}
+			mapped = append(mapped, child)
+		}
+		return mapped, true, nil
+	case "exclusiveMinimum", "exclusiveMaximum", "nullable", "example", "deprecated":
+		return nil, false, nil
+	case "readOnly", "writeOnly":
+		if boolValue(value) {
+			return nil, false, unsupported("directional keyword " + key)
+		}
+		return nil, false, nil
+	default:
+		return nil, false, unsupported("schema keyword " + key)
+	}
+}
+
+func (p *projector) bodySchema(body any, method string) (map[string]any, bool, error) {
+	if method != "POST" && method != "PUT" && method != "PATCH" {
+		return nil, false, unsupported("request body only supported for POST/PUT/PATCH")
+	}
+	raw, err := p.resolve(body, "requestBodies")
+	if err != nil {
+		return nil, false, err
+	}
+	content := object(raw["content"])
+	if len(content) != 1 || content["application/json"] == nil {
+		return nil, false, unsupported("request body must declare only application/json")
+	}
+	schema, err := p.schema(object(content["application/json"])["schema"], 0)
+	return schema, boolValue(raw["required"]), err
 }

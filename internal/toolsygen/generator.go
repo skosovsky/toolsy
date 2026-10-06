@@ -12,6 +12,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,9 +20,8 @@ import (
 	"strings"
 	"unicode"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
@@ -49,7 +49,6 @@ type manifest struct {
 	HandlerName   string
 	FactoryName   string
 	Fields        []fieldSpec
-	NeedsTime     bool
 	RawSchemaJSON string
 }
 
@@ -136,6 +135,7 @@ type generator struct {
 const (
 	fileModeGenerated            fs.FileMode = 0o644
 	jsonSchemaTypeString                     = "string"
+	jsonSchemaTypeObject                     = "object"
 	defaultMaxGeneratorFileBytes             = 4 * 1024 * 1024
 )
 
@@ -377,7 +377,7 @@ func (g *generator) loadManifest(ctx context.Context, path string) (*manifest, e
 	if !ok {
 		return nil, fmt.Errorf("%s: parameters: required object", path)
 	}
-	fields, needsTime, err := buildRootSchema(path, rawParams)
+	fields, err := buildRootSchema(path, rawParams)
 	if err != nil {
 		return nil, err
 	}
@@ -421,7 +421,6 @@ func (g *generator) loadManifest(ctx context.Context, path string) (*manifest, e
 		HandlerName:   handlerName(structName, stream),
 		FactoryName:   "New" + structName + "Tool",
 		Fields:        fields,
-		NeedsTime:     needsTime,
 		RawSchemaJSON: schemaJSON,
 	}, nil
 }
@@ -436,80 +435,71 @@ func (g *generator) readManifestFile(ctx context.Context, path string) (map[stri
 	var decoded any
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".json":
-		if err := json.Unmarshal(data, &decoded); err != nil {
+		decoded, err = jsonschemax.Decode(data)
+		if err != nil {
 			return nil, fmt.Errorf("parse manifest JSON: %w", err)
 		}
 	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(data, &decoded); err != nil {
+		decoded, err = decodeYAMLManifest(data)
+		if err != nil {
 			return nil, fmt.Errorf("parse manifest YAML: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("unsupported manifest extension %q", filepath.Ext(path))
 	}
 
-	root, ok := normalizeValue(decoded).(map[string]any)
+	encoded, err := json.Marshal(decoded)
+	if err != nil {
+		return nil, fmt.Errorf("encode manifest: %w", err)
+	}
+	decoded, err = jsonschemax.Decode(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("decode manifest: %w", err)
+	}
+	root, ok := decoded.(map[string]any)
 	if !ok {
 		return nil, errors.New("manifest root must be an object")
 	}
 	return root, nil
 }
 
-func normalizeValue(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			out[k] = normalizeValue(val)
-		}
-		return out
-	case map[any]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			out[fmt.Sprint(k)] = normalizeValue(val)
-		}
-		return out
-	case []any:
-		out := make([]any, len(x))
-		for i, val := range x {
-			out[i] = normalizeValue(val)
-		}
-		return out
-	default:
-		return x
-	}
-}
-
-func buildRootSchema(path string, raw map[string]any) ([]fieldSpec, bool, error) {
-	fields, needsTime, err := validateObjectSchema(path, "parameters", raw, true)
+func buildRootSchema(path string, raw map[string]any) ([]fieldSpec, error) {
+	fields, err := validateObjectSchema(path, "parameters", raw, true)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-	return fields, needsTime, nil
+	return fields, nil
 }
 
-func validateObjectSchema(filePath, schemaPath string, raw map[string]any, root bool) ([]fieldSpec, bool, error) {
+func validateObjectSchema(filePath, schemaPath string, raw map[string]any, root bool) ([]fieldSpec, error) {
 	if err := rejectUnsupportedKeywords(schemaPath, raw); err != nil {
-		return nil, false, fmt.Errorf("%s: %w", filePath, err)
+		return nil, fmt.Errorf("%s: %w", filePath, err)
 	}
 	typ, err := getRequiredString(raw, "type")
 	if err != nil {
-		return nil, false, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
+		return nil, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
 	}
-	if typ != "object" {
+	if typ != jsonSchemaTypeObject {
 		if root {
-			return nil, false, fmt.Errorf("%s: %s.type: expected %q, got %q", filePath, schemaPath, "object", typ)
+			return nil, fmt.Errorf(
+				"%s: %s.type: expected %q, got %q",
+				filePath,
+				schemaPath,
+				jsonSchemaTypeObject,
+				typ,
+			)
 		}
-		return nil, false, fmt.Errorf("%s: %s: nested objects are not supported", filePath, schemaPath)
+		return nil, fmt.Errorf("%s: %s: nested objects are not supported", filePath, schemaPath)
 	}
 
 	propsRaw, ok := raw["properties"].(map[string]any)
 	if !ok {
-		return nil, false, fmt.Errorf("%s: %s.properties: required object", filePath, schemaPath)
+		return nil, fmt.Errorf("%s: %s.properties: required object", filePath, schemaPath)
 	}
 
 	requiredSet, err := parseRequiredSet(raw, schemaPath)
 	if err != nil {
-		return nil, false, fmt.Errorf("%s: %w", filePath, err)
+		return nil, fmt.Errorf("%s: %w", filePath, err)
 	}
 
 	propNames := make([]string, 0, len(propsRaw))
@@ -519,21 +509,20 @@ func validateObjectSchema(filePath, schemaPath string, raw map[string]any, root 
 	sort.Strings(propNames)
 
 	fields := make([]fieldSpec, 0, len(propNames))
-	seenGoNames := make(map[string]string, len(propNames))
-	needsTime := false
+	seenGoNames := map[string]string{"RawJSON": "reserved raw argument field"}
 
 	for _, propName := range propNames {
 		propPath := schemaPath + ".properties." + propName
 		propMap, ok := propsRaw[propName].(map[string]any)
 		if !ok {
-			return nil, false, fmt.Errorf("%s: %s: expected object", filePath, propPath)
+			return nil, fmt.Errorf("%s: %s: expected object", filePath, propPath)
 		}
-		field, fieldNeedsTime, err := validateProperty(filePath, propPath, propName, propMap, requiredSet[propName])
+		field, err := validateProperty(filePath, propPath, propName, propMap, requiredSet[propName])
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 		if previous, exists := seenGoNames[field.GoName]; exists {
-			return nil, false, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: generated field name collision between %q and %q",
 				filePath,
 				previous,
@@ -542,14 +531,11 @@ func validateObjectSchema(filePath, schemaPath string, raw map[string]any, root 
 		}
 		seenGoNames[field.GoName] = propName
 		fields = append(fields, field)
-		if fieldNeedsTime {
-			needsTime = true
-		}
 	}
 
 	for requiredName := range requiredSet {
 		if _, ok := propsRaw[requiredName]; !ok {
-			return nil, false, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%s: %s.required: references unknown property %q",
 				filePath,
 				schemaPath,
@@ -558,29 +544,36 @@ func validateObjectSchema(filePath, schemaPath string, raw map[string]any, root 
 		}
 	}
 
-	return fields, needsTime, nil
+	return fields, nil
 }
 
 func validateProperty(
 	filePath, schemaPath, jsonName string,
 	raw map[string]any,
 	required bool,
-) (fieldSpec, bool, error) {
+) (fieldSpec, error) {
 	if err := rejectUnsupportedKeywords(schemaPath, raw); err != nil {
-		return fieldSpec{}, false, fmt.Errorf("%s: %w", filePath, err)
+		return fieldSpec{}, fmt.Errorf("%s: %w", filePath, err)
 	}
 	if _, err := getRequiredString(raw, "description"); err != nil {
-		return fieldSpec{}, false, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
+		return fieldSpec{}, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
 	}
 
+	if !supportedJSONFieldName(jsonName) {
+		return fieldSpec{}, fmt.Errorf(
+			"%s: %s: property name cannot be represented by a Go JSON field tag",
+			filePath,
+			schemaPath,
+		)
+	}
 	goName := exportedName(jsonName)
 	if goName == "" {
-		return fieldSpec{}, false, fmt.Errorf("%s: %s: cannot derive Go field name", filePath, schemaPath)
+		return fieldSpec{}, fmt.Errorf("%s: %s: cannot derive Go field name", filePath, schemaPath)
 	}
 
-	goType, needsTime, err := mapGoType(filePath, schemaPath, raw, required, true)
+	goType, err := mapGoType(filePath, schemaPath, raw, required, true)
 	if err != nil {
-		return fieldSpec{}, false, err
+		return fieldSpec{}, err
 	}
 
 	tag := fmt.Sprintf(`json:"%s"`, jsonName)
@@ -596,15 +589,29 @@ func validateProperty(
 		GoType:   goType,
 		Tag:      tag,
 		Required: required,
-	}, needsTime, nil
+	}, nil
 }
 
-func mapGoType(filePath, schemaPath string, raw map[string]any, required bool, topLevel bool) (string, bool, error) {
+func supportedJSONFieldName(name string) bool {
+	if name == "" || name == "-" {
+		return false
+	}
+	for _, r := range name {
+		if !strings.ContainsRune("!#$%&()*+-./:;<=>?@[]^_{|}~ ", r) && !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func mapGoType(filePath, schemaPath string, raw map[string]any, required bool, topLevel bool) (string, error) {
+	if types, ok := raw["type"].([]any); ok {
+		return mapNullableGoType(filePath, schemaPath, raw, types, required, topLevel)
+	}
 	typ, err := getRequiredString(raw, "type")
 	if err != nil {
-		return "", false, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
+		return "", fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
 	}
-
 	switch typ {
 	case jsonSchemaTypeString:
 		return mapGoTypeString(filePath, schemaPath, raw, required, topLevel)
@@ -614,83 +621,168 @@ func mapGoType(filePath, schemaPath string, raw map[string]any, required bool, t
 		return mapGoTypeBoolean(required, topLevel)
 	case "array":
 		return mapGoTypeArray(filePath, schemaPath, raw, required, topLevel)
-	case "object":
-		return "", false, fmt.Errorf("%s: %s: nested objects are not supported", filePath, schemaPath)
+	case jsonSchemaTypeObject:
+		return "", fmt.Errorf("%s: %s: nested objects are not supported", filePath, schemaPath)
 	default:
-		return "", false, fmt.Errorf("%s: %s.type: unsupported value %q", filePath, schemaPath, typ)
+		return "", fmt.Errorf("%s: %s.type: unsupported value %q", filePath, schemaPath, typ)
 	}
 }
 
-func mapGoTypeString(filePath, schemaPath string, raw map[string]any, required, topLevel bool) (string, bool, error) {
+func mapNullableGoType(
+	filePath, schemaPath string,
+	raw map[string]any,
+	types []any,
+	required, topLevel bool,
+) (string, error) {
+	if !topLevel || len(types) != 2 {
+		return "", fmt.Errorf("%s: %s.type: unsupported type union", filePath, schemaPath)
+	}
+	var base string
+	for _, typ := range types {
+		if typ == "null" {
+			continue
+		}
+		str, ok := typ.(string)
+		if !ok || base != "" {
+			return "", fmt.Errorf("%s: %s.type: unsupported type union", filePath, schemaPath)
+		}
+		base = str
+	}
+	if base == "" {
+		return "", fmt.Errorf("%s: %s.type: nullable union requires one concrete type", filePath, schemaPath)
+	}
+	concrete := maps.Clone(raw)
+	concrete["type"] = base
+	if _, err := mapGoType(filePath, schemaPath, concrete, required, topLevel); err != nil {
+		return "", err
+	}
+	return "json.RawMessage", nil
+}
+
+func mapGoTypeString(filePath, schemaPath string, raw map[string]any, required, topLevel bool) (string, error) {
 	format, err := getOptionalString(raw, "format")
 	if err != nil {
-		return "", false, fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
+		return "", fmt.Errorf("%s: %s: %w", filePath, schemaPath, err)
 	}
 	switch format {
 	case "", "date-time":
 	default:
-		return "", false, fmt.Errorf("%s: %s.format: unsupported value %q", filePath, schemaPath, format)
+		return "", fmt.Errorf("%s: %s.format: unsupported value %q", filePath, schemaPath, format)
 	}
 
 	baseType := jsonSchemaTypeString
-	needsTime := false
-	if format == "date-time" {
-		baseType = "time.Time"
-		needsTime = true
-	}
 	if required || !topLevel {
-		return baseType, needsTime, nil
+		return baseType, nil
 	}
-	return "*" + baseType, needsTime, nil
+	return "*" + baseType, nil
 }
 
-func mapGoTypeInteger(required, topLevel bool) (string, bool, error) {
+func mapGoTypeInteger(required, topLevel bool) (string, error) {
 	_ = required
 	if !topLevel {
-		return "int64", false, nil
+		return "json.Number", nil
 	}
-	// Top-level integers use pointers so required fields can be validated via nil checks
-	// without conflating a missing JSON key with numeric zero.
-	return "*int64", false, nil
+	// Top-level pointers preserve omitted keys without conflating them with zero.
+	return "*json.Number", nil
 }
 
-func mapGoTypeBoolean(required, topLevel bool) (string, bool, error) {
+func mapGoTypeBoolean(required, topLevel bool) (string, error) {
 	_ = required
 	if !topLevel {
-		return "bool", false, nil
+		return "bool", nil
 	}
-	return "*bool", false, nil
+	return "*bool", nil
 }
 
-func mapGoTypeArray(filePath, schemaPath string, raw map[string]any, required, topLevel bool) (string, bool, error) {
+func mapGoTypeArray(filePath, schemaPath string, raw map[string]any, required, topLevel bool) (string, error) {
 	items, ok := raw["items"].(map[string]any)
 	if !ok {
-		return "", false, fmt.Errorf("%s: %s.items: required object", filePath, schemaPath)
+		return "", fmt.Errorf("%s: %s.items: required object", filePath, schemaPath)
 	}
 	if err := rejectUnsupportedKeywords(schemaPath+".items", items); err != nil {
-		return "", false, fmt.Errorf("%s: %w", filePath, err)
+		return "", fmt.Errorf("%s: %w", filePath, err)
 	}
-	itemType, needsTime, err := mapGoType(filePath, schemaPath+".items", items, true, false)
+	itemType, err := mapGoType(filePath, schemaPath+".items", items, true, false)
 	if err != nil {
-		return "", false, err
+		return "", err
 	}
 	if strings.HasPrefix(itemType, "[]") {
-		return "", false, fmt.Errorf("%s: %s.items: nested arrays are not supported", filePath, schemaPath)
+		return "", fmt.Errorf("%s: %s.items: nested arrays are not supported", filePath, schemaPath)
 	}
 	itemType = strings.TrimPrefix(itemType, "*")
 	sliceType := "[]" + itemType
 	if required && topLevel {
 		// Pointer distinguishes a missing JSON key (nil) from an explicit empty array.
-		return "*" + sliceType, needsTime, nil
+		return "*" + sliceType, nil
 	}
-	return sliceType, needsTime, nil
+	return sliceType, nil
 }
 
 func rejectUnsupportedKeywords(schemaPath string, raw map[string]any) error {
-	for _, key := range []string{"$ref", "oneOf", "allOf", "anyOf", "not", "patternProperties"} {
-		if _, ok := raw[key]; ok {
-			return fmt.Errorf("%s.%s: unsupported in toolsy-gen v1", schemaPath, key)
+	allowed := map[string]bool{
+		"type":        true,
+		"description": true,
+		"title":       true,
+		"default":     true,
+		"examples":    true,
+		"enum":        true,
+		"const":       true,
+	}
+	typ := schemaBaseType(raw)
+	for _, key := range schemaTypeKeywords(typ) {
+		allowed[key] = true
+	}
+	if typ == jsonSchemaTypeObject {
+		if err := checkObjectKeywords(schemaPath, raw); err != nil {
+			return err
 		}
+	}
+	keys := make([]string, 0, len(raw))
+	for key := range raw {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if !allowed[key] {
+			return fmt.Errorf("%s.%s: unsupported in toolsy-gen", schemaPath, key)
+		}
+	}
+	return nil
+}
+
+func schemaTypeKeywords(typ string) []string {
+	switch typ {
+	case jsonSchemaTypeObject:
+		return []string{"properties", "required", "additionalProperties", "minProperties", "maxProperties", "$schema"}
+	case jsonSchemaTypeString:
+		return []string{"format", "minLength", "maxLength", "pattern"}
+	case "integer":
+		return []string{"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf"}
+	case "array":
+		return []string{"items", "minItems", "maxItems", "uniqueItems"}
+	default:
+		return nil
+	}
+}
+func schemaBaseType(raw map[string]any) string {
+	typ, _ := raw["type"].(string)
+	if types, ok := raw["type"].([]any); ok {
+		for _, candidate := range types {
+			if candidate != "null" {
+				typ, _ = candidate.(string)
+			}
+		}
+	}
+	return typ
+}
+func checkObjectKeywords(schemaPath string, raw map[string]any) error {
+	if value, exists := raw["additionalProperties"]; exists {
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("%s.additionalProperties: only boolean supported", schemaPath)
+		}
+	}
+	if dialect, exists := raw["$schema"]; exists && dialect != "https://json-schema.org/draft/2020-12/schema" {
+		return fmt.Errorf("%s.$schema: unsupported dialect", schemaPath)
 	}
 	return nil
 }
@@ -1044,9 +1136,6 @@ func renderManifest(m *manifest) ([]byte, error) {
 	if m.Stream {
 		imports = append(imports, "iter")
 	}
-	if m.NeedsTime {
-		imports = append(imports, "time")
-	}
 	sort.Strings(imports)
 
 	var buf bytes.Buffer
@@ -1060,38 +1149,10 @@ func renderManifest(m *manifest) ([]byte, error) {
 
 	fmt.Fprintf(&buf, "// %s is the decoded input for the %q tool.\n", m.InputTypeName, m.Name)
 	fmt.Fprintf(&buf, "type %s struct {\n", m.InputTypeName)
+	buf.WriteString("\tRawJSON json.RawMessage `json:\"-\"`\n")
 	for _, field := range m.Fields {
 		fmt.Fprintf(&buf, "\t%s %s `%s`\n", field.GoName, field.GoType, field.Tag)
 	}
-	buf.WriteString("}\n\n")
-
-	fmt.Fprintf(&buf, "// Validate applies post-schema validation for %s.\n", m.InputTypeName)
-	fmt.Fprintf(&buf, "func (in %s) Validate() error {\n", m.InputTypeName)
-	for _, field := range m.Fields {
-		if !field.Required {
-			continue
-		}
-		msg := "missing required field: '" + field.JSONName + "'"
-		switch {
-		case field.GoType == "string":
-			fmt.Fprintf(&buf, "\tif in.%s == \"\" {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
-			buf.WriteString("\t}\n")
-		case field.GoType == "time.Time":
-			fmt.Fprintf(&buf, "\tif in.%s.IsZero() {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
-			buf.WriteString("\t}\n")
-		case strings.HasPrefix(field.GoType, "*[]"):
-			fmt.Fprintf(&buf, "\tif in.%s == nil || len(*in.%s) == 0 {\n", field.GoName, field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
-			buf.WriteString("\t}\n")
-		case strings.HasPrefix(field.GoType, "*"):
-			fmt.Fprintf(&buf, "\tif in.%s == nil {\n", field.GoName)
-			fmt.Fprintf(&buf, "\t\treturn errors.New(%s)\n", strconvQuote(msg))
-			buf.WriteString("\t}\n")
-		}
-	}
-	buf.WriteString("\treturn nil\n")
 	buf.WriteString("}\n\n")
 
 	if m.Stream {
@@ -1120,17 +1181,25 @@ func renderManifest(m *manifest) ([]byte, error) {
 		strconvQuote(m.Name),
 		strconvQuote(m.Description),
 	)
+	buf.WriteString(
+		"\t\tvar original map[string]json.RawMessage\n\t\tif err := json.Unmarshal(rawArgs, &original); err != nil { return toolsy.NewSchemaError(\"invalid JSON object\") }\n\t\tdeclared := make(map[string]json.RawMessage)\n",
+	)
+	for _, field := range m.Fields {
+		fmt.Fprintf(
+			&buf,
+			"\t\tif value, present := original[%s]; present { declared[%s] = value }\n",
+			strconvQuote(field.JSONName),
+			strconvQuote(field.JSONName),
+		)
+	}
+	buf.WriteString("\t\tdecoded, err := json.Marshal(declared)\n\t\tif err != nil { return err }\n")
 	fmt.Fprintf(&buf, "\t\tvar input %s\n", m.InputTypeName)
-	buf.WriteString("\t\tif err := json.Unmarshal(rawArgs, &input); err != nil {\n")
+	buf.WriteString("\t\tif err := json.Unmarshal(decoded, &input); err != nil {\n")
 	buf.WriteString(
 		"\t\t\treturn toolsy.NewSchemaError(\"Validation failed: invalid JSON format or type mismatch\")\n",
 	)
 	buf.WriteString("\t\t}\n")
-	buf.WriteString("\t\tif err := input.Validate(); err != nil {\n")
-	buf.WriteString(
-		"\t\t\treturn toolsy.NewValidationError(\"Validation failed: \" + err.Error())\n",
-	)
-	buf.WriteString("\t\t}\n")
+	buf.WriteString("\t\tinput.RawJSON = append(json.RawMessage(nil), rawArgs...)\n")
 
 	if m.Stream {
 		buf.WriteString("\t\tvar pending string\n")

@@ -383,13 +383,9 @@ parameters:
 
 	for _, want := range []string{
 		`"iter"`,
-		`"time"`,
 		"package apptools",
 		"type BookAppointmentStreamHandler interface",
 		"DoctorID string",
-		`errors.New("missing required field: 'doctor_id'")`,
-		`in.SlotTime.IsZero()`,
-		`return toolsy.NewValidationError("Validation failed: " + err.Error())`,
 		`return toolsy.NewSchemaError("Validation failed: invalid JSON format or type mismatch"`,
 		"return toolsy.AsAsyncTool(proxy), nil",
 	} {
@@ -443,14 +439,9 @@ parameters:
 	}
 	s := string(code)
 	for _, want := range []string{
-		"*int64",
+		"*json.Number",
 		"*bool",
 		"*[]string",
-		`if in.Count == nil`,
-		`if in.Active == nil`,
-		`if in.Tags == nil || len(*in.Tags) == 0`,
-		`missing required field: 'count'`,
-		`missing required field: 'active'`,
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("generated code missing %q:\n%s", want, s)
@@ -645,9 +636,7 @@ package apptools
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/skosovsky/toolsy"
 )
@@ -655,7 +644,7 @@ import (
 type bookHandler struct{}
 
 func (bookHandler) Execute(_ context.Context, input BookAppointmentInput) (string, error) {
-	return input.DoctorID + "|" + input.SlotTime.UTC().Format(time.RFC3339), nil
+	return input.DoctorID + "|" + input.SlotTime, nil
 }
 
 func TestGeneratedNonStreamTool(t *testing.T) {
@@ -696,16 +685,8 @@ func TestGeneratedNonStreamTool(t *testing.T) {
 		toolsy.ToolInput{ArgsJSON: []byte("{\"doctor_id\":\"\",\"slot_time\":\"2026-03-18T09:00:00Z\"}")},
 		func(toolsy.Chunk) error { return nil },
 	)
-	if te, ok := toolsy.AsToolError(err); err == nil || !ok || !toolsy.ClientCorrectable(te.Code) {
-		t.Fatalf("empty doctor_id error = %v, want client error", err)
-	}
-	var ce *toolsy.ToolError
-	if !errors.As(err, &ce) {
-		t.Fatalf("error type = %T, want *toolsy.ToolError", err)
-	}
-	if !strings.Contains(ce.Reason, "Validation failed:") || !strings.Contains(ce.Reason, "missing required field: 'doctor_id'") {
-		t.Fatalf("empty doctor_id reason = %q", ce.Reason)
-	}
+	if err != nil { t.Fatalf("empty required string must be accepted: %v", err) }
+ var ce *toolsy.ToolError
 
 	err = tool.Execute(
 		context.Background(),
@@ -787,7 +768,9 @@ func (streamHandler) ExecuteStream(_ context.Context, input ProgressDemoInput) i
 		if input.Count == nil {
 			return
 		}
-		switch *input.Count {
+		count, err := input.Count.Int64()
+ if err != nil { yield("", err); return }
+ switch count {
 		case 0:
 			return
 		case 1:

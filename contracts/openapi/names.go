@@ -1,8 +1,9 @@
 package openapi
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -34,7 +35,7 @@ func sanitizeToolName(s string) string {
 }
 
 // toolNameFromOperation prefers operationId (sanitized), else method_path (e.g. get_users_id).
-// Used names are passed to avoid collisions; on collision append _2, _3, ...
+// Sorted discovery order and an operation identity hash make collision names stable.
 func toolNameFromOperation(operationID, method, path string, used map[string]bool) string {
 	base := operationID
 	if base == "" {
@@ -42,10 +43,14 @@ func toolNameFromOperation(operationID, method, path string, used map[string]boo
 	}
 	base = sanitizeToolName(base)
 	name := base
-	i := 2
-	for used[name] {
-		name = base + "_" + strconv.Itoa(i)
-		i++
+	if used[name] {
+		identity := sha256.Sum256([]byte(method + " " + path))
+		suffix := fmt.Sprintf("_%x", identity[:6])
+		name = base[:min(len(base), maxSanitizedToolNameLen-len(suffix))] + suffix
+		for attempt := 2; used[name]; attempt++ {
+			candidateSuffix := fmt.Sprintf("%s_%d", suffix, attempt)
+			name = base[:min(len(base), maxSanitizedToolNameLen-len(candidateSuffix))] + candidateSuffix
+		}
 	}
 	used[name] = true
 	return name

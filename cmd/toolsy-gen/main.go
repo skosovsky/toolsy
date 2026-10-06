@@ -30,7 +30,10 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stdout)
 		_, _ = fmt.Fprintln(stdout, "Generate Go DTOs, handlers, and tool factories from YAML/JSON tool manifests.")
 		_, _ = fmt.Fprintln(stdout)
-		_, _ = fmt.Fprintln(stdout, "If no paths are provided, the current directory is scanned recursively.")
+		_, _ = fmt.Fprintln(
+			stdout,
+			"If no paths are provided, the current directory is scanned recursively.\nInput subset and clear-break DTO semantics: docs/generator-contract.md.",
+		)
 	}
 
 	if err := fs.Parse(argv); err != nil {

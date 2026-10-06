@@ -7,160 +7,226 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 	"github.com/skosovsky/toolsy/textprocessor"
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-const truncationSuffix = textprocessor.ContractsTruncationSuffix
-
-// execute runs the HTTP request for one operation: path params in path, query params in query string, body params in body only.
-func execute(
-	ctx context.Context,
-	run *toolsy.RunEnv,
-	toolName string,
-	method, pathTemplate string,
-	pathParamNames, queryParamNames []string,
-	bodyParamNames []string,
-	argsJSON []byte,
-	opts *Options,
-	yield func(toolsy.Chunk) error,
-) error {
-	client := opts.httpClient()
-	baseURL := strings.TrimSuffix(opts.BaseURL, "/")
-	if baseURL == "" {
-		return errors.New("openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)")
+func execute(ctx context.Context, run *toolsy.RunEnv, name, method, path string, contract *operationContract,
+	argsJSON []byte, opts *Options, yield func(toolsy.Chunk) error) error {
+	decoded, err := jsonschemax.Decode(argsJSON)
+	if err != nil {
+		return fmt.Errorf("openapi: args: %w", err)
 	}
-
-	args, err := parseArgsJSON(argsJSON)
+	args := object(decoded)
+	if args == nil {
+		return errors.New("openapi: args must be an object")
+	}
+	requestURL, err := makeRequestURL(opts.BaseURL, path, contract, args)
 	if err != nil {
 		return err
 	}
-
-	pathParamsSet := paramNameSet(pathParamNames)
-	queryParamsSet := paramNameSet(queryParamNames)
-
-	substitutedPath := substitutePathParams(pathTemplate, args, pathParamsSet)
-	u, err := buildRequestURL(baseURL, substitutedPath, args, pathParamsSet, queryParamsSet)
-	if err != nil {
-		return err
-	}
-
 	var body io.Reader
-	if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
-		b, marshalErr := marshalRequestBodyJSON(bodyParamNames, args)
+	if value, present := args["body"]; present && contract.body {
+		encoded, marshalErr := json.Marshal(value)
 		if marshalErr != nil {
-			return marshalErr
+			return fmt.Errorf("openapi: body: %w", marshalErr)
 		}
-		if len(bodyParamNames) > 0 {
-			body = bytes.NewReader(b)
-		}
+		body = bytes.NewReader(encoded)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
+	request, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
 		return fmt.Errorf("openapi: request: %w", err)
 	}
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Content-Type", "application/json")
 	}
-	if run.Credentials != nil {
-		authHeader, authErr := run.Credentials.GetAuth(ctx, toolName)
+	if run != nil && run.Credentials != nil {
+		auth, authErr := run.Credentials.GetAuth(ctx, name)
 		if authErr != nil {
-			return fmt.Errorf("openapi: credentials for %s: %w", toolName, authErr)
+			return fmt.Errorf("openapi: credentials for %s: %w", name, authErr)
 		}
-		if authHeader != "" {
-			req.Header.Set("Authorization", authHeader)
+		if auth != "" {
+			request.Header.Set("Authorization", auth)
 		}
 	}
-
-	// #nosec G704 -- URL from Options/spec, not user input
-	resp, err := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
+	// #nosec G704 -- authority comes from host Options or the source contract, never argument input.
+	response, err := opts.httpClient().Do(request) //nolint:bodyclose // deferred bounded close helper
 	if err != nil {
 		return fmt.Errorf("openapi: do request: %w", err)
 	}
-	defer httptool.CloseResponseBody(ctx, resp.Body)
-	if !httptool.IsSuccessStatus(resp.StatusCode) {
-		return fmt.Errorf("openapi: response status %d", resp.StatusCode)
+	defer httptool.CloseResponseBody(ctx, response.Body)
+	return emitResponse(ctx, response, contract, opts, yield)
+}
+
+func emitResponse(
+	ctx context.Context,
+	response *http.Response,
+	contract *operationContract,
+	opts *Options,
+	yield func(toolsy.Chunk) error,
+) error {
+	if !httptool.IsSuccessStatus(response.StatusCode) {
+		return fmt.Errorf("openapi: response status %d", response.StatusCode)
+	}
+	expectJSON, err := declaredResponseJSON(contract, response.StatusCode)
+	if err != nil {
+		return err
 	}
 
-	text, err := textprocessor.ReadAndTruncate(ctx, resp.Body, opts.maxResponseBytes(), truncationSuffix)
+	data, err := textprocessor.ReadLimitedBytes(ctx, response.Body, opts.maxResponseBytes())
 	if err != nil {
 		return fmt.Errorf("openapi: read response: %w", err)
 	}
-
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(text), MimeType: toolsy.MimeTypeText})
-}
-
-func parseArgsJSON(argsJSON []byte) (map[string]any, error) {
-	var args map[string]any
-	if err := json.Unmarshal(argsJSON, &args); err != nil {
-		return nil, fmt.Errorf("openapi: invalid args JSON: %w", err)
+	mediaType, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+	isJSON := mediaType == "application/json" || strings.HasSuffix(mediaType, "+json")
+	if expectJSON && !isJSON {
+		return errors.New("openapi: successful response Content-Type must be JSON")
 	}
-	return args, nil
-}
-
-func paramNameSet(names []string) map[string]bool {
-	m := make(map[string]bool, len(names))
-	for _, p := range names {
-		m[p] = true
+	if contract.responseJSON != nil && !expectJSON && len(data) > 0 {
+		return errors.New("openapi: body returned for an empty response contract")
 	}
-	return m
-}
-
-func substitutePathParams(pathTemplate string, args map[string]any, pathParamsSet map[string]bool) string {
-	path := pathTemplate
-	for k, v := range args {
-		if !pathParamsSet[k] {
-			continue
+	if len(data) == 0 {
+		if expectJSON {
+			return errors.New("openapi: empty body for declared JSON response")
 		}
-		placeholder := "{" + k + "}"
-		if strings.Contains(path, placeholder) {
-			path = strings.ReplaceAll(path, placeholder, url.PathEscape(fmt.Sprint(v)))
-		}
+		return yield(toolsy.Chunk{Event: toolsy.EventResult, EmptyResult: true})
 	}
-	return path
+	chunkType := toolsy.MimeTypeText
+	if isJSON {
+		if err := validateJSONResponse(data); err != nil {
+			return err
+		}
+		chunkType = toolsy.MimeTypeJSON
+	}
+
+	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: chunkType})
 }
 
-func buildRequestURL(
-	baseURL, substitutedPath string,
-	args map[string]any,
-	pathParamsSet, queryParamsSet map[string]bool,
-) (*url.URL, error) {
-	u, err := url.Parse(baseURL)
+func scalarString(value any) (string, error) {
+	switch typed := value.(type) {
+	case string:
+		return typed, nil
+	case json.Number:
+		return typed.String(), nil
+	case bool:
+		if typed {
+			return "true", nil
+		}
+		return "false", nil
+	default:
+		return "", errors.New("openapi: parameter must be scalar")
+	}
+}
+func makeRequestURL(base, path string, contract *operationContract, args map[string]any) (string, error) {
+	if base == "" {
+		return "", errors.New("openapi: base URL required (set Options.BaseURL or add servers to the OpenAPI spec)")
+	}
+	parsed, err := url.Parse(base)
 	if err != nil {
-		return nil, fmt.Errorf("openapi: base URL: %w", err)
+		return "", fmt.Errorf("openapi: base URL: %w", err)
 	}
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + strings.TrimPrefix(substitutedPath, "/")
-
-	q := u.Query()
-	for k, v := range args {
-		if pathParamsSet[k] || !queryParamsSet[k] {
+	if parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Host == "" || parsed.Fragment != "" {
+		return "", errors.New("openapi: base URL must be an absolute HTTP(S) URL without fragment")
+	}
+	parts := []string{}
+	if parsed.RawQuery != "" {
+		parts = append(parts, parsed.RawQuery)
+	}
+	for _, parameter := range contract.parameters {
+		values := object(args[parameter.location])
+		value, present := values[parameter.name]
+		if !present {
 			continue
 		}
-		q.Set(k, fmt.Sprint(v))
+		if parameter.location == locationPath {
+			text, scalarErr := scalarString(value)
+			if scalarErr != nil {
+				return "", scalarErr
+			}
+			path = strings.ReplaceAll(path, "{"+parameter.name+"}", escapeParameter(text))
+			continue
+		}
+		serialized, serializationErr := queryParameter(parameter, value)
+		if serializationErr != nil {
+			return "", serializationErr
+		}
+		parts = append(parts, serialized...)
 	}
-	u.RawQuery = q.Encode()
-	return u, nil
+	// Escaped parameter values remain in RawPath, so '/' in a value cannot become a path segment.
+	escapedPath := strings.TrimSuffix(parsed.EscapedPath(), "/") + "/" + strings.TrimPrefix(path, "/")
+	decodedPath, err := url.PathUnescape(escapedPath)
+	if err != nil {
+		return "", fmt.Errorf("openapi: path encoding: %w", err)
+	}
+	parsed.Path, parsed.RawPath = decodedPath, escapedPath
+	parsed.RawQuery = strings.Join(parts, "&")
+	return parsed.String(), nil
 }
 
-func marshalRequestBodyJSON(bodyParamNames []string, args map[string]any) ([]byte, error) {
-	if len(bodyParamNames) == 0 {
+func queryParameter(parameter parameter, value any) ([]string, error) {
+	parts := []string{}
+	escapedName := escapeParameter(parameter.name)
+	if !parameter.array {
+		text, scalarErr := scalarString(value)
+		if scalarErr != nil {
+			return nil, scalarErr
+		}
+		parts = append(parts, escapedName+"="+escapeParameter(text))
+		return parts, nil
+	}
+	array, ok := value.([]any)
+	if !ok {
+		return nil, errors.New("openapi: query array value expected")
+	}
+	if len(array) == 0 {
 		return nil, nil
 	}
-	bodyObj := make(map[string]any)
-	for _, k := range bodyParamNames {
-		if v, ok := args[k]; ok {
-			bodyObj[k] = v
+	escaped := make([]string, 0, len(array))
+	for _, entry := range array {
+		text, scalarErr := scalarString(entry)
+		if scalarErr != nil {
+			return nil, scalarErr
+		}
+		escaped = append(escaped, escapeParameter(text))
+	}
+	if parameter.explode {
+		for _, entry := range escaped {
+			parts = append(parts, escapedName+"="+entry)
+		}
+	} else {
+		parts = append(parts, escapedName+"="+strings.Join(escaped, ","))
+	}
+	return parts, nil
+}
+
+// RFC6570 simple/form expansions encode every byte except RFC3986 unreserved characters.
+func escapeParameter(value string) string {
+	return strings.ReplaceAll(url.QueryEscape(value), "+", "%20")
+}
+
+func validateJSONResponse(data []byte) error {
+	if _, err := jsonschemax.Decode(data); err != nil {
+		return fmt.Errorf("openapi: invalid JSON response: %w", err)
+	}
+	return nil
+}
+
+func declaredResponseJSON(contract *operationContract, statusCode int) (bool, error) {
+	if contract.responseJSON == nil {
+		return false, nil
+	}
+	for _, status := range []string{strconv.Itoa(statusCode), "2XX", defaultKeyword} {
+		if value, ok := contract.responseJSON[status]; ok {
+			return value, nil
 		}
 	}
-	bodyBytes, err := json.Marshal(bodyObj)
-	if err != nil {
-		return nil, fmt.Errorf("openapi: marshal body: %w", err)
-	}
-	return bodyBytes, nil
+	return false, errors.New("openapi: undeclared successful response status")
 }

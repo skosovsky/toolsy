@@ -69,7 +69,7 @@ Modules with outbound HTTP should reuse `httptool` library primitives (`NewSafeH
 | `toolkits/web` scrape                    | `httptool` safe stack              | Search HTTP is host-owned via `SearchProvider`                                                                                    |
 | `toolkits/document` remote               | `httptool` safe stack              | IP-only (no host blacklist)                                                                                                       |
 | `agents`                                 | `httptool.NewSafeHTTPClient`       | `MergeHTTPClient` for custom timeout; bounded via `ReadLimitedBytes`                                                              |
-| `contracts/openapi`, `contracts/graphql` | safe client + merge                | Execute: `ReadAndTruncate`; spec/introspection: `ReadLimitedBytes` (fail-closed). See [migration-task30.md](migration-task30.md). |
+| `contracts/openapi`, `contracts/graphql` | safe client + merge                | Execute and spec/introspection: `ReadLimitedBytes` (fail-closed). See [migration-task30.md](migration-task30.md). |
 | `mcp` Streamable HTTP                    | `httptool` safe client              | Long-lived streams (`Timeout: 0`); one validated endpoint for POST/GET; private IP opt-in only for tests                         |
 
 Custom `*http.Client` values merge **Timeout only**; Transport always comes from the SSRF-safe default.
@@ -89,10 +89,10 @@ All `contracts/openapi` and `contracts/graphql` HTTP paths use `CloseResponseBod
 | toolkits HTTP (`httptool` probe)          | `ReadBodyLimited` → `[]byte` fail-closed        | yes       |
 | `web` scrape                              | `ReadLimitedBytes` → error on exceed            | yes       |
 | `fstool` / local files                    | `ReadLimitedBytes` → validation in tool         | yes       |
-| contracts execute                         | `ReadAndTruncate` + `ContractsTruncationSuffix` | yes       |
+| contracts execute                         | `ReadLimitedBytes` (complete response or error) | yes       |
 | contracts spec/introspection, agents REST | `ReadLimitedBytes` (hard cap)                   | yes       |
 | `document` remote download                | `ReadLimitedBytes`                              | yes       |
-| `contracts/grpc`                          | `TruncateBytesToValidUTF8String` on bytes       | n/a       |
+| `contracts/grpc`                          | `ValidateWireJSON` (complete JSON or error)       | n/a       |
 
 Semantic suffixes (`ContractsTruncationSuffix`, `SQLRowsTruncationSuffix`, `SearchResultsTruncationSuffix`, etc.) apply on display/wire tiers — not on transport read primitives.
 

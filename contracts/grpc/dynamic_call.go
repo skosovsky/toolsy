@@ -21,8 +21,11 @@ func invokeRPC(
 	opts *Options,
 	yield func(toolsy.Chunk) error,
 ) error {
+	if err := validateUnary(method); err != nil {
+		return err
+	}
 	req := dynamicpb.NewMessage(method.Input())
-	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: true}
+	unmarshaler := protojson.UnmarshalOptions{DiscardUnknown: false}
 	if err := unmarshaler.Unmarshal(argsJSON, req); err != nil {
 		return fmt.Errorf("grpc: unmarshal request: %w", err)
 	}
@@ -40,4 +43,11 @@ func invokeRPC(
 		return err
 	}
 	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: toolsy.MimeTypeJSON})
+}
+
+func validateUnary(method protoreflect.MethodDescriptor) error {
+	if method.IsStreamingClient() || method.IsStreamingServer() {
+		return unsupported(string(method.FullName()), "streaming RPC")
+	}
+	return nil
 }

@@ -257,28 +257,33 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 **Clean-break rules (generation fails on violation):**
 
 - Every parameter in `parameters.properties` must have a non-empty `description`.
-- Nested objects (`type: object` inside `properties`) are not supported in v1.
-- Unsupported JSON Schema keywords (`$ref`, `oneOf`, `allOf`, `anyOf`, `not`, `patternProperties`) are rejected.
+- Nested objects and nested arrays are unsupported.
+- Unknown or inapplicable JSON Schema keywords are rejected, including references and composition.
 
 **Supported schema subset:**
 
 - Root `parameters.type` must be `object`.
 - Type mapping:
   - `string` -> `string`
-  - `string` + `format: date-time` -> `time.Time`
-  - `integer` -> `*int64` (top-level; pointer distinguishes missing key from numeric zero)
+  - `string` + `format: date-time` -> `string` (schema annotation)
+  - `integer` -> `*json.Number` (top-level; exact integer and presence)
   - `boolean` -> `*bool` (top-level)
   - `array` -> `[]T` (single level only; no nested arrays)
+  - nullable top-level union -> `json.RawMessage` (omitted/null/value)
+
+Every DTO includes `RawJSON` with the complete accepted arguments, including
+undeclared keys when the source schema permits them. See the full
+[generator contract](docs/generator-contract.md) for constraints and limits.
 
 **Complex payloads (nested objects):**
 
 - Nested `type: object` inside `properties` is rejected.
 - For structured payloads, split into multiple flat tools or model a single `string` field that carries JSON text validated in handler code.
 
-**Generated validation (zero-dependency):**
+**Schema validation:**
 
-- Required fields from schema `required` are enforced in generated `Validate()` with explicit Go checks (no `validator/v10`, no `validate` struct tags).
-- Top-level `integer`/`boolean` use pointers so `Validate()` can detect absent keys without rejecting legitimate `0`/`false` values.
+- Generated factories use the existing bounded schema validator; DTOs have no separate `Validate()` method.
+- `required` enforces presence. Empty strings/arrays, zero and false remain valid unless the source schema adds constraints.
 - Parse/validate failures in the factory return `*ToolError` (`CodeValidationFailed` / `CodeSchemaInvalid`) for LLM self-correction.
 
 **Stream tools (`stream: true`):**
@@ -591,6 +596,10 @@ gRPC reflection helpers take an injected `grpc.ClientConnInterface` (no dial ins
 ## Contracts modules
 
 `contracts/openapi`, `contracts/graphql`, `contracts/grpc` return `[]toolsy.Tool`.
+Each adapter publishes a bounded supported subset and rejects unsupported
+contracts during discovery. Hosts provide output selections, credentials,
+connections and business policy. See [adapter contracts](contracts/README.md)
+and [generator contract](docs/generator-contract.md).
 
 Register tools at setup time through builder:
 
