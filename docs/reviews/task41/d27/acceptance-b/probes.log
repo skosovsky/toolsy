@@ -1,0 +1,80 @@
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.00s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+--- PASS: TestOutputEdgesInterruptionAndCleanup (0.01s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.04s)
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.00s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+--- PASS: TestOutputEdgesInterruptionAndCleanup (0.01s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.03s)
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.00s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+--- PASS: TestOutputEdgesInterruptionAndCleanup (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- PASS: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.03s)
+PASS
+ok  	d27acceptanceb	4.802s

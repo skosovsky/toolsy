@@ -1,0 +1,123 @@
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.00s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stdout exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stderr exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+--- FAIL: TestOutputEdgesInterruptionAndCleanup (0.01s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.06s)
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.01s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stdout exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stderr exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+--- FAIL: TestOutputEdgesInterruptionAndCleanup (0.01s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.05s)
+=== RUN   TestConcurrentLiteralOwnership
+--- PASS: TestConcurrentLiteralOwnership (0.01s)
+=== RUN   TestOutputEdgesInterruptionAndCleanup
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdoutcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stdout exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stdout+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcomplete
+    probe_test.go:72: cleanup err=sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderrcancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+complete
+    probe_test.go:72: cleanup err=sandbox internal failure: execute: stderr exceeds 262144 byte limit: read operation exceeded configured byte limit
+        sandbox e2b cleanup kill session: kill refused kills=1
+=== RUN   TestOutputEdgesInterruptionAndCleanup/stderr+cancel
+    probe_test.go:72: cleanup err=context canceled
+        sandbox e2b cleanup kill session: kill refused kills=1
+--- FAIL: TestOutputEdgesInterruptionAndCleanup (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdoutcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stdout+cancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcomplete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderrcancel (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+complete (0.00s)
+    --- FAIL: TestOutputEdgesInterruptionAndCleanup/stderr+cancel (0.00s)
+=== RUN   TestMalformedRejectedBeforeProvisioning
+--- PASS: TestMalformedRejectedBeforeProvisioning (0.00s)
+=== RUN   TestArgvHelper
+--- PASS: TestArgvHelper (0.00s)
+=== RUN   TestExecutableTypedTransport
+--- PASS: TestExecutableTypedTransport (1.06s)
+FAIL
+FAIL	d27acceptanceb	3.902s
+FAIL

@@ -2,18 +2,19 @@ package e2b
 
 const (
 	languagePython   = "python"
-	pythonCommand    = "python /workspace/main.py"
+	pythonCommand    = "python"
 	pythonScriptName = "main.py"
 )
 
 // Runtime describes how a language should be executed inside the remote E2B
 // workspace.
 //
-// Command must be a simple POSIX-style command line where the script path
-// appears exactly once as a top-level shell argument. Wrapper forms such as
-// `sh -c 'python /workspace/main.py'` are intentionally unsupported.
+// Command is a literal executable; Args must contain exactly one literal
+// /workspace/<ScriptName> argument. New canonicalizes that argument only.
+// Other arguments are trusted host configuration, never parsed as shell syntax.
 type Runtime struct {
 	Command    string
+	Args       []string
 	ScriptName string
 }
 
@@ -26,9 +27,9 @@ type options struct {
 
 // WithRuntime adds or overrides a language runtime mapping.
 //
-// The supplied Runtime.Command is validated by New against the supported
-// top-level script-argument subset described on Runtime.
+// Args are captured at option creation and copied again by New and each dispatch.
 func WithRuntime(language string, runtime Runtime) Option {
+	runtime.Args = append([]string(nil), runtime.Args...)
 	return func(o *options) {
 		if o.runtimes == nil {
 			o.runtimes = defaultRuntimes()
@@ -40,19 +41,23 @@ func WithRuntime(language string, runtime Runtime) Option {
 func defaultRuntimes() map[string]Runtime {
 	return map[string]Runtime{
 		"bash": {
-			Command:    "bash /workspace/main.sh",
+			Command:    "bash",
+			Args:       []string{"/workspace/main.sh"},
 			ScriptName: "main.sh",
 		},
 		"go": {
-			Command:    "go run /workspace/main.go",
+			Command:    "go",
+			Args:       []string{"run", "/workspace/main.go"},
 			ScriptName: "main.go",
 		},
 		"js": {
-			Command:    "node /workspace/main.js",
+			Command:    "node",
+			Args:       []string{"/workspace/main.js"},
 			ScriptName: "main.js",
 		},
 		languagePython: {
 			Command:    pythonCommand,
+			Args:       []string{workspacePrefix + pythonScriptName},
 			ScriptName: pythonScriptName,
 		},
 	}

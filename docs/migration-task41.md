@@ -849,3 +849,29 @@ preparation/redactor cost and not secret exposure. Portable and opted-in vendor
 fields mirror the same redacted/capped values. See the
 [adapter contract and examples](../ext/toolsyotel/README.md); exporter conformance
 and host authentication/classification remain external responsibilities.
+
+## D27 — E2B executable/argv seam and one output source
+
+E2B `Runtime.Command` is now a literal executable, with `Runtime.Args []string`.
+Convert `Command: "python /workspace/main.py"` to `Command: "python"` plus
+`Args: []string{"/workspace/main.py"}`. Go's command becomes `"go"` and
+`Args: []string{"run", "/workspace/main.go"}`. Do not pre-quote or escape args.
+The exact `/workspace/<ScriptName>` argument must occur once; New canonicalizes
+that one argument and the uploaded script path. A second already-canonical
+reference is rejected too. Other literal args are unchanged.
+Constructor rejects invalid UTF8/NUL, missing/duplicate script arg, empty executable
+and invalid script path. Args are copied for option/config/per-dispatch ownership.
+
+Implement `Session.StartAndWait(ctx, command, args, env, stdout, stderr)` with the
+new `args []string` parameter. Preserve argv semantics; if a backend only accepts
+one string, implement the single correct transport serialization boundary there.
+The adapter no longer parses/encodes shell strings. Literal argv is not a sandbox,
+program allowlist or prevention of programs interpreting their own flags; host
+runtime policy remains trusted. Shell-like text in other arguments is not rewritten.
+
+`CommandResult.Stdout` and `Stderr` are removed; only `ExitCode` remains. All output
+must flow through supplied capped writers, propagating writer errors. No uncapped
+buffered-output fallback exists. Inclusive per-stream256KiB, cancellation/timeout,
+nonzero exit and detached5s cleanup contracts remain. The thin client must cooperate
+with contexts; unit and executable local seams do not prove cloud destruction or
+filesystem/network/CPU isolation. See [E2B contract/example](../adapters/sandbox/e2b/README.md).

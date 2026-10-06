@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted, signed commit pending; rows 32–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted, signed commit pending; rows 33–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1250,3 +1250,50 @@ B control/abort/rejected/concurrent/reentrant/cap matrix and invalidbytes probes
 Both fullmodule racecount3, pinnedlint0, benchmarkPASS. Reports/probes/rawlogs in
  task41/d25/acceptance-a and acceptance-b; original90% rejection retained and
 superseded by final100%. Accepted for separate signed commit `refactor: telemetry mapping`.
+
+### 32 — D27 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Runtime executable and Args are literal argv, Session accepts them separately;
+   legacy shell parser/encoder removed, exact canonical script arg once validated,
+   builtins migrated; no shell interpretation or second quoting boundary in adapter.
+2. Constructor rejects malformed config before remote work; script normalization
+   materialization agrees with argv. Config slices snapshot and per-call argv copy
+   preserve host mutation/concurrent execution boundaries; arbitrary literal args
+   including empty/metacharacters/Unicode remain intact.
+3. CommandResult only ExitCode; capped writers sole stdout/stderr source, inclusive
+   output caps and interruption/primary/cleanup error contracts preserved, no fallback.
+4. AAA literal argv/canonical script/config ownership and writers/cap/cancel/cleanup
+   regressions; affected module race/lint and executable host seam checks pass.
+5. README/migration/API examples agree on clear break, single transport serialization
+   boundary and trusted client/program semantics; contexts/writer failures and cloud
+   isolation remain cooperative host capabilities, no live guarantees. Two100% and
+   no unresolved detected errors.
+
+Spec-first: Runtime.Command is an executable string, Runtime.Args a literal argv
+slice containing exactly one `/workspace/<raw trimmed ScriptName>` argument; New
+replaces only that exact arg with canonical script path, preserving all others.
+No shell syntax parser/quoting or embedded-reference rejection: other args are
+literal trusted host config; clients must preserve argv semantics. Command/args
+must be nonempty executable/valid UTF8/noNUL (empty args permitted). WithRuntime
+captures args and New snapshots; each dispatch transfers a separate args copy to
+client. Session.StartAndWait adds Args parameter; CommandResult removes Stdout/
+Stderr. Client owns at most one transport encoding if SDK accepts a string, with
+correct independent argument escaping and no reinterpretation/concatenation.
+Host-selected programs may interpret their own options/scripts; argv is not a
+sandbox or executable allowlist. Writer streams remain authoritative and bounded.
+
+D27 implementation complete: literal executable/Args Session seam, exact script
+arg normalization, config and perdispatch copying, removed shellparser/encoder and
+unused CommandResult outputs. Builtins/tests/docs/publicexample migrated. E2B full
+racecount3PASS17.559s/pinnedlint0; constructor/literalargv/ownership runnable checks
+pass. Capped writer, interrupt and cleanup behavior retained. Evidence in task41/d27;
+no live cloud/SDK serialization guarantee asserted. Independent acceptance pending.
+
+Independent D27 final A and B each100% (five20/20), no unresolved detectederrors.
+A affectedmodulerace3PASS16.694s/lint0/publicprobes3PASS1.693s; B affectedmodulerace3
+PASS16.807s/lint0/publicprobes3PASS4.802s. A64/B80 simultaneouscalls with clientargv
+mutation, reusedoptions, literalbytes/Unicode, canonicalcollisions, ignoredwriter
+errors/exact256KiB/+1, interruption and cleanup; B realOSargvtransport exercised.
+Reports/probes/rawlogs retained task41/d27/acceptance-a/b. Cloudlimits remainhost.
+Accepted for separate signed commit `refactor: e2b argv`.

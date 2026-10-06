@@ -1,0 +1,116 @@
+package acceptanceb
+
+import (
+ "context"
+ "encoding/json"
+ "os"
+ "os/exec"
+ "errors"
+ "io"
+ "reflect"
+ "strings"
+ "sync"
+ "testing"
+ "time"
+
+ "github.com/skosovsky/toolsy/adapters/sandbox/e2b"
+ "github.com/skosovsky/toolsy/exectool"
+ "github.com/skosovsky/toolsy/textprocessor"
+)
+
+type client struct { newSession func() *session }
+func (c client) CreateSandbox(context.Context) (e2b.Session,error) { return c.newSession(),nil }
+type session struct {
+ run func(context.Context,string,[]string,io.Writer,io.Writer)(e2b.CommandResult,error)
+ writes map[string]string
+ cleanup error
+ killed int
+}
+func(s *session) WriteFile(_ context.Context,p string,b []byte)error {
+ if s.writes==nil { s.writes=map[string]string{} }; s.writes[p]=string(b); return nil
+}
+func(s *session) StartAndWait(ctx context.Context,c string,a []string,_ map[string]string,o,e io.Writer)(e2b.CommandResult,error){return s.run(ctx,c,a,o,e)}
+func(s *session) Kill(ctx context.Context)error {
+ s.killed++; if ctx.Err()!=nil {return errors.New("cleanup inherited canceled context")}
+ d,ok:=ctx.Deadline(); if !ok || time.Until(d)>5*time.Second {return errors.New("missing bounded cleanup deadline")}; return s.cleanup
+}
+
+func TestConcurrentLiteralOwnership(t *testing.T) {
+ // Arrange: every session mutates its transferred argv; one shared adapter handles 80 runs.
+ raw:=[]string{"/workspace/a/../main 界.py","","$(touch /tmp/should-not-exist)","`id`","; rm -rf /","'\"\\\n","prefix/workspace/a/../main 界.py","/workspace/main 界.py.bak"}
+ expected:=append([]string(nil),raw...); expected[0]="/workspace/main 界.py"
+ opt:=e2b.WithRuntime("literal",e2b.Runtime{Command:" /opt/literal executable ",Args:raw,ScriptName:" a/../main 界.py "})
+ raw[1]="host mutation"
+ c:=client{newSession:func()*session {
+ s:=&session{}
+ s.run=func(_ context.Context,cmd string,args []string,o,e io.Writer)(e2b.CommandResult,error){
+ if cmd!=" /opt/literal executable " || !reflect.DeepEqual(args,expected) {return e2b.CommandResult{},errors.New("literal argv corrupted")}
+ if s.writes["/workspace/main 界.py"]!="payload" {return e2b.CommandResult{},errors.New("script path mismatch")}
+ for i:=range args {args[i]="client mutation"}
+ _,err:=io.WriteString(o,"ok"); return e2b.CommandResult{ExitCode:9},err
+ }; return s}}
+ sb,err:=e2b.New(c,opt); if err!=nil {t.Fatal(err)}
+ // Act.
+ var wg sync.WaitGroup
+ for range 80 {wg.Add(1); go func(){defer wg.Done();r,e:=sb.Run(context.Background(),exectool.RunRequest{Language:"literal",Code:"payload"});if e!=nil||r.Stdout!="ok"||r.ExitCode!=9 {t.Errorf("result=%+v err=%v",r,e)}}()};wg.Wait()
+ // Assert: the option can construct another adapter after all dispatch mutations.
+ second,err:=e2b.New(c,opt);if err!=nil{t.Fatal(err)};if _,err=second.Run(context.Background(),exectool.RunRequest{Language:"literal",Code:"payload"});err!=nil{t.Fatal(err)}
+}
+
+func TestOutputEdgesInterruptionAndCleanup(t *testing.T) {
+ for _,stream:=range []string{"stdout","stderr"} {for _,n:=range []int{256*1024,256*1024+1} {for _,interrupt:=range []bool{false,true} {
+ t.Run(stream+strings.Repeat("+",n-256*1024)+map[bool]string{false:"complete",true:"cancel"}[interrupt],func(t *testing.T){
+ // Arrange: client intentionally swallows writer errors and reports a guest exit.
+ cleanup:=errors.New("kill refused")
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel()
+ s:=&session{cleanup:cleanup,run:func(_ context.Context,_ string,_ []string,o,e io.Writer)(e2b.CommandResult,error){
+ w:=o;if stream=="stderr" {w=e};_,_ = io.WriteString(w,strings.Repeat("x",n));if interrupt {cancel()};return e2b.CommandResult{ExitCode:7},nil}}
+ sb,err:=e2b.New(client{newSession:func()*session{return s}});if err!=nil{t.Fatal(err)}
+ // Act.
+ r,err:=sb.Run(ctx,exectool.RunRequest{Language:"python",Code:"pass"})
+ // Assert: interruption is primary; cleanup stays inspectable; cap cannot be bypassed.
+ var diagnostic *exectool.CleanupError
+ if !errors.As(err,&diagnostic)||!errors.Is(diagnostic.Cause,cleanup)||!errors.Is(err,exectool.ErrSandboxCleanup)||s.killed!=1 {t.Fatalf("cleanup err=%v kills=%d",err,s.killed)}
+ if interrupt {if !errors.Is(err,context.Canceled)||errors.Is(err,textprocessor.ErrReadLimitExceeded)||r.Stdout!=""||r.Stderr!="" {t.Fatalf("interrupt result=%+v err=%v",r,err)}} else if n>256*1024 {if !errors.Is(err,textprocessor.ErrReadLimitExceeded)||!errors.Is(err,exectool.ErrSandboxFailure)||r.Stdout!=""||r.Stderr!="" {t.Fatalf("overflow result=%+v err=%v",r,err)}} else {out:=r.Stdout;if stream=="stderr" {out=r.Stderr};if len(out)!=n||r.ExitCode!=7{t.Fatalf("inclusive len=%d exit=%d err=%v",len(out),r.ExitCode,err)}}
+ })}}}
+}
+
+func TestMalformedRejectedBeforeProvisioning(t *testing.T) {
+ for _,rt:=range []e2b.Runtime{
+ {Command:" \t",Args:[]string{"/workspace/main.py"},ScriptName:"main.py"},
+ {Command:string([]byte{255}),Args:[]string{"/workspace/main.py"},ScriptName:"main.py"},
+ {Command:"python",Args:[]string{"/workspace/main.py","/workspace/main.py"},ScriptName:"main.py"},
+ {Command:"python",Args:[]string{"/workspace/main.py"},ScriptName:"a/../main.py"},
+ {Command:"python",Args:[]string{"/workspace/a/../main.py","/workspace/main.py"},ScriptName:"a/../main.py"},
+ {Command:"python",Args:[]string{"/workspace/../main.py"},ScriptName:"../main.py"},
+ } {
+ // Arrange.
+ calls:=0;c:=client{newSession:func()*session{calls++;return &session{}}}
+ // Act.
+ _,err:=e2b.New(c,e2b.WithRuntime("invalid",rt))
+ // Assert.
+ if err==nil||calls!=0{t.Fatalf("err=%v provisioned=%d",err,calls)}
+ }
+}
+
+func TestArgvHelper(t *testing.T) {
+ if os.Getenv("D27_ACCEPTANCE_HELPER")!="1" { return }
+ for i,a:=range os.Args {if a=="--" {if err:=json.NewEncoder(os.Stdout).Encode(os.Args[i+1:]);err!=nil{os.Exit(1)};os.Exit(0)}}
+ os.Exit(2)
+}
+
+func TestExecutableTypedTransport(t *testing.T) {
+ // Arrange: a real local process receives the literal argv through exec.CommandContext.
+ exe,err:=os.Executable();if err!=nil{t.Fatal(err)}
+ literals:=[]string{"/workspace/main 界.py", "", "$(printf injected)", "`printf injected`", "a; printf injected", "one two", "'quoted'", "line\nnext", "界"}
+ args:=append([]string{"-test.run=TestArgvHelper","--"},literals...)
+ s:=&session{run:func(ctx context.Context,c string,a []string,o,e io.Writer)(e2b.CommandResult,error){
+ cmd:=exec.CommandContext(ctx,c,a...);cmd.Stdout=o;cmd.Stderr=e;cmd.Env=append(os.Environ(),"D27_ACCEPTANCE_HELPER=1")
+ err:=cmd.Run();return e2b.CommandResult{ExitCode:0},err
+ }}
+ sb,err:=e2b.New(client{newSession:func()*session{return s}},e2b.WithRuntime("typed",e2b.Runtime{Command:exe,Args:args,ScriptName:"main 界.py"}));if err!=nil{t.Fatal(err)}
+ // Act.
+ r,err:=sb.Run(context.Background(),exectool.RunRequest{Language:"typed",Code:"payload"});if err!=nil{t.Fatal(err)}
+ // Assert: metacharacters, empty args, Unicode and newlines survived an actual OS argv boundary.
+ var got []string;if err=json.Unmarshal([]byte(r.Stdout),&got);err!=nil{t.Fatal(err)};if !reflect.DeepEqual(got,literals){t.Fatalf("got=%q want=%q",got,literals)}
+}

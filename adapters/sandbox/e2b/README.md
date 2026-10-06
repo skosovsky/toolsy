@@ -10,24 +10,50 @@
 The package ships with built-in runtime mappings for `python`, `bash`, `js`,
 and `go`, and is designed to sit behind a thin transport-specific Go client.
 
-Custom `Runtime.Command` values intentionally support only a narrow subset:
-the script path must appear exactly once as a top-level shell argument.
-Wrapper forms such as `sh -c 'python /workspace/main.py'` and nested shell
-snippets are rejected at construction time.
+## Literal executable and argv
 
-Remote sandbox teardown uses a bounded cleanup timeout so stalled control-plane
-calls cannot block timeout returns forever.
+`Runtime.Command` is a literal executable (for example `python` or `/opt/my python`),
+not a shell command line. `Runtime.Args` contains literal arguments, including
+exactly one `/workspace/<ScriptName>` argument. `New` canonicalizes ScriptName and
+rewrites only that exact argument; code is uploaded at the same canonical path.
+The canonical script path must also occur exactly once after rewriting; supplying
+both noncanonical and canonical script references is rejected. Other arguments,
+including empty strings, spaces, quotes and shell metacharacters,
+remain literal. Arguments/executable must be valid UTF-8 without NUL. Empty or
+whitespace-only executable, missing/repeated/mismatched script arguments and invalid
+relative script paths are rejected before provisioning.
 
-## Execution contract
+```go
+sb, err := e2b.New(client, e2b.WithRuntime("custom", e2b.Runtime{
+    Command:    "python",
+    Args:       []string{"-u", "/workspace/dir/../main script.py", "$literal"},
+    ScriptName: "dir/../main script.py",
+}))
+```
 
-Every runtime, including built-ins and already-normalized entrypoints, passes the
-same constructor validation. Commands are one POSIX-style command with exactly
-one top-level `/workspace/<ScriptName>` argument following an executable. Missing,
-mismatched, repeated, or embedded script references are rejected. Shell operators,
-expansions, multiline commands, command-mode wrappers (`sh -c`, `bash -ec`, etc.)
-and mixed quoting of the script token are unsupported. Literal single/double
-quoting and escaped spaces are supported. Entrypoint normalization rewrites that
-one argument and materializes code at the matching canonical path.
+This dispatches executable `python` and arguments `-u`,
+`/workspace/main script.py`, `$literal` separately. There is no shell parser,
+quoting pass, expansion or shell-operator interpretation in the adapter. Other
+args that embed script-like text are not rewritten. Runtime arguments are copied
+at option creation, construction and each dispatch, so a client's argument mutation
+does not change subsequent calls. See the runnable [public example](example_test.go).
+
+`Session.StartAndWait` accepts `(ctx, command, args, env, stdout, stderr)`.
+The injected client must preserve literal argv semantics. If its transport/SDK
+only accepts a command string, that client owns the **single serialization
+boundary** and must independently escape each argument for the actual target
+transport. Joining raw strings or parsing them again changes the contract. This
+module supplies no universal shell serializer. Host-selected programs can still
+interpret their own flags and execute code (including explicit shell interpreters);
+argv is not an executable allowlist or isolation guarantee. Such semantics remain
+trusted host runtime policy.
+
+## Execution and output contract
+
+`CommandResult` contains only `ExitCode`. Supplied stdout/stderr writers are the
+only output source; clients must not return separately buffered output. There is
+no fallback around bounded writers. Remote sandbox teardown uses a fresh bounded
+five-second cleanup context.
 
 The injected client owns remote transport and infrastructure. It must honor
 contexts for provisioning, upload, execution and teardown, stream stdout/stderr
@@ -44,3 +70,13 @@ cancellation. If Kill fails or times out, `*exectool.CleanupError` exposes the
 backend, operation and cause, preserving the original result/error. Successful
 cleanup means the client returned success; no additional remote destruction claim
 is made. Unit mocks verify requests and error semantics, not live remote isolation.
+
+## D27 migration
+
+Replace `Runtime{Command: "python /workspace/main.py", ScriptName: "main.py"}` with
+`Runtime{Command: "python", Args: []string{"/workspace/main.py"}, ScriptName: "main.py"}`.
+For Go, use `Command: "go", Args: []string{"run", "/workspace/main.go"}`.
+Remove pre-quoting/escaping from literal paths and args. Update client implementations
+to accept the new `args []string` parameter and stream all output through supplied
+writers; remove `CommandResult.Stdout`/`Stderr` initializers. Keep `ExitCode`.
+See [task41 migration](../../../docs/migration-task41.md).

@@ -35,14 +35,23 @@ func (c *fakeClient) CreateSandbox(context.Context) (Session, error) {
 	return c.session, nil
 }
 
+// Test transport fixture streams these bytes; they are not returned in CommandResult.
+type fakeCommandOutput struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int
+}
+
 type fakeSession struct {
 	writes       map[string][]byte
 	writeErrs    map[string]error
-	result       CommandResult
+	result       fakeCommandOutput
 	err          error
 	killed       bool
 	killCount    int
 	command      string
+	args         []string
+	mutateArgs   bool
 	env          map[string]string
 	blockRun     bool
 	blockKill    bool
@@ -69,10 +78,15 @@ func (s *fakeSession) WriteFile(_ context.Context, path string, data []byte) err
 func (s *fakeSession) StartAndWait(
 	ctx context.Context,
 	command string,
+	args []string,
 	env map[string]string,
 	stdout, stderr io.Writer,
 ) (CommandResult, error) {
 	s.command = command
+	s.args = append([]string(nil), args...)
+	if s.mutateArgs { // Constructor guarantees at least the script argument.
+		args[0] = "client changed input"
+	}
 	if len(env) > 0 {
 		s.env = make(map[string]string, len(env))
 		maps.Copy(s.env, env)
@@ -117,7 +131,7 @@ func (s *fakeSession) Kill(ctx context.Context) error {
 }
 
 func TestRunSuccess(t *testing.T) {
-	session := &fakeSession{result: CommandResult{Stdout: "ok", ExitCode: 0}}
+	session := &fakeSession{result: fakeCommandOutput{Stdout: "ok", ExitCode: 0}}
 	sb, err := New(&fakeClient{session: session})
 	require.NoError(t, err)
 
@@ -130,7 +144,8 @@ func TestRunSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
 	require.Equal(t, "ok", res.Stdout)
-	require.Equal(t, "python /workspace/main.py", session.command)
+	require.Equal(t, "python", session.command)
+	require.Equal(t, []string{"/workspace/main.py"}, session.args)
 	require.Equal(t, map[string]string{"MODE": "ci"}, session.env)
 	require.Equal(t, []byte("payload"), session.writes["/workspace/data.txt"])
 	require.Equal(t, []byte("print(1)"), session.writes["/workspace/main.py"])
@@ -138,7 +153,7 @@ func TestRunSuccess(t *testing.T) {
 }
 
 func TestRunReturnsNonZeroExitAsResult(t *testing.T) {
-	session := &fakeSession{result: CommandResult{Stderr: "boom", ExitCode: 4}}
+	session := &fakeSession{result: fakeCommandOutput{Stderr: "boom", ExitCode: 4}}
 	sb, err := New(&fakeClient{session: session})
 	require.NoError(t, err)
 
@@ -166,8 +181,11 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 func TestNewRejectsDuplicateLanguagesAfterTrimming(t *testing.T) {
 	_, err := New(
 		&fakeClient{session: &fakeSession{}},
-		WithRuntime("python", Runtime{Command: "python /workspace/main.py", ScriptName: "main.py"}),
-		WithRuntime(" python ", Runtime{Command: "python /workspace/other.py", ScriptName: "other.py"}),
+		WithRuntime("python", Runtime{Command: "python", Args: []string{"/workspace/main.py"}, ScriptName: "main.py"}),
+		WithRuntime(
+			" python ",
+			Runtime{Command: "python", Args: []string{"/workspace/other.py"}, ScriptName: "other.py"},
+		),
 	)
 	require.Error(t, err)
 }
@@ -175,98 +193,12 @@ func TestNewRejectsDuplicateLanguagesAfterTrimming(t *testing.T) {
 func TestNewRejectsInvalidScriptName(t *testing.T) {
 	_, err := New(
 		&fakeClient{session: &fakeSession{}},
-		WithRuntime("custom", Runtime{Command: "python /workspace/main.py", ScriptName: "../main.py"}),
+		WithRuntime(
+			"custom",
+			Runtime{Command: "python", Args: []string{"/workspace/main.py"}, ScriptName: "../main.py"},
+		),
 	)
 	require.Error(t, err)
-}
-
-func TestNewNormalizesExactWorkspaceScriptPath(t *testing.T) {
-	testCases := []struct {
-		name       string
-		command    string
-		scriptName string
-		wantCmd    string
-		wantScript string
-	}{
-		{
-			name:       "bare token",
-			command:    "python /workspace/dir/../main.py",
-			scriptName: "dir/../main.py",
-			wantCmd:    "python /workspace/main.py",
-			wantScript: "main.py",
-		},
-		{
-			name:       "double quoted",
-			command:    `python "/workspace/dir/../main.py"`,
-			scriptName: "dir/../main.py",
-			wantCmd:    `python "/workspace/main.py"`,
-			wantScript: "main.py",
-		},
-		{
-			name:       "single quoted",
-			command:    "python '/workspace/dir/../main.py'",
-			scriptName: "dir/../main.py",
-			wantCmd:    "python '/workspace/main.py'",
-			wantScript: "main.py",
-		},
-		{
-			name:       "escaped spaces",
-			command:    `python /workspace/dir/../main\ script.py`,
-			scriptName: "dir/../main script.py",
-			wantCmd:    `python /workspace/main\ script.py`,
-			wantScript: "main script.py",
-		},
-		{
-			name:       "rewrite only exact script arg",
-			command:    `python "/workspace/dir/../main.py" --cache=/workspace/main.py.cache`,
-			scriptName: "dir/../main.py",
-			wantCmd:    `python "/workspace/main.py" --cache=/workspace/main.py.cache`,
-			wantScript: "main.py",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			sb, err := New(
-				&fakeClient{session: &fakeSession{}},
-				WithRuntime("custom", Runtime{
-					Command:    tc.command,
-					ScriptName: tc.scriptName,
-				}),
-			)
-			require.NoError(t, err)
-			require.Equal(t, tc.wantCmd, sb.runtimes["custom"].Command)
-			require.Equal(t, tc.wantScript, sb.runtimes["custom"].ScriptName)
-		})
-	}
-}
-
-func TestNewRejectsAmbiguousScriptPathReferencesInCommand(t *testing.T) {
-	testCases := []string{
-		"python /workspace/dir/../main.py --cache-key=dir/../main.py",
-		"python /workspace/dir/../main.py --output=/tmp/dir/../main.py.bak",
-		"python /workspace/dir/../main.py --cache=/workspace/dir/../main.py.cache",
-		"python /workspace/dir/../main.py label=/workspace/dir/../main.py",
-		"python /workspace/dir/../main.py /workspace/dir/../main.py",
-		`sh -c 'python /workspace/dir/../main.py'`,
-		`bash -lc "python /workspace/dir/../main.py"`,
-		`python "/workspace/dir/../main.py`,
-		`python /workspace/dir/../main\`,
-	}
-
-	for _, command := range testCases {
-		t.Run(command, func(t *testing.T) {
-			_, err := New(
-				&fakeClient{session: &fakeSession{}},
-				WithRuntime("custom", Runtime{
-					Command:    command,
-					ScriptName: "dir/../main.py",
-				}),
-			)
-			require.Error(t, err)
-			require.ErrorContains(t, err, "top-level shell argument")
-		})
-	}
 }
 
 func TestRunRejectsReservedScriptNames(t *testing.T) {
@@ -382,7 +314,7 @@ func TestRunReturnsTimeoutWhenScriptUploadTimesOut(t *testing.T) {
 
 func TestRunDurationExcludesProvisioningAndUpload(t *testing.T) {
 	session := &fakeSession{
-		result:     CommandResult{Stdout: "ok", ExitCode: 0},
+		result:     fakeCommandOutput{Stdout: "ok", ExitCode: 0},
 		writeDelay: 20 * time.Millisecond,
 		runDelay:   30 * time.Millisecond,
 	}
@@ -409,7 +341,7 @@ func TestRunRejectsOversizedRemoteOutputStreaming(t *testing.T) {
 	for range 5 {
 		chunks = append(chunks, chunk)
 	}
-	session := &fakeSession{stdoutChunks: chunks, result: CommandResult{ExitCode: 0}}
+	session := &fakeSession{stdoutChunks: chunks, result: fakeCommandOutput{ExitCode: 0}}
 	sb, err := New(&fakeClient{session: session})
 	require.NoError(t, err)
 
@@ -425,7 +357,7 @@ func TestRunRejectsOversizedRemoteOutputStreaming(t *testing.T) {
 
 func TestRunRejectsOversizedRemoteOutput(t *testing.T) {
 	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
-	session := &fakeSession{result: CommandResult{Stdout: big, ExitCode: 0}}
+	session := &fakeSession{result: fakeCommandOutput{Stdout: big, ExitCode: 0}}
 	sb, err := New(&fakeClient{session: session})
 	require.NoError(t, err)
 
@@ -463,50 +395,13 @@ func TestClassifyControlPlaneError_CancelOverReadLimit(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 }
 
-func TestNewValidatesAllEntrypointForms(t *testing.T) {
-	for _, script := range []string{"main.py", "dir/../main.py"} {
-		for _, command := range []string{
-			"python /workspace/other.py", "python", "python /workspace/" + script + " /workspace/" + script,
-			"sh -c 'python /workspace/" + script + "'", "sh -ec /workspace/" + script,
-			"python /workspace/" + script + "; echo ok", "python /workspace/" + script + "\necho ok",
-			"python /workspace/" + script + " $(echo extra)", `python "/workspace/` + script + `" "$SECRET"`,
-		} {
-			t.Run(script+command, func(t *testing.T) {
-				// Arrange / Act.
-				_, err := New(
-					&fakeClient{session: &fakeSession{}},
-					WithRuntime("custom", Runtime{Command: command, ScriptName: script}),
-				)
-				// Assert.
-				require.Error(t, err)
-			})
-		}
-		t.Run(script+" valid", func(t *testing.T) {
-			// Arrange.
-			session := &fakeSession{result: CommandResult{Stdout: "yes"}}
-			sb, err := New(
-				&fakeClient{session: session},
-				WithRuntime("custom", Runtime{Command: "python /workspace/" + script, ScriptName: script}),
-			)
-			require.NoError(t, err)
-			// Act.
-			result, err := sb.Run(context.Background(), exectool.RunRequest{Language: "custom", Code: "print('yes')"})
-			// Assert.
-			require.NoError(t, err)
-			require.Equal(t, "yes", result.Stdout)
-			require.Equal(t, "python /workspace/main.py", session.command)
-			require.Contains(t, session.writes, "/workspace/main.py")
-		})
-	}
-}
-
 func TestRunCleanupFailurePreservesResultAndPrimaryError(t *testing.T) {
 	for _, primary := range []error{nil, context.Canceled, errors.New("transport failed")} {
 		t.Run(fmt.Sprint(primary), func(t *testing.T) {
 			// Arrange.
 			cleanupErr := errors.New("kill not confirmed")
 			session := &fakeSession{
-				result:  CommandResult{Stdout: "done", ExitCode: 7},
+				result:  fakeCommandOutput{Stdout: "done", ExitCode: 7},
 				err:     primary,
 				killErr: cleanupErr,
 			}
@@ -530,25 +425,54 @@ func TestRunCleanupFailurePreservesResultAndPrimaryError(t *testing.T) {
 	}
 }
 
-func TestNewShellWhitespaceAndLiteralUnicodePath(t *testing.T) {
-	for _, space := range []string{"\u00a0", "\u2003"} {
-		// Arrange / Act.
-		_, err := New(
-			&fakeClient{session: &fakeSession{}},
-			WithRuntime("custom", Runtime{Command: "python" + space + "/workspace/main.py", ScriptName: "main.py"}),
-		)
-		// Assert.
-		require.Error(t, err)
-	}
-	// Arrange / Act.
-	sb, err := New(
-		&fakeClient{session: &fakeSession{}},
-		WithRuntime(
-			"custom",
-			Runtime{Command: "python '/workspace/main\u00a0script.py'", ScriptName: "main\u00a0script.py"},
-		),
+func TestRuntimeLiteralArgvCanonicalScriptAndOwnership(t *testing.T) {
+	// Arrange: shell metacharacters, empty arg and Unicode are literal host config.
+	original := []string{"-u", "/workspace/dir/../main script.py", "", "$SECRET", "; echo x", "'quoted'", "界"}
+	option := WithRuntime(
+		"custom",
+		Runtime{Command: "/opt/my python", Args: original, ScriptName: "dir/../main script.py"},
 	)
-	// Assert.
+	original[0] = "mutated"
+	session := &fakeSession{result: fakeCommandOutput{Stdout: "ok"}, mutateArgs: true}
+	sb, err := New(&fakeClient{session: session}, option)
 	require.NoError(t, err)
-	require.Equal(t, "python '/workspace/main\u00a0script.py'", sb.runtimes["custom"].Command)
+	// Act.
+	result, err := sb.Run(t.Context(), exectool.RunRequest{Language: "custom", Code: "print(1)"})
+	// Assert: exact script matches the uploaded file, without a shell quoting pass.
+	require.NoError(t, err)
+	require.Equal(t, "ok", result.Stdout)
+	require.Equal(t, "/opt/my python", session.command)
+	require.Equal(
+		t,
+		[]string{"-u", "/workspace/main script.py", "", "$SECRET", "; echo x", "'quoted'", "界"},
+		session.args,
+	)
+	require.Equal(t, []byte("print(1)"), session.writes["/workspace/main script.py"])
+	require.Equal(t, "-u", sb.runtimes["custom"].Args[0])
+	// A constructed sandbox cannot mutate a reused option snapshot.
+	sb.runtimes["custom"].Args[0] = "changed first sandbox"
+	second, err := New(&fakeClient{session: &fakeSession{}}, option)
+	require.NoError(t, err)
+	require.Equal(t, "-u", second.runtimes["custom"].Args[0])
+}
+
+func TestRuntimeRejectsMalformedArgv(t *testing.T) {
+	for _, runtime := range []Runtime{
+		{Command: "", Args: []string{"/workspace/main.py"}, ScriptName: "main.py"},
+		{Command: "python", Args: nil, ScriptName: "main.py"},
+		{Command: "python", Args: []string{"/workspace/other.py"}, ScriptName: "main.py"},
+		{Command: "python", Args: []string{"/workspace/main.py", "/workspace/main.py"}, ScriptName: "main.py"},
+		{Command: "python", Args: []string{"/workspace/dir/../main.py", "/workspace/main.py"}, ScriptName: "dir/../main.py"},
+		{Command: "py\x00thon", Args: []string{"/workspace/main.py"}, ScriptName: "main.py"},
+		{Command: "python", Args: []string{"/workspace/main.py", "bad\x00"}, ScriptName: "main.py"},
+		{Command: "python", Args: []string{"/workspace/main.py", string([]byte{0xff})}, ScriptName: "main.py"},
+	} {
+		// Arrange.
+		client := &fakeClient{}
+		// Act.
+		_, err := New(client, WithRuntime("custom", runtime))
+		// Assert: constructor rejection never provisions remote work.
+		require.Error(t, err)
+		require.Zero(t, client.createCalls)
+	}
 }

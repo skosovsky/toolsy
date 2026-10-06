@@ -1,0 +1,73 @@
+package acceptancea
+
+import (
+ "context"
+ "errors"
+ "io"
+ "reflect"
+ "strings"
+ "sync"
+ "testing"
+
+ "github.com/skosovsky/toolsy/adapters/sandbox/e2b"
+ "github.com/skosovsky/toolsy/exectool"
+ "github.com/skosovsky/toolsy/textprocessor"
+)
+
+type client struct { start func(context.Context,string,[]string,io.Writer,io.Writer)(e2b.CommandResult,error) }
+func (c client) CreateSandbox(context.Context)(e2b.Session,error){ return session{c},nil }
+type session struct { client }
+func (s session) WriteFile(context.Context,string,[]byte)error{return nil}
+func (s session) Kill(context.Context)error{return nil}
+func (s session) StartAndWait(ctx context.Context,cmd string,args []string,_ map[string]string,out,errout io.Writer)(e2b.CommandResult,error){return s.start(ctx,cmd,args,out,errout)}
+
+func TestPublicConcurrentOwnership(t *testing.T) {
+ // Arrange: a reused option and a client which mutates the actual received slice.
+ want := []string{"", "/workspace/main 界\u00a0script.py", "\n\t  literal  ", "$x; `echo hi`", "--cache=/workspace/dir/../main 界\u00a0script.py"}
+ original := append([]string(nil),want...)
+ original[1] = "/workspace/dir/../main 界\u00a0script.py"
+ opt := e2b.WithRuntime("custom",e2b.Runtime{Command:" /opt/my python\t",Args:original,ScriptName:"dir/../main 界\u00a0script.py"})
+ original[0]="host mutation"
+ c:=client{start:func(_ context.Context,cmd string,args []string,_,_ io.Writer)(e2b.CommandResult,error){
+  if cmd!=" /opt/my python\t" || !reflect.DeepEqual(args,want){return e2b.CommandResult{},errors.New("literal argv changed")}
+  args[0]="client mutation"; return e2b.CommandResult{},nil
+ }}
+ first,err:=e2b.New(c,opt);if err!=nil{t.Fatal(err)}
+ second,err:=e2b.New(c,opt);if err!=nil{t.Fatal(err)}
+ // Act.
+ var wg sync.WaitGroup
+ for i:=0;i<64;i++ { wg.Add(1);go func(i int){defer wg.Done(); sb:=first;if i%2==0{sb=second};_,err:=sb.Run(context.Background(),exectool.RunRequest{Language:"custom"});if err!=nil{t.Error(err)}}(i) };wg.Wait()
+ // Assert: all concurrent and subsequent dispatches preserve the snapshot.
+ if _,err:=first.Run(context.Background(),exectool.RunRequest{Language:"custom"});err!=nil{t.Fatal(err)}
+}
+
+func TestIgnoredWriterErrorsStillFailClosed(t *testing.T) {
+ for _,size:=range []int{256*1024,256*1024+1} {t.Run(string(rune(size)),func(t *testing.T){
+  // Arrange: malicious client ignores both writer errors and claims complete success.
+  c:=client{start:func(_ context.Context,_ string,_ []string,out,errout io.Writer)(e2b.CommandResult,error){_,_=io.WriteString(out,strings.Repeat("x",size));_,_=io.WriteString(errout,strings.Repeat("y",size));_,_=io.WriteString(out,"");return e2b.CommandResult{ExitCode:13},nil}}
+  sb,err:=e2b.New(c);if err!=nil{t.Fatal(err)}
+  // Act.
+  result,err:=sb.Run(context.Background(),exectool.RunRequest{Language:"python"})
+  // Assert.
+  if size==256*1024 {if err!=nil||len(result.Stdout)!=size||len(result.Stderr)!=size||result.ExitCode!=13{t.Fatalf("inclusive cap failed: %v",err)}} else {if !errors.Is(err,textprocessor.ErrReadLimitExceeded){t.Fatalf("overflow not reported: %v",err)};if len(result.Stdout)>256*1024||len(result.Stderr)>256*1024{t.Fatal("unbounded output")}}
+ })}
+}
+
+func TestExactDuplicateRejectedBeforeProvision(t *testing.T){
+ // Arrange.
+ called:=false
+ c:=client{start:func(context.Context,string,[]string,io.Writer,io.Writer)(e2b.CommandResult,error){called=true;return e2b.CommandResult{},nil}}
+ // Act.
+ _,err:=e2b.New(c,e2b.WithRuntime("custom",e2b.Runtime{Command:"python",Args:[]string{"/workspace/dir/../main.py","/workspace/dir/../main.py"},ScriptName:"dir/../main.py"}))
+ // Assert.
+ if err==nil||called{t.Fatalf("duplicate not rejected: %v",err)}
+}
+
+func TestRawAndCanonicalDuplicateRejected(t *testing.T){
+ // Arrange.
+ c:=client{}
+ // Act.
+ _,err:=e2b.New(c,e2b.WithRuntime("custom",e2b.Runtime{Command:"python",Args:[]string{"/workspace/dir/../main.py","/workspace/main.py"},ScriptName:"dir/../main.py"}))
+ // Assert.
+ if err==nil{t.Fatal("two canonical script arguments accepted")}
+}
