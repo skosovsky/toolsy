@@ -353,7 +353,7 @@ func TestPostHandlerFormatterBypassAndNestedHandler(t *testing.T) {
 }
 
 func TestPostHandlerDiagnosticCausesDoNotControlRouting(t *testing.T) {
-	for _, cause := range []error{ErrPause, ErrYield, ErrHalt, ErrUIAction, ErrStreamAborted, context.DeadlineExceeded} {
+	for _, cause := range []error{ErrPause, ErrYield, ErrHalt, ErrHostEvent, ErrStreamAborted, context.DeadlineExceeded} {
 		t.Run(cause.Error(), func(t *testing.T) {
 			// Arrange: a callback embeds a control/interrupt cause in a repairable error.
 			failure := &ToolError{Code: CodeValidationFailed, Retryable: true, Err: cause}

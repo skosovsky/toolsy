@@ -14,7 +14,7 @@
 //     Execute(ctx, run, input, yield)
 //   - ToolCall carries Input ToolInput (CallID + ArgsJSON + Attachments).
 //   - Chunk data-plane: Event, Data, MimeType, IsError, Progress.
-//   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/UIAction).
+//   - Chunk control-plane: EventControl + typed ControlSignal (Pause/Yield/Halt/HostEvent).
 //   - ToolManifest SSOT: ReadOnly, RequiresConfirmation, Dangerous, Idempotent, CompletionPolicy.
 //   - Session: in-memory state via SetSessionState/GetSessionState; ExportSnapshot/ImportSnapshot;
 //     StateCodecRegistry for typed snapshot roundtrips (see docs/migration-task28.md and docs/adr/adr-task28-hardening.md).

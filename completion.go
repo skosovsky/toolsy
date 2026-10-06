@@ -4,11 +4,12 @@ package toolsy
 type CompletionPolicy string
 
 const (
-	// CompletionContinue is the default: proceed to the next agent step normally.
+	// CompletionContinue is the default host routing hint: continue after success.
 	CompletionContinue CompletionPolicy = "continue"
-	// CompletionSilentYield stops the current chain quietly after this tool (no hard error).
+	// CompletionSilentYield asks the host to end its continuation quietly after success.
 	CompletionSilentYield CompletionPolicy = "silent_yield"
-	// CompletionHalt stops the agent track after this tool.
+	// CompletionHalt asks the host to stop its continuation after success.
+	// Core does not enforce these hints or cancel other calls.
 	CompletionHalt CompletionPolicy = "halt"
 )
 

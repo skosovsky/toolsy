@@ -1,0 +1,39 @@
+package toolsy_test
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "strings"
+ "testing"
+ toolsy "github.com/skosovsky/toolsy"
+)
+func TestD02AProbeSnapshotAndCodec(t *testing.T) {
+ original := &toolsy.HostEventSignal{Name:"host.changed", PayloadJSON:[]byte(`{"id":1}`)}
+ tool,err:=toolsy.NewTypedTool(toolsy.TypedToolSpec[toolsy.NoSubject,toolsy.NoScope,struct{},string,string]{Name:"probe",Description:"probe",Handler:func(context.Context,toolsy.TypedCallContext[toolsy.NoSubject,toolsy.NoScope],*toolsy.RunEnv,toolsy.ValidatedArgs[struct{}])(toolsy.ToolResult[string,string],error){r:=toolsy.NewToolResult[string,string]("ok");r.Controls=[]toolsy.ControlSignal{original};return r,nil}})
+ if err!=nil {t.Fatal(err)}
+ var delivered toolsy.Chunk
+ err=tool.Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(c toolsy.Chunk)error{delivered=c;original.Name="mutated";original.PayloadJSON[6]='2';return nil})
+ if err!=nil {t.Fatal(err)}
+ control:=delivered.Controls[0].(*toolsy.HostEventSignal)
+ if control.Name!="host.changed" || string(control.PayloadJSON)!=`{"id":1}` {t.Fatalf("aliased producer: %#v",control)}
+ codec:=toolsy.JSONResultCodec[string,string]{}
+ raw,err:=codec.EncodeResult(delivered);if err!=nil {t.Fatal(err)}
+ var obj map[string]json.RawMessage
+ if err=json.Unmarshal(raw,&obj);err!=nil {t.Fatal(err)}
+ for _,payload:=range []string{`{"x":1,"x":2}`,`true false`,strings.Repeat("[",129)+"0"+strings.Repeat("]",129)} {
+   controls,_:=json.Marshal([]map[string]any{{"kind":"host_event","text":"event","payload":[]byte(payload)}})
+   obj["controls"]=controls;changed,_:=json.Marshal(obj)
+   _,err=codec.DecodeResult(changed)
+   var c *toolsy.ResultContractError
+   if !errors.As(err,&c) || c.Kind!="control_contract" {t.Fatalf("malformed payload accepted: %s %v",payload,err)}
+ }
+}
+func TestD02AProbeInvalidNotFormatted(t *testing.T) {
+ tool,err:=toolsy.NewStreamTool("probe","probe",func(_ context.Context,_ *toolsy.RunEnv,_ struct{},y func(toolsy.Chunk)error)error{return toolsy.YieldControl(y,&toolsy.HostEventSignal{Name:"event",PayloadJSON:[]byte(`true false`)})},toolsy.WithIndependentStream())
+ if err!=nil {t.Fatal(err)}
+ registry,err:=toolsy.NewRegistryBuilder().Use(toolsy.WithErrorFormatter()).Add(tool).Build();if err!=nil {t.Fatal(err)}
+ delivered:=0
+ err=registry.Execute(context.Background(),toolsy.ToolCall{ToolName:"probe",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}},func(toolsy.Chunk)error{delivered++;return nil})
+ var contract *toolsy.ResultContractError
+ if delivered!=0 || !errors.As(err,&contract) {t.Fatalf("invalid control formatted: %d %v",delivered,err)}
+}

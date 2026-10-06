@@ -85,7 +85,7 @@ func TestTask31TypedToolPipeline_ContextPolicyOutcomeEffects(t *testing.T) {
 			handlerSeen = call.Subject.ID == "u1" && call.Scope.Tenant == "t1"
 			out := NewToolResult[result, effect](result{V: a.Value.N * 10})
 			out.Effects = []effect{{Kind: "indexed"}}
-			out.Controls = []ControlSignal{&UIActionSignal{Action: "refresh"}}
+			out.Controls = []ControlSignal{&HostEventSignal{Name: "refresh"}}
 			return out, nil
 		},
 	})
@@ -120,7 +120,7 @@ func TestTask31TypedToolPipeline_ContextPolicyOutcomeEffects(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []effect{{Kind: "indexed"}}, effects)
 	require.Len(t, outcome.Controls, 1)
-	assert.IsType(t, &UIActionSignal{}, outcome.Controls[0])
+	assert.IsType(t, &HostEventSignal{}, outcome.Controls[0])
 }
 
 func TestTask31RegistryPolicy_DeniesBeforeValidatorAndHandler(t *testing.T) {

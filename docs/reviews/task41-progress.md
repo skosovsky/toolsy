@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted; rows 23–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted; rows 24–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -800,3 +800,45 @@ OTel/contexty/hostcount3PASS/bothlint0. Evidence docs/reviews/task41/d01/.
 No contexty dependency added; local checked source only, host-owned projection and
 provider budgeting/cooperative callbacks, no published/liveprovider guarantee.
 Commit: refactor: history boundary.
+
+### 23 — D02 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Remove UIActionSignal/ErrUIAction and agent-track promises; sealed neutral
+   HostEventSignal(Name, bounded JSON data)/ErrHostEvent carries no UI execution
+   or authority. Host allowlists/routes events; core owns no shell dispatcher.
+2. Define Pause/Yield/Halt precisely as current-call control requests, no scheduler,
+   global halt, cancellation of other calls, durable pause/resume or grant issuance.
+   CompletionPolicy remains host routing metadata, not an enforced state machine.
+3. Enforce nonnil built-in signals, UTF-8, finite inclusive text/name/payload/count/
+   aggregate bounds and strict JSON; malformed post-handler controls are INTERNAL
+   result-contract failures, never argument-repair/retry. Delivery/cached controls
+   use the same contract with snapshots; old cache kind ui fails explicitly.
+4. AAA public control/consumer/middleware/typed-result/cache-codec regressions and
+   runnable host event allowlist example verify no automatic UI action, no hidden
+   scheduler and unrelated subsequent call remains executable; affected race/lint.
+5. Current docs/migration list the clear API/persistence break and exact budget/
+   delivery-only limits; no legacy UI API left; both reviewers100%, no defects.
+
+Spec-first: neutral sealed HostEventSignal replaces UIActionSignal; payload is
+optional strict JSON data. A delivered EventControl returns its matching sentinel
+when the producer returns YieldControl; core does not preempt a producer ignoring
+errors. Controls on terminal result are declarations, not automatic control errors.
+Host owns UI adapters, event allowlist, persistence, authorization and scheduling.
+Control field byte budget64KiB inclusive, event name128bytes, result controls64 max,
+aggregate field budget64KiB; existing human16KiB default fits. Cached ui kind is
+removed without silent reinterpretation. Validation is post-handler INTERNAL.
+
+Row23 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Neutral host events replace UI API; precise continuation/CompletionPolicy boundaries,
+UTF8/strictJSON/list/name field budgets and invalidposthandler classification enforced
+before normalization. Delivery snapshots built-in structs/payload; codec checks same
+contract and rejects oldui kind. Host allowlist example owns routing, no coreexecutor.
+Parent rootfullracePASS(generator26.795s), controlcount3PASS1.660s,
+humancount3PASS1.718s, OTelPASS1.487s; allthree pinnedlints0.
+A independently root/human/OTelracePASS/alllint0/probecount5PASS1.562s;
+B root/human/OTelracePASS/alllint0/probecount5PASS1.834s.
+Both executed host allowlist example; extra decode/snapshot/outputclassification
+fixtures PASS. Evidence docs/reviews/task41/d02/. No hardproducerpreemption,
+pre-allocation quota, genericaliasraceprotection or actualUI/scheduler proof.
+Commit: refactor: host events.

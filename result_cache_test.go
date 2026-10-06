@@ -119,7 +119,7 @@ func TestResultCachePreservesCompleteTypedOutcome(t *testing.T) {
 				result.Effects, result.Controls = []string{
 					"effect",
 				}, []ControlSignal{
-					&UIActionSignal{Action: "show", PayloadJSON: []byte(`{}`)},
+					&HostEventSignal{Name: "show", PayloadJSON: []byte(`{}`)},
 				}
 				result.EnvelopeMetadata = map[string]any{"classification": "private"}
 				return result, nil

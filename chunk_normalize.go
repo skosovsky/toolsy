@@ -17,10 +17,10 @@ func validateChunk(c Chunk) error {
 	if c.Event != EventProgress && c.Event != EventResult && c.Event != EventControl {
 		return NewInternalError(fmt.Errorf("toolsy: unsupported chunk event %q", c.Event))
 	}
+	if err := validateControlDeclarations(c); err != nil {
+		return err
+	}
 	if c.Event == EventControl {
-		if c.Control == nil {
-			return NewInternalError(errors.New("toolsy: control chunk requires typed Control signal"))
-		}
 		return nil
 	}
 	if c.Event == EventResult {
@@ -122,11 +122,24 @@ func malformedErrorChunkDetail(c Chunk) string {
 
 // prepareChunk normalizes error chunks and validates the wire contract before delivery.
 func prepareChunk(c Chunk) (Chunk, error) {
+	if err := validateControlDeclarations(c); err != nil {
+		return Chunk{}, err
+	}
 	if c.IsError {
 		c = normalizeErrorChunk(c)
 	}
 	if err := validateChunk(c); err != nil {
 		return Chunk{}, err
+	}
+	if c.Control != nil {
+		c.Control = cloneControl(c.Control)
+	}
+	if len(c.Controls) != 0 {
+		controls := make([]ControlSignal, len(c.Controls))
+		for i, signal := range c.Controls {
+			controls[i] = cloneControl(signal)
+		}
+		c.Controls = controls
 	}
 	if c.Envelope != nil {
 		if !bytes.Equal(c.Envelope.Raw, c.Data) || c.Envelope.MimeType != c.MimeType {

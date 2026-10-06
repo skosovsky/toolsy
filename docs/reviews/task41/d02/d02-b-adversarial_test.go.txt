@@ -1,0 +1,21 @@
+package toolsy
+import("encoding/json";"strings";"testing";"github.com/stretchr/testify/require")
+func TestD02BAdversarialDecodeBounds(t *testing.T) {
+ codec:=JSONResultCodec[string,string]{}
+ data,err:=codec.EncodeResult(Chunk{Event:EventResult,Controls:[]ControlSignal{&HostEventSignal{Name:"host.event"}}}); require.NoError(t,err)
+ var wire map[string]any; require.NoError(t,json.Unmarshal(data,&wire))
+ cases:=[]struct{name string; controls []map[string]any}{
+ {"count",nil},{"aggregate",[]map[string]any{{"kind":"pause","text":strings.Repeat("x",MaxControlBytes/2+1)},{"kind":"halt","text":strings.Repeat("x",MaxControlBytes/2+1)}}},
+ {"name",[]map[string]any{{"kind":"host_event","text":"../bad"}}},
+ {"payload_nonhost",[]map[string]any{{"kind":"pause","text":"wait","payload":[]byte(`{}`)}}},
+ {"duplicate_payload",[]map[string]any{{"kind":"host_event","text":"host.event","payload":[]byte(`{"x":1,"x":2}`)}}},
+ }
+ for i:=0;i<MaxControlSignals+1;i++{ cases[0].controls=append(cases[0].controls,map[string]any{"kind":"pause","text":""}) }
+ for _,tt:=range cases {t.Run(tt.name,func(t *testing.T){wire["controls"]=tt.controls; raw,e:=json.Marshal(wire);require.NoError(t,e);_,e=codec.DecodeResult(raw);requireControlContractFailure(t,e)})}
+}
+func TestD02BTerminalSnapshot(t *testing.T){
+ original:=&HostEventSignal{Name:"host.event",PayloadJSON:[]byte(`{"x":1}`)}
+ chunk,e:=prepareChunk(Chunk{Event:EventResult,Controls:[]ControlSignal{original}});require.NoError(t,e)
+ original.Name="changed";original.PayloadJSON[5]='2'
+ delivered:=chunk.Controls[0].(*HostEventSignal);require.Equal(t,"host.event",delivered.Name);require.Equal(t,`{"x":1}`,string(delivered.PayloadJSON))
+}

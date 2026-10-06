@@ -14,6 +14,8 @@ import (
 // arbitrary concrete Go types inside interfaces are not reconstructed.
 type JSONResultCodec[R, E any] struct{}
 
+const cachedHostEvent = "host_event"
+
 type cachedControl struct {
 	Kind    string `json:"kind"`
 	Text    string `json:"text"`
@@ -41,6 +43,9 @@ type cachedResult[R, E any] struct {
 func (JSONResultCodec[R, E]) EncodeResult(chunk Chunk) ([]byte, error) {
 	if chunk.Event != EventResult || chunk.IsError {
 		return nil, errors.New("codec requires a successful result")
+	}
+	if err := validateControlDeclarations(chunk); err != nil {
+		return nil, err
 	}
 	env := chunk.ToolEnvelope()
 	if env.Kind != ToolEnvelopeKindResult || env.Error != nil || !bytes.Equal(env.Raw, chunk.Data) ||
@@ -143,6 +148,9 @@ func (JSONResultCodec[R, E]) DecodeResult(raw []byte) (Chunk, error) {
 }
 
 func encodeCachedControl(control ControlSignal) (cachedControl, error) {
+	if _, err := controlSize(control); err != nil {
+		return cachedControl{}, err
+	}
 	switch value := control.(type) {
 	case *PauseSignal:
 		if value != nil {
@@ -156,15 +164,18 @@ func encodeCachedControl(control ControlSignal) (cachedControl, error) {
 		if value != nil {
 			return cachedControl{Kind: "halt", Text: value.Reason, Payload: nil}, nil
 		}
-	case *UIActionSignal:
+	case *HostEventSignal:
 		if value != nil {
-			return cachedControl{Kind: "ui", Text: value.Action, Payload: value.PayloadJSON}, nil
+			return cachedControl{Kind: cachedHostEvent, Text: value.Name, Payload: value.PayloadJSON}, nil
 		}
 	}
 	return cachedControl{}, errors.New("unsupported control for cache codec")
 }
 
 func decodeCachedControl(control cachedControl) (ControlSignal, error) {
+	if control.Kind != cachedHostEvent && len(control.Payload) != 0 {
+		return nil, invalidControl("payload requires host event control")
+	}
 	switch control.Kind {
 	case "pause":
 		return &PauseSignal{Reason: control.Text}, nil
@@ -172,8 +183,8 @@ func decodeCachedControl(control cachedControl) (ControlSignal, error) {
 		return &YieldSignal{Result: control.Text}, nil
 	case "halt":
 		return &HaltSignal{Reason: control.Text}, nil
-	case "ui":
-		return &UIActionSignal{Action: control.Text, PayloadJSON: control.Payload}, nil
+	case cachedHostEvent:
+		return &HostEventSignal{Name: control.Text, PayloadJSON: control.Payload}, nil
 	default:
 		return nil, errors.New("unsupported cached control")
 	}

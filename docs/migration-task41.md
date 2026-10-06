@@ -627,3 +627,23 @@ remain available. No mandatory dependency on contexty is introduced.
 Contexty capability/semantic mapping and a compiled host recipe are documented
 in `docs/history-compaction-migration.md` with verified source mapping. This is a
 clear break, not an API alias or automatic message conversion.
+
+## D02 — neutral bounded controls and host-owned UI routing
+
+Removed `UIActionSignal` and `ErrUIAction`. Hosts use `HostEventSignal{Name,
+PayloadJSON}` / `ErrHostEvent` for named data, and own an explicit allowlisted UI
+adapter; neither event delivery nor payload grants authority. `JSONResultCodec`
+writes kind `host_event` and rejects old `ui` records. Migrate persisted records
+explicitly under host policy instead of silently replaying an old action.
+
+Pause/Yield/Halt ask the host to pause/end/stop its continuation after this call.
+They do not stop agent tracks, cancel contexts/other calls or persist continuation.
+Manifest CompletionPolicy is host routing metadata; terminal result Controls are
+collected declarations. Invalid controls fail INTERNAL post-handler, without
+argument correction/retry. New inclusive limits: 64KiB field bytes per signal and
+aggregate result list, 64 result controls, 128byte ASCII host event name; strict
+UTF-8/JSON, typed-nil rejection. This is a clear API and cache-record break.
+
+See [exact contract](control-contract.md) for field/name/delivery/cancellation
+limits and [host example](../examples/host_event/main.go). Existing human toolkit
+16KiB default payload cap fits the core bound; larger host overrides must also fit.

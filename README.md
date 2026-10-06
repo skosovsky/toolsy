@@ -126,7 +126,7 @@ Output schemas are executable contracts for successful JSON result bytes. Builde
 - `ToolCall` carries `Input toolsy.ToolInput` and optional `CallContext` for typed subject/scope.
 - `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
 - `Chunk` data-plane: `Event`, `Data`, `MimeType`, `IsError`, `Progress`, `TypedResult`, `EmptyResult`, `Noop`, `Effects`.
-- `Chunk` control-plane: `EventControl` + typed `ControlSignal` (`PauseSignal`, `YieldSignal`, `HaltSignal`, `UIActionSignal`).
+- `Chunk` control-plane: `EventControl` + typed `ControlSignal` (`PauseSignal`, `YieldSignal`, `HaltSignal`, `HostEventSignal`).
 - `Chunk.Event` values: `EventProgress`, `EventResult`, `EventControl`.
 - `Chunk.RawData` is removed.
 - Runtime `Registry` is immutable. Use `RegistryBuilder` to add tools and middleware before `Build()`.
@@ -349,7 +349,7 @@ outcome, err := sess.RunCall(ctx, call)
 if err != nil {
     // infrastructure — not found, shutdown, max calls, control signals (partial outcome preserved)
     if toolsy.IsControlError(err) {
-        _ = outcome.Controls // Pause/Yield/Halt/UIAction collected before err
+        _ = outcome.Controls // Pause/Yield/Halt/HostEvent collected before err
     }
     return err
 }
@@ -464,8 +464,11 @@ Tools emit control signals via `toolsy.YieldControl`:
 return toolsy.YieldControl(yield, &toolsy.PauseSignal{Reason: payloadJSON})
 ```
 
-Orchestrators should treat `ErrPause`, `ErrYield`, `ErrHalt`, and `ErrUIAction` as control-plane outcomes (`toolsy.IsControlError`), not tool failures.
-Set manifest policy for routing after successful completion:
+Orchestrators should treat `ErrPause`, `ErrYield`, `ErrHalt`, and `ErrHostEvent` as control-plane outcomes (`toolsy.IsControlError`), not tool failures.
+These are host continuation requests; core does not cancel other calls or run a
+scheduler/UI action. See [exact control contract and bounds](docs/control-contract.md)
+and [host event example](examples/host_event/main.go). Set manifest policy as a host
+routing hint after successful completion:
 
 ```go
 toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContinue, CompletionHalt
