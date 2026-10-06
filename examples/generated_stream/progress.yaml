@@ -1,0 +1,12 @@
+name: progress
+description: Emit progress parts synchronously or through explicit host async composition
+stream: true
+parameters:
+  type: object
+  properties:
+    count:
+      type: integer
+      description: Number of parts to emit
+      minimum: 1
+      maximum: 10
+  required: [count]

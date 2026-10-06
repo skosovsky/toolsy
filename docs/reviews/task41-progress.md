@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is in progress; rows 21–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted; rows 22–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -729,3 +729,40 @@ currentpermanentpublic/helpertestsPASS. Evidence docs/reviews/task41/r20/.
 Text-only supported node namespace subset; page/column flattened to LF, no complete
 OOXML/layout or hard parser preemption/intermediate-allocation isolation claim.
 Commit: fix: docx whitespace.
+
+### 21 — R21 / D26 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Every finalize failure/cancellation after any installed output follows one rollback
+   path, including reserve backup, old-to-backup, temp-to-target and interruption
+   after last successful rename. Current partially moved backup is restored too.
+2. Primary and all rollback/owned-temp cleanup failures retain causes and target/
+   recovery backup paths; failed restore never deletes the only recovery copy.
+   Earlier staging temps are cleaned on staging failure. Backup removal after full
+   successful install is explicitly post-commit cleanup, not fake crash atomicity.
+3. Fault-injected AAA baseline/current tests cover failure reserve/backup/install/
+   cancel/restore/remove after first commit, existing and new targets, successful
+   complete install, preserved backups and no unreported partial/recovery state.
+4. stream:true generates ordinary synchronous stream tool; progress/result/error/
+   invalid input/caller cancellation are observable on Execute. Host explicitly
+   configures AsAsyncTool timeout/collection/onComplete; acceptance is not terminal.
+   Compiling generated fixtures and host example cover terminal/error/cancel/callback.
+5. API/README/migration describe filesystem exclusive-writer/cooperative syscall/
+   recovery/non-crash-atomic limits and explicit async composition; affected root/
+   generated-module tests/race/lint pass, both reviewers100%, no unresolved defects.
+
+Decision D26: keep generated streaming synchronous; host opts into async execution
+and lifecycle configuration. No implicit background validation/accepted-only wrapper.
+
+Row21 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Unified failure recovery replaces legacy commit path; moved recovery backups survive
+failed restore/remove. Joined cleanup diagnostics retain all causes and owned paths.
+Post-commit disposal errors report CommitComplete=true with complete Result.Files.
+Parent rootracePASS (generator24.894s), targeted recoverycount3PASS1.985s/lint0.
+A rootracePASS/lint0/privateprobescount5PASS1.870s; B rootracePASS/lint0/private
+probescount5PASS1.870s. Both independently ran generated streaming host example;
+nested generated-module race covers sync terminal/error/cancel and explicit async.
+Baseline0700cc5 three originalAPI recovery assertionsFAIL; currentcount5PASS2.107s.
+Evidence: docs/reviews/task41/r21/. Exclusive writer, cooperative local FS operations;
+no crashatomicity/concurrentmutation/hardpreemption or nonlocalFS proof claimed.
+Commit: fix: generator recovery.

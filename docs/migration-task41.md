@@ -591,3 +591,26 @@ Source snapshot, ZIP/expanded XML, text node, extracted-text and final JSON boun
 remain in force. XML parsing is synchronous with cooperative token/context checks,
 not hard CPU/intermediate-allocation preemption. Host sandbox/parser adapter owns
 stronger guarantees for hostile content. Stored format/tool result shape unchanged.
+
+
+## R21 / D26 — generator recovery and explicit async streaming
+
+Generator finalize errors/cancellation share one best-effort rollback path for
+installed outputs and the current moved backup. Primary and secondary cleanup/
+restore failures remain inspectable with affected target/recovery backup paths.
+Failed restore retains the recovery copy; staging failures dispose owned generated
+temps. Backup disposal after a full successful install is post-commit cleanup:
+a cleanup diagnostic does not imply that new outputs were rolled back.
+FileRecoveryError retains failed action/target/backup and cause; CommitComplete=true
+marks post-commit backup cleanup, with complete Result.Files returned alongside error. The host
+must provide exclusive access to target paths; no crash-atomic multi-file transaction
+or hard interruption of filesystem syscalls is promised.
+
+Generated stream:true factories return ordinary synchronous stream tools. Caller
+Execute receives progress, final result and errors; invalid input is rejected before
+handler invocation. Background execution is explicit host composition:
+AsAsyncTool(base, WithBackgroundTimeout(...), WithMaxCollectedChunks(...),
+WithOnComplete(...)). Accepted acknowledges scheduling, never terminal completion;
+background errors/validation are reported through the configured completion hook,
+not the already-returned caller. Parent cancellation is detached by the existing
+async wrapper; host background timeout and Registry.Shutdown define that lifecycle.

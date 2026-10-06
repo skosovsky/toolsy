@@ -1,0 +1,29 @@
+package toolsygen
+import("errors";"os";"path/filepath";"strings";"testing";"github.com/stretchr/testify/require")
+func TestAcceptanceAFullGenerateCommittedCleanup(t *testing.T){
+ // Arrange.
+ dir:=t.TempDir();manifest:=filepath.Join(dir,"probe.yaml")
+ writeFile(t,manifest,"name: probe\ndescription: probe\npackage: probes\nparameters:\n  type: object\n  properties: {}\n")
+ cfg:=Config{Inputs:[]string{dir}};initial,err:=Generate(t.Context(),cfg);require.NoError(t,err);require.Len(t,initial.Files,1)
+ target:=initial.Files[0];want,err:=os.ReadFile(target);require.NoError(t,err);writeFile(t,target,"old contents")
+ facade:=newDefaultOSFacade(defaultMaxGeneratorFileBytes);remove:=facade.remove;cause:=errors.New("dispose fault")
+ facade.remove=func(path string)error{if strings.Contains(path,".bak-"){data,e:=os.ReadFile(path);if e==nil&&len(data)>0{return cause}};return remove(path)}
+ // Act.
+ result,err:=generateWithFS(t.Context(),cfg,facade)
+ // Assert.
+ require.ErrorIs(t,err,cause);require.Equal(t,initial.Files,result.Files);actual,readErr:=os.ReadFile(target);require.NoError(t,readErr);require.Equal(t,want,actual)
+ var diagnostic *FileRecoveryError;require.ErrorAs(t,err,&diagnostic);require.True(t,diagnostic.CommitComplete);require.Equal(t,target,diagnostic.Target);requireFileContent(t,diagnostic.Backup,"old contents")
+}
+func TestAcceptanceAAggregateTwoRestores(t *testing.T){
+ // Arrange.
+ dir:=t.TempDir();a:=filepath.Join(dir,"a.go");b:=filepath.Join(dir,"b.go");writeFile(t,a,"old-a");writeFile(t,b,"old-b")
+ primary,restoreA,restoreB:=errors.New("install"),errors.New("restore-a"),errors.New("restore-b")
+ facade:=newDefaultOSFacade(defaultMaxGeneratorFileBytes);rename:=facade.rename
+ facade.rename=func(old,new string)error{if new==b&&strings.Contains(old,".tmp-"){return primary};if strings.Contains(old,".bak-"){if new==a{return restoreA};if new==b{return restoreB}};return rename(old,new)}
+ g:=&generator{fs:facade}
+ // Act.
+ err:=g.commitFilesWithRollback(t.Context(),[]generatedFile{{Path:a,Content:[]byte("new-a")},{Path:b,Content:[]byte("new-b")}},0600)
+ // Assert.
+ for _,cause:=range []error{primary,restoreA,restoreB}{require.ErrorIs(t,err,cause)}
+ for _,target:=range []string{a,b}{backups,e:=filepath.Glob(target+".bak-*");require.NoError(t,e);require.Len(t,backups,1);require.Contains(t,err.Error(),backups[0]);data,e:=os.ReadFile(backups[0]);require.NoError(t,e);require.Equal(t,"old-"+strings.TrimSuffix(filepath.Base(target),".go"),string(data))}
+}

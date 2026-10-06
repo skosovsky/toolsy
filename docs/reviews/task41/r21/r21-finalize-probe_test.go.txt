@@ -1,0 +1,39 @@
+package toolsygen
+
+import (
+ "errors"
+ "os"
+ "path/filepath"
+ "strings"
+ "testing"
+
+ "github.com/stretchr/testify/require"
+)
+func TestR21FinalizePublicRecoveryProbe(t *testing.T){
+ for _,fault:=range []string{"reserve","backup","restore_current"}{
+  t.Run(fault,func(t *testing.T){
+   // Arrange: old private finalize API, first output installed before second fails.
+   dir:=t.TempDir();a:=filepath.Join(dir,"a.go");b:=filepath.Join(dir,"b.go")
+   writeFile(t,a,"old-a");writeFile(t,b,"old-b")
+   facade:=newDefaultOSFacade(defaultMaxGeneratorFileBytes);create,rename:=facade.createTemp,facade.rename
+   cause:=errors.New("injected finalize failure")
+   facade.createTemp=func(dir,pattern string)(*os.File,error){if fault=="reserve"&&strings.HasPrefix(pattern,"b.go.bak-"){return nil,cause};return create(dir,pattern)}
+   facade.rename=func(oldPath,newPath string)error{
+    if fault=="backup"&&oldPath==b&&strings.Contains(newPath,".bak-"){return cause}
+    if fault=="restore_current"&&newPath==b&&(strings.Contains(oldPath,"b.go.tmp-")||strings.Contains(oldPath,"b.go.bak-")){return cause}
+    return rename(oldPath,newPath)
+   }
+   g:=&generator{fs:facade}
+   staged,err:=g.stageFilesForCommit(t.Context(),[]generatedFile{{Path:a,Content:[]byte("new-a")},{Path:b,Content:[]byte("new-b")}},0o600);require.NoError(t,err)
+   // Act.
+   _,err=g.finalizeStagedCommits(t.Context(),staged)
+   // Assert.
+   require.ErrorIs(t,err,cause)
+   data,readErr:=os.ReadFile(a);require.NoError(t,readErr);require.Equal(t,"old-a",string(data))
+   if fault=="restore_current"{
+    backups,globErr:=filepath.Glob(b+".bak-*");require.NoError(t,globErr);require.Len(t,backups,1)
+    data,readErr=os.ReadFile(backups[0]);require.NoError(t,readErr);require.Equal(t,"old-b",string(data));require.Contains(t,err.Error(),backups[0])
+   }else{data,readErr=os.ReadFile(b);require.NoError(t,readErr);require.Equal(t,"old-b",string(data))}
+  })
+ }
+}

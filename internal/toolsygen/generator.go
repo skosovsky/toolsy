@@ -15,7 +15,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -223,13 +222,17 @@ func (g *generator) generate(ctx context.Context, cfg Config) (Result, error) {
 	}
 
 	written := make([]string, 0, len(files))
-	if err := g.commitFilesAtomically(ctx, files, fileModeGenerated); err != nil {
-		return Result{}, err
-	}
 	for _, file := range files {
 		written = append(written, file.Path)
 	}
 	sort.Strings(written)
+	if err := g.commitFilesWithRollback(ctx, files, fileModeGenerated); err != nil {
+		var recovery *FileRecoveryError
+		if errors.As(err, &recovery) && recovery.CommitComplete {
+			return Result{Files: written}, err
+		}
+		return Result{}, err
+	}
 	return Result{Files: written}, nil
 }
 
@@ -1205,6 +1208,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\tvar pending string\n")
 		buf.WriteString("\t\thavePending := false\n")
 		buf.WriteString("\t\tfor part, err := range handler.ExecuteStream(ctx, input) {\n")
+		buf.WriteString("\t\t\tif interrupt := ctx.Err(); interrupt != nil { return interrupt }\n")
 		buf.WriteString("\t\t\tif err != nil {\n")
 		buf.WriteString("\t\t\t\tif havePending {\n")
 		buf.WriteString(
@@ -1225,6 +1229,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 		buf.WriteString("\t\t\tpending = part\n")
 		buf.WriteString("\t\t\thavePending = true\n")
 		buf.WriteString("\t\t}\n")
+		buf.WriteString("\t\tif interrupt := ctx.Err(); interrupt != nil { return interrupt }\n")
 		buf.WriteString("\t\tif !havePending {\n")
 		buf.WriteString("\t\t\treturn yield(toolsy.Chunk{Event: toolsy.EventResult})\n")
 		buf.WriteString("\t\t}\n")
@@ -1248,11 +1253,7 @@ func renderManifest(m *manifest) ([]byte, error) {
 	buf.WriteString("\tif err != nil {\n")
 	buf.WriteString("\t\treturn nil, err\n")
 	buf.WriteString("\t}\n")
-	if m.Stream {
-		buf.WriteString("\treturn toolsy.AsAsyncTool(proxy), nil\n")
-	} else {
-		buf.WriteString("\treturn proxy, nil\n")
-	}
+	buf.WriteString("\treturn proxy, nil\n")
 	buf.WriteString("}\n")
 
 	formatted, err := format.Source(buf.Bytes())
@@ -1265,196 +1266,6 @@ func renderManifest(m *manifest) ([]byte, error) {
 func strconvQuote(s string) string {
 	data, _ := json.Marshal(s)
 	return string(data)
-}
-
-type stagedFile struct {
-	path       string
-	tempPath   string
-	backupPath string
-	exists     bool
-}
-
-func (g *generator) commitFilesAtomically(ctx context.Context, files []generatedFile, mode fs.FileMode) error {
-	staged, err := g.stageFilesForCommit(ctx, files, mode)
-	if err != nil {
-		return err
-	}
-	committed, err := g.finalizeStagedCommits(ctx, staged)
-	if err != nil {
-		return err
-	}
-	return g.removeBackupFiles(committed)
-}
-
-func (g *generator) stageFilesForCommit(
-	ctx context.Context,
-	files []generatedFile,
-	mode fs.FileMode,
-) ([]stagedFile, error) {
-	staged := make([]stagedFile, 0, len(files))
-	for _, file := range files {
-		if err := checkContext(ctx); err != nil {
-			return nil, err
-		}
-		existing, readErr := g.readFileLimited(ctx, file.Path)
-		switch {
-		case readErr == nil && bytes.Equal(existing, file.Content):
-			continue
-		case readErr == nil:
-			tempPath, wtErr := g.writeTempFile(
-				filepath.Dir(file.Path),
-				filepath.Base(file.Path)+".tmp-*",
-				file.Content,
-				mode,
-			)
-			if wtErr != nil {
-				return nil, fmt.Errorf("%s: %w", file.Path, wtErr)
-			}
-			staged = append(staged, stagedFile{path: file.Path, tempPath: tempPath, backupPath: "", exists: true})
-		case errors.Is(readErr, os.ErrNotExist):
-			tempPath, wtErr := g.writeTempFile(
-				filepath.Dir(file.Path),
-				filepath.Base(file.Path)+".tmp-*",
-				file.Content,
-				mode,
-			)
-			if wtErr != nil {
-				return nil, fmt.Errorf("%s: %w", file.Path, wtErr)
-			}
-			staged = append(staged, stagedFile{path: file.Path, tempPath: tempPath, backupPath: "", exists: false})
-		default:
-			return nil, fmt.Errorf("%s: read existing file: %w", file.Path, readErr)
-		}
-	}
-	return staged, nil
-}
-
-func (g *generator) finalizeStagedCommits(ctx context.Context, staged []stagedFile) ([]stagedFile, error) {
-	committed := make([]stagedFile, 0, len(staged))
-	for i := range staged {
-		if err := checkContext(ctx); err != nil {
-			if rollbackErr := g.rollbackCommitted(committed); rollbackErr != nil {
-				return nil, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr)
-			}
-			g.cleanupStagedTemps(staged)
-			return nil, err
-		}
-		next, err := g.commitOneStagedFile(&staged[i], committed, staged)
-		if err != nil {
-			return nil, err
-		}
-		committed = next
-	}
-	return committed, nil
-}
-
-func (g *generator) commitOneStagedFile(sf *stagedFile, committed, staged []stagedFile) ([]stagedFile, error) {
-	if sf.exists {
-		backupPath, err := g.reserveTempPath(filepath.Dir(sf.path), filepath.Base(sf.path)+".bak-*")
-		if err != nil {
-			g.cleanupStagedTemps(staged)
-			return committed, fmt.Errorf("%s: reserve backup path: %w", sf.path, err)
-		}
-		sf.backupPath = backupPath
-		if err := g.fs.rename(sf.path, sf.backupPath); err != nil {
-			g.cleanupStagedTemps(staged)
-			return committed, fmt.Errorf("%s: backup existing file: %w", sf.path, err)
-		}
-	}
-	if err := g.fs.rename(sf.tempPath, sf.path); err != nil {
-		if sf.exists && sf.backupPath != "" {
-			_ = g.fs.rename(sf.backupPath, sf.path)
-		}
-		if rollbackErr := g.rollbackCommitted(committed); rollbackErr != nil {
-			g.cleanupStagedTemps(staged)
-			return committed, fmt.Errorf(
-				"%s: commit generated file: %w; rollback failed: %w",
-				sf.path, err, rollbackErr,
-			)
-		}
-		g.cleanupStagedTemps(staged)
-		return committed, fmt.Errorf("%s: commit generated file: %w", sf.path, err)
-	}
-	sf.tempPath = ""
-	return append(committed, *sf), nil
-}
-
-func (g *generator) removeBackupFiles(committed []stagedFile) error {
-	for _, sf := range committed {
-		if sf.backupPath == "" {
-			continue
-		}
-		if err := g.fs.remove(sf.backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("%s: cleanup backup file: %w", sf.path, err)
-		}
-	}
-	return nil
-}
-
-func (g *generator) writeTempFile(dir, pattern string, data []byte, mode fs.FileMode) (string, error) {
-	tmp, err := g.fs.createTemp(dir, pattern)
-	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		_ = g.fs.remove(tmpPath)
-		return "", fmt.Errorf("write temp file: %w", err)
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		_ = g.fs.remove(tmpPath)
-		return "", fmt.Errorf("chmod temp file: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = g.fs.remove(tmpPath)
-		return "", fmt.Errorf("close temp file: %w", err)
-	}
-	return tmpPath, nil
-}
-
-func (g *generator) reserveTempPath(dir, pattern string) (string, error) {
-	tmp, err := g.fs.createTemp(dir, pattern)
-	if err != nil {
-		return "", err
-	}
-	path := tmp.Name()
-	if err := tmp.Close(); err != nil {
-		_ = g.fs.remove(path)
-		return "", err
-	}
-	if err := g.fs.remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", err
-	}
-	return path, nil
-}
-
-func (g *generator) rollbackCommitted(committed []stagedFile) error {
-	var errs []error
-	for _, sf := range slices.Backward(committed) {
-		if err := g.fs.remove(sf.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			errs = append(errs, fmt.Errorf("%s: remove committed file during rollback: %w", sf.path, err))
-			continue
-		}
-		if sf.exists && sf.backupPath != "" {
-			if err := g.fs.rename(sf.backupPath, sf.path); err != nil {
-				errs = append(errs, fmt.Errorf("%s: restore backup during rollback: %w", sf.path, err))
-			}
-		}
-	}
-	return joinErrors(errs)
-}
-
-func (g *generator) cleanupStagedTemps(staged []stagedFile) {
-	for _, sf := range staged {
-		if sf.tempPath != "" {
-			_ = g.fs.remove(sf.tempPath)
-		}
-		if sf.backupPath != "" {
-			_ = g.fs.remove(sf.backupPath)
-		}
-	}
 }
 
 func joinErrors(errs []error) error {

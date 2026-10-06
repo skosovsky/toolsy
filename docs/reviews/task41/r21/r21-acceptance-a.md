@@ -1,0 +1,24 @@
+# R21 / D26 — independent acceptance A
+
+Reviewed current worktree against HEAD 0700cc5, original task R21/D26 and progress row 21. Read tracked changes and untracked commit.go, commit_recovery_test.go and examples/generated_stream. Read-only review; no implementation edits/delegation and no access to reviewer B's verdict.
+
+| Criterion | Score | Evidence |
+|---|---:|---|
+| 1. Unified rollback for all finalize errors/cancellation | 20/20 | finalizeStagedCommits routes pre-file, commitOne and final context failures through failedFinalization. Explicit installed/backupMoved states include the current backed-up file. Reverse rollback restores earlier outputs and new outputs to absence. Six permanent finalize fault cases cover reserve/backup/install/cancellation after first/last install and after current backup. |
+| 2. Causes, paths and preserved recovery copies | 20/20 | errors.Join retains primary and every rollback/owned artifact cleanup cause; FileRecoveryError exposes target/backup/action. Cleanup excludes moved backups, including after failed remove/restore. Staging failure cleans previous temps. Disposal after completed install aggregates errors with CommitComplete=true. Independent simultaneous two-restore fault probe confirms both distinct causes and both old-content backups remain. |
+| 3. Fault injected regressions and honest installed state | 20/20 | Permanent tests cover existing/new paths, stage failure/cleanup failure, backup/install/reserve/cancellation, failed current/earlier restore, failed installed removal and full-install disposal failure. Independently reran old-API baseline overlay: all 3 cases fail on 0700cc5, matching original defect; current overlay passes ×5 under race. Independent Generate-level probe verifies post-commit cleanup failure returns complete Result.Files, installed generated content and typed retained-backup diagnostic. |
+| 4. Generated sync stream and explicit async lifecycle | 20/20 | Factory returns proxy directly. Generated-module fixture compiles/runs with race, checks empty/single/multiple terminal success, progress followed by handler error, invalid input before handler, caller timeout and consumer stop. Explicit AsAsyncTool fixture configures timeout, collection cap and completion callback and checks accepted plus success/handler/validation/timeout completion. Actual generated-stream example executes and emits scheduling, two progress parts and terminal result. |
+| 5. Documentation and affected validation | 20/20 | README, generator-contract and migration agree on best-effort rollback, exclusive writer/cooperative syscalls/non-crash atomicity, recovery inspection and committed cleanup Result.Files. Sync/async cancellation, accepted versus terminal and completion-hook responsibilities are explicit. Independent complete root-module race passed, including generator EndToEnd nested module race; pinned lint reports zero issues; diff check clean. Separate reviewer B gate is parent-owned and not inferred here. |
+
+Total: **100% (100/100)**. Incomplete criteria: none. Detected unresolved errors/regressions: none. Verdict: **принято**.
+
+## Independent commands and outputs
+
+- `GOCACHE=/tmp/toolsy-review-gocache go test -race -count=1 ./...` exit 0: r21-a-root-race.log (root 8.096s, internal/toolsygen 51.249s; nested generated fixture race executes from EndToEnd).
+- `GOCACHE=/tmp/toolsy-review-gocache GOLANGCI_LINT_CACHE=/tmp/toolsy-task41/r21-a-lint-cache /opt/homebrew/bin/golangci-lint run --allow-parallel-runners ./...` exit 0: r21-a-lint.log, 0 issues.
+- Current old-API recovery plus independent aggregate/Generate probes: `go test -race -count=5 -overlay=/tmp/toolsy-task41/r21-a-overlay.json ./internal/toolsygen -run 'TestAcceptanceA|TestR21Finalize'` exit 0, 1.870s: r21-a-probes.log. Probe source r21-a-adversarial_test.go.
+- Baseline `GOWORK=off go -C /tmp/toolsy-task41/r21-baseline test -count=1 -overlay=/tmp/toolsy-task41/r21-baseline-overlay.json ./internal/toolsygen -run TestR21FinalizePublicRecoveryProbe` exit 1, 3 expected failures: r21-a-baseline.log (reserve/backup leave new-a, failed current restore deletes backup).
+- `go run ./examples/generated_stream` exit 0: r21-a-example.log; scheduled ID, progress parts 1/2, result part 3.
+- `git diff --check` exit 0.
+
+Limits: local macOS filesystem and injected facade failures; no power-loss/crash atomicity, arbitrary mutation/concurrent writer or uninterruptible syscall guarantee, matching contract. Async fixture uses cooperative handler; no hard preemption claim. Collection cap is explicitly configured; existing core async behavior remains unchanged. Scores are completion against explicit criteria, not a proof that every possible defect is absent. Parent must obtain a separate independent review and commit only after both accept the same diff.

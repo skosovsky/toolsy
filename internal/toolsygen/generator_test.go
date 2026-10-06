@@ -387,7 +387,7 @@ parameters:
 		"type BookAppointmentStreamHandler interface",
 		"DoctorID string",
 		`return toolsy.NewSchemaError("Validation failed: invalid JSON format or type mismatch"`,
-		"return toolsy.AsAsyncTool(proxy), nil",
+		"return proxy, nil",
 	} {
 		if !strings.Contains(code, want) {
 			t.Fatalf("generated code missing %q:\n%s", want, code)
@@ -552,7 +552,7 @@ parameters:
 	}
 }
 
-func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
+func TestCommitFilesWithRollbackOnFailure(t *testing.T) {
 	dir := t.TempDir()
 	firstPath := filepath.Join(dir, "first_gen.go")
 	secondPath := filepath.Join(dir, "second_gen.go")
@@ -570,12 +570,12 @@ func TestCommitFilesAtomicallyRollsBackOnFailure(t *testing.T) {
 	}
 
 	g := &generator{fs: fs}
-	err := g.commitFilesAtomically(context.Background(), []generatedFile{
+	err := g.commitFilesWithRollback(context.Background(), []generatedFile{
 		{Path: firstPath, Content: []byte("updated")},
 		{Path: secondPath, Content: []byte("created")},
 	}, 0o644)
 	if err == nil || !strings.Contains(err.Error(), "forced rename failure") {
-		t.Fatalf("commitFilesAtomically error = %v, want forced rename failure", err)
+		t.Fatalf("commitFilesWithRollback error = %v, want forced rename failure", err)
 	}
 
 	// #nosec G304 -- firstPath is created inside this test workspace.
@@ -742,145 +742,81 @@ parameters:
 package streamtools
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
-	"iter"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
-
-	"github.com/skosovsky/toolsy"
+ "context"
+ "encoding/json"
+ "errors"
+ "iter"
+ "sync/atomic"
+ "testing"
+ "time"
+ "github.com/skosovsky/toolsy"
 )
-
-var (
-	streamHandlerInvoked atomic.Bool
-	streamObsMu          sync.Mutex
-	streamHandlerErr     error
-)
-
+var invoked atomic.Int32
+var boom=errors.New("handler failed")
 type streamHandler struct{}
-
-func (streamHandler) ExecuteStream(_ context.Context, input ProgressDemoInput) iter.Seq2[string, error] {
-	return func(yield func(string, error) bool) {
-		streamHandlerInvoked.Store(true)
-		if input.Count == nil {
-			return
-		}
-		count, err := input.Count.Int64()
- if err != nil { yield("", err); return }
- switch count {
-		case 0:
-			return
-		case 1:
-			yield("done", nil)
-		case 3:
-			if !yield("step-1", nil) {
-				return
-			}
-			if !yield("step-2", nil) {
-				return
-			}
-			yield("done", nil)
-		case -1:
-			if !yield("step-1", nil) {
-				return
-			}
-			boom := errors.New("boom")
-			streamObsMu.Lock()
-			streamHandlerErr = boom
-			streamObsMu.Unlock()
-			yield("", boom)
-		default:
-			yield("unexpected", nil)
-		}
-	}
+func(streamHandler)ExecuteStream(ctx context.Context,input ProgressDemoInput)iter.Seq2[string,error]{
+ return func(yield func(string,error)bool){
+  invoked.Add(1)
+  n,err:=input.Count.Int64();if err!=nil{yield("",err);return}
+  switch n{
+  case 0:return
+  case 1:yield("done",nil)
+  case 3:for _,s:=range []string{"step1","step2","done"}{if !yield(s,nil){return}}
+  case -1:if yield("step",nil){yield("",boom)}
+  case -2:yield("step",nil);<-ctx.Done();yield("",ctx.Err())
+  }
+ }
 }
-
-func waitStreamBackground(t *testing.T, pred func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if pred() {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("timed out waiting for stream background work")
+func TestGeneratedSynchronousStream(t *testing.T){
+ for _,n:=range []int{0,1,3,-1}{
+  // Arrange.
+  base,err:=NewProgressDemoTool(streamHandler{});if err!=nil{t.Fatal(err)}
+  raw,_:=json.Marshal(map[string]int{"count":n});var chunks []toolsy.Chunk
+  // Act.
+  err=base.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:raw},func(c toolsy.Chunk)error{chunks=append(chunks,c);return nil})
+  // Assert: accepted is not substituted for progress/result or handler error.
+  if n==-1{if !errors.Is(err,boom)||len(chunks)!=1||chunks[0].Event!=toolsy.EventProgress{t.Fatalf("failure: %v %#v",err,chunks)};continue}
+  if err!=nil{t.Fatal(err)}
+  want:=1;if n==3{want=3};if len(chunks)!=want||chunks[len(chunks)-1].Event!=toolsy.EventResult{t.Fatalf("terminal: %#v",chunks)}
+  if n>0&&string(chunks[len(chunks)-1].Data)!="done"{t.Fatalf("data: %#v",chunks)}
+ }
 }
-
-func TestGeneratedStreamTool(t *testing.T) {
-	tool, err := NewProgressDemoTool(streamHandler{})
-	if err != nil {
-		t.Fatalf("NewProgressDemoTool: %v", err)
-	}
-
-	var accepted toolsy.AsyncAccepted
-	err = tool.Execute(
-		context.Background(),
-		toolsy.NewRunEnv(nil),
-		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":1}")},
-		func(c toolsy.Chunk) error {
-			if err := json.Unmarshal(c.Data, &accepted); err != nil {
-				return err
-			}
-			return nil
-		},
-	)
-	if err != nil {
-		t.Fatalf("Execute async stream tool: %v", err)
-	}
-	if accepted.Status != "accepted" || accepted.TaskID == "" {
-		t.Fatalf("accepted = %#v, want status accepted and non-empty task_id", accepted)
-	}
-
-	// Background error path: handler yields error after progress; Execute returns nil after accept.
-	streamHandlerInvoked.Store(false)
-	streamObsMu.Lock()
-	streamHandlerErr = nil
-	streamObsMu.Unlock()
-	err = tool.Execute(
-		context.Background(),
-		toolsy.NewRunEnv(nil),
-		toolsy.ToolInput{ArgsJSON: []byte("{\"count\":-1}")},
-		func(c toolsy.Chunk) error {
-			return json.Unmarshal(c.Data, &accepted)
-		},
-	)
-	if err != nil {
-		t.Fatalf("Execute stream tool with handler error: %v", err)
-	}
-	if accepted.Status != "accepted" {
-		t.Fatalf("accepted status = %q, want accepted", accepted.Status)
-	}
-	waitStreamBackground(t, func() bool {
-		return streamHandlerInvoked.Load()
-	})
-	streamObsMu.Lock()
-	gotErr := streamHandlerErr
-	streamObsMu.Unlock()
-	if gotErr == nil || gotErr.Error() != "boom" {
-		t.Fatalf("handler error = %v, want boom", gotErr)
-	}
-
-	// Validation runs in background after accept; handler must not run for invalid payload.
-	streamHandlerInvoked.Store(false)
-	err = tool.Execute(
-		context.Background(),
-		toolsy.NewRunEnv(nil),
-		toolsy.ToolInput{ArgsJSON: []byte("{}")},
-		func(c toolsy.Chunk) error {
-			return json.Unmarshal(c.Data, &accepted)
-		},
-	)
-	if err != nil {
-		t.Fatalf("Execute stream tool missing required: %v", err)
-	}
-	time.Sleep(100 * time.Millisecond)
-	if streamHandlerInvoked.Load() {
-		t.Fatal("handler invoked for invalid payload, want validation failure before ExecuteStream")
-	}
+func TestGeneratedInputCancellationAndYieldError(t *testing.T){
+ // Arrange.
+ base,err:=NewProgressDemoTool(streamHandler{});if err!=nil{t.Fatal(err)}
+ before:=invoked.Load()
+ // Act/Assert: invalid args reject before dispatch.
+ err=base.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte("{}")},func(toolsy.Chunk)error{t.Fatal("invalid output");return nil})
+ if err==nil||invoked.Load()!=before{t.Fatalf("validation: %v",err)}
+ // Act/Assert: synchronous caller cancellation and consumer stop propagate causes.
+ ctx,cancel:=context.WithTimeout(t.Context(),20*time.Millisecond);defer cancel()
+ err=base.Execute(ctx,nil,toolsy.ToolInput{ArgsJSON:[]byte("{\"count\":-2}")},func(toolsy.Chunk)error{return nil})
+ if !errors.Is(err,context.DeadlineExceeded){t.Fatalf("cancel: %v",err)}
+ stop:=errors.New("consumer stopped")
+ err=base.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte("{\"count\":3}")},func(toolsy.Chunk)error{return stop})
+ if !errors.Is(err,stop){t.Fatalf("consumer: %v",err)}
+}
+func TestExplicitAsyncCompletion(t *testing.T){
+ for _,raw:=range []string{"{\"count\":1}","{\"count\":-1}","{\"count\":-2}","{}"}{
+  // Arrange: host owns timeout, collection and completion, independently of generated factory.
+  base,err:=NewProgressDemoTool(streamHandler{});if err!=nil{t.Fatal(err)}
+  type completion struct{chunks []toolsy.Chunk;err error}
+  done:=make(chan completion,1)
+  async:=toolsy.AsAsyncTool(base,toolsy.WithBackgroundTimeout(250*time.Millisecond),toolsy.WithMaxCollectedChunks(10),
+   toolsy.WithOnComplete(func(_ context.Context,_ string,chunks []toolsy.Chunk,err error){done<-completion{chunks,err}}))
+  var accepted toolsy.AsyncAccepted
+  // Act.
+  err=async.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(raw)},func(c toolsy.Chunk)error{return json.Unmarshal(c.Data,&accepted)})
+  // Assert: caller sees scheduling; terminal/error comes through completion hook.
+  if err!=nil||accepted.Status!="accepted"||accepted.TaskID==""{t.Fatalf("accept: %v %#v",err,accepted)}
+  select{
+  case got:=<-done:
+   if raw=="{\"count\":1}"{if got.err!=nil||len(got.chunks)!=1||got.chunks[0].Event!=toolsy.EventResult{t.Fatalf("completion: %#v",got)}}else if got.err==nil{t.Fatalf("missing completion error for %s",raw)}
+   if raw=="{\"count\":-1}"&&!errors.Is(got.err,boom){t.Fatalf("error cause: %v",got.err)}
+   if raw=="{\"count\":-2}"&&!errors.Is(got.err,context.DeadlineExceeded){t.Fatalf("timeout cause: %v",got.err)}
+  case <-time.After(time.Second):t.Fatal("no async completion")
+  }
+ }
 }
 
 `)
@@ -895,7 +831,7 @@ func TestGeneratedStreamTool(t *testing.T) {
 	}
 
 	runGo(t, moduleDir, goCache, "mod", "tidy")
-	runGo(t, moduleDir, goCache, "test", "./...")
+	runGo(t, moduleDir, goCache, "test", "-race", "./...")
 }
 
 func writeFile(t *testing.T, path, content string) {

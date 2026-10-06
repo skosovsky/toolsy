@@ -1,0 +1,37 @@
+--- FAIL: TestR21FinalizePublicRecoveryProbe (0.01s)
+    --- FAIL: TestR21FinalizePublicRecoveryProbe/reserve (0.00s)
+        r21_finalize_probe_test.go:32: 
+            	Error Trace:	/private/tmp/toolsy-task41/r21-baseline/internal/toolsygen/r21_finalize_probe_test.go:32
+            	Error:      	Not equal: 
+            	            	expected: "old-a"
+            	            	actual  : "new-a"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-old-a
+            	            	+new-a
+            	Test:       	TestR21FinalizePublicRecoveryProbe/reserve
+    --- FAIL: TestR21FinalizePublicRecoveryProbe/backup (0.00s)
+        r21_finalize_probe_test.go:32: 
+            	Error Trace:	/private/tmp/toolsy-task41/r21-baseline/internal/toolsygen/r21_finalize_probe_test.go:32
+            	Error:      	Not equal: 
+            	            	expected: "old-a"
+            	            	actual  : "new-a"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1 +1 @@
+            	            	-old-a
+            	            	+new-a
+            	Test:       	TestR21FinalizePublicRecoveryProbe/backup
+    --- FAIL: TestR21FinalizePublicRecoveryProbe/restore_current (0.00s)
+        r21_finalize_probe_test.go:34: 
+            	Error Trace:	/private/tmp/toolsy-task41/r21-baseline/internal/toolsygen/r21_finalize_probe_test.go:34
+            	Error:      	"[]" should have 1 item(s), but has 0
+            	Test:       	TestR21FinalizePublicRecoveryProbe/restore_current
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/toolsygen	0.810s
+FAIL

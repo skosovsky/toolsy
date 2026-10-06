@@ -290,8 +290,8 @@ undeclared keys when the source schema permits them. See the full
 **Stream tools (`stream: true`):**
 
 - Handler interface uses `ExecuteStream(...) iter.Seq2[string, error]`.
-- Factory wraps the proxy tool with `toolsy.AsAsyncTool` (immediate `AsyncAccepted` chunk, stream runs in background).
-- Argument parse/validate errors from the embedded proxy surface as tool `Execute` errors when they occur in the background goroutine; the accepted chunk is returned first.
+- Factory returns an ordinary synchronous proxy: caller Execute observes progress, terminal result and errors. Invalid arguments fail before handler dispatch; caller cancellation remains attached.
+- Async execution is explicit host composition using `AsAsyncTool(base, WithBackgroundTimeout(...), WithMaxCollectedChunks(...), WithOnComplete(...))`. Accepted acknowledges scheduling; background terminal/errors arrive through the completion hook, not the returned caller. See [the runnable example](examples/generated_stream/main.go) and [generator recovery/lifecycle contract](docs/generator-contract.md).
 
 ## Session state and RunEnv (DI)
 
