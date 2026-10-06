@@ -38,6 +38,8 @@ func NewMemoryOperationStore() *MemoryOperationStore {
 }
 
 // RestoreOperationStore copies a trusted, complete image for atomic adapters.
+// It validates structural consistency in both directions, not authenticity or
+// external outcome truth. Historical approval expiry does not invalidate an image.
 func RestoreOperationStore(snapshot OperationSnapshot) (*MemoryOperationStore, error) {
 	raw, err := json.Marshal(snapshot)
 	if err != nil {
@@ -60,6 +62,18 @@ func validateOperationSnapshot(state OperationSnapshot) error {
 	for key, record := range state.Records {
 		if err := validateOperationRecord(key, record); err != nil {
 			return err
+		}
+		if record.GrantID == "" {
+			if !record.ApprovalExpiresAt.IsZero() {
+				return &OperationError{Kind: operationCorruptSnapshot}
+			}
+			continue
+		}
+		grant, hasGrant := state.Grants[record.GrantID]
+		reservedKey, reserved := state.Consumed[record.GrantID]
+		if !hasGrant || !reserved || reservedKey != key || grant.Binding != record.Binding ||
+			!record.ApprovalExpiresAt.Equal(grant.ExpiresAt) {
+			return &OperationError{Kind: operationCorruptSnapshot}
 		}
 	}
 	for id, grant := range state.Grants {
@@ -206,7 +220,8 @@ func (s *MemoryOperationStore) Claim(ctx context.Context, claim OperationClaim) 
 	if err := validateOperationBinding(claim.Binding); err != nil {
 		return ClaimResult{}, err
 	}
-	if claim.AttemptID == "" || claim.Now.IsZero() || !claim.LeaseUntil.After(claim.Now) {
+	if claim.AttemptID == "" || claim.Now.IsZero() || !claim.LeaseUntil.After(claim.Now) ||
+		(!claim.RequiresApproval && claim.GrantID != "") {
 		return ClaimResult{}, &OperationError{Kind: "invalid_claim"}
 	}
 	s.mu.Lock()
@@ -222,6 +237,9 @@ func (s *MemoryOperationStore) Claim(ctx context.Context, claim OperationClaim) 
 			s.state.Records[key] = record
 		}
 		return ClaimResult{Dispatch: false, Record: cloneOperationRecord(record)}, nil
+	}
+	if exists && (record.GrantID != "") != claim.RequiresApproval {
+		return ClaimResult{}, &OperationError{Kind: operationBindingMismatch}
 	}
 	if exists && slices.Contains(record.Attempts, claim.AttemptID) {
 		return ClaimResult{}, &OperationError{Kind: operationStaleAttempt}

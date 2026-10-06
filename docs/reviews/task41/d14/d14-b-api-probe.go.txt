@@ -1,0 +1,10 @@
+package main
+import("context";"fmt";"os";"path/filepath";"time"; t "github.com/skosovsky/toolsy"; j "github.com/skosovsky/toolsy/adapters/execution/filejournal")
+func main(){
+ ctx:=context.Background(); now:=time.Now().UTC()
+ b:=t.OperationBinding{Namespace:"writes",Scope:"tenant",Subject:"user",OperationID:"intent",Tool:"write",ManifestFingerprint:"manifest",ViewFingerprint:"view",PolicyFingerprint:"policy",CanonicalDigest:"digest",CanonicalRules:"canonical",DownstreamKey:"downstream"}
+ c:=t.OperationClaim{Binding:b,AttemptID:"a",GrantID:"unused",Issuer:"host",RequiresApproval:false,Now:now,LeaseUntil:now.Add(time.Minute)}
+ m:=t.NewMemoryOperationStore(); r,e:=m.Claim(ctx,c); _,restore:=t.RestoreOperationStore(m.Snapshot()); fmt.Printf("memory: dispatch=%v claimErr=%v restoreErr=%v\n",r.Dispatch,e,restore)
+ d,e:=os.MkdirTemp("/tmp/toolsy-task41","d14-b-journal-"); if e!=nil{panic(e)}; defer os.RemoveAll(d)
+ s,e:=j.Open(filepath.Join(d,"journal.json"),0); if e!=nil{panic(e)}; r,e=s.Claim(ctx,c); _,found,inspect:=s.Inspect(ctx,b); fmt.Printf("filejournal: dispatch=%v claimErr=%v found=%v inspectErr=%v\n",r.Dispatch,e,found,inspect)
+}

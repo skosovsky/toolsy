@@ -35,6 +35,7 @@ func TestOperationInspectNeverClaimsOrMutates(t *testing.T) {
 	store := NewMemoryOperationStore()
 	claim := testOperationClaim(time.Now())
 	claim.RequiresApproval = false
+	claim.GrantID = ""
 	// Act.
 	_, found, err := store.Inspect(ctx, claim.Binding)
 	require.NoError(t, err)
@@ -151,6 +152,7 @@ func TestOperationReconcileRequiresUncertaintyAndEvidence(t *testing.T) {
 			store := NewMemoryOperationStore()
 			claim := testOperationClaim(time.Now())
 			claim.RequiresApproval = false
+			claim.GrantID = ""
 			if mode != "absent" {
 				_, err := store.Claim(ctx, claim)
 				require.NoError(t, err)

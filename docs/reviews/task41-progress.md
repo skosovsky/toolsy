@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted (commit pending); rows 28–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted (commit pending); rows 29–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1056,3 +1056,52 @@ A independently exercised inclusive display/encoded-result caps and default1MiB
 boundaries with a retained overlay fixture; race count3 PASS. Both reproduced
 baseline typednil failures, current race/lint and restart replay with one receipt.
 Accepted for separate signed commit `refactor: operation config`.
+
+### 28 — D14 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Retain bounded local reference adapter; state full-image transaction/inspect
+   time and memory complexity and serialized locking, default/inclusive quota.
+2. Restore validates both directions of record/grant/consumed links, including
+   missing grant/reservation, wrong binding/expiry, and inconsistent grantless records.
+3. AAA corrupt snapshot and durable journal regressions reject before permission
+   and preserve persisted bytes; legitimate approved/unapproved/recovery states restore.
+4. Host maintenance guidance preserves uncertainty, consumed grants, replay and
+   downstream idempotency; no automatic record eviction/retention API/integrity promise.
+5. Contract/migration consistent; targeted/full affected race and pinned lint pass;
+   both independent reviewers100% and no unresolved detected errors.
+
+Spec-first: grant-bearing records must have matching immutable grant and consumed
+reservation pointing back to their exact key; approval expiry must match. Grantless
+records have zero approval expiry. Existing forward link validation remains.
+Plain JSON validation establishes structural consistency only, not authentication.
+Local journal retains whole-image transactions under persistent advisory lock;
+maintenance belongs to authenticated host with quiesced writers and safe backups,
+never automatic deletion/reinitialization after quota or uncertain outcomes.
+
+Implementation adds reverse grant-bearing record checks and grantless expiry check,
+retaining forward validation. Baseline new tests showed five behavioral failures;
+current operation/recovery/normative/journal race count3 PASS2.103s/6.542s, lint0.
+Durable malformed-image claim/inspect fails with preserved original bytes; underlying
+OperationError is inspected through sanitized store error. Five legitimate states
+with/without approvals restore. Full root race and independent acceptance underway.
+
+Full root race PASS3.113s/filejournal2.993s; unchanged packages cached.
+
+Independent A/B found Claim(false approval, nonempty grant) could produce a snapshot
+rejected by the new restore. Fixed pre-dispatch invalid_claim validation and clear
+migration; unapproved callers clear irrelevant grant IDs. Recovery cannot switch
+approval mode and erase an old reservation (binding_mismatch). AAA memory/durable
+checks assert rejection before mutation, valid unapproved finish/reopen and retained
+consumed recovery links. Both independent acceptances must repeat final diff.
+
+Final revised targeted race count3 PASS2.062s/filejournal6.697s; full root race
+PASS4.523s/filejournal3.185s and pinned lint0. Real API-generated five-state snapshots
+include expired historical approval; both independent final reviews in progress.
+
+Independent final A and B each100%, five20/20 criteria, no unresolved detected
+errors. Both independently verified revised public API probes, complete uncached
+root race and targetedrace3/pinnedlint0; retained reports in task41/d14/acceptance-*.md.
+Accepted for separate signed commit `fix: journal consistency`. Local Restore
+benchmark10/100/1000 approvedrecords observed allocations77KiB/810KiB/8.3MiB;
+retained fixture/log, concurrent timings are not a performance guarantee.

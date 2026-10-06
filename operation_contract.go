@@ -65,6 +65,8 @@ type ApprovalGrant struct {
 
 // OperationClaim requests one atomic approval reservation and dispatch claim.
 // Lease expiry changes uncertainty, not permission to start another effect.
+// GrantID must be empty when RequiresApproval is false. Recovery retains the
+// original approval mode; it cannot erase a consumed reservation.
 type OperationClaim struct {
 	Binding          OperationBinding
 	AttemptID        string

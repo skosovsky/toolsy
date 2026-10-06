@@ -1,0 +1,27 @@
+package toolsy_test
+
+import (
+ "strconv"
+ "testing"
+ "time"
+ "github.com/skosovsky/toolsy"
+)
+
+func BenchmarkD14RestoreImage(b *testing.B) {
+ for _, n := range []int{10,100,1000} {
+ b.Run(strconv.Itoa(n),func(b *testing.B) {
+ store:=toolsy.NewMemoryOperationStore()
+ now:=time.Now().UTC()
+ for i:=range n {
+ binding:=toolsy.OperationBinding{Namespace:"bench",Scope:"scope",Subject:"subject",OperationID:strconv.Itoa(i),Tool:"tool",ManifestFingerprint:"manifest",PolicyFingerprint:"policy",CanonicalDigest:"digest",CanonicalRules:"rules"}
+ grantID:=strconv.Itoa(i)
+ if err:=store.PutGrant(b.Context(),toolsy.ApprovalGrant{ID:grantID,Issuer:"host",Binding:binding,IssuedAt:now,ExpiresAt:now.Add(time.Hour)});err!=nil {b.Fatal(err)}
+ if _,err:=store.Claim(b.Context(),toolsy.OperationClaim{Binding:binding,AttemptID:"attempt",GrantID:grantID,Issuer:"host",RequiresApproval:true,Now:now,LeaseUntil:now.Add(time.Minute)});err!=nil {b.Fatal(err)}
+ }
+ snapshot:=store.Snapshot()
+ b.ReportAllocs()
+ b.ResetTimer()
+ for b.Loop() { if _,err:=toolsy.RestoreOperationStore(snapshot);err!=nil {b.Fatal(err)} }
+ })
+ }
+}

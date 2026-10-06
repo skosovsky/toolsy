@@ -758,3 +758,25 @@ normalize or authenticate it. Config is captured by value, while referenced port
 and callback captures remain host-owned/concurrent-safe. Construction invokes no
 host callback. The [approval journal example](../examples/approval_journal/main.go)
 uses named fields and demonstrates challenge, bound issuance and durable replay.
+
+## D14 — local journal maintenance and restore consistency
+
+`RestoreOperationStore` now rejects incomplete reverse record/grant/reservation
+links, including grant-bearing records without a consumed reservation and
+approval expiry on a grantless record. Correct snapshots require no format change.
+A malformed historical image must be reconciled from authenticated host evidence;
+do not invent a reservation, clear the journal, or reissue an old operation merely
+to make restore succeed. Validation checks structure, not authenticity or external
+outcome truth. Expired original grants remain historical data.
+
+The filejournal adapter retains full-image transactions with an inclusive 8MiB
+zero-config default, no automatic eviction or retention API. See its
+[maintenance and complexity contract](../adapters/execution/filejournal/README.md).
+Hosts must preserve uncertainty, consumed approvals, fences and replay identities
+when backing up or migrating after quiescing all workers. Storage growth is a host
+capacity concern; bounded reference storage is not a distributed journal.
+
+Unapproved claims must have an empty `GrantID`; inconsistent claims now fail with
+`invalid_claim` before dispatch/mutation. Clear irrelevant grant IDs in host inputs.
+Recovery cannot change the original approval mode for the same operation binding;
+a downgrade/upgrade fails with `binding_mismatch`, preserving the old reservation.

@@ -4,6 +4,7 @@ package filejournal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -281,4 +282,71 @@ func TestJournalCrashChild(t *testing.T) {
 	}, func(toolsy.Chunk) error { return nil })
 	require.NoError(t, err)
 	t.Fatal("crash helper returned")
+}
+
+func TestJournalCorruptReverseLinkFailsBeforeDispatch(t *testing.T) {
+	// Arrange: durable approval/claim, then a storage image missing its reservation.
+	now := time.Now().UTC()
+	path := filepath.Join(t.TempDir(), "journal.json")
+	store := seedJournal(t, path, now)
+	first, err := store.Claim(t.Context(), journalClaim(now))
+	require.NoError(t, err)
+	require.True(t, first.Dispatch)
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var snapshot toolsy.OperationSnapshot
+	require.NoError(t, json.Unmarshal(raw, &snapshot))
+	delete(snapshot.Consumed, "grant")
+	corrupt, err := json.Marshal(snapshot)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, corrupt, privateEffectMode))
+	reopened, err := Open(path, 0)
+	require.NoError(t, err)
+	claim := journalClaim(now.Add(2 * time.Minute))
+	claim.AttemptID = "recovery"
+	// Act.
+	result, err := reopened.Claim(t.Context(), claim)
+	_, found, inspectErr := reopened.Inspect(t.Context(), claim.Binding)
+	// Assert: corrupt image never returns permission or a trusted record, nor rewrites bytes.
+	var claimCause, inspectCause *toolsy.OperationError
+	require.ErrorAs(t, err, &claimCause)
+	require.ErrorAs(t, inspectErr, &inspectCause)
+	assert.Equal(t, "corrupt_snapshot", claimCause.Kind)
+	assert.Equal(t, "corrupt_snapshot", inspectCause.Kind)
+	assert.False(t, result.Dispatch)
+	assert.False(t, found)
+	after, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	assert.Equal(t, corrupt, after)
+}
+
+func TestJournalRejectsUnusedGrantBeforeDispatch(t *testing.T) {
+	// Arrange: unapproved claim carries a grant it must not consume.
+	now := time.Now().UTC()
+	path := filepath.Join(t.TempDir(), "journal.json")
+	store := seedJournal(t, path, now)
+	before, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	claim := journalClaim(now)
+	claim.RequiresApproval = false
+	// Act.
+	result, err := store.Claim(t.Context(), claim)
+	// Assert: no effect permission and no invalid persisted image.
+	require.ErrorContains(t, err, "invalid_claim")
+	assert.False(t, result.Dispatch)
+	after, readErr := os.ReadFile(path)
+	require.NoError(t, readErr)
+	assert.Equal(t, before, after)
+	claim.GrantID = ""
+	result, err = store.Claim(t.Context(), claim)
+	require.NoError(t, err)
+	assert.True(t, result.Dispatch)
+	require.NoError(t, store.Finish(t.Context(), toolsy.OperationFinish{Binding: claim.Binding,
+		AttemptID: claim.AttemptID, State: toolsy.OperationCompleted, Result: []byte("done")}))
+	reopened, openErr := Open(path, 0)
+	require.NoError(t, openErr)
+	record, found, inspectErr := reopened.Inspect(t.Context(), claim.Binding)
+	require.NoError(t, inspectErr)
+	assert.True(t, found)
+	assert.Equal(t, toolsy.OperationCompleted, record.State)
 }

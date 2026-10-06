@@ -1,0 +1,15 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkD14RestoreImage/10-10 	    1045	    624506 ns/op	   76858 B/op	     169 allocs/op
+BenchmarkD14RestoreImage/10-10 	    1226	    535901 ns/op	   76909 B/op	     169 allocs/op
+BenchmarkD14RestoreImage/10-10 	    2184	    599612 ns/op	   76790 B/op	     168 allocs/op
+BenchmarkD14RestoreImage/100-10         	     100	   2964578 ns/op	  810533 B/op	    1572 allocs/op
+BenchmarkD14RestoreImage/100-10         	     100	   3366576 ns/op	  810069 B/op	    1568 allocs/op
+BenchmarkD14RestoreImage/100-10         	     100	   5599890 ns/op	  810035 B/op	    1567 allocs/op
+BenchmarkD14RestoreImage/1000-10        	       4	  94163792 ns/op	 8306154 B/op	   17305 allocs/op
+BenchmarkD14RestoreImage/1000-10        	       6	  49113167 ns/op	 8303048 B/op	   17303 allocs/op
+BenchmarkD14RestoreImage/1000-10        	      12	  23888885 ns/op	 8303397 B/op	   17303 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	5.518s

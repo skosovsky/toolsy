@@ -1,0 +1,29 @@
+--- FAIL: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- FAIL: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+        operation_snapshot_links_test.go:43: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/operation_snapshot_links_test.go:43
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestRestoreOperationSnapshotReverseLinks/missing_reservation
+    --- FAIL: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+        operation_snapshot_links_test.go:43: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/operation_snapshot_links_test.go:43
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+    --- FAIL: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+        operation_snapshot_links_test.go:43: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/operation_snapshot_links_test.go:43
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+    --- FAIL: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+        operation_snapshot_links_test.go:43: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/operation_snapshot_links_test.go:43
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+    --- FAIL: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+        operation_snapshot_links_test.go:43: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/operation_snapshot_links_test.go:43
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.533s
+FAIL
