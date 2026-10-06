@@ -1,0 +1,8 @@
+--- FAIL: TestR16PublicInvalidUTF8NeverBecomesSuccessfulJSON (0.00s)
+    --- FAIL: TestR16PublicInvalidUTF8NeverBecomesSuccessfulJSON/GET (0.00s)
+        r16_public_probe_test.go:14: invalid body accepted: err=<nil> chunks=1
+    --- FAIL: TestR16PublicInvalidUTF8NeverBecomesSuccessfulJSON/POST (0.00s)
+        r16_public_probe_test.go:14: invalid body accepted: err=<nil> chunks=1
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/httptool	0.468s

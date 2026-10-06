@@ -499,3 +499,17 @@ its mandatory context/reader/capability contract is in the adapter README. The
 constructor-validated policy is the only source of output/log-timeout bounds.
 Starlark fs.read limit errors intentionally remain guest exit1 with bounded stderr;
 stdout/stderr collection overflow remains an infrastructure/output error.
+
+## R16 — HTTP toolkit response encoding
+
+GET/POST JSON body strings now require valid UTF-8 response bytes. Invalid UTF-8
+is rejected before bytes-to-string/JSON replacement; no Content-Type charset
+inference, transcoding or implicit binary wrapper. Valid UTF-8/status/body shape
+is unchanged. Binary hosts use byte-oriented library readers and explicit encoding.
+
+Encoding failure exposes ErrInvalidUTF8Response and ResponseEncodingError with
+method/status through CodeInternal ResultContractError. POST response read/wire
+limit errors also become result-phase CodeInternal with their original causes;
+pre-dispatch request and GET read/wire bounds retain their validation categories.
+These failures never emit success or authorize repair/retry of an already dispatched
+POST. Caller cancellation keeps its precedence and does not imply effect rollback.

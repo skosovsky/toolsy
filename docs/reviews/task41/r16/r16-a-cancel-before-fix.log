@@ -1,0 +1,5 @@
+--- FAIL: TestR16ACanceledPOSTWireLimit (0.00s)
+    r16_a_probe_test.go:10: cancellation lost: VALIDATION_FAILED: encoded result exceeds wire budget
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/httptool	0.547s

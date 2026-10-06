@@ -109,7 +109,7 @@ func TestHTTPGet_ExceedsLimitReturnsValidationError(t *testing.T) {
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
-func TestHTTPPost_ExceedsLimitReturnsValidationError(t *testing.T) {
+func TestHTTPPost_ExceedsResponseLimitReturnsResultError(t *testing.T) {
 	largeBody := make([]byte, 100)
 	for i := range largeBody {
 		largeBody[i] = 'x'
@@ -137,8 +137,13 @@ func TestHTTPPost_ExceedsLimitReturnsValidationError(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "20")
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	var phase *toolsy.ResultContractError
+	require.ErrorAs(t, err, &phase)
+	require.Equal(t, "http_response_read", phase.Kind)
+	cause, ok := toolsy.AsToolError(phase.Cause)
+	require.True(t, ok)
+	require.Contains(t, cause.Reason, "20")
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }

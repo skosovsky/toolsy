@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted (commit pending); rows 16–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is in progress; rows 17–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -570,3 +570,35 @@ No unresolved detected defects. Parent public currentprobe count5PASS1.477s,
 all affected race/rootracePASS, final pinnedlint0. Evidence docs/reviews/task41/r15/.
 No live Docker/E2B; interpretation/resource limits remain backend-specific.
 Commit: fix: sandbox output.
+
+### 16 — R16 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. GET/POST tool response body is explicitly UTF-8-only: valid bytes roundtrip
+   unchanged, invalid UTF-8 rejected before bytes-to-string/JSON replacement, with
+   no charset sniffing/transcoding or MIME guesses. Library readers remain binary.
+2. Encoding failures retain typed method/status/cause as post-dispatch result errors;
+   no successful result, argument repair or automatic retry. POST effects are not
+   reported as rolled back; adversarial counters prove single dispatch.
+3. Source/wire budgets remain independent and inclusive, validated before decoding;
+   limits/escaping/exact-boundary/context fixtures pass. POST response-read/wire
+   failures are result-phase failures; pre-dispatch request bounds stay validation.
+4. API/README/migration explain UTF-8 representation, binary library alternative,
+   unchanged status/body shape and POST reconciliation/cancellation limits accurately.
+5. AAA public baseline/current encoding/body-limit/POST-effect probes and affected
+   tests/race/lint pass; both reviewers100%, no unresolved detected defects.
+
+Contract: keep JSON status/body string shape, require actual UTF-8 response bytes
+regardless of Content-Type charset; no binary encoding inference. UTF-8 encoding
+failures are CodeInternal ResultContractError with typed ResponseEncodingError.
+Post response read/wire failures also cannot be treated as pre-dispatch argument
+errors. Caller cancellation retains its precedence and does not imply rollback.
+
+Row16 gate: A100%, B100%, five20% criteria each; no unresolved detected defects.
+Initial canceled POST wire-validation gap fixed and independently reverified.
+A fullHTTP race+probe count3PASS4.825s/lint0; B fullHTTP race count3PASS4.158s,
+adversarialcount5PASS1.624s/lint0. Parent fullHTTP racePASS2.477s/lint0,
+rootracePASS (cached except generator18.865s). Public baseline GET/POST invalid
+UTF8FAIL as expected/currentcount5PASS2.144s. Evidence docs/reviews/task41/r16/.
+LocalHTTP only; cancellation checkpoints are not rollback, no live API/performance
+claims. Commit: fix: http encoding.

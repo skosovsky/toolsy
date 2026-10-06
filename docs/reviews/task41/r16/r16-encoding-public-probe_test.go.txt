@@ -1,0 +1,17 @@
+package httptool_test
+import("encoding/json";"net/http";"net/http/httptest";"sync/atomic";"testing";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/httptool")
+func TestR16PublicInvalidUTF8NeverBecomesSuccessfulJSON(t *testing.T){
+ for index,method:=range []string{http.MethodGet,http.MethodPost}{t.Run(method,func(t *testing.T){
+  // Arrange.
+  var effects atomic.Int32
+  srv:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,_ *http.Request){effects.Add(1);w.Header().Set("Content-Type","application/octet-stream");_,_=w.Write([]byte{0xff})}));defer srv.Close()
+  tools,closeIdle,err:=httptool.AsToolsWithCleanup(httptool.WithAllowedDomains([]string{"127.0.0.1"}),httptool.WithAllowPrivateIPs(true));if err!=nil{t.Fatal(err)};defer closeIdle()
+  input,err:=json.Marshal(map[string]any{"url":srv.URL});if err!=nil{t.Fatal(err)}
+  chunks:=0
+  // Act.
+  err=toolsy.WithErrorFormatter()(tools[index]).Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:input},func(toolsy.Chunk)error{chunks++;return nil})
+  // Assert: a JSON replacement result is corruption, not success or argument correction.
+  if err==nil||chunks!=0{t.Fatalf("invalid body accepted: err=%v chunks=%d",err,chunks)}
+  if effects.Load()!=1{t.Fatalf("dispatch count %d",effects.Load())}
+ })}
+}

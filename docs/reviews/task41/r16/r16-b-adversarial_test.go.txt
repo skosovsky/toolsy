@@ -1,0 +1,62 @@
+package httptool
+
+import (
+ "bytes"
+ "context"
+ "encoding/json"
+ "errors"
+ "io"
+ "net/http"
+ "net/http/httptest"
+ "sync/atomic"
+ "testing"
+ "github.com/skosovsky/toolsy"
+)
+type r16BCancelReader struct { cancel context.CancelFunc }
+func(r r16BCancelReader)Read(p []byte)(int,error){r.cancel();p[0]=0xff;return 1,io.EOF}
+func TestR16BAdversarial(t *testing.T){
+ t.Run("canceled_wire_result",func(t *testing.T){
+  // Arrange.
+  ctx,cancel:=context.WithCancel(t.Context());cancel()
+  // Act and Assert: cancellation replaces both success and validation after dispatch.
+  for _,input:=range []error{nil,toolsy.NewValidationError("wire")}{
+   err:=responseFailure(ctx,http.MethodPost,"http_response_wire",input)
+   if !errors.Is(err,context.Canceled){t.Fatalf("cancellation lost: %v",err)}
+  }
+ })
+ t.Run("cancellation_precedes_invalid",func(t *testing.T){
+  // Arrange.
+  ctx,cancel:=context.WithCancel(t.Context());defer cancel()
+  resp:=&http.Response{StatusCode:200,Body:io.NopCloser(r16BCancelReader{cancel:cancel})}
+  // Act.
+  _,err:=readToolResponse(ctx,resp,1,http.MethodPost)
+  // Assert.
+  if !errors.Is(err,context.Canceled)||errors.Is(err,ErrInvalidUTF8Response){t.Fatalf("wrong cancellation precedence %v",err)}
+ })
+ for i,method:=range []string{http.MethodGet,http.MethodPost}{
+  for _,delta:=range []int{0,-1}{t.Run(method+string(rune('0'-delta)),func(t *testing.T){
+   // Arrange: inclusive source cap plus JSON escape inflation.
+   body:=[]byte("<\x00é\r\n")
+   expected,_:=json.Marshal(httpResult{Status:200,Body:string(body)})
+   var calls atomic.Int32
+   s:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){calls.Add(1);_,_=w.Write(body)}));defer s.Close()
+   tools,closeIdle,err:=AsToolsWithCleanup(WithAllowedDomains([]string{"127.0.0.1"}),WithAllowPrivateIPs(true),WithMaxResponseBody(len(body)),WithMaxWireBytes(len(expected)+delta));if err!=nil{t.Fatal(err)};defer closeIdle()
+   in,_:=json.Marshal(getArgs{URL:s.URL});var chunks []toolsy.Chunk
+   // Act.
+   err=toolsy.WithErrorFormatter()(tools[i]).Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:in},func(c toolsy.Chunk)error{chunks=append(chunks,c);return nil})
+   // Assert.
+   if calls.Load()!=1{t.Fatal(calls.Load())}
+   if delta==0{if err!=nil||len(chunks)!=1{t.Fatalf("exact rejected %v %d",err,len(chunks))}; got:=decodeHTTPResult(t,chunks[0]);if !bytes.Equal(body,[]byte(got.Body)){t.Fatal("corruption")};return}
+   if i==1{var phase *toolsy.ResultContractError;if err==nil||!errors.As(err,&phase)||phase.Kind!="http_response_wire"||len(chunks)!=0{t.Fatalf("POST wrong overflow %v %d",err,len(chunks))}}
+  })}
+ }
+ t.Run("over_limit_invalid_checks_budget_first",func(t *testing.T){
+  // Arrange.
+  resp:=&http.Response{StatusCode:200,Body:io.NopCloser(bytes.NewReader([]byte{0xff,0xff}))}
+  // Act.
+  _,err:=readToolResponse(t.Context(),resp,1,http.MethodPost)
+  // Assert.
+  var phase *toolsy.ResultContractError
+  if !errors.As(err,&phase)||phase.Kind!="http_response_read"||errors.Is(err,ErrInvalidUTF8Response){t.Fatalf("wrong budget precedence %v",err)}
+ })
+}

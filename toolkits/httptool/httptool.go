@@ -88,7 +88,8 @@ func AsToolsWithCleanup(opts ...Option) ([]toolsy.Tool, func(), error) {
 			if requestErr != nil {
 				return format.JSONResult{}, requestErr
 			}
-			return format.ToJSONResult(r, o.maxWireBytes)
+			result, resultErr := format.ToJSONResult(r, o.maxWireBytes)
+			return result, responseFailure(ctx, http.MethodPost, "http_response_wire", resultErr)
 		},
 		toolsy.WithDangerous(),
 		toolsy.WithRequiresConfirmation(),
@@ -139,16 +140,7 @@ func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options,
 	}
 	defer CloseResponseBody(ctx, resp.Body)
 
-	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
-	if mapped := toolsy.MapToolkitReadError(
-		ctx, err, "toolkit/httptool: read body", o.maxResponseBody, "response body", "",
-	); mapped != nil {
-		return httpResult{}, mapped
-	}
-	if err != nil {
-		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
-	}
-	return httpResult{Status: resp.StatusCode, Body: string(body)}, nil
+	return readToolResponse(ctx, resp, o.maxResponseBody, http.MethodGet)
 }
 
 func doPOST(
@@ -207,16 +199,7 @@ func doPOST(
 	}
 	defer CloseResponseBody(ctx, resp.Body)
 
-	body, err := ReadBodyLimited(ctx, resp.Body, o.maxResponseBody)
-	if mapped := toolsy.MapToolkitReadError(
-		ctx, err, "toolkit/httptool: read body", o.maxResponseBody, "response body", "",
-	); mapped != nil {
-		return httpResult{}, mapped
-	}
-	if err != nil {
-		return httpResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/httptool: read body: %w", err))
-	}
-	return httpResult{Status: resp.StatusCode, Body: string(body)}, nil
+	return readToolResponse(ctx, resp, o.maxResponseBody, http.MethodPost)
 }
 
 func credentialsAllowed(run *toolsy.RunEnv, o *options, u *url.URL) bool {

@@ -17,16 +17,16 @@ go get github.com/skosovsky/toolsy/toolkits/httptool
 | `http_get`  | Perform an HTTP GET request         | `{"url": "string"}`                                     |
 | `http_post` | Perform an HTTP POST with JSON body | `{"url": "string", "json_body": {"key": "value", ...}}` |
 
-Result: `{"status": 200, "body": "..."}`. Responses retain their body unchanged or return a limit error; there is no silent truncation. The toolkit does not interpret response text as trusted instructions.
+Result: `{"status": 200, "body": "..."}`. Tool response bodies must contain valid UTF-8 bytes; valid bodies roundtrip unchanged through the JSON string, and invalid UTF-8 returns an error before conversion. There is no silent truncation or replacement. Content-Type/charset does not trigger guessing or transcoding. The toolkit does not interpret response text as trusted instructions.
 
 ## Contract and bounds
 
 - `WithMaxResponseBody`: source body read budget, default 512 KiB.
 - `WithMaxRequestBody`: POST JSON input byte budget, default 512 KiB; reject before dispatch and preserve approved bytes.
-- `WithMaxWireBytes`: complete encoded result budget, default 4 MiB, checked after JSON escaping. Body and wire limits are independent; escaping can make a body within its read budget exceed the wire budget.
+- `WithMaxWireBytes`: encoded status/body JSON budget (excluding outer host envelopes), default 4 MiB, checked after JSON escaping. Body and wire limits are independent; escaping can make a body within its read budget exceed the wire budget.
 - Nonpositive values select these finite defaults. URLs are limited to 8192 bytes.
-- Exceeding a limit returns a validation error with no successful result. A POST may already have occurred when its response exceeds a result limit; response bounds are not an operation rollback guarantee. Compose host operation profiles for durable approval/idempotency.
-- The safe tool client has a 30-second default timeout; a positive custom `http.Client.Timeout` overrides it and context cancellation still applies. The host selects allowed destinations and private-IP exceptions.
+- Pre-dispatch request bounds and GET response bounds retain validation errors. POST response-read/wire bounds instead return CodeInternal ResultContractError with the original limit cause, preventing argument repair or blind retry. No successful result is emitted. A POST may already have occurred when its response exceeds a result limit; response bounds are not an operation rollback guarantee. Compose host operation profiles for durable approval/idempotency.
+- The safe tool client has a 30-second default timeout; a positive `ClientSettings.Timeout` overrides it and context cancellation still applies. The host selects allowed destinations and private-IP exceptions.
 - No generic pagination is promised. A host can expose API-specific query/cursor parameters in the URL; stable continuation depends on that API. Status/body are returned without synthesizing a token.
 
 ## Credentials and destinations
@@ -62,7 +62,7 @@ data, err := httptool.ReadBodyLimited(ctx, resp.Body, 512*1024)
 if errors.Is(err, textprocessor.ErrReadLimitExceeded) {
     // handle limit
 }
-body := string(data)
+// Keep data as []byte for binary adapters, or explicitly choose a text/binary encoding.
 ```
 
 **SafeDialOptions host policy:**
@@ -141,3 +141,13 @@ never resolved again between attempts. Stream readers use stop-after-budget
 semantics: exactly exhausting a byte cap without an EOF in the last Read yields
 a limit error on the next nonempty Read, without probing beyond the budget. Empty
 reads consume nothing; cancellation takes precedence.
+
+Invalid tool response encoding is CodeInternal with ResultContractError kind
+http_response_encoding and an inspectable ResponseEncodingError (Method/Status),
+matching ErrInvalidUTF8Response. It is non-retryable and not an argument error.
+Empty bodies, NUL, CRLF and valid Unicode remain unchanged; there is no charset
+sniffing, replacement character insertion or implicit Base64 wrapper. HTTP status
+is preserved for valid UTF-8 regardless of Content-Type or success/error status.
+A failed POST result does not mean its remote side effect was undone. Hosts own
+reconciliation/idempotency; cancellation also never promises rollback. The exported
+ReadBodyLimited/stream readers remain byte-oriented for binary host adapters.

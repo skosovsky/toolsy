@@ -1,0 +1,11 @@
+package httptool
+import("context";"errors";"net/http";"testing"; "github.com/skosovsky/toolsy")
+func TestR16ACanceledPOSTWireLimit(t *testing.T){
+ // Arrange: cancellation occurred while encoding the already-dispatched response.
+ ctx,cancel:=context.WithCancel(t.Context()); cancel()
+ original:=toolsy.NewValidationError("encoded result exceeds wire budget")
+ // Act.
+ got:=responseFailure(ctx,http.MethodPost,"http_response_wire",original)
+ // Assert: caller cancellation cannot become argument repair.
+ if !errors.Is(got,context.Canceled){t.Fatalf("cancellation lost: %v",got)}
+}
