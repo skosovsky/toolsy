@@ -43,36 +43,39 @@ func NewTool[T any, R any](
 		}
 		cfg.Manifest.OutputSchema = outSchema
 	}
+	manifest := buildToolManifest(name, description, ext.Schema(), cfg.Manifest)
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		args, err := ext.ParseAndValidate(input.ArgsJSON)
 		if err != nil {
 			return err
 		}
-		res, err := fn(ctx, env, args)
-		if err != nil {
-			return wrapHandlerError(err)
-		}
-		data, err := marshalToolResult(res)
-		if err != nil {
-			return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
-		}
-		chunk := Chunk{
-			Event:       EventResult,
-			Data:        data,
-			MimeType:    MimeTypeJSON,
-			TypedResult: res,
-		}
-		prepared, err := prepareChunk(chunk)
-		if err != nil {
-			return err
-		}
-		if err := yield(prepared); err != nil {
-			return wrapYieldError(err)
-		}
-		return nil
+		return ExecutePrepared(ctx, env, manifest, input, args, func(_ ToolInput, out func(Chunk) error) error {
+			res, err := fn(ctx, env, args)
+			if err != nil {
+				return wrapHandlerError(err)
+			}
+			data, err := marshalToolResult(res)
+			if err != nil {
+				return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
+			}
+			chunk := Chunk{
+				Event:       EventResult,
+				Data:        data,
+				MimeType:    MimeTypeJSON,
+				TypedResult: res,
+			}
+			prepared, err := prepareChunk(chunk)
+			if err != nil {
+				return err
+			}
+			if err := out(prepared); err != nil {
+				return wrapYieldError(err)
+			}
+			return nil
+		}, yield)
 	}
 	return &tool{
-		manifest: buildToolManifest(name, description, ext.Schema(), cfg.Manifest),
+		manifest: manifest,
 		execute:  execute,
 	}, nil
 }
@@ -123,6 +126,7 @@ func deepCopySchemaFromMap(schemaMap map[string]any) (map[string]any, error) {
 //
 //nolint:gocognit
 func rawArgsValidatedExecute(
+	manifest ToolManifest,
 	compiled schemaValidator,
 	handler func(ctx context.Context, env *RunEnv, argsJSON []byte, yield func(Chunk) error) error,
 ) func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error {
@@ -134,29 +138,31 @@ func rawArgsValidatedExecute(
 		if err := validateAgainstSchema(compiled, v); err != nil {
 			return err
 		}
-		yieldWrapped := func(c Chunk) error {
-			prepared, err := prepareChunk(c)
-			if err != nil {
-				return err
+		return ExecutePrepared(ctx, env, manifest, input, v, func(bound ToolInput, out func(Chunk) error) error {
+			yieldWrapped := func(c Chunk) error {
+				prepared, err := prepareChunk(c)
+				if err != nil {
+					return err
+				}
+				if err := out(prepared); err != nil {
+					return wrapYieldError(err)
+				}
+				return nil
 			}
-			if err := yield(prepared); err != nil {
-				return wrapYieldError(err)
+			if err := handler(ctx, env, bound.ArgsJSON, yieldWrapped); err != nil {
+				if clientCorrectable(err) {
+					return err
+				}
+				if errors.Is(err, ErrStreamAborted) {
+					return err
+				}
+				if IsControlError(err) {
+					return err
+				}
+				return wrapHandlerError(err)
 			}
 			return nil
-		}
-		if err := handler(ctx, env, input.ArgsJSON, yieldWrapped); err != nil {
-			if clientCorrectable(err) {
-				return err
-			}
-			if errors.Is(err, ErrStreamAborted) {
-				return err
-			}
-			if IsControlError(err) {
-				return err
-			}
-			return wrapHandlerError(err)
-		}
-		return nil
+		}, yield)
 	}
 }
 
@@ -164,8 +170,8 @@ func rawArgsValidatedExecute(
 //
 // Unlike [NewTool], stream tools do not have a single typed result type R, so
 // [ToolManifest.OutputSchema] is not generated automatically. Set it with
-// [WithOutputSchema] when the LLM should know the shape of final JSON results,
-// or document progress/result chunks in the tool description.
+// [WithOutputSchema] for final JSON results. Callers must explicitly select
+// [WithTerminalStream] or [WithIndependentStream]; MIME does not select semantics.
 //
 //nolint:gocognit
 func NewStreamTool[T any](
@@ -178,41 +184,51 @@ func NewStreamTool[T any](
 		opt(&cfg)
 	}
 	cfg.Schema = ensureSchemaConfig(cfg.Schema)
+	validator, limit, contractErr := buildStreamContract(cfg)
+	if contractErr != nil {
+		return nil, contractErr
+	}
+	cfg.Manifest.StreamMaxBytes = limit
 	ext, err := NewExtractorWithConfig[T](cfg.Schema)
 	if err != nil {
 		return nil, err
 	}
+	manifest := buildToolManifest(name, description, ext.Schema(), cfg.Manifest)
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
-		yieldWrapped := func(c Chunk) error {
-			prepared, err := prepareChunk(c)
-			if err != nil {
-				return err
-			}
-			if err := yield(prepared); err != nil {
-				return wrapYieldError(err)
-			}
-			return nil
-		}
 		args, err := ext.ParseAndValidate(input.ArgsJSON)
 		if err != nil {
 			return err
 		}
-		if err := fn(ctx, env, args, yieldWrapped); err != nil {
-			if clientCorrectable(err) {
-				return err
+		return ExecutePrepared(ctx, env, manifest, input, args, func(_ ToolInput, out func(Chunk) error) error {
+			yieldWrapped := func(c Chunk) error {
+				prepared, err := prepareChunk(c)
+				if err != nil {
+					return err
+				}
+				if err := out(prepared); err != nil {
+					return wrapYieldError(err)
+				}
+				return nil
 			}
-			if errors.Is(err, ErrStreamAborted) {
-				return err
+			if err := runStreamContract(ctx, validator, limit, func(out func(Chunk) error) error {
+				return fn(ctx, env, args, out)
+			}, yieldWrapped); err != nil {
+				if clientCorrectable(err) {
+					return err
+				}
+				if errors.Is(err, ErrStreamAborted) {
+					return err
+				}
+				if IsControlError(err) {
+					return err
+				}
+				return wrapHandlerError(err)
 			}
-			if IsControlError(err) {
-				return err
-			}
-			return wrapHandlerError(err)
-		}
-		return nil
+			return nil
+		}, yield)
 	}
 	return &tool{
-		manifest: buildToolManifest(name, description, ext.Schema(), cfg.Manifest),
+		manifest: manifest,
 		execute:  execute,
 	}, nil
 }
@@ -255,9 +271,10 @@ func NewProxyTool(
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile proxy schema: %w", err)
 	}
-	execute := rawArgsValidatedExecute(compiled, handler)
+	manifest := buildToolManifest(name, description, schemaCopy, cfg.Manifest)
+	execute := rawArgsValidatedExecute(manifest, compiled, handler)
 	return &tool{
-		manifest: buildToolManifest(name, description, schemaCopy, cfg.Manifest),
+		manifest: manifest,
 		execute:  execute,
 	}, nil
 }
@@ -265,6 +282,8 @@ func NewProxyTool(
 func buildToolManifest(name, description string, schema map[string]any, cfg ToolManifest) ToolManifest {
 	tags := append([]string(nil), cfg.Tags...)
 	return ToolManifest{
+		StreamSemantics:      cfg.StreamSemantics,
+		StreamMaxBytes:       cfg.StreamMaxBytes,
 		Name:                 name,
 		Description:          description,
 		Parameters:           maps.Clone(schema),
@@ -298,9 +317,11 @@ func (t *tool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield 
 	if env == nil {
 		env = NewRunEnv(nil)
 	}
-	if len(input.Attachments) > 0 {
-		env = env.cloneForExecute(input.Attachments, env.async)
+	if env.preparedDispatch {
+		return NewValidationError("direct nested execution requires a fresh RunEnv or scoped executor")
 	}
+	// Every call owns preparation state; shared host dependencies/session remain shared.
+	env = env.cloneForExecute(input.Attachments, env.async)
 	return t.execute(ctx, env, input, yield)
 }
 
@@ -309,8 +330,14 @@ func wrapHandlerError(err error) error {
 	if err == nil {
 		return nil
 	}
+	if outcomeErr, ok := errors.AsType[*OperationOutcomeError](err); ok {
+		return NewInternalError(outcomeErr)
+	}
 	if IsControlError(err) {
 		return err
+	}
+	if streamErr, ok := errors.AsType[*StreamContractError](err); ok {
+		return NewInternalError(streamErr)
 	}
 	if te, ok := AsToolError(err); ok && te.Code == CodeInternal && isContextInterrupt(te.Err) {
 		err = te.Err

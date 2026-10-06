@@ -88,7 +88,7 @@ type ToolInput struct {
 
 // Clone returns a deep copy of in (ArgsJSON backing array and attachment bytes).
 func (in ToolInput) Clone() ToolInput {
-	out := ToolInput{ //nolint:exhaustruct // ArgsJSON and Attachments assigned below
+	out := ToolInput{ //nolint:exhaustruct_v5 // ArgsJSON and Attachments assigned below
 		CallID: in.CallID,
 	}
 	if len(in.ArgsJSON) > 0 {

@@ -8,7 +8,7 @@ import (
 
 func defaultHTTPClient(allowPrivateIPs bool) *http.Client {
 	return httptool.NewSafeHTTPClient(
-		httptool.SafeDialOptions{AllowPrivateIPs: allowPrivateIPs}, //nolint:exhaustruct // blacklist mode when false
+		httptool.SafeDialOptions{AllowPrivateIPs: allowPrivateIPs}, //nolint:exhaustruct_v5 // blacklist mode when false
 		httptool.CheckRedirectRemote(allowPrivateIPs, nil),
 	)
 }

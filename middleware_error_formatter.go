@@ -19,7 +19,7 @@ import (
 func WithErrorFormatter() Middleware {
 	return func(next Tool) Tool {
 		return &errorFormatterTool{
-			toolBase: toolBase{next: next},
+			next: next,
 		}
 	}
 }

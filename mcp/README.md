@@ -2,7 +2,24 @@
 
 `github.com/skosovsky/toolsy/mcp` is a strict MCP client and protocol bridge. It supports exactly `2026-07-28`; there is no legacy negotiation, fallback, compatibility mode or MCP server implementation.
 
+All transport implementations and test doubles use `NotificationHandler` with
+`json.RawMessage` parameters and the `PrepareRequest` delivery boundary. A
+legacy `Call` method is not a substitute for preparation: request-correlated
+state must be registered before delivery. The package owns one shared JSON-line
+scanner cap; transports must not redeclare it or introduce compatibility shims.
+
+`NewSSETransport` and its `WithSSE*` options are removed. Select
+`NewStreamableHTTPTransport` for POST responses that contain request-scoped SSE.
+There is no GET/endpoint-discovery stream, legacy initializer, session recovery
+or server-request handler compatibility path. Migration retains applicable
+transport safety checks; obsolete positive protocol scenarios become explicit
+rejection/no-traffic checks rather than restoring unsupported features.
+
 ## Connect
+
+Once `Connect` attempts `Transport.Start`, it owns cleanup on failure, including
+a partially successful start. It calls `Close` and preserves the original start
+error. Invalid client options rejected before `Start` do not transfer ownership.
 
 ```go
 transport := mcp.NewStdioTransport("my-mcp-server", nil)
@@ -22,6 +39,18 @@ Every request carries the protocol version, actual client capabilities and clien
 Set `RequestMeta.LogLevel` to opt a single request into bounded `notifications/message` diagnostics; no session-wide logging state exists. `ExtensionRegistry` and `ExtensionCodec` are the BYO-types boundary for typed extension payloads. Vendor IDs and official capability extension IDs such as `io.modelcontextprotocol/*` may be registered. Unknown declarations remain lossless and inert; registration does not advertise or enable a capability by itself. `logging`, `completions` and `experimental` advertisements are likewise inert data and expose no legacy runtime API.
 
 ## Results
+
+Client discovery, call/read and list boundaries map transport read-limit failures
+to `toolsy.CodeValidationFailed` with the actual transport byte cap and operation
+subject. The underlying cause remains inspectable. Cancellation, deadlines and
+timeout causes take precedence and do not become validation failures.
+
+The SSE scanner has one byte of token headroom beyond the stream budget, so a
+long line cannot replace the reader's budget failure with a scanner-only error.
+The bounded stream reader remains authoritative: requesting more bytes after
+exhausting its budget fails closed, including an unfinished line exactly at the
+cap. An unfinished line below the cap instead fails the terminal/framing contract.
+Scanner headroom does not increase the readable byte budget.
 
 Every wire result requires `resultType`. `complete` is returned as a method-specific typed result. `input_required` is accepted only from `tools/call`, `resources/read` and `prompts/get` and is surfaced distinctly; the library does not automatically answer or retry MRTR rounds. A host-driven retry uses a fresh request ID, current-round `inputResponses` and the server's byte-exact opaque `requestState`. Use `CallTool`, `ReadResourceRound` and `GetPromptRound` for explicit rounds; convenience APIs return `InputRequiredError` rather than hiding interim results.
 
@@ -44,17 +73,50 @@ Streamable HTTP uses one endpoint and POST only. Each request includes:
 
 Responses may be terminal JSON or request-scoped SSE. Cancelling an HTTP request closes that request's response stream; it does not send `notifications/cancelled`. A broken stream is not resumed or automatically retried. Sessions, `Mcp-Session-Id`, GET polling, DELETE-on-close, `Last-Event-ID` and SSE redelivery are absent. A correlated HTTP 400 JSON-RPC `HeaderMismatch` (`-32020`) is returned as a typed protocol error.
 
+SSE events are dispatched only at the terminating empty line. EOF discards an
+unfinished event; a truncated terminal result cannot complete a request, and
+truncated acknowledgements/notifications cannot trigger handlers. This follows
+the [SSE framing rules](https://html.spec.whatwg.org/multipage/server-sent-events.html#interpreting-an-event-stream),
+not the removed GET/reconnect transport behavior.
+
 The request decorator is for authentication and trace headers. It cannot replace protocol-derived `Mcp-*`/`Mcp-Param-*`, method, URL, Host or body fields. The transport retains SSRF-safe dialing and redirects, bounded responses and secret-safe diagnostics.
 
 ## Stdio and cancellation
 
 Stdio uses one JSON-RPC message per line and sends `server/discover` first. Writes are serialized; stdout is protocol-only and stderr is bounded logging. After a request reaches the wire, context cancellation sends `notifications/cancelled` with the exact raw request ID. Cancellation before delivery sends no notification. Process failure unblocks all waiters, and `Close` terminates the complete child process tree.
 
+Tool progress is request-scoped and strictly increasing. Its completion callback
+is installed before `Deliver`: the wire-terminal boundary retires the route, so
+late notifications cannot reach the consumer. Accepted buffered progress is
+drained before delivering the terminal result. A custom transport must expose
+`CompletionPendingRequest` for proxy tool progress; otherwise the prepared
+request is aborted before any delivery.
+
+Proxy tool calls own a child cancellation context for preparation and Await.
+Returning from the invocation cancels that context, including after a consumer
+abort with an uncancelled caller. Cleanup does not require the optional local
+pending-cancellation interface or global transport Close. The proxy loop owns
+cancellation notification dispatch; the background Await worker does not send
+another cancellation. A completed wire request does not receive a consumer-abort
+notification. Completion still retires progress before Await is released.
+
+An intentional empty tool result retains its typed MCP value and result
+envelope, sets `EmptyResult`, and has neither payload bytes nor MIME type, in
+accordance with the core chunk contract. Consumer failures preserve their cause
+alongside the stream-aborted marker.
+
 This is intentionally different from HTTP cancellation: stdio has no per-request response stream, while HTTP does.
 
 ## Subscriptions and invalidation
 
 Use `subscriptions/listen` for list changes and resource updates. The first SSE message must acknowledge the subscription with the effective filter and `_meta.io.modelcontextprotocol/subscriptionId`; notifications before acknowledgment are rejected. Later notifications must match both the active subscription ID and effective filter. The library does not silently reconnect a failed listen stream. Discovery generation counters remain authoritative if a bounded consumer channel overflows.
+
+Resource subscription matching normalizes scheme/hostname case, HTTP/HTTPS
+default ports and unreserved percent-encoded path octets. Reserved escapes and
+repeated slashes remain distinct; dot segments are rejected. Queries and
+fragments permit only the same normalized URI, not descendant matches. These
+rules route opted-in notifications; they do not confer filesystem or host rights.
+Normalization follows [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2).
 
 ## Tool registration
 

@@ -14,13 +14,15 @@ type SchemaConfig struct {
 
 // ToolManifest contains metadata exposed to orchestrators and discovery layers.
 type ToolManifest struct {
-	Name         string
-	Description  string
-	Parameters   map[string]any
-	OutputSchema map[string]any
-	Tags         []string
-	Version      string
-	Requirements ToolRequirements
+	StreamSemantics StreamSemantics
+	StreamMaxBytes  int
+	Name            string
+	Description     string
+	Parameters      map[string]any
+	OutputSchema    map[string]any
+	Tags            []string
+	Version         string
+	Requirements    ToolRequirements
 
 	CompletionPolicy     CompletionPolicy
 	ReadOnly             bool
@@ -119,16 +121,17 @@ func WithOutputSchema(schema map[string]any) ToolOption {
 type RegistryOption func(*registryOptions)
 
 type registryOptions struct {
-	recoverPanics   bool
-	validator       Validator
-	policy          Policy
-	policyDigest    string
-	policyIDMissing bool
-	authorizer      Authorizer
-	view            RegistryViewSnapshot
-	onBefore        func(context.Context, ToolCall)
-	onAfter         func(context.Context, ToolCall, ExecutionSummary, time.Duration)
-	onChunk         func(context.Context, Chunk)
+	executionProfile ExecutionProfile
+	recoverPanics    bool
+	validator        Validator
+	policy           Policy
+	policyDigest     string
+	policyIDMissing  bool
+	authorizer       Authorizer
+	view             RegistryViewSnapshot
+	onBefore         func(context.Context, ToolCall)
+	onAfter          func(context.Context, ToolCall, ExecutionSummary, time.Duration)
+	onChunk          func(context.Context, Chunk)
 }
 
 // WithRecoverPanics enables panic recovery in Execute (returns [ToolError] with [CodeInternal]).

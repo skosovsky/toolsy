@@ -15,7 +15,7 @@ type BudgetTracker interface {
 func WithBudget() Middleware {
 	return func(next Tool) Tool {
 		return &budgetTool{
-			toolBase: toolBase{next: next},
+			next: next,
 		}
 	}
 }

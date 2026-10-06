@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -166,11 +165,13 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 		if err != nil {
 			return err
 		}
-		res, err := spec.Handler(ctx, callCtx, env, cloneValidatedArgs(bound))
-		if err != nil {
-			return wrapHandlerError(err)
-		}
-		return emitTypedToolResult(res, spec.ResultValidator, spec.EffectValidator, spec.Postcondition, yield)
+		return ExecutePrepared(ctx, env, manifest, input, bound.Value, func(_ ToolInput, out func(Chunk) error) error {
+			res, handlerErr := spec.Handler(ctx, callCtx, env, cloneValidatedArgs(bound))
+			if handlerErr != nil {
+				return wrapHandlerError(handlerErr)
+			}
+			return emitTypedToolResult(res, spec.ResultValidator, spec.EffectValidator, spec.Postcondition, out)
+		}, yield)
 	}
 	return &tool{manifest: manifest, execute: execute}, nil
 }
@@ -269,15 +270,10 @@ func cloneArgsMetadata(in map[string]any) map[string]any {
 }
 
 func cloneTypedArgValue[T any](in T) T {
-	payload, err := json.Marshal(in)
-	if err != nil {
-		return in
+	if out, ok := cloneMutableValue(in).(T); ok {
+		return out
 	}
-	var out T
-	if err := json.Unmarshal(payload, &out); err != nil {
-		return in
-	}
-	return out
+	return in
 }
 
 func emitTypedToolResult[TResult, TEffect any](

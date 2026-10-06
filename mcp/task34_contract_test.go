@@ -16,10 +16,13 @@ import (
 )
 
 type contractPending struct {
-	id     json.RawMessage
-	result json.RawMessage
-	err    error
-	done   chan struct{}
+	id       json.RawMessage
+	result   json.RawMessage
+	err      error
+	done     chan struct{}
+	mu       sync.Mutex
+	hooks    []func()
+	complete bool
 }
 
 func newContractPending(id int64, result json.RawMessage, err error) *contractPending {
@@ -40,8 +43,37 @@ func (p *contractPending) Await(context.Context) (json.RawMessage, error) {
 func (p *contractPending) DeliveryDone() <-chan struct{} { return p.done }
 func (*contractPending) WasSent() bool                   { return true }
 func (*contractPending) CancelPending() bool             { return true }
-func (*contractPending) Deliver() error                  { return nil }
-func (*contractPending) Abort(error) error               { return nil }
+func (p *contractPending) Deliver() error {
+	p.completeCallbacks()
+	return nil
+}
+func (*contractPending) Abort(error) error { return nil }
+
+func (p *contractPending) OnComplete(hook func()) {
+	p.mu.Lock()
+	if !p.complete {
+		p.hooks = append(p.hooks, hook)
+		p.mu.Unlock()
+		return
+	}
+	p.mu.Unlock()
+	hook()
+}
+
+func (p *contractPending) completeCallbacks() {
+	p.mu.Lock()
+	if p.complete {
+		p.mu.Unlock()
+		return
+	}
+	p.complete = true
+	hooks := append([]func(){}, p.hooks...)
+	p.hooks = nil
+	p.mu.Unlock()
+	for _, hook := range hooks {
+		hook()
+	}
+}
 
 type contractRequest struct {
 	method string
@@ -117,7 +149,7 @@ func completeDiscovery(capabilities ServerCapabilities) json.RawMessage {
 		ResultType:        ResultTypeComplete,
 		SupportedVersions: []string{ProtocolVersion},
 		Capabilities:      capabilities,
-		CacheInfo:         CacheInfo{TTLMS: JSONNumber("0"), CacheScope: CacheScopePrivate},
+		TTLMS:             JSONNumber("0"), CacheScope: CacheScopePrivate,
 		Meta: ResultMeta{ServerInfo: &Implementation{
 			Name: "contract-server", Version: "1.0.0",
 		}},

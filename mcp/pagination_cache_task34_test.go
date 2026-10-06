@@ -26,7 +26,7 @@ func TestTask34PaginationPreservesChangingPerPageCacheSnapshots(t *testing.T) {
 				InputSchema: json.RawMessage(`{"type":"object"}`),
 			}},
 			NextCursor: "page-2",
-			CacheInfo:  CacheInfo{TTLMS: JSONNumber("10"), CacheScope: CacheScopePrivate},
+			TTLMS:      JSONNumber("10"), CacheScope: CacheScopePrivate,
 		}
 		if params.Cursor == "page-2" {
 			result.Tools[0].Name = "second"

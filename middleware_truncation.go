@@ -45,7 +45,7 @@ func WithTruncation(maxRunes int, opts ...TruncationOption) Middleware {
 	}
 	return func(next Tool) Tool {
 		return &truncationTool{
-			toolBase: toolBase{next: next},
+			next:     next,
 			maxRunes: maxRunes,
 			cfg:      cfg,
 		}

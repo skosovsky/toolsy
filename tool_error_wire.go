@@ -40,7 +40,7 @@ func unmarshalToolErrorWire(data []byte) (*ToolError, error) {
 	if wire.Code == "" {
 		return nil, errors.New("toolsy: tool error wire missing code")
 	}
-	te := &ToolError{ //nolint:exhaustruct // Err restored below when possible
+	te := &ToolError{ //nolint:exhaustruct_v5 // Err restored below when possible
 		Code:        wire.Code,
 		Retryable:   wire.Retryable,
 		Reason:      wire.Reason,

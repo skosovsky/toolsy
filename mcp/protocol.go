@@ -86,7 +86,7 @@ func validateMetaKeys(meta map[string]json.RawMessage) error {
 }
 
 // JSONNumber preserves the exact lexical representation of a JSON number.
-type JSONNumber string //nolint:recvcheck // JSON marshaling requires a pointer decoder and value encoder.
+type JSONNumber string
 
 func (n *JSONNumber) UnmarshalJSON(data []byte) error {
 	if !jsonNumberPattern.Match(data) {
@@ -104,7 +104,7 @@ func (n JSONNumber) MarshalJSON() ([]byte, error) {
 func (n JSONNumber) String() string { return string(n) }
 
 // ProgressToken is an MCP string-or-number progress token.
-type ProgressToken struct { //nolint:recvcheck // JSON marshaling requires a pointer decoder and value encoder.
+type ProgressToken struct {
 	raw json.RawMessage
 }
 
@@ -258,7 +258,6 @@ type NotificationParams struct {
 
 type DiscoverParams = RequestParams
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type DiscoverResult struct {
 	CacheInfo
 
@@ -294,7 +293,6 @@ type CursorParams struct {
 }
 type ToolsListParams = CursorParams
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type ToolsListResult struct {
 	CacheInfo
 
@@ -348,7 +346,6 @@ type ResourceContents struct {
 	blobPresent bool
 }
 
-//nolint:recvcheck // Value marshaling and pointer unmarshaling implement encoding/json contracts.
 type ContentBlock struct {
 	Type        string            `json:"type"`
 	Text        string            `json:"text,omitempty"`
@@ -368,7 +365,6 @@ type ContentBlock struct {
 
 type ResourcesListParams = CursorParams
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type ResourcesListResult struct {
 	CacheInfo
 
@@ -392,7 +388,6 @@ type Resource struct {
 }
 type ResourceTemplatesListParams = CursorParams
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type ResourceTemplatesListResult struct {
 	CacheInfo
 
@@ -420,7 +415,6 @@ type ResourcesReadParams struct {
 	Meta           *RequestMeta    `json:"_meta"`
 }
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type ResourcesReadResult struct {
 	CacheInfo
 
@@ -432,7 +426,6 @@ type ResourcesReadResult struct {
 
 type PromptsListParams = CursorParams
 
-//nolint:recvcheck // JSON decoding mutates while snapshot identity is value-semantic.
 type PromptsListResult struct {
 	CacheInfo
 

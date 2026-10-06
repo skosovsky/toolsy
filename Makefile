@@ -1,5 +1,5 @@
 GO                     := go
-GOLANGCI_LINT_VERSION := v2.11.3
+GOLANGCI_LINT_VERSION := v2.14.0
 GOLANGCI_LINT         := $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 MODULES                := $(shell find . -type d \( -name ".*" -not -name "." -o -name "vendor" \) -prune -o -type f -name "go.mod" -exec dirname {} \;)
 

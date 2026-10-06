@@ -1,5 +1,5 @@
 // Package main demonstrates NewStreamTool and chunk-by-chunk streaming with toolsy.
-// Legacy chunk API demo: host loops should prefer Session.RunCall (see examples/run_call).
+// Independent results are explicitly selected; consumers process each result.
 package main
 
 import (
@@ -32,6 +32,7 @@ func main() {
 			}
 			return nil
 		},
+		toolsy.WithIndependentStream(),
 	)
 	if err != nil {
 		log.Fatalf("NewStreamTool: %v", err)

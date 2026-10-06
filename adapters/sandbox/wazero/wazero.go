@@ -108,8 +108,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	duration, err := s.engine.Run(ctx, s.module, workspaceDir, req.Env, stdout, stderr)
 
 	if err != nil {
-		var exitErr *wazerosys.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*wazerosys.ExitError](err); ok {
 			return sandboxfs.FinalizeOrInterrupt(
 				ctx, err, stdout, stderr, int(exitErr.ExitCode()), duration, true, false,
 			)

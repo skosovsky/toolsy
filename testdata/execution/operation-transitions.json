@@ -1,0 +1,26 @@
+{
+  "states": ["in_progress", "completed", "unknown_outcome", "rejected", "retry_authorized"],
+  "transitions": [
+    {"from": "absent", "event": "atomic_authorized_claim", "to": "in_progress", "dispatch": true},
+    {"from": "absent", "event": "approval_missing", "to": "absent", "dispatch": false},
+    {"from": "in_progress", "event": "concurrent_claim", "to": "in_progress", "dispatch": false},
+    {"from": "in_progress", "event": "lease_expired", "to": "unknown_outcome", "dispatch": false},
+    {"from": "in_progress", "event": "fenced_success", "to": "completed", "dispatch": false},
+    {"from": "in_progress", "event": "execution_or_validation_failure", "to": "unknown_outcome", "dispatch": false},
+    {"from": "unknown_outcome", "event": "unverified_retry", "to": "unknown_outcome", "dispatch": false},
+    {"from": "unknown_outcome", "event": "trusted_reconciled_success", "to": "completed", "dispatch": false},
+    {"from": "unknown_outcome", "event": "trusted_retry_proof", "to": "retry_authorized", "dispatch": false},
+    {"from": "unknown_outcome", "event": "trusted_rejected", "to": "rejected", "dispatch": false},
+    {"from": "retry_authorized", "event": "atomic_authorized_claim", "to": "in_progress", "dispatch": true},
+    {"from": "rejected", "event": "repeat_delivery", "to": "rejected", "dispatch": false},
+    {"from": "completed", "event": "authorized_replay", "to": "completed", "dispatch": false}
+  ],
+  "invariants": [
+    "different_binding_same_operation_is_conflict",
+    "grant_consume_and_claim_are_atomic",
+    "consumed_grant_is_not_automatically_reissued",
+    "stale_attempt_cannot_finish_or_resolve",
+    "cancel_does_not_rollback_external_effect",
+    "delivery_failure_does_not_change_completed_execution"
+  ]
+}

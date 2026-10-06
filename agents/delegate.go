@@ -119,7 +119,7 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 				}
 				if yieldErr := yield(toolsy.Chunk{
 					Event: toolsy.EventProgress,
-					Progress: &toolsy.ProgressInfo{ //nolint:exhaustruct // label/status only for sub-agent steps
+					Progress: &toolsy.ProgressInfo{ //nolint:exhaustruct_v5 // label/status only for sub-agent steps
 						Label:  step.Name,
 						Status: step.Status,
 					},

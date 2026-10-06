@@ -44,9 +44,9 @@ func UnmarshalToolCall(data []byte) (toolsy.ToolCall, error) {
 	if w.Version != wireVersion {
 		return toolsy.ToolCall{}, fmt.Errorf("historycodec: unsupported wire version %d", w.Version)
 	}
-	return toolsy.ToolCall{ //nolint:exhaustruct // wire format omits runtime-only fields
+	return toolsy.ToolCall{ //nolint:exhaustruct_v5 // wire format omits runtime-only fields
 		ToolName: w.ToolName,
-		Input: toolsy.ToolInput{ //nolint:exhaustruct // attachments not serialized on wire
+		Input: toolsy.ToolInput{ //nolint:exhaustruct_v5 // attachments not serialized on wire
 			CallID:   w.CallID,
 			ArgsJSON: w.ArgsJSON,
 		},

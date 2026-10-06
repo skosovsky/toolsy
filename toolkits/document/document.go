@@ -257,7 +257,7 @@ func documentHTTPClient(o *options) (*http.Client, error) {
 		}
 	}
 	safe := httptool.NewSafeHTTPClient(
-		httptool.SafeDialOptions{AllowPrivateIPs: o.allowPrivateIPs}, //nolint:exhaustruct // IP-only blacklist mode
+		httptool.SafeDialOptions{AllowPrivateIPs: o.allowPrivateIPs}, //nolint:exhaustruct_v5 // IP-only blacklist mode
 		httptool.CheckRedirectRemote(o.allowPrivateIPs, nil),
 	)
 	return httptool.MergeHTTPClient(safe, o.httpClient), nil

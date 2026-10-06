@@ -348,15 +348,16 @@ func TestTask32PolicyTool_PassesSanitizedRawToBaseToolWithoutHostWrapper(t *test
 	// Arrange.
 	var baseSawSanitized, policySawTyped bool
 	var firstChunk, secondChunk Chunk
-	base := newMiddlewareMinTool(
-		"generic_search",
-		func(_ context.Context, _ *RunEnv, input ToolInput, yield func(Chunk) error) error {
-			baseSawSanitized = assert.JSONEq(t, `{"query":"safe"}`, string(input.ArgsJSON))
-			require.Len(t, input.Attachments, 1)
-			assert.Equal(t, "payload", string(input.Attachments[0].Data))
+	base, err := NewProxyTool(
+		"generic_search", "Generic search", []byte(`{"type":"object"}`),
+		func(_ context.Context, env *RunEnv, raw []byte, yield func(Chunk) error) error {
+			baseSawSanitized = assert.JSONEq(t, `{"query":"safe"}`, string(raw))
+			require.Len(t, env.Attachments(), 1)
+			assert.Equal(t, "payload", string(env.Attachments()[0].Data))
 			return yield(Chunk{Event: EventResult, Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
 		},
 	)
+	require.NoError(t, err)
 	wrapped, err := NewPolicyTool(ToolPolicySpec[subject, scope, args]{
 		Tool: base,
 		Requirements: ToolRequirements{
@@ -494,13 +495,14 @@ func TestTask32PolicyTool_EmptyBinderRawFailsClosed(t *testing.T) {
 	}
 
 	// Arrange.
-	base := newMiddlewareMinTool(
-		"generic_empty_raw",
-		func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error {
+	base, err := NewProxyTool(
+		"generic_empty_raw", "Generic empty raw", []byte(`{"type":"object"}`),
+		func(context.Context, *RunEnv, []byte, func(Chunk) error) error {
 			t.Fatal("base tool must not run without canonical raw args")
 			return nil
 		},
 	)
+	require.NoError(t, err)
 	wrapped, err := NewPolicyTool(ToolPolicySpec[NoSubject, NoScope, args]{
 		Tool: base,
 		ArgsBinder: func(context.Context, ArgsBindRequest) (ValidatedArgs[args], error) {

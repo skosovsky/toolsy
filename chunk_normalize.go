@@ -59,7 +59,7 @@ func normalizeErrorChunk(c Chunk) Chunk {
 	if detail := malformedErrorChunkDetail(c); detail != "" {
 		reason += "; " + detail
 	}
-	return NewErrorChunkFromErr(&ToolError{ //nolint:exhaustruct // Err set below
+	return NewErrorChunkFromErr(&ToolError{ //nolint:exhaustruct_v5 // Err set below
 		Code:      CodeInternal,
 		Reason:    reason,
 		Retryable: false,

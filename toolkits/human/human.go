@@ -45,6 +45,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 			})
 		},
 		toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield),
+		toolsy.WithIndependentStream(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/human: build approval tool: %w", err)
@@ -68,6 +69,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 			})
 		},
 		toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield),
+		toolsy.WithIndependentStream(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("toolkit/human: build clarification tool: %w", err)

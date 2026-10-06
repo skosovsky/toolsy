@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"maps"
 	"reflect"
 )
 
@@ -104,26 +103,15 @@ func deepCloneMap(in map[string]any) map[string]any {
 	if len(in) == 0 {
 		return nil
 	}
-	out := maps.Clone(in)
-	for k, v := range out {
-		out[k] = deepCloneValue(v)
+	out, ok := cloneMutableValue(in).(map[string]any)
+	if !ok {
+		return nil
 	}
 	return out
 }
 
 func deepCloneValue(v any) any {
-	switch typed := v.(type) {
-	case map[string]any:
-		return deepCloneMap(typed)
-	case []any:
-		out := make([]any, len(typed))
-		for i := range typed {
-			out[i] = deepCloneValue(typed[i])
-		}
-		return out
-	default:
-		return cloneMutableValue(v)
-	}
+	return cloneMutableValue(v)
 }
 
 func cloneMutableValue(v any) any {
@@ -138,77 +126,88 @@ func cloneMutableValue(v any) any {
 }
 
 func cloneReflectValue(v reflect.Value) reflect.Value {
+	return (&valueCloner{seen: make(map[cloneReference]reflect.Value)}).clone(v)
+}
+
+type cloneReference struct {
+	typeOf  reflect.Type
+	pointer uintptr
+	length  int
+}
+
+type valueCloner struct {
+	seen map[cloneReference]reflect.Value
+}
+
+// Exported data fields are snapshotted without JSON type erasure. Opaque private
+// state, functions and channels remain host-owned and must be immutable during
+// execution. Cycles are preserved rather than recursed indefinitely.
+func (c *valueCloner) clone(v reflect.Value) reflect.Value {
 	if !v.IsValid() {
 		return v
 	}
 	switch v.Kind() {
 	case reflect.Interface:
-		return cloneReflectInterface(v)
-	case reflect.Pointer:
-		return cloneReflectPointer(v)
-	case reflect.Map:
-		return cloneReflectMap(v)
-	case reflect.Slice:
-		return cloneReflectSlice(v)
+		if v.IsNil() {
+			return reflect.Zero(v.Type())
+		}
+		out := reflect.New(v.Type()).Elem()
+		out.Set(c.clone(v.Elem()))
+		return out
+	case reflect.Pointer, reflect.Map, reflect.Slice:
+		return c.cloneReference(v)
 	case reflect.Array:
-		return cloneReflectArray(v)
+		out := reflect.New(v.Type()).Elem()
+		for i := range v.Len() {
+			out.Index(i).Set(c.clone(v.Index(i)))
+		}
+		return out
+	case reflect.Struct:
+		out := reflect.New(v.Type()).Elem()
+		out.Set(v)
+		for i := range v.NumField() {
+			if v.Type().Field(i).IsExported() {
+				out.Field(i).Set(c.clone(v.Field(i)))
+			}
+		}
+		return out
 	default:
 		return v
 	}
 }
 
-func cloneReflectInterface(v reflect.Value) reflect.Value {
+func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 	if v.IsNil() {
 		return reflect.Zero(v.Type())
 	}
-	elem := cloneReflectValue(v.Elem())
-	if !elem.IsValid() || !elem.Type().AssignableTo(v.Type()) {
-		return v
+	key := cloneReference{typeOf: v.Type(), pointer: uintptr(v.UnsafePointer()), length: 0}
+	if v.Kind() == reflect.Slice {
+		key.length = v.Len()
 	}
-	out := reflect.New(v.Type()).Elem()
-	out.Set(elem)
-	return out
-}
-
-func cloneReflectPointer(v reflect.Value) reflect.Value {
-	if v.IsNil() {
-		return reflect.Zero(v.Type())
+	if out, exists := c.seen[key]; exists {
+		return out
 	}
-	elem := cloneReflectValue(v.Elem())
-	out := reflect.New(v.Type().Elem())
-	if elem.IsValid() && elem.Type().AssignableTo(v.Type().Elem()) {
-		out.Elem().Set(elem)
-	}
-	return out
-}
-
-func cloneReflectMap(v reflect.Value) reflect.Value {
-	if v.IsNil() {
-		return reflect.Zero(v.Type())
-	}
-	out := reflect.MakeMapWithSize(v.Type(), v.Len())
-	iter := v.MapRange()
-	for iter.Next() {
-		out.SetMapIndex(iter.Key(), cloneReflectValue(iter.Value()))
-	}
-	return out
-}
-
-func cloneReflectSlice(v reflect.Value) reflect.Value {
-	if v.IsNil() {
-		return reflect.Zero(v.Type())
-	}
-	out := reflect.MakeSlice(v.Type(), v.Len(), v.Cap())
-	for i := range v.Len() {
-		out.Index(i).Set(cloneReflectValue(v.Index(i)))
-	}
-	return out
-}
-
-func cloneReflectArray(v reflect.Value) reflect.Value {
-	out := reflect.New(v.Type()).Elem()
-	for i := range v.Len() {
-		out.Index(i).Set(cloneReflectValue(v.Index(i)))
+	var out reflect.Value
+	switch v.Kind() {
+	case reflect.Pointer:
+		out = reflect.New(v.Type().Elem())
+		c.seen[key] = out
+		out.Elem().Set(c.clone(v.Elem()))
+	case reflect.Map:
+		out = reflect.MakeMapWithSize(v.Type(), v.Len())
+		c.seen[key] = out
+		iter := v.MapRange()
+		for iter.Next() {
+			out.SetMapIndex(iter.Key(), c.clone(iter.Value()))
+		}
+	case reflect.Slice:
+		out = reflect.MakeSlice(v.Type(), v.Len(), v.Len())
+		c.seen[key] = out
+		for i := range v.Len() {
+			out.Index(i).Set(c.clone(v.Index(i)))
+		}
+	default:
+		panic("toolsy: invalid internal snapshot reference kind")
 	}
 	return out
 }

@@ -248,11 +248,9 @@ func TestRunReturnsTimeoutDuringSetup(t *testing.T) {
 
 func TestRunCreatesCleanupTimeoutAtRemoveTime(t *testing.T) {
 	client := &delayedWaitClient{
-		mockClient: mockClient{
-			waitResponse: container.WaitResponse{StatusCode: 0},
-			logs:         muxLogs("hello", ""),
-		},
-		delay: 60 * time.Millisecond,
+		waitResponse: container.WaitResponse{StatusCode: 0},
+		logs:         muxLogs("hello", ""),
+		delay:        60 * time.Millisecond,
 	}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
@@ -271,11 +269,9 @@ func TestRunCreatesCleanupTimeoutAtRemoveTime(t *testing.T) {
 
 func TestRunCollectsLogsAfterContextExpires(t *testing.T) {
 	client := &delayedLogsClient{
-		mockClient: mockClient{
-			waitResponse: container.WaitResponse{StatusCode: 0},
-			logs:         muxLogs("done", ""),
-		},
-		delay: 30 * time.Millisecond,
+		waitResponse: container.WaitResponse{StatusCode: 0},
+		logs:         muxLogs("done", ""),
+		delay:        30 * time.Millisecond,
 	}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
@@ -291,12 +287,10 @@ func TestRunCollectsLogsAfterContextExpires(t *testing.T) {
 
 func TestRunDurationExcludesLogCollection(t *testing.T) {
 	client := &durationClient{
-		mockClient: mockClient{
-			waitResponse: container.WaitResponse{StatusCode: 0},
-			logs:         muxLogs("done", ""),
-		},
-		waitDelay: 30 * time.Millisecond,
-		logsDelay: 60 * time.Millisecond,
+		waitResponse: container.WaitResponse{StatusCode: 0},
+		logs:         muxLogs("done", ""),
+		waitDelay:    30 * time.Millisecond,
+		logsDelay:    60 * time.Millisecond,
 	}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
@@ -611,12 +605,10 @@ func TestDocker_Run_LogOverflowWithCanceledCtx_InterruptWins(t *testing.T) {
 	large := strings.Repeat("x", defaultMaxContainerLogBytes+1)
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &cancelOnLogsClient{
-		mockClient: mockClient{
-			waitResponse: container.WaitResponse{StatusCode: 0},
-			logs:         muxLogs(large, ""),
-		},
-		runCtx: ctx,
-		cancel: cancel,
+		waitResponse: container.WaitResponse{StatusCode: 0},
+		logs:         muxLogs(large, ""),
+		runCtx:       ctx,
+		cancel:       cancel,
 	}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)

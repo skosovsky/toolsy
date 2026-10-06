@@ -33,11 +33,11 @@ func NewScratchpad(opts ...Option) *Scratchpad {
 
 // AsTools returns the three memory tools (pin, read all, unpin).
 func (s *Scratchpad) AsTools() ([]toolsy.Tool, error) {
-	memRWReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct // Permissions host-defined
+	memRWReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct_v5 // Permissions host-defined
 		MemoryAccess: toolsy.MemoryAccessReadWrite,
 		NeedsSession: true,
 	})
-	memReadReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct // Permissions host-defined
+	memReadReq := toolsy.WithRequirements(toolsy.ToolRequirements{ //nolint:exhaustruct_v5 // Permissions host-defined
 		MemoryAccess: toolsy.MemoryAccessRead,
 		NeedsSession: true,
 	})

@@ -129,6 +129,7 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 			}
 			return nil
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 

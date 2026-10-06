@@ -120,8 +120,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	duration := time.Since(start)
 
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return sandboxfs.FinalizeOrInterrupt(
 				ctx, err, stdout, stderr, exitErr.ExitCode(), duration, true, false,
 			)

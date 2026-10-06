@@ -46,7 +46,7 @@ func New(sandbox Sandbox, opts ...Option) (toolsy.Tool, error) {
 	}
 
 	handler := newExecHandler(sandbox, supported)
-	return toolsy.NewDynamicToolFromSpec(toolsy.DynamicToolSpec{ //nolint:exhaustruct // ValidateArgs optional
+	return toolsy.NewDynamicToolFromSpec(toolsy.DynamicToolSpec{ //nolint:exhaustruct_v5 // ValidateArgs optional
 		Name:        o.name,
 		Description: o.description,
 		Schema:      toolsy.MapSchemaProvider(buildSchema(supported)),

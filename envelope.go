@@ -121,7 +121,7 @@ func cloneToolEnvelope(in *ToolEnvelope) *ToolEnvelope {
 		Audience:      in.Audience,
 		Raw:           append([]byte(nil), in.Raw...),
 		MimeType:      in.MimeType,
-		Result:        in.Result,
+		Result:        deepCloneValue(in.Result),
 		Metadata:      deepCloneMap(in.Metadata),
 	}
 }

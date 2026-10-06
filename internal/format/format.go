@@ -91,8 +91,7 @@ func CapWireJSON(raw json.RawMessage, maxBytes int, suffix string) json.RawMessa
 }
 
 func validationError(err error) error {
-	var te *toolsy.ToolError
-	if errors.As(err, &te) {
+	if te, ok := errors.AsType[*toolsy.ToolError](err); ok {
 		return te
 	}
 	return toolsy.NewValidationError(err.Error())

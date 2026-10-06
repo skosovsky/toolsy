@@ -47,14 +47,14 @@ func TestComputeSnapshotDigestCanonicalizesMapsNumbersAndPointers(t *testing.T) 
 	left := ToolsListResult{
 		ResultType: ResultTypeComplete,
 		Tools:      []MCPTool{},
-		CacheInfo:  CacheInfo{TTLMS: JSONNumber("1000"), CacheScope: CacheScopePrivate},
-		Extra:      Meta{"vendor.example/data": json.RawMessage(`{"b":2.0,"a":1e0}`)},
+		TTLMS:      JSONNumber("1000"), CacheScope: CacheScopePrivate,
+		Extra: Meta{"vendor.example/data": json.RawMessage(`{"b":2.0,"a":1e0}`)},
 	}
 	right := ToolsListResult{
 		ResultType: ResultTypeComplete,
 		Tools:      []MCPTool{},
-		CacheInfo:  CacheInfo{TTLMS: JSONNumber("1e3"), CacheScope: CacheScopePrivate},
-		Extra:      Meta{"vendor.example/data": json.RawMessage(` { "a" : 1.00, "b" : 2 } `)},
+		TTLMS:      JSONNumber("1e3"), CacheScope: CacheScopePrivate,
+		Extra: Meta{"vendor.example/data": json.RawMessage(` { "a" : 1.00, "b" : 2 } `)},
 	}
 
 	// Act.
@@ -75,7 +75,7 @@ func TestComputeSnapshotDigestIncludesCacheMetadataAndWireOrder(t *testing.T) {
 			{Name: "a", InputSchema: json.RawMessage(`{"type":"object"}`)},
 			{Name: "b", InputSchema: json.RawMessage(`{"type":"object"}`)},
 		},
-		CacheInfo: CacheInfo{TTLMS: JSONNumber("10"), CacheScope: CacheScopePrivate},
+		TTLMS: JSONNumber("10"), CacheScope: CacheScopePrivate,
 	}
 	differentTTL := base
 	differentTTL.TTLMS = JSONNumber("11")
@@ -105,8 +105,8 @@ func TestComputeSnapshotDigestRejectsInvalidAndNilSnapshots(t *testing.T) {
 	invalid := ToolsListResult{
 		ResultType: ResultTypeComplete,
 		Tools:      []MCPTool{},
-		CacheInfo:  CacheInfo{TTLMS: JSONNumber("0"), CacheScope: CacheScopePrivate},
-		Extra:      Meta{"vendor.example/data": json.RawMessage(`{"x":1,"x":2}`)},
+		TTLMS:      JSONNumber("0"), CacheScope: CacheScopePrivate,
+		Extra: Meta{"vendor.example/data": json.RawMessage(`{"x":1,"x":2}`)},
 	}
 	var nilSnapshot *ToolsListResult
 
@@ -129,7 +129,7 @@ func TestComputeSnapshotDigestRejectsOversizedEncodingBeforeCanonicalization(t *
 			Description: strings.Repeat("x", maxSnapshotEncodingBytes),
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 		}},
-		CacheInfo: CacheInfo{TTLMS: JSONNumber("0"), CacheScope: CacheScopePrivate},
+		TTLMS: JSONNumber("0"), CacheScope: CacheScopePrivate,
 	}
 
 	// Act.

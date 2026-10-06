@@ -79,11 +79,14 @@ func (b *RegistryBuilder) Build() (*Registry, error) {
 		}
 		if asyncOpts != nil {
 			t = &asyncTool{
-				toolBase: toolBase{next: t},
-				opts:     *asyncOpts,
+				next: t,
+				opts: *asyncOpts,
 			}
 		}
 		name := t.Manifest().Name
+		if err := validatePreparedTool(t, b.opts.executionProfile); err != nil {
+			return nil, err
+		}
 		if name == "" {
 			return nil, errors.New("toolsy: tool manifest name is required")
 		}
@@ -381,6 +384,11 @@ func (r *Registry) executeWithSummary(
 		call.CallContext = bindViewMetadata(call.CallContext, r.opts.view.ID)
 	}
 	execEnv = execEnv.cloneForExecute(call.Input.Attachments, newAsyncRuntime(r), call.CallContext)
+	// A scoped executor starts a new invocation, not another preparation layer
+	// of its caller. Parent checks and envelope decorators must not cross it.
+	execEnv.preparedChecks = nil
+	execEnv.preparedDispatch = false
+	execEnv.executionProfile = underlyingExecutionProfile(execEnv.executionProfile)
 	execEnv.view = cloneRegistryViewSnapshot(r.opts.view)
 	defer func() {
 		if execEnv.async == nil || !execEnv.async.backgroundStarted.Load() {
@@ -429,6 +437,14 @@ func (r *Registry) runToolWithValidationAndExecute(
 	summary *ExecutionSummary,
 ) {
 	manifest := cloneManifestForPolicy(tool.Manifest())
+	env.executionManifest = &manifest
+	if r.opts.executionProfile != nil {
+		env.executionProfile = r.opts.executionProfile
+	}
+	if env.executionProfile != nil && !supportsPreparedExecution(tool) {
+		summary.Error = NewValidationError("tool has no prepared execution boundary")
+		return
+	}
 	if err := enforceRequirementsPolicy(manifest.Requirements, r.opts.policy); err != nil {
 		summary.Error = err
 		return
@@ -497,6 +513,11 @@ func enforceRuntimeRequirements(req ToolRequirements, env *RunEnv) error {
 func normalizeExecutionInterrupt(err error) error {
 	if err == nil {
 		return nil
+	}
+	var outcomeErr *OperationOutcomeError
+	var streamErr *StreamContractError
+	if errors.As(err, &outcomeErr) || errors.As(err, &streamErr) {
+		return err // contract outcome must not be downgraded to retryable timeout.
 	}
 	if errors.Is(err, context.Canceled) {
 		return err

@@ -5,9 +5,14 @@ Universal AI Tool Engine for Go: build tools from typed handlers, expose JSON Sc
 [![Go Reference](https://pkg.go.dev/badge/github.com/skosovsky/toolsy.svg)](https://pkg.go.dev/github.com/skosovsky/toolsy)
 [![Build Status](https://github.com/skosovsky/toolsy/workflows/Go/badge.svg)](https://github.com/skosovsky/toolsy/actions)
 
-Go 1.26+ · [License](LICENSE)
+Go 1.27.1+ · [License](LICENSE)
 
 ## Quick start
+
+For ordinary host execution with bound approval and durable replay, see
+[approval_journal](examples/approval_journal). Prepared execution contracts and
+clear-break migration are documented in [execution-contract](docs/execution-contract.md)
+and [migration-task35](docs/migration-task35.md).
 
 ```go
 package main
@@ -467,7 +472,7 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 ## Authorization and idempotency
 
 - Registry-level: prefer `WithPolicy`; `WithAuthorizer` and `WithAuthorization` accept `AuthorizationRequest` with manifest, input, call context, and view identity.
-- Idempotent tools: mark with `WithIdempotent()` and wrap registry with `WithIdempotency(store, keyFn)`.
+- Result cache: mark eligible tools with `WithIdempotent()`, create `NewResultCache(store, partition, codec, maxBytes)` and install it with `WithExecutionProfile`. Binding and current typed policy run before replay; the host provides a trusted partition and complete outcome codec. This cache does not guarantee atomic duplicate dispatch. See [execution contract](docs/execution-contract.md).
 
 ### Session tool choice (RunPolicy)
 

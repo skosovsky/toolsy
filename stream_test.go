@@ -29,6 +29,7 @@ func TestNewStreamTool_MultipleChunks(t *testing.T) {
 			}
 			return nil
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 
@@ -61,6 +62,7 @@ func TestNewStreamTool_YieldError(t *testing.T) {
 			_ = yield(Chunk{Event: EventProgress, Data: []byte("first"), MimeType: MimeTypeText})
 			return yield(Chunk{Event: EventResult, Data: []byte("second"), MimeType: MimeTypeText})
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 
@@ -92,6 +94,7 @@ func TestNewStreamTool_ZeroChunks(t *testing.T) {
 		func(_ context.Context, _ *RunEnv, _ Args, _ func(Chunk) error) error {
 			return nil
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 

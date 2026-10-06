@@ -116,10 +116,12 @@ func TestReservedRPCErrorDataViolationsAreClassified(t *testing.T) {
 	require.ErrorAs(t, err, &payloadErr)
 }
 
-//nolint:golines // The complete capability frame makes lossless round-trip intent explicit.
+// The complete capability frame makes lossless round-trip intent explicit.
 func TestCurrentInertCapabilitiesAndUnrelatedExtrasRemainLossless(t *testing.T) {
 	// Arrange.
-	raw := []byte(`{"tools":{},"logging":{"level":"debug"},"completions":{},"experimental":{"vendor":{}},"vendor.example":{"x":1}}`)
+	raw := []byte(
+		`{"tools":{},"logging":{"level":"debug"},"completions":{},"experimental":{"vendor":{}},"vendor.example":{"x":1}}`,
+	)
 
 	// Act.
 	var capabilities ServerCapabilities
@@ -166,23 +168,51 @@ func TestExtensionRegistryRequiresExplicitOwnership(t *testing.T) {
 	require.NoError(t, registry.Register("io.modelcontextprotocol/example", boundaryExtensionCodec{}))
 }
 
-//nolint:golines // Full adversarial JSON frames are kept inline so variant contamination stays visible.
+// Full adversarial JSON frames are kept inline so variant contamination stays visible.
 func TestResultUnionRejectsForeignVariantFieldsAcrossMethods(t *testing.T) {
 	// Arrange.
 	completeFixtures := []struct {
 		name, raw string
 		target    any
 	}{
-		{"discover", `{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","requestState":"x"}`, &DiscoverResult{}},
-		{"tools list", `{"resultType":"complete","tools":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`, &ToolsListResult{}},
-		{"resources list", `{"resultType":"complete","resources":[],"ttlMs":0,"cacheScope":"private","requestState":"x"}`, &ResourcesListResult{}},
-		{"templates list", `{"resultType":"complete","resourceTemplates":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`, &ResourceTemplatesListResult{}},
-		{"prompts list", `{"resultType":"complete","prompts":[],"ttlMs":0,"cacheScope":"private","requestState":"x"}`, &PromptsListResult{}},
-		{"resource read", `{"resultType":"complete","contents":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`, &ResourcesReadResult{}},
+		{
+			"discover",
+			`{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","requestState":"x"}`,
+			&DiscoverResult{},
+		},
+		{
+			"tools list",
+			`{"resultType":"complete","tools":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`,
+			&ToolsListResult{},
+		},
+		{
+			"resources list",
+			`{"resultType":"complete","resources":[],"ttlMs":0,"cacheScope":"private","requestState":"x"}`,
+			&ResourcesListResult{},
+		},
+		{
+			"templates list",
+			`{"resultType":"complete","resourceTemplates":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`,
+			&ResourceTemplatesListResult{},
+		},
+		{
+			"prompts list",
+			`{"resultType":"complete","prompts":[],"ttlMs":0,"cacheScope":"private","requestState":"x"}`,
+			&PromptsListResult{},
+		},
+		{
+			"resource read",
+			`{"resultType":"complete","contents":[],"ttlMs":0,"cacheScope":"private","inputRequests":{}}`,
+			&ResourcesReadResult{},
+		},
 		{"prompt get", `{"resultType":"complete","messages":[],"requestState":"x"}`, &PromptsGetResult{}},
 		{"tool call", `{"resultType":"complete","content":[],"inputRequests":{}}`, &CallToolResult{}},
 		{"empty", `{"resultType":"complete","requestState":"x"}`, &CompleteResult{}},
-		{"subscription", `{"resultType":"complete","_meta":{"io.modelcontextprotocol/subscriptionId":1},"inputRequests":{}}`, &SubscriptionsListenResult{}},
+		{
+			"subscription",
+			`{"resultType":"complete","_meta":{"io.modelcontextprotocol/subscriptionId":1},"inputRequests":{}}`,
+			&SubscriptionsListenResult{},
+		},
 	}
 
 	for _, fixture := range completeFixtures {
@@ -259,11 +289,15 @@ func TestSubscriptionMetaIgnoresMalformedServerInfo(t *testing.T) {
 	require.JSONEq(t, `7`, string(meta.SubscriptionID))
 }
 
-//nolint:golines // Full schema fixtures stay inline to expose dialect and reference placement.
+// Full schema fixtures stay inline to expose dialect and reference placement.
 func TestMCPToolCompilesSchemasAtWireBoundary(t *testing.T) {
 	// Arrange.
-	valid := []byte(`{"name":"valid","inputSchema":{"type":"object","$defs":{"id":{"type":"string"}},"properties":{"id":{"$ref":"#/$defs/id"}}},"outputSchema":{"type":"array","items":{"type":"integer"}}}`)
-	remoteRef := []byte(`{"name":"invalid","inputSchema":{"type":"object","properties":{"id":{"$ref":"https://example.test/schema"}}}}`)
+	valid := []byte(
+		`{"name":"valid","inputSchema":{"type":"object","$defs":{"id":{"type":"string"}},"properties":{"id":{"$ref":"#/$defs/id"}}},"outputSchema":{"type":"array","items":{"type":"integer"}}}`,
+	)
+	remoteRef := []byte(
+		`{"name":"invalid","inputSchema":{"type":"object","properties":{"id":{"$ref":"https://example.test/schema"}}}}`,
+	)
 
 	// Act.
 	var tool MCPTool
@@ -283,7 +317,7 @@ func TestCapabilityExtensionsPreserveCurrentMCPNamespace(t *testing.T) {
 	}
 }
 
-//nolint:golines // The table is the executable DTO-family contract matrix.
+// The table is the executable DTO-family contract matrix.
 func TestStrictDTOFamiliesRejectNullAndPreserveAdditiveFields(t *testing.T) {
 	probes := []struct {
 		name      string
@@ -291,19 +325,74 @@ func TestStrictDTOFamiliesRejectNullAndPreserveAdditiveFields(t *testing.T) {
 		nullKnown string
 		newTarget func() any
 	}{
-		{"server capabilities", `{"tools":{},"vendor":{"x":1}}`, `{"tools":null}`, func() any { return &ServerCapabilities{} }},
-		{"discover", `{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","vendor":{"x":1}}`, `{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","instructions":null}`, func() any { return &DiscoverResult{} }},
-		{"tool result", `{"resultType":"complete","content":[],"vendor":{"x":1}}`, `{"resultType":"complete","content":[],"isError":null}`, func() any { return &CallToolResult{} }},
-		{"tool", `{"name":"t","inputSchema":{"type":"object"},"vendor":{"x":1}}`, `{"name":"t","title":null,"inputSchema":{"type":"object"}}`, func() any { return &MCPTool{} }},
-		{"resource", `{"uri":"file:///a","name":"a","vendor":{"x":1}}`, `{"uri":"file:///a","name":"a","icons":null}`, func() any { return &Resource{} }},
-		{"resource template", `{"uriTemplate":"file:///{path}","name":"a","vendor":{"x":1}}`, `{"uriTemplate":"file:///{path}","name":"a","annotations":null}`, func() any { return &ResourceTemplate{} }},
+		{
+			"server capabilities",
+			`{"tools":{},"vendor":{"x":1}}`,
+			`{"tools":null}`,
+			func() any { return &ServerCapabilities{} },
+		},
+		{
+			"discover",
+			`{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","vendor":{"x":1}}`,
+			`{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{},"ttlMs":0,"cacheScope":"private","instructions":null}`,
+			func() any { return &DiscoverResult{} },
+		},
+		{
+			"tool result",
+			`{"resultType":"complete","content":[],"vendor":{"x":1}}`,
+			`{"resultType":"complete","content":[],"isError":null}`,
+			func() any { return &CallToolResult{} },
+		},
+		{
+			"tool",
+			`{"name":"t","inputSchema":{"type":"object"},"vendor":{"x":1}}`,
+			`{"name":"t","title":null,"inputSchema":{"type":"object"}}`,
+			func() any { return &MCPTool{} },
+		},
+		{
+			"resource",
+			`{"uri":"file:///a","name":"a","vendor":{"x":1}}`,
+			`{"uri":"file:///a","name":"a","icons":null}`,
+			func() any { return &Resource{} },
+		},
+		{
+			"resource template",
+			`{"uriTemplate":"file:///{path}","name":"a","vendor":{"x":1}}`,
+			`{"uriTemplate":"file:///{path}","name":"a","annotations":null}`,
+			func() any { return &ResourceTemplate{} },
+		},
 		{"prompt", `{"name":"p","vendor":{"x":1}}`, `{"name":"p","arguments":null}`, func() any { return &Prompt{} }},
-		{"prompt argument", `{"name":"a","vendor":{"x":1}}`, `{"name":"a","required":null}`, func() any { return &PromptArgument{} }},
-		{"prompt message", `{"role":"user","content":{"type":"text","text":"x"},"vendor":{"x":1}}`, `{"role":null,"content":{"type":"text","text":"x"}}`, func() any { return &PromptMessage{} }},
-		{"implementation", `{"name":"i","version":"1","vendor":{"x":1}}`, `{"name":"i","version":"1","icons":null}`, func() any { return &Implementation{} }},
-		{"icon", `{"src":"https://example.test/a.png","vendor":{"x":1}}`, `{"src":"https://example.test/a.png","sizes":null}`, func() any { return &Icon{} }},
+		{
+			"prompt argument",
+			`{"name":"a","vendor":{"x":1}}`,
+			`{"name":"a","required":null}`,
+			func() any { return &PromptArgument{} },
+		},
+		{
+			"prompt message",
+			`{"role":"user","content":{"type":"text","text":"x"},"vendor":{"x":1}}`,
+			`{"role":null,"content":{"type":"text","text":"x"}}`,
+			func() any { return &PromptMessage{} },
+		},
+		{
+			"implementation",
+			`{"name":"i","version":"1","vendor":{"x":1}}`,
+			`{"name":"i","version":"1","icons":null}`,
+			func() any { return &Implementation{} },
+		},
+		{
+			"icon",
+			`{"src":"https://example.test/a.png","vendor":{"x":1}}`,
+			`{"src":"https://example.test/a.png","sizes":null}`,
+			func() any { return &Icon{} },
+		},
 		{"annotations", `{"priority":0.5,"vendor":{"x":1}}`, `{"priority":null}`, func() any { return &Annotations{} }},
-		{"tool annotations", `{"readOnlyHint":true,"vendor":{"x":1}}`, `{"readOnlyHint":null}`, func() any { return &ToolAnnotations{} }},
+		{
+			"tool annotations",
+			`{"readOnlyHint":true,"vendor":{"x":1}}`,
+			`{"readOnlyHint":null}`,
+			func() any { return &ToolAnnotations{} },
+		},
 	}
 
 	for _, probe := range probes {

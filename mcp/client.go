@@ -1,4 +1,4 @@
-//nolint:exhaustruct // Wire DTO constructors intentionally spell only meaningful fields.
+//nolint:exhaustruct_v5 // Wire DTO constructors intentionally spell only meaningful fields.
 package mcp
 
 import (
@@ -128,6 +128,7 @@ type progressState struct {
 	mu      sync.Mutex
 	last    float64
 	started bool
+	retired bool
 	ch      chan<- toolsy.Chunk
 	done    <-chan struct{}
 }
@@ -184,6 +185,7 @@ func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*C
 		invalidations: make(chan Invalidation, clientEventBufferSize),
 	}
 	if err := transport.Start(ctx); err != nil {
+		_ = transport.Close()
 		return nil, err
 	}
 	client.registerHandlers()
@@ -344,7 +346,7 @@ func detachRequestMeta(params any) (any, *RequestMeta) {
 	}
 	var meta *RequestMeta
 	if !field.IsNil() {
-		original, ok := field.Interface().(*RequestMeta)
+		original, ok := reflect.TypeAssert[*RequestMeta](field)
 		if !ok {
 			return params, nil
 		}
@@ -602,50 +604,6 @@ func (c *Client) request(ctx context.Context, method string, params any) (Pendin
 	return pending, nil
 }
 
-func (c *Client) requestWithProgress(
-	ctx context.Context,
-	method string,
-	params any,
-	token ProgressToken,
-) (PendingRequest, error) {
-	prepared, err := c.prepareParams(params)
-	if err != nil {
-		return nil, err
-	}
-	fields, err := decodeObjectFields(prepared)
-	if err != nil {
-		return nil, err
-	}
-	meta, err := decodeObjectFields(fields["_meta"])
-	if err != nil {
-		return nil, err
-	}
-	meta["progressToken"], err = json.Marshal(token)
-	if err != nil {
-		return nil, err
-	}
-	fields["_meta"], err = json.Marshal(meta)
-	if err != nil {
-		return nil, err
-	}
-	prepared, err = json.Marshal(fields)
-	if err != nil {
-		return nil, err
-	}
-	logKey, err := requestLogCorrelation(prepared)
-	if err != nil {
-		return nil, &InvalidPayloadError{Subject: requestLogSubject, Err: err}
-	}
-	pending, err := c.transport.PrepareRequest(ctx, method, prepared)
-	if err != nil {
-		return nil, err
-	}
-	if err := c.deliverPrepared(pending, logKey); err != nil {
-		return nil, err
-	}
-	return pending, nil
-}
-
 func (c *Client) requestAndAwait(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	pending, err := c.request(ctx, method, params)
 	if err != nil {
@@ -666,8 +624,7 @@ func (c *Client) awaitPending(
 }
 
 func mapTypedRPCError(err error) error {
-	var rpcErr *RPCError
-	if errors.As(err, &rpcErr) {
+	if rpcErr, ok := errors.AsType[*RPCError](err); ok {
 		return TypedRPCError(rpcErr)
 	}
 	return err
@@ -691,7 +648,15 @@ func (c *Client) mapCallReadLimitFor(ctx context.Context, err error, subject str
 		return err
 	}
 	if textprocessor.IsReadLimitExceeded(err) {
-		return toolsy.MapReadLimitErrorFor(err, c.maxStreamBytes(), subject, "")
+		mapped := toolsy.MapReadLimitErrorFor(err, c.maxStreamBytes(), subject, "")
+		if toolErr, ok := toolsy.AsToolError(mapped); ok {
+			// Preserve diagnostic identity without exposing the transport cause in
+			// the bounded validation reason or mutating a shared error instance.
+			withCause := *toolErr
+			withCause.Err = errors.Join(toolErr.Err, err)
+			return &withCause
+		}
+		return mapped
 	}
 	return err
 }
@@ -1059,6 +1024,11 @@ func compileOutputSchema(raw json.RawMessage) (schemaValidator, error) {
 	return jsonschemax.Compile(schema)
 }
 
+type toolCallFinalResult struct {
+	raw json.RawMessage
+	err error
+}
+
 //nolint:gocognit // Explicit ordering avoids cancellation/progress races.
 func (c *Client) runMCPToolCall(
 	ctx context.Context,
@@ -1071,6 +1041,8 @@ func (c *Client) runMCPToolCall(
 	if _, err := c.toolAuthority(name); err != nil {
 		return err
 	}
+	callCtx, cancelCall := context.WithCancel(ctx)
+	defer cancelCall()
 	token := NewStringProgressToken(c.nextProgressToken())
 	tokenKey, err := progressTokenKey(token)
 	if err != nil {
@@ -1078,25 +1050,50 @@ func (c *Client) runMCPToolCall(
 	}
 	progressCh := make(chan toolsy.Chunk, progressChunkBufferSize)
 	done := make(chan struct{})
-	c.progressCallbacks.Store(tokenKey, &progressState{ch: progressCh, done: done})
+	state := &progressState{ch: progressCh, done: done}
+	c.progressCallbacks.Store(tokenKey, state)
 	defer func() { c.progressCallbacks.Delete(tokenKey); close(done) }()
-	pending, err := c.requestWithProgress(
-		ctx,
+	pending, logging, err := c.prepareRequest(
+		callCtx,
 		MethodToolsCall,
-		ToolsCallParams{Name: name, Arguments: bytes.Clone(rawArgs)},
-		token,
+		ToolsCallParams{
+			Name: name, Arguments: bytes.Clone(rawArgs),
+			Meta: &RequestMeta{ProgressToken: token},
+		},
 	)
 	if err != nil {
 		return err
 	}
-	type finalResult struct {
-		raw json.RawMessage
-		err error
+	completion, ok := pending.(CompletionPendingRequest)
+	if !ok {
+		cause := &UnsupportedFeatureError{Feature: "request-scoped progress lifecycle"}
+		_ = pending.Abort(cause)
+		return cause
 	}
-	finalCh := make(chan finalResult, 1)
+	completion.OnComplete(func() {
+		state.mu.Lock()
+		state.retired = true
+		c.progressCallbacks.CompareAndDelete(tokenKey, state)
+		state.mu.Unlock()
+	})
+	notifyConsumerAbort := func() {
+		state.mu.Lock()
+		retired := state.retired
+		state.mu.Unlock()
+		if retired && ctx.Err() == nil {
+			return
+		}
+		c.notifyCancelledPending(ctx, pending, "result consumer aborted")
+	}
+	if err := c.deliverPrepared(pending, logging); err != nil {
+		return err
+	}
+	finalCh := make(chan toolCallFinalResult, 1)
 	go func() {
-		raw, awaitErr := c.awaitPending(ctx, pending)
-		finalCh <- finalResult{raw: raw, err: awaitErr}
+		// Only the invocation loop owns cancellation notifications. Cancelling
+		// callCtx on return must release custom Await without a second send.
+		raw, awaitErr := pending.Await(callCtx)
+		finalCh <- toolCallFinalResult{raw: raw, err: awaitErr}
 	}()
 	for {
 		select {
@@ -1105,34 +1102,55 @@ func (c *Client) runMCPToolCall(
 			return ctx.Err()
 		case progress := <-progressCh:
 			if err := yield(progress); err != nil {
-				c.notifyCancelledPending(ctx, pending, "result consumer aborted")
-				return toolsy.ErrStreamAborted
+				notifyConsumerAbort()
+				return fmt.Errorf("%w: %w", toolsy.ErrStreamAborted, err)
 			}
 		case final := <-finalCh:
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				c.notifyCancelledPending(ctx, pending, ctxErr.Error())
+				return ctxErr
+			}
+			// Completion has retired the route and serialized with enqueueing.
+			// Deliver every accepted pre-terminal notification before the result.
+			for len(progressCh) > 0 {
+				if err := yield(<-progressCh); err != nil {
+					notifyConsumerAbort()
+					return fmt.Errorf("%w: %w", toolsy.ErrStreamAborted, err)
+				}
+			}
 			if final.err != nil {
 				return c.mapCallReadLimitFor(ctx, mapTypedRPCError(final.err), "MCP tool response")
 			}
-			if current := c.toolGeneration.Load(); current != generation {
-				return staleError(InvalidationTools, generation, current)
-			}
-			input, err := requireCompleteResult(final.raw, MethodToolsCall, true)
-			if err != nil {
-				return err
-			}
-			if input != nil {
-				return &InputRequiredError{Method: MethodToolsCall, Result: *input}
-			}
-			chunk, err := buildToolResultChunk(name, final.raw, outputSchema)
+			chunk, err := c.completeToolCallChunk(name, final.raw, outputSchema, generation)
 			if err != nil {
 				return err
 			}
 			if err := yield(chunk); err != nil {
-				c.notifyCancelledPending(ctx, pending, "result consumer aborted")
-				return toolsy.ErrStreamAborted
+				notifyConsumerAbort()
+				return fmt.Errorf("%w: %w", toolsy.ErrStreamAborted, err)
 			}
 			return nil
 		}
 	}
+}
+
+func (c *Client) completeToolCallChunk(
+	name string,
+	raw json.RawMessage,
+	outputSchema schemaValidator,
+	generation uint64,
+) (toolsy.Chunk, error) {
+	if current := c.toolGeneration.Load(); current != generation {
+		return toolsy.Chunk{}, staleError(InvalidationTools, generation, current)
+	}
+	input, err := requireCompleteResult(raw, MethodToolsCall, true)
+	if err != nil {
+		return toolsy.Chunk{}, err
+	}
+	if input != nil {
+		return toolsy.Chunk{}, &InputRequiredError{Method: MethodToolsCall, Result: *input}
+	}
+	return buildToolResultChunk(name, raw, outputSchema)
 }
 
 func progressTokenKey(token ProgressToken) (string, error) {
@@ -1266,16 +1284,20 @@ func buildToolResultChunk(name string, raw json.RawMessage, outputSchema schemaV
 			),
 		}, nil
 	}
+	mimeType := toolsy.MimeTypeText
+	if len(projection) == 0 {
+		mimeType = ""
+	}
 	return toolsy.Chunk{
 		Event:       toolsy.EventResult,
 		Data:        projection,
-		MimeType:    toolsy.MimeTypeText,
+		MimeType:    mimeType,
 		TypedResult: result,
 		EmptyResult: len(projection) == 0,
 		Envelope: toolsy.NewResultEnvelope(
 			result,
 			projection,
-			toolsy.MimeTypeText,
+			mimeType,
 			toolsy.DeliveryClassText,
 			toolsy.AudienceModel,
 			nil,
@@ -1335,12 +1357,11 @@ func (c *Client) handleProgress(raw json.RawMessage) {
 		return
 	}
 	state.mu.Lock()
-	if state.started && progress.Progress <= state.last {
-		state.mu.Unlock()
+	defer state.mu.Unlock()
+	if state.retired || state.started && progress.Progress <= state.last {
 		return
 	}
 	state.started, state.last = true, progress.Progress
-	state.mu.Unlock()
 	chunk := toolsy.Chunk{
 		Event: toolsy.EventProgress,
 		Progress: &toolsy.ProgressInfo{
@@ -1392,7 +1413,7 @@ func (c *Client) GetResourceTool() (toolsy.Tool, error) {
 			return err
 		}
 		if err := yield(chunk); err != nil {
-			return toolsy.ErrStreamAborted
+			return fmt.Errorf("%w: %w", toolsy.ErrStreamAborted, err)
 		}
 		return nil
 	}
@@ -1478,6 +1499,9 @@ func buildResourceResultChunk(result ResourcesReadResult, projection []byte) (to
 			delivery = toolsy.DeliveryClassBinary
 		}
 	}
+	if len(data) == 0 {
+		mimeType = ""
+	}
 	return toolsy.Chunk{
 		Event:       toolsy.EventResult,
 		Data:        data,
@@ -1495,7 +1519,7 @@ func (c *Client) ListResources(ctx context.Context, cursor string) (ResourcesLis
 	generation := c.resourceGeneration.Load()
 	raw, err := c.requestAndAwait(ctx, MethodResourcesList, ResourcesListParams{Cursor: cursor})
 	if err != nil {
-		return ResourcesListResult{}, err
+		return ResourcesListResult{}, c.mapCallReadLimitFor(ctx, err, "MCP resources list response")
 	}
 	if current := c.resourceGeneration.Load(); current != generation {
 		return ResourcesListResult{}, staleError(InvalidationResources, generation, current)
@@ -1517,7 +1541,7 @@ func (c *Client) ListResourceTemplates(ctx context.Context, cursor string) (Reso
 	generation := c.resourceGeneration.Load()
 	raw, err := c.requestAndAwait(ctx, MethodResourceTemplatesList, ResourceTemplatesListParams{Cursor: cursor})
 	if err != nil {
-		return ResourceTemplatesListResult{}, err
+		return ResourceTemplatesListResult{}, c.mapCallReadLimitFor(ctx, err, "MCP resource templates list response")
 	}
 	if current := c.resourceGeneration.Load(); current != generation {
 		return ResourceTemplatesListResult{}, staleError(InvalidationResources, generation, current)
@@ -1565,7 +1589,7 @@ func (c *Client) ListPrompts(ctx context.Context, cursor string) (PromptsListRes
 	generation := c.promptGeneration.Load()
 	raw, err := c.requestAndAwait(ctx, MethodPromptsList, PromptsListParams{Cursor: cursor})
 	if err != nil {
-		return PromptsListResult{}, err
+		return PromptsListResult{}, c.mapCallReadLimitFor(ctx, err, "MCP prompts list response")
 	}
 	if current := c.promptGeneration.Load(); current != generation {
 		return PromptsListResult{}, staleError(InvalidationPrompts, generation, current)
@@ -1950,26 +1974,38 @@ func cloneSubscriptionFilter(filter SubscriptionFilter) SubscriptionFilter {
 
 func resourceSubscriptionAllows(subscriptions []string, uri string) bool {
 	for _, subscription := range subscriptions {
-		if subscription == uri || isSubresourceURI(subscription, uri) {
+		if subscription == uri || subscriptionURIMatches(subscription, uri, true) {
 			return true
 		}
 	}
 	return false
 }
 
-func isSubresourceURI(subscription, candidate string) bool {
-	base, baseErr := url.ParseRequestURI(subscription)
-	updated, updatedErr := url.ParseRequestURI(candidate)
+func subscriptionURIMatches(subscription, candidate string, allowEqual bool) bool {
+	base, baseErr := url.Parse(subscription)
+	updated, updatedErr := url.Parse(candidate)
 	if baseErr != nil || updatedErr != nil || base.IsAbs() != updated.IsAbs() ||
-		!strings.EqualFold(base.Scheme, updated.Scheme) || base.Host != updated.Host ||
-		base.User.String() != updated.User.String() || base.RawQuery != "" || updated.RawQuery != "" ||
-		base.Fragment != "" || updated.Fragment != "" || base.Opaque != "" || updated.Opaque != "" {
+		!strings.EqualFold(base.Scheme, updated.Scheme) || !strings.EqualFold(base.Hostname(), updated.Hostname()) ||
+		subscriptionURIPort(base) != subscriptionURIPort(updated) ||
+		base.User.String() != updated.User.String() || base.Opaque != "" || updated.Opaque != "" {
 		return false
 	}
 	if hasDotPathSegment(base.Path) || hasDotPathSegment(updated.Path) {
 		return false
 	}
-	basePath, updatedPath := base.EscapedPath(), updated.EscapedPath()
+	basePath := normalizeSubscriptionPath(base.EscapedPath())
+	updatedPath := normalizeSubscriptionPath(updated.EscapedPath())
+	baseHasFragment := strings.Contains(subscription, "#")
+	updatedHasFragment := strings.Contains(candidate, "#")
+	if allowEqual && basePath == updatedPath && base.RawQuery == updated.RawQuery &&
+		base.ForceQuery == updated.ForceQuery && baseHasFragment == updatedHasFragment &&
+		base.EscapedFragment() == updated.EscapedFragment() {
+		return true
+	}
+	if base.RawQuery != "" || updated.RawQuery != "" || base.ForceQuery || updated.ForceQuery ||
+		baseHasFragment || updatedHasFragment {
+		return false
+	}
 	if basePath == "" || updatedPath == basePath {
 		return false
 	}
@@ -1977,6 +2013,44 @@ func isSubresourceURI(subscription, candidate string) bool {
 		return strings.HasPrefix(updatedPath, basePath)
 	}
 	return strings.HasPrefix(updatedPath, basePath+"/")
+}
+
+func subscriptionURIPort(uri *url.URL) string {
+	port := uri.Port()
+	if strings.EqualFold(uri.Scheme, "http") && port == "80" ||
+		strings.EqualFold(uri.Scheme, "https") && port == "443" {
+		return ""
+	}
+	return port
+}
+
+// Normalize only unreserved octets. In particular, encoded slashes must never
+// become path separators, and repeated separators are never collapsed.
+func normalizeSubscriptionPath(path string) string {
+	var normalized strings.Builder
+	const hex = "0123456789ABCDEF"
+	for index := 0; index < len(path); index++ {
+		if path[index] != '%' || index+2 >= len(path) {
+			normalized.WriteByte(path[index])
+			continue
+		}
+		decoded, err := url.PathUnescape(path[index : index+3])
+		if err != nil {
+			normalized.WriteByte(path[index])
+			continue
+		}
+		octet := decoded[0]
+		if octet >= 'a' && octet <= 'z' || octet >= 'A' && octet <= 'Z' ||
+			octet >= '0' && octet <= '9' || strings.ContainsRune("-._~", rune(octet)) {
+			normalized.WriteByte(octet)
+		} else {
+			normalized.WriteByte('%')
+			normalized.WriteByte(hex[octet>>4])
+			normalized.WriteByte(hex[octet&15])
+		}
+		index += 2
+	}
+	return normalized.String()
 }
 
 func hasDotPathSegment(path string) bool {

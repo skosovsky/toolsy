@@ -46,7 +46,7 @@ func MergeHTTPClient(safe *http.Client, base HTTPClient) *http.Client {
 }
 
 func defaultHTTPClient(o *options) *http.Client {
-	opts := SafeDialOptions{ //nolint:exhaustruct // whitelist mode; IP policy defaults
+	opts := SafeDialOptions{ //nolint:exhaustruct_v5 // whitelist mode; IP policy defaults
 		AllowedHosts:    o.allowedDomains,
 		AllowPrivateIPs: o.allowPrivateIPs,
 	}

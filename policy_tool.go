@@ -59,12 +59,30 @@ func NewPolicyToolFromSpec[TSubject, TScope, TArgs any](
 
 // NewPolicyTool builds a production-ready generic tool without host-local policy wrappers.
 func NewPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TScope, TArgs]) (Tool, error) {
+	if err := validatePolicyToolSpec(spec); err != nil {
+		return nil, err
+	}
+	return buildPolicyTool(spec)
+}
+
+func validatePolicyToolSpec[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TScope, TArgs]) error {
 	if spec.Tool == nil {
-		return nil, errors.New("toolsy: policy tool requires base tool")
+		return errors.New("toolsy: policy tool requires base tool")
 	}
 	if spec.ArgsBinder == nil {
-		return nil, errors.New("toolsy: policy tool requires args binder")
+		return errors.New("toolsy: policy tool requires args binder")
 	}
+	if !supportsPreparedExecution(spec.Tool) {
+		return errors.New("toolsy: policy tool requires a prepared execution boundary")
+	}
+	if _, reserved := spec.EnvelopeMetadata[CacheReplayMetadata]; reserved {
+		return errors.New("toolsy: policy tool cannot configure reserved replay metadata")
+	}
+	return nil
+}
+
+func buildPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TScope, TArgs]) (Tool, error) {
+	spec.EnvelopeMetadata = deepCloneMap(spec.EnvelopeMetadata)
 	manifest := spec.Tool.Manifest()
 	if hasRequirements(spec.Requirements) {
 		manifest.Requirements = cloneRequirements(spec.Requirements)
@@ -92,8 +110,8 @@ func NewPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TS
 			manifest,
 			ext,
 			spec.ArgsBinder,
-			spec.Policy,
-			spec.ArgValidator,
+			nil,
+			nil,
 		)
 		if prepErr != nil {
 			return prepErr
@@ -109,11 +127,85 @@ func NewPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TS
 			Metadata: cloneCallMetadata(callCtx.Metadata),
 			Values:   maps.Clone(callCtx.Values),
 		})
-		return spec.Tool.Execute(ctx, env, forward, func(c Chunk) error {
-			return yield(applyPolicyToolEnvelope(c, spec.DeliveryClass, spec.Audience, spec.EnvelopeMetadata))
-		})
+		// Delegate to the innermost preparation boundary: every binder and policy
+		// must run before a profile can claim, dispatch or replay an outcome.
+		innerEnv := *env
+		innerEnv.preparedChecks = append(innerEnv.preparedChecks, policyFinalCheck(spec, ext, bound.Metadata))
+		if innerEnv.executionManifest == nil {
+			innerEnv.executionManifest = &manifest
+		}
+		transform := func(c Chunk) Chunk {
+			return applyPolicyToolEnvelope(c, spec.DeliveryClass, spec.Audience, spec.EnvelopeMetadata)
+		}
+		if innerEnv.executionProfile != nil {
+			innerEnv.executionProfile = policyEnvelopeProfile{next: innerEnv.executionProfile, transform: transform}
+		}
+		return spec.Tool.Execute(ctx, &innerEnv, forward, func(c Chunk) error { return yield(transform(c)) })
 	}
 	return &tool{manifest: manifest, execute: execute}, nil
+}
+
+func policyFinalCheck[TSubject, TScope, TArgs any](
+	spec ToolPolicySpec[TSubject, TScope, TArgs], ext *Extractor[TArgs], metadata map[string]any,
+) func(context.Context, PreparedCall, any) error {
+	return func(ctx context.Context, call PreparedCall, finalArgs any) error {
+		value, ok := finalArgs.(TArgs)
+		if !ok {
+			var err error
+			value, err = ext.ParseAndValidate(call.Input.ArgsJSON)
+			if err != nil {
+				return err
+			}
+		}
+		if spec.ArgValidator != nil {
+			if err := spec.ArgValidator(cloneTypedArgValue(value)); err != nil {
+				return wrapArgValidatorError(err)
+			}
+		}
+		if spec.Policy == nil {
+			return nil
+		}
+		finalContext, err := TypedContext[TSubject, TScope](call.Context)
+		if err != nil {
+			return err
+		}
+		return decisionError(spec.Policy(ctx, TypedPolicyRequest[TSubject, TScope, TArgs]{
+			Manifest: call.Manifest,
+			Input:    call.Input,
+			Context:  finalContext,
+			Args:     value,
+			BoundArgs: ValidatedArgs[TArgs]{
+				Value:    cloneTypedArgValue(value),
+				Raw:      append([]byte(nil), call.Input.ArgsJSON...),
+				Metadata: cloneArgsMetadata(metadata),
+			},
+		}))
+	}
+}
+
+func underlyingExecutionProfile(profile ExecutionProfile) ExecutionProfile {
+	for {
+		decorator, ok := profile.(policyEnvelopeProfile)
+		if !ok {
+			return profile
+		}
+		profile = decorator.next
+	}
+}
+
+// policyEnvelopeProfile preserves current delivery restrictions both when
+// persisting fresh outcomes and when returning previously stored outcomes.
+type policyEnvelopeProfile struct {
+	next      ExecutionProfile
+	transform func(Chunk) Chunk
+}
+
+func (p policyEnvelopeProfile) ExecutePrepared(
+	ctx context.Context, call PreparedCall, invoke InvocationHandler, yield func(Chunk) error,
+) error {
+	return p.next.ExecutePrepared(ctx, call, func(out func(Chunk) error) error {
+		return invoke(func(c Chunk) error { return out(p.transform(c)) })
+	}, func(c Chunk) error { return yield(p.transform(c)) })
 }
 
 func applyPolicyToolEnvelope(
@@ -130,14 +222,23 @@ func applyPolicyToolEnvelope(
 		envelope.DeliveryClass = deliveryClass
 	}
 	if audience != "" {
-		envelope.Audience = audience
+		if replay, _ := envelope.Metadata[CacheReplayMetadata].(bool); replay && envelope.Audience != audience {
+			// Model and user are disjoint delivery targets; internal is the
+			// conservative intersection. A stored private outcome never becomes public.
+			envelope.Audience = AudienceInternal
+		} else {
+			envelope.Audience = audience
+		}
 	}
 	if len(metadata) > 0 {
 		merged := deepCloneMap(envelope.Metadata)
 		if merged == nil {
 			merged = make(map[string]any, len(metadata))
 		}
-		maps.Copy(merged, deepCloneMap(metadata))
+		overlay := deepCloneMap(metadata)
+		// Replay provenance belongs to the execution profile, never to an overlay.
+		delete(overlay, CacheReplayMetadata)
+		maps.Copy(merged, overlay)
 		envelope.Metadata = merged
 	}
 	c.Envelope = &envelope

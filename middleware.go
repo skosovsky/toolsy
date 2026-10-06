@@ -23,7 +23,7 @@ func WithLogging(logger *slog.Logger) Middleware {
 		logger = slog.Default()
 	}
 	return func(next Tool) Tool {
-		return &middlewareTool{toolBase: toolBase{next: next}, logger: logger}
+		return &middlewareTool{next: next, logger: logger}
 	}
 }
 

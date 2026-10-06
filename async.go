@@ -83,15 +83,15 @@ func WithMaxCollectedChunks(n int) AsyncOption {
 // When executed via [Registry], the registry injects an async tracker via [*RunEnv]; the
 // background job is tracked so [Registry.Shutdown] waits for it to finish.
 func AsAsyncTool(baseTool Tool, opts ...AsyncOption) Tool {
-	o := asyncOptions{ //nolint:exhaustruct // onComplete, timeout set via AsyncOption
+	o := asyncOptions{ //nolint:exhaustruct_v5 // onComplete, timeout set via AsyncOption
 		maxCollectedChunks: DefaultMaxCollectedChunks,
 	}
 	for _, opt := range opts {
 		opt(&o)
 	}
 	return &asyncTool{
-		toolBase: toolBase{next: baseTool},
-		opts:     o,
+		next: baseTool,
+		opts: o,
 	}
 }
 

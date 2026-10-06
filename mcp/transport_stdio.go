@@ -1,4 +1,4 @@
-//nolint:exhaustruct // Transport options deliberately initialize only configured runtime state.
+//nolint:exhaustruct_v5 // Transport options deliberately initialize only configured runtime state.
 package mcp
 
 import (
@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	rpcJSONLineScannerMaxBytes = 1024 * 1024
 	maxStdioLogLineBytes       = 256
 	stdioStderrReadBufferBytes = 4096
 	stdioWriteQueueSize        = 64
@@ -167,8 +166,7 @@ func (t *StdioTransport) Start(ctx context.Context) error {
 }
 
 func (t *StdioTransport) startProcess(ctx context.Context) (startedStdioProcess, error) {
-	// #nosec G204 -- the executable and arguments are explicitly supplied by the caller.
-
+	// #nosec G204 G702 -- executable/argv are trusted host configuration; no shell or remote-derived command is used.
 	cmd := exec.CommandContext(context.WithoutCancel(ctx), t.executable, t.args...)
 	configureProcessTree(cmd)
 	stdin, err := cmd.StdinPipe()
@@ -476,6 +474,13 @@ func (t *StdioTransport) readLoop() {
 	scanner := bufio.NewScanner(t.stdout)
 	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
 	for scanner.Scan() {
+		// Scanner may yield a final partial token after a reader failure. A
+		// byte-budget or cancellation error must not become a JSON syntax error,
+		// and an incomplete frame must never complete a correlated request.
+		if err := scanner.Err(); err != nil {
+			t.closeAsync(&TransportCrashError{Transport: "stdio", Err: err})
+			return
+		}
 		line := append([]byte(nil), scanner.Bytes()...)
 		if len(line) == 0 {
 			continue

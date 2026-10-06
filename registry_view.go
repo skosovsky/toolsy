@@ -301,6 +301,10 @@ func registryManifestDigest(reg *Registry) (string, error) {
 }
 
 func writeManifestDigest(h hash.Hash, manifest ToolManifest) error {
+	_, _ = fmt.Fprintf(h, "%d\x00", manifest.StreamMaxBytes)
+	if err := writeDigestJSON(h, manifest.StreamSemantics); err != nil {
+		return err
+	}
 	fmt.Fprintf(
 		h,
 		"%s\x00%s\x00%s\x00%t\x00%t\x00%t\x00%t\x00%s\x00%t\x00%s\x00",

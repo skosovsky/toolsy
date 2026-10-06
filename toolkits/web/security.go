@@ -27,7 +27,7 @@ func scrapeHTTPClient(o *options) (*http.Client, error) {
 			)
 		}
 	}
-	dialOpts := httptool.SafeDialOptions{ //nolint:exhaustruct // blacklist mode; IP policy via AllowPrivateIPs
+	dialOpts := httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // blacklist mode; IP policy via AllowPrivateIPs
 		BlockedHosts:    o.blockedDomains,
 		AllowPrivateIPs: o.allowPrivateIPs,
 	}

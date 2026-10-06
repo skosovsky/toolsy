@@ -86,7 +86,7 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 		return newInfrastructureOutcome(call.ToolName), NewToolNotFoundError()
 	}
 
-	outcome := ToolOutcome{ToolName: call.ToolName} //nolint:exhaustruct // filled during Execute
+	outcome := ToolOutcome{ToolName: call.ToolName} //nolint:exhaustruct_v5 // filled during Execute
 	if tool, ok := s.reg.GetTool(call.ToolName); ok {
 		outcome.CompletionPolicy = tool.Manifest().CompletionPolicy
 	}
@@ -113,7 +113,7 @@ func (s *Session) RunCall(ctx context.Context, call ToolCall) (ToolOutcome, erro
 }
 
 func newInfrastructureOutcome(toolName string) ToolOutcome {
-	return ToolOutcome{ //nolint:exhaustruct // zero values intentionally mean no result/progress/effects are available.
+	return ToolOutcome{ //nolint:exhaustruct_v5 // zero values intentionally mean no result/progress/effects are available.
 		ToolName: toolName,
 		Status:   OutcomeInfrastructureError,
 	}

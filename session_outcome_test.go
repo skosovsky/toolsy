@@ -116,6 +116,7 @@ func TestSession_RunCall_ControlSignal(t *testing.T) {
 		func(_ context.Context, _ *RunEnv, _ struct{}, yield func(Chunk) error) error {
 			return YieldControl(yield, &PauseSignal{Reason: `{"await":"human"}`})
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 
@@ -575,6 +576,7 @@ func TestSession_RunCall_ProgressBeforeBusinessError(t *testing.T) {
 				IsError:  true,
 			})
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 

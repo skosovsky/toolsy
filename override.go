@@ -118,8 +118,8 @@ func OverrideTool(base Tool, opts ...OverrideOption) Tool {
 		opt(&o)
 	}
 	return &overriddenTool{
-		toolBase: toolBase{next: base},
-		opts:     &o,
+		next: base,
+		opts: &o,
 	}
 }
 
@@ -144,6 +144,15 @@ func (t *overriddenTool) Manifest() ToolManifest {
 }
 
 func (t *overriddenTool) Execute(ctx context.Context, run *RunEnv, input ToolInput, yield func(Chunk) error) error {
+	if run == nil {
+		run = NewRunEnv(nil)
+	}
+	if run.executionManifest == nil {
+		privateRun := *run
+		manifest := t.Manifest()
+		privateRun.executionManifest = &manifest
+		run = &privateRun
+	}
 	if t.opts.name != nil {
 		alias := *t.opts.name
 		origYield := yield

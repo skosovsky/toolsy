@@ -13,7 +13,7 @@ type processTree struct {
 }
 
 func configureProcessTree(cmd *exec.Cmd) {
-	//nolint:exhaustruct // The zero values of all other process attributes are intentional.
+	//nolint:exhaustruct_v5 // The zero values of all other process attributes are intentional.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 

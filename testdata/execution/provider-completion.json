@@ -1,0 +1,5 @@
+[
+  {"name":"valid-prefix-is-not-completion","events":[{"args":"{}"},{"end":true}],"want_dispatch":1,"want_error":false},
+  {"name":"valid-prefix-then-invalid-suffix","events":[{"args":"{}"},{"args":"trailing"},{"end":true}],"want_dispatch":0,"want_error":true},
+  {"name":"valid-prefix-without-marker","events":[{"args":"{}"}],"want_dispatch":0,"want_error":false}
+]

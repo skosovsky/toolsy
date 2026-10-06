@@ -149,7 +149,7 @@ func safeDialContext(
 			}
 		}
 		dialAddr := net.JoinHostPort(ips[0].IP.String(), port)
-		d := net.Dialer{Timeout: timeout} //nolint:exhaustruct // defaults for DNS pin dial
+		d := net.Dialer{Timeout: timeout} //nolint:exhaustruct_v5 // defaults for DNS pin dial
 		return d.DialContext(ctx, network, dialAddr)
 	}
 }

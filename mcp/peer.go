@@ -1,4 +1,4 @@
-//nolint:exhaustruct // Internal JSON-RPC envelopes intentionally omit mutually exclusive fields.
+//nolint:exhaustruct_v5 // Internal JSON-RPC envelopes intentionally omit mutually exclusive fields.
 package mcp
 
 import (
@@ -152,7 +152,7 @@ func newRPCPeer(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	//nolint:gosec // The peer owns cancel and invokes it exactly once from rpcPeer.close.
+
 	peerCtx, cancel := context.WithCancel(ctx)
 	return &rpcPeer{
 		logger:  logger,
@@ -362,7 +362,7 @@ func (p *rpcPeer) dispatchEnvelope(
 ) error {
 	if hasMethod {
 		paramsInvalid := false
-		methodInvalid := requireStringField(fields, "method", true) != nil
+		methodInvalid := requireStringField(fields, "method", false) != nil
 		if hasParams {
 			_, paramsErr := decodeObjectFields(message.Params)
 			paramsInvalid = paramsErr != nil

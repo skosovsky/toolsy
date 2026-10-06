@@ -22,7 +22,7 @@ type CappedBuffer struct {
 
 // NewCappedBuffer returns a buffer that rejects writes beyond maxBytes.
 func NewCappedBuffer(name string, maxBytes int) *CappedBuffer {
-	return &CappedBuffer{ //nolint:exhaustruct // buf starts empty
+	return &CappedBuffer{ //nolint:exhaustruct_v5 // buf starts empty
 		max:  maxBytes,
 		name: name,
 	}

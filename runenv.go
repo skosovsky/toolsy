@@ -1,6 +1,7 @@
 package toolsy
 
 import (
+	"context"
 	"reflect"
 	"sync"
 )
@@ -24,8 +25,12 @@ func newRunEnvStore() *runEnvStore {
 // RunEnv is the per-call execution environment: credentials, persisted state store,
 // keyed dependencies (deps), and optional binding to a [Session] for in-memory state.
 type RunEnv struct {
-	Credentials CredentialsProvider
-	StateStore  StateStore
+	executionProfile  ExecutionProfile
+	executionManifest *ToolManifest
+	preparedChecks    []func(context.Context, PreparedCall, any) error
+	preparedDispatch  bool
+	Credentials       CredentialsProvider
+	StateStore        StateStore
 
 	session     *Session
 	store       *runEnvStore
@@ -55,7 +60,7 @@ func WithStateStore(s StateStore) RunEnvOption {
 // NewRunEnv creates a run environment. When session is non-nil, [SetState] and [GetState]
 // delegate to that session's in-memory state. session may be nil for DI-only usage.
 func NewRunEnv(session *Session, opts ...RunEnvOption) *RunEnv {
-	env := &RunEnv{ //nolint:exhaustruct // optional providers set via RunEnvOption
+	env := &RunEnv{ //nolint:exhaustruct_v5 // optional providers set via RunEnvOption
 		session: session,
 		store:   newRunEnvStore(),
 	}
@@ -92,7 +97,7 @@ func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime, 
 		bound = cloneCallContext(e.callContext)
 	}
 	if e == nil {
-		return &RunEnv{ //nolint:exhaustruct // nil env bootstrap
+		return &RunEnv{ //nolint:exhaustruct_v5 // nil env bootstrap
 			store:       newRunEnvStore(),
 			attachments: cloneAttachments(attachments),
 			callContext: bound,
@@ -109,14 +114,18 @@ func (e *RunEnv) cloneForExecute(attachments []Attachment, async *asyncRuntime, 
 		}
 	}
 	return &RunEnv{
-		session:     e.session,
-		Credentials: e.Credentials,
-		StateStore:  e.StateStore,
-		store:       e.store,
-		attachments: cloneAttachments(attachments),
-		callContext: bound,
-		view:        cloneRegistryViewSnapshot(e.view),
-		async:       async,
+		executionProfile:  e.executionProfile,
+		executionManifest: e.executionManifest,
+		preparedChecks:    append([]func(context.Context, PreparedCall, any) error(nil), e.preparedChecks...),
+		preparedDispatch:  e.preparedDispatch,
+		session:           e.session,
+		Credentials:       e.Credentials,
+		StateStore:        e.StateStore,
+		store:             e.store,
+		attachments:       cloneAttachments(attachments),
+		callContext:       bound,
+		view:              cloneRegistryViewSnapshot(e.view),
+		async:             async,
 	}
 }
 

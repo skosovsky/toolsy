@@ -98,10 +98,9 @@ func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithUse(t *testing.T) {
 	assert.Contains(t, err.Error(), "nested_use_base")
 }
 
-func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithIdempotency(t *testing.T) {
+func TestRegistryBuilder_NestedAsyncTool_FailsBuild_WithLogging(t *testing.T) {
 	base := mustNamedTool(t, "nested_idem_base")
-	store := NewMemoryIdempotencyStore()
-	nested := WithIdempotency(store, nil)(AsAsyncTool(AsAsyncTool(base)))
+	nested := WithLogging(nil)(AsAsyncTool(AsAsyncTool(base)))
 
 	_, err := NewRegistryBuilder().Add(nested).Build()
 	require.Error(t, err)
@@ -757,6 +756,7 @@ func TestRegistry_ExecuteIter(t *testing.T) {
 			}
 			return nil
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 
@@ -1248,6 +1248,7 @@ func TestRegistry_OnChunkCountsOnlySuccess(t *testing.T) {
 			_ = yield(Chunk{Event: EventProgress, Data: []byte("chunk2"), MimeType: MimeTypeText})
 			return yield(Chunk{Event: EventResult, Data: []byte(`{"ok":true}`), MimeType: MimeTypeJSON})
 		},
+		WithIndependentStream(),
 	)
 	require.NoError(t, err)
 

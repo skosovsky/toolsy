@@ -57,7 +57,7 @@ type ToolError struct {
 
 // NewValidationError builds a non-retryable validation [ToolError].
 func NewValidationError(reason string, fixableFields ...string) *ToolError {
-	return &ToolError{ //nolint:exhaustruct // SafeMessage optional for LLM-facing copy
+	return &ToolError{ //nolint:exhaustruct_v5 // SafeMessage optional for LLM-facing copy
 		Code:        CodeValidationFailed,
 		Reason:      reason,
 		Retryable:   false,
@@ -68,7 +68,7 @@ func NewValidationError(reason string, fixableFields ...string) *ToolError {
 
 // NewSchemaError builds a non-retryable schema or parse [ToolError].
 func NewSchemaError(reason string) *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeSchemaInvalid,
 		Reason:    reason,
 		Retryable: false,
@@ -80,7 +80,7 @@ func NewJSONParseError(err error) *ToolError {
 	if err == nil {
 		return nil
 	}
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeSchemaInvalid,
 		Reason:    "invalid JSON",
 		Retryable: false,
@@ -94,7 +94,7 @@ func NewInternalError(err error) *ToolError {
 	if err == nil {
 		return nil
 	}
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeInternal,
 		Reason:    "internal error",
 		Retryable: false,
@@ -114,7 +114,7 @@ func WithSafeMessage(te *ToolError, safe string) *ToolError {
 // NewDependencyMissingError reports a missing or nil typed dependency.
 func NewDependencyMissingError(key string) *ToolError {
 	reason := fmt.Sprintf("dependency %q is missing or nil", key)
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeDependencyMissing,
 		Reason:    reason,
 		Retryable: false,
@@ -124,7 +124,7 @@ func NewDependencyMissingError(key string) *ToolError {
 
 // NewToolNotFoundError reports an unknown tool name.
 func NewToolNotFoundError() *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeToolNotFound,
 		Reason:    ErrToolNotFound.Error(),
 		Retryable: false,
@@ -134,7 +134,7 @@ func NewToolNotFoundError() *ToolError {
 
 // NewTimeoutError reports execution timeout; set retryable when the orchestrator may retry.
 func NewTimeoutError(retryable bool) *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeTimeout,
 		Reason:    ErrTimeout.Error(),
 		Retryable: retryable,
@@ -147,7 +147,7 @@ func NewTimeoutErrorFrom(cause error, retryable bool) *ToolError {
 	if cause == nil {
 		return NewTimeoutError(retryable)
 	}
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeTimeout,
 		Reason:    ErrTimeout.Error(),
 		Retryable: retryable,
@@ -233,7 +233,7 @@ func IsContextInterrupt(err error) bool {
 
 // NewShutdownError reports registry shutdown.
 func NewShutdownError() *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeShutdown,
 		Reason:    ErrShutdown.Error(),
 		Retryable: false,
@@ -243,7 +243,7 @@ func NewShutdownError() *ToolError {
 
 // NewMaxStepsExceededError reports session step budget exhaustion.
 func NewMaxStepsExceededError() *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeMaxStepsExceeded,
 		Reason:    ErrMaxStepsExceeded.Error(),
 		Retryable: false,
@@ -253,7 +253,7 @@ func NewMaxStepsExceededError() *ToolError {
 
 // NewRegistryStateError reports uninitialized registry runtime state.
 func NewRegistryStateError() *ToolError {
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeRegistryNotReady,
 		Reason:    ErrRegistryState.Error(),
 		Retryable: false,
@@ -264,7 +264,7 @@ func NewRegistryStateError() *ToolError {
 // NewToolsContractMissingError reports required tools missing from the registry contract.
 func NewToolsContractMissingError(required, missing []string) *ToolError {
 	reason := fmt.Sprintf("missing required tools: %v (contract requires %v)", missing, required)
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:        CodeToolsContractMissing,
 		Reason:      reason,
 		Retryable:   false,
@@ -276,7 +276,7 @@ func NewToolsContractMissingError(required, missing []string) *ToolError {
 // NewStateCodecMissingError reports a session state key without a registered codec in strict mode.
 func NewStateCodecMissingError(key string) *ToolError {
 	reason := fmt.Sprintf("no state codec registered for key %q", key)
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:        CodeStateCodecMissing,
 		Reason:      reason,
 		Retryable:   false,
@@ -294,7 +294,7 @@ func NewSnapshotHydrationError(reason string, err error) *ToolError {
 	if err == nil {
 		err = errors.New(reason)
 	}
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeInternal,
 		Reason:    reason,
 		Retryable: false,
@@ -308,7 +308,7 @@ func NewBudgetExceededError(reason string) *ToolError {
 	if reason == "" {
 		reason = ErrBudgetExceeded.Error()
 	}
-	return &ToolError{ //nolint:exhaustruct // optional envelope fields omitted by design
+	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
 		Code:      CodeBudgetExceeded,
 		Reason:    reason,
 		Retryable: true,
@@ -340,8 +340,7 @@ func (e *ToolError) Unwrap() error { return e.Err }
 
 // AsToolError returns a [*ToolError] when err is or wraps one.
 func AsToolError(err error) (*ToolError, bool) {
-	var te *ToolError
-	if errors.As(err, &te) {
+	if te, ok := errors.AsType[*ToolError](err); ok {
 		return te, true
 	}
 	return nil, false

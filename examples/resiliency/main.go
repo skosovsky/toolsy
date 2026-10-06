@@ -39,7 +39,7 @@ type httpGetResult struct {
 }
 
 // execReq carries typed args plus [*toolsy.RunEnv] so credentials and attachments
-// reach the underlying toolkit while [routery.Executor] stays generic.
+// reach the underlying toolkit while [routery.BasicRouteHandler] stays generic.
 type execReq struct {
 	Env  *toolsy.RunEnv
 	Args httpGetArgs
@@ -127,10 +127,10 @@ func findHTTPGetTool(tools []toolsy.Tool) (toolsy.Tool, error) {
 	return nil, errors.New("http_get tool not found")
 }
 
-func buildReliableExecutor(baseGet toolsy.Tool) routery.Executor[execReq, httpGetResult] {
+func buildReliableExecutor(baseGet toolsy.Tool) routery.BasicRouteHandler[execReq, httpGetResult] {
 	// The wrapped host tool uses RunCall above; direct Execute here is low-level adapter glue
 	// for reusing the underlying httptool implementation inside routery.
-	base := routery.ExecutorFunc[execReq, httpGetResult](func(ctx context.Context, req execReq) (httpGetResult, error) {
+	base := routery.FromFunc[execReq, httpGetResult](func(ctx context.Context, req execReq) (httpGetResult, error) {
 		raw, marshalErr := json.Marshal(req.Args)
 		if marshalErr != nil {
 			return httpGetResult{}, marshalErr
@@ -150,10 +150,12 @@ func buildReliableExecutor(baseGet toolsy.Tool) routery.Executor[execReq, httpGe
 		return *decoded, nil
 	})
 
-	return routery.Apply(base,
-		routery.Timeout[execReq, httpGetResult](policyTimeout),
-		routery.RetryIf[execReq, httpGetResult](policyRetryAttempts, policyRetryBackoff, retryOnNetTimeout),
-		routery.Bulkhead[execReq, httpGetResult](policyBulkheadLimit),
+	return routery.ApplyRoute(base,
+		routery.Timeout[execReq, routery.BasicKind, routery.BasicReason, httpGetResult](policyTimeout),
+		routery.RetryIf[execReq, routery.BasicKind, routery.BasicReason, httpGetResult](
+			policyRetryAttempts, policyRetryBackoff, retryOnNetTimeout,
+		),
+		routery.Bulkhead[execReq, routery.BasicKind, routery.BasicReason, httpGetResult](policyBulkheadLimit),
 	)
 }
 
@@ -165,7 +167,7 @@ func retryOnNetTimeout(_ context.Context, _ execReq, execErr error) bool {
 	return errors.As(execErr, &ne) && ne.Timeout()
 }
 
-func buildWrappedTool(reliable routery.Executor[execReq, httpGetResult]) (toolsy.Tool, error) {
+func buildWrappedTool(reliable routery.BasicRouteHandler[execReq, httpGetResult]) (toolsy.Tool, error) {
 	return toolsy.NewTypedTool(toolsy.TypedToolSpec[
 		toolsy.NoSubject,
 		toolsy.NoScope,
@@ -181,11 +183,14 @@ func buildWrappedTool(reliable routery.Executor[execReq, httpGetResult]) (toolsy
 			run *toolsy.RunEnv,
 			args toolsy.ValidatedArgs[httpGetArgs],
 		) (toolsy.ToolResult[httpGetResult, struct{}], error) {
-			res, err := reliable.Execute(ctx, execReq{Env: run, Args: args.Value})
+			res, err := reliable(routery.NewRouteCall(ctx, execReq{Env: run, Args: args.Value}))
 			if err != nil {
 				return toolsy.ToolResult[httpGetResult, struct{}]{}, err
 			}
-			return toolsy.NewToolResult[httpGetResult, struct{}](res), nil
+			if res.Action != routery.ActionStop || !res.HasPayload {
+				return toolsy.ToolResult[httpGetResult, struct{}]{}, errors.New("HTTP route did not return a result")
+			}
+			return toolsy.NewToolResult[httpGetResult, struct{}](res.Payload), nil
 		},
 	})
 }

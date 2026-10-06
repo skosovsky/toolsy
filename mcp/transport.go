@@ -10,6 +10,9 @@ import (
 	"sync/atomic"
 )
 
+// rpcJSONLineScannerMaxBytes bounds an individual JSON-RPC scanner token.
+const rpcJSONLineScannerMaxBytes = 1024 * 1024
+
 func contextUntilPendingTerminal(
 	parent context.Context,
 	terminal <-chan struct{},

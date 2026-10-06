@@ -26,7 +26,7 @@ func NewSchemaRegistry() *SchemaRegistry {
 }
 
 // RegisterType registers a custom Go type to be mapped to a JSON Schema type/format in generated schemas.
-// emptyInstance is a value of the type to register (e.g. uuid.UUID{}, or MyMoney{}); it must not be nil.
+// emptyInstance is a value of the type to register (for example, a UUID or money value); it must not be nil.
 // jsonType is the JSON Schema type (e.g. "string", "number"); it must not be empty.
 // format is optional (e.g. "uuid", "decimal"). Registration is by [reflect.TypeOf](emptyInstance).
 // Pointer fields (*T) use the same mapping as T; call RegisterType once for the value type.
@@ -122,7 +122,7 @@ func enrichSchemaFromStructTags(schemaMap map[string]any, typ reflect.Type) {
 	}
 	jsonToField := make(map[string]reflect.StructField)
 	for field := range typ.Fields() {
-		jsonTag := strings.Split(field.Tag.Get("json"), ",")[0]
+		jsonTag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if jsonTag == "" || jsonTag == "-" {
 			continue
 		}

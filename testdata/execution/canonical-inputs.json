@@ -1,0 +1,10 @@
+[
+  {"id":"raw-large-integer","mode":"raw","input":{"n":9007199254740993},"canonical":{"n":9007199254740993}},
+  {"id":"raw-decimal-spelling","mode":"raw","input":{"n":1.0},"canonical":{"n":1.0}},
+  {"id":"raw-explicit-null","mode":"raw","input":{"n":null},"canonical":{"n":null}},
+  {"id":"raw-missing","mode":"raw","input":{},"canonical":{}},
+  {"id":"typed-large-integer","mode":"typed","input":{"n":9007199254740993},"canonical":{"n":9007199254740993}},
+  {"id":"host-default-missing","mode":"default","input":{},"canonical":{"n":10}},
+  {"id":"host-default-null","mode":"default","input":{"n":null},"canonical":{"n":10}},
+  {"id":"host-explicit-zero","mode":"default","input":{"n":0},"canonical":{"n":0}}
+]

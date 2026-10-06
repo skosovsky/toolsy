@@ -1,4 +1,4 @@
-//nolint:exhaustruct // Internal transport values intentionally omit optional fields.
+//nolint:exhaustruct_v5 // Internal transport values intentionally omit optional fields.
 package mcp
 
 import (
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/big"
 	"mime"
 	"net/http"
@@ -147,7 +148,7 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	if err := httptool.ValidateRemoteURL(ctx, t.endpoint, t.allowPrivateIPs); err != nil {
 		return err
 	}
-	//nolint:gosec // The transport owns cancel and invokes it from terminate or Close.
+
 	t.lifetimeCtx, t.cancel = context.WithCancel(context.WithoutCancel(ctx))
 	t.peer = newRPCPeer(t.lifetimeCtx, t.logger, func(context.Context, []byte) error {
 		return errors.New("mcp: HTTP transport cannot send server responses")
@@ -862,8 +863,7 @@ func validateReservedMCPRPCError(raw json.RawMessage) error {
 		Message: wireError.Message,
 		Data:    bytes.Clone(wireError.Data),
 	})
-	var invalid *InvalidPayloadError
-	if errors.As(mapped, &invalid) {
+	if invalid, ok := errors.AsType[*InvalidPayloadError](mapped); ok {
 		return invalid
 	}
 	return nil
@@ -916,7 +916,13 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 ) error {
 	limited := httptool.LimitStreamReaderWithContext(ctx, reader, t.maxStreamBytes)
 	scanner := bufio.NewScanner(limited)
-	scanner.Buffer(nil, t.maxStreamBytes)
+	// The bounded reader must observe budget exhaustion before the scanner's
+	// token ceiling can replace its typed cause. Headroom is not readable budget.
+	scannerLimit := t.maxStreamBytes
+	if scannerLimit < math.MaxInt {
+		scannerLimit++
+	}
+	scanner.Buffer(nil, scannerLimit)
 	scanner.Split(splitSSELines)
 	var data strings.Builder
 	dataSeen := false
@@ -993,9 +999,8 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 		}
 		return &InvalidPayloadError{Subject: streamableHTTPSSESubject, Err: err}
 	}
-	if err := dispatch(); err != nil {
-		return err
-	}
+	// EOF is not an SSE event boundary. Pending data has no terminating
+	// empty line and must not complete a request or invoke a handler.
 	if !terminal {
 		return &InvalidPayloadError{
 			Subject: streamableHTTPSSESubject,
@@ -1280,8 +1285,7 @@ func isTerminalHTTPTransportError(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	var invalid *InvalidPayloadError
-	if errors.As(err, &invalid) {
+	if _, ok := errors.AsType[*InvalidPayloadError](err); ok {
 		return true
 	}
 	var httpErr *HTTPError

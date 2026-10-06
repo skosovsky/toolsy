@@ -35,7 +35,7 @@ type DynamicToolSpec struct {
 
 // NewDynamicToolFromSpec creates a [Tool] from [DynamicToolSpec].
 //
-//nolint:gocognit,funlen // schema compile + validated handler pipeline
+//nolint:gocognit // schema compile + validated handler pipeline
 func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	if spec.Schema == nil {
 		return nil, errors.New("dynamic tool schema provider must not be nil")
@@ -69,6 +69,7 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 
 	validateArgs := spec.ValidateArgs
 	handler := spec.Handler
+	manifest := buildToolManifest(spec.Name, spec.Description, schemaCopy, cfg.Manifest)
 
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		var v any
@@ -87,33 +88,35 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 				return vErr
 			}
 		}
-		yieldWrapped := func(c Chunk) error {
-			prepared, err := prepareChunk(c)
-			if err != nil {
-				return err
+		return ExecutePrepared(ctx, env, manifest, input, decoded, func(_ ToolInput, out func(Chunk) error) error {
+			yieldWrapped := func(c Chunk) error {
+				prepared, err := prepareChunk(c)
+				if err != nil {
+					return err
+				}
+				if err := out(prepared); err != nil {
+					return wrapYieldError(err)
+				}
+				return nil
 			}
-			if err := yield(prepared); err != nil {
-				return wrapYieldError(err)
+			if err := handler(ctx, env, decoded, yieldWrapped); err != nil {
+				if clientCorrectable(err) {
+					return err
+				}
+				if errors.Is(err, ErrStreamAborted) {
+					return err
+				}
+				if IsControlError(err) {
+					return err
+				}
+				return wrapHandlerError(err)
 			}
 			return nil
-		}
-		if err := handler(ctx, env, decoded, yieldWrapped); err != nil {
-			if clientCorrectable(err) {
-				return err
-			}
-			if errors.Is(err, ErrStreamAborted) {
-				return err
-			}
-			if IsControlError(err) {
-				return err
-			}
-			return wrapHandlerError(err)
-		}
-		return nil
+		}, yield)
 	}
 
 	return &tool{
-		manifest: buildToolManifest(spec.Name, spec.Description, schemaCopy, cfg.Manifest),
+		manifest: manifest,
 		execute:  execute,
 	}, nil
 }

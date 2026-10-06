@@ -73,7 +73,7 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Session{ //nolint:exhaustruct // stateMu zero value; state map initialized below
+	return &Session{ //nolint:exhaustruct_v5 // stateMu zero value; state map initialized below
 		reg:     reg,
 		track:   newSessionTrack(cfg),
 		policy:  cfg.policy,

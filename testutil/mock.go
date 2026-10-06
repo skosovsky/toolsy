@@ -28,7 +28,7 @@ func (m *MockTool) Manifest() toolsy.ToolManifest {
 	if m.ManifestVal.Name != "" {
 		return m.ManifestVal
 	}
-	return toolsy.ToolManifest{ //nolint:exhaustruct // test default manifest
+	return toolsy.ToolManifest{ //nolint:exhaustruct_v5 // test default manifest
 		Name:        "mock",
 		Description: "",
 		Parameters:  map[string]any{jsonSchemaTypeKey: jsonSchemaObject},

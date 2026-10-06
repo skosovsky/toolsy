@@ -29,8 +29,8 @@ func WithAuthorizer(a Authorizer) RegistryOption {
 func WithAuthorization(auth Authorizer) Middleware {
 	return func(next Tool) Tool {
 		return &authorizationTool{
-			toolBase: toolBase{next: next},
-			auth:     auth,
+			next: next,
+			auth: auth,
 		}
 	}
 }

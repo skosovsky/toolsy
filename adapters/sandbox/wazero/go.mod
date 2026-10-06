@@ -1,20 +1,19 @@
 module github.com/skosovsky/toolsy/adapters/sandbox/wazero
 
-go 1.26.3
+go 1.27.1
 
 require (
 	github.com/skosovsky/toolsy v0.0.0
-	github.com/stretchr/testify v1.11.1
-	github.com/tetratelabs/wazero v1.11.0
+	github.com/stretchr/testify v1.12.1
+	github.com/tetratelabs/wazero v1.12.0
 )
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
-	github.com/kr/text v0.2.0 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
 
 replace github.com/skosovsky/toolsy => ../../..

@@ -119,7 +119,7 @@ type StateCodecRegistry struct {
 
 // NewStateCodecRegistry creates an empty codec registry.
 func NewStateCodecRegistry() *StateCodecRegistry {
-	return &StateCodecRegistry{ //nolint:exhaustruct // mu zero value
+	return &StateCodecRegistry{ //nolint:exhaustruct_v5 // mu zero value
 		codecs: make(map[string]stateCodecEntry),
 	}
 }
@@ -303,7 +303,7 @@ func reflectTypeFingerprint(typ reflect.Type) string {
 const sessionSnapshotVersion = 1
 
 // SessionSnapshot is an opaque, versioned session state blob for persistence.
-type SessionSnapshot struct { //nolint:recvcheck // MarshalJSON value receiver; UnmarshalJSON pointer receiver
+type SessionSnapshot struct {
 	version int
 	payload []byte
 	binding SessionBinding

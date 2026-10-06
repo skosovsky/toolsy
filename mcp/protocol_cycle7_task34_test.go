@@ -109,9 +109,9 @@ func TestCanonicalBase64RejectsAlternateSpellingsAndProjectionBypass(t *testing.
 	}
 
 	for _, value := range []string{"Zh==", "Zg", "Zg==\n", "__8="} {
-		resourceRaw := []byte(`{"uri":"file:///a","blob":` + string(mustJSON(t, value)) + "}")
+		resourceRaw := []byte(`{"uri":"file:///a","blob":` + string(mustJSONString(t, value)) + "}")
 		require.Error(t, json.Unmarshal(resourceRaw, &ResourceContents{}), value)
-		contentRaw := []byte(`{"type":"audio","data":` + string(mustJSON(t, value)) + `,"mimeType":"audio/wav"}`)
+		contentRaw := []byte(`{"type":"audio","data":` + string(mustJSONString(t, value)) + `,"mimeType":"audio/wav"}`)
 		require.Error(t, json.Unmarshal(contentRaw, &ContentBlock{}), value)
 
 		blob := value
@@ -120,7 +120,7 @@ func TestCanonicalBase64RejectsAlternateSpellingsAndProjectionBypass(t *testing.
 	}
 }
 
-func mustJSON(t *testing.T, value string) []byte {
+func mustJSONString(t *testing.T, value string) []byte {
 	t.Helper()
 	raw, err := json.Marshal(value)
 	require.NoError(t, err)
