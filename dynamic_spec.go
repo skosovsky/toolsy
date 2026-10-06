@@ -2,10 +2,11 @@ package toolsy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 )
 
 // SchemaProvider supplies a JSON Schema map for dynamic tools.
@@ -25,6 +26,8 @@ func (m MapSchemaProvider) ParametersSchema() map[string]any {
 }
 
 // DynamicToolSpec describes a dynamic tool with schema validation and decoded args.
+// Numbers in ValidateArgs/Handler maps are [json.Number]. Duplicate keys and input
+// values above depth 128 or 100,000 nodes are rejected before dispatch.
 type DynamicToolSpec struct {
 	Name, Description string
 	Schema            SchemaProvider
@@ -76,8 +79,8 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	}
 
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
-		var v any
-		if err := json.Unmarshal(input.ArgsJSON, &v); err != nil {
+		v, err := jsonschemax.Decode(input.ArgsJSON)
+		if err != nil {
 			return wrapJSONParseError(err)
 		}
 		if err := validateAgainstSchema(compiled, v); err != nil {

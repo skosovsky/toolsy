@@ -1,11 +1,12 @@
 package toolsy
 
 import (
+	"bytes"
 	"encoding/json"
 	"maps"
 	"reflect"
 
-	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 )
 
 // Extractor provides JSON Schema generation and two-layer validation (schema + Validatable)
@@ -13,7 +14,7 @@ import (
 // schema export and validated parsing but not the full Tool Execute(ctx, argsJSON, yield) pipeline.
 type Extractor[T any] struct {
 	schemaMap map[string]any
-	resolved  *jsonschema.Resolved
+	resolved  schemaValidator
 }
 
 // NewExtractor creates an Extractor for type T. When strict is true, the generated schema
@@ -46,17 +47,22 @@ func (e *Extractor[T]) Schema() map[string]any {
 // ParseAndValidate deserializes argsJSON into T, runs Layer 1 (schema validation) and
 // Layer 2 (Validatable.Validate() if T implements it). Returns [ToolError] for invalid
 // JSON or validation failures so the caller can pass the message to the LLM for self-correction.
+// Interface-valued numbers use [json.Number]; concrete numeric fields keep their type.
+// Duplicate keys, multiple documents, depth above 128 and over 100,000 value nodes
+// are rejected before schema validation and typed decoding.
 func (e *Extractor[T]) ParseAndValidate(argsJSON []byte) (T, error) {
 	var zero T
-	var v any
-	if err := json.Unmarshal(argsJSON, &v); err != nil {
+	v, err := jsonschemax.Decode(argsJSON)
+	if err != nil {
 		return zero, wrapJSONParseError(err)
 	}
 	if err := validateAgainstSchema(e.resolved, v); err != nil {
 		return zero, err
 	}
 	var args T
-	if err := json.Unmarshal(argsJSON, &args); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(argsJSON))
+	decoder.UseNumber()
+	if err := decoder.Decode(&args); err != nil {
 		return zero, wrapJSONParseError(err)
 	}
 	// Layer 2: Validatable. Try args first (value receiver or T is *SomeType), then &args only

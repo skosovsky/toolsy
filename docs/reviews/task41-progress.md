@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted; rows 03–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted; rows 04–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -125,4 +125,30 @@ Evidence: [R02 acceptance](task41/r02-acceptance.md). Independent reviewers
 `r02_acceptance_a` and `r02_acceptance_b` each accepted all five criteria at
 100%, with no unresolved detected defects. Both repeated seven-module race
 suites and targeted lint; reviewer B independently measured zero DNS calls for
-denied admissions. Commit ID will be recorded in the next ledger update.
+denied admissions. Commit: `d1619e8` (`fix: host policy`).
+
+### 03 — R03 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Shared lossless JSON input parsing preserves 2^53±1 and max int64 for dynamic
+   handlers, typed validation and interface-valued typed arguments.
+2. Exact-number schema compilation enforces integer minimum/maximum/enum and
+   fractional rejection, including constraints on properties named id.
+3. Handler values, prepared snapshots and cache keys remain distinct for distinct
+   large integers; public regression asserts each boundary.
+4. Explicit structure policy rejects recursive duplicate keys, trailing documents,
+   depth above 128 and node count above 100,000; migration records the break.
+5. Original P1 numeric regressions fail behaviorally; current affected module
+   race/lint suites pass; documentation and legacy removal match implementation;
+   both independent reviewers find no unresolved detected defect.
+
+Decision: use existing bounded jsonschemax Decode/Compile for all validated input
+pipelines. Dynamic and interface numbers become json.Number; explicit Go float
+fields retain the host's chosen floating-point semantics. Schema transformation
+visits schema objects only, preserving property names and literal values.
+
+Evidence: [R03 acceptance](task41/r03-acceptance.md). Independent reviewers
+`r03_acceptance_a` and `r03_acceptance_b` each accepted all five criteria at 100%
+with no unresolved detected defect. Both ran their own race/lint checks and
+numeric/schema adversarial overlays. Commit ID belongs in the next update.

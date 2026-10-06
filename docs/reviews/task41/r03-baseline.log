@@ -1,0 +1,97 @@
+--- FAIL: TestLosslessDynamicInputIdentity (0.00s)
+    numeric_input_regression_test.go:40:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:40
+                Error:          Not equal:
+                                expected: []string{"9007199254740991", "9007199254740992", "9007199254740993", "9223372036854775807"}
+                                actual  : []string{"9.007199254740991e+15", "9.007199254740992e+15", "9.007199254740992e+15", "9.223372036854776e+18"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,6 +1,6 @@
+                                 ([]string) (len=4) {
+                                - (string) (len=16) "9007199254740991",
+                                - (string) (len=16) "9007199254740992",
+                                - (string) (len=16) "9007199254740993",
+                                - (string) (len=19) "9223372036854775807"
+                                + (string) (len=21) "9.007199254740991e+15",
+                                + (string) (len=21) "9.007199254740992e+15",
+                                + (string) (len=21) "9.007199254740992e+15",
+                                + (string) (len=21) "9.223372036854776e+18"
+                                 }
+                Test:           TestLosslessDynamicInputIdentity
+    numeric_input_regression_test.go:41:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:41
+                Error:          Not equal:
+                                expected: "{\"id\":9007199254740993}"
+                                actual  : "{\"id\":9007199254740992}"
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1 +1 @@
+                                -{"id":9007199254740993}
+                                +{"id":9007199254740992}
+                Test:           TestLosslessDynamicInputIdentity
+    numeric_input_regression_test.go:41:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:41
+                Error:          Not equal:
+                                expected: "{\"id\":9223372036854775807}"
+                                actual  : "{\"id\":9223372036854776000}"
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1 +1 @@
+                                -{"id":9223372036854775807}
+                                +{"id":9223372036854776000}
+                Test:           TestLosslessDynamicInputIdentity
+    numeric_input_regression_test.go:42:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:42
+                Error:          "map[5c7c8aac45b7691e6ae10dd43c396dc4e3fb0aed6a20210e68855c964eb51730:true a796a3c4370b2d2101a7d684a555e487fbb2a13374d762f1b66046f3c272129c:true d3b047b0513c940bdfbac438f2f54a15708755b36f6e8dcc83f6e5de0a09ed86:true]" should have 4 item(s), but has 3
+                Test:           TestLosslessDynamicInputIdentity
+--- FAIL: TestLosslessNumericSchemaConstraints (0.00s)
+    --- FAIL: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+        numeric_input_regression_test.go:60:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:60
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessNumericSchemaConstraints/minimum
+    --- FAIL: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+        numeric_input_regression_test.go:60:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:60
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessNumericSchemaConstraints/maximum
+    --- FAIL: TestLosslessNumericSchemaConstraints/enum (0.00s)
+        numeric_input_regression_test.go:60:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:60
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessNumericSchemaConstraints/enum
+    --- FAIL: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+        numeric_input_regression_test.go:60:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:60
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessNumericSchemaConstraints/int64
+--- FAIL: TestLosslessTypedExtractorValidation (0.00s)
+    numeric_input_regression_test.go:75:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:75
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessTypedExtractorValidation
+--- FAIL: TestLosslessInputStructurePolicy (0.00s)
+    --- FAIL: TestLosslessInputStructurePolicy/case-15 (0.00s)
+        numeric_input_regression_test.go:89:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:89
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessInputStructurePolicy/case-15
+    --- FAIL: TestLosslessInputStructurePolicy/case-26 (0.00s)
+        numeric_input_regression_test.go:89:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:89
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessInputStructurePolicy/case-26
+    --- FAIL: TestLosslessInputStructurePolicy/case-272 (0.00s)
+        numeric_input_regression_test.go:89:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/numeric_input_regression_test.go:89
+                Error:          An error is expected but got nil.
+                Test:           TestLosslessInputStructurePolicy/case-272
+FAIL
+FAIL    github.com/skosovsky/toolsy     0.445s
+FAIL

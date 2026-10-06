@@ -1,0 +1,48 @@
+module adapters/sandbox/docker
+ok      github.com/skosovsky/toolsy/adapters/sandbox/docker     1.823s
+module adapters/sandbox/e2b
+ok      github.com/skosovsky/toolsy/adapters/sandbox/e2b        7.005s
+module adapters/sandbox/host
+ok      github.com/skosovsky/toolsy/adapters/sandbox/host       12.462s
+module adapters/sandbox/starlark
+ok      github.com/skosovsky/toolsy/adapters/sandbox/starlark   3.779s
+module adapters/sandbox/wazero
+ok      github.com/skosovsky/toolsy/adapters/sandbox/wazero     100.234s
+module agents
+ok      github.com/skosovsky/toolsy/agents      2.007s
+module contracts/graphql
+ok      github.com/skosovsky/toolsy/contracts/graphql   1.889s
+module contracts/grpc
+ok      github.com/skosovsky/toolsy/contracts/grpc      3.132s
+module contracts/openapi
+ok      github.com/skosovsky/toolsy/contracts/openapi   3.400s
+module examples/resiliency
+ok      github.com/skosovsky/toolsy/examples/resiliency 1.794s
+module ext/toolsyotel
+ok      github.com/skosovsky/toolsy/ext/toolsyotel      1.820s
+module mcp
+ok      github.com/skosovsky/toolsy/mcp 19.688s
+?       github.com/skosovsky/toolsy/mcp/examples/stdio  [no test files]
+?       github.com/skosovsky/toolsy/mcp/examples/streamable_http        [no test files]
+module toolkits/document
+ok      github.com/skosovsky/toolsy/toolkits/document   3.009s
+module toolkits/fstool
+ok      github.com/skosovsky/toolsy/toolkits/fstool     1.932s
+module toolkits/httptool
+ok      github.com/skosovsky/toolsy/toolkits/httptool   2.292s
+module toolkits/human
+ok      github.com/skosovsky/toolsy/toolkits/human      1.827s
+module toolkits/mail
+ok      github.com/skosovsky/toolsy/toolkits/mail       1.716s
+module toolkits/memory
+ok      github.com/skosovsky/toolsy/toolkits/memory     1.895s
+module toolkits/prompts
+ok      github.com/skosovsky/toolsy/toolkits/prompts    1.543s
+module toolkits/rag
+ok      github.com/skosovsky/toolsy/toolkits/rag        1.960s
+module toolkits/sqltool
+ok      github.com/skosovsky/toolsy/toolkits/sqltool    2.042s
+module toolkits/timetool
+ok      github.com/skosovsky/toolsy/toolkits/timetool   1.640s
+module toolkits/web
+ok      github.com/skosovsky/toolsy/toolkits/web        2.343s

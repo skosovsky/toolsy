@@ -67,3 +67,30 @@ deny and identical suffix policies. This replaces the precomputed exact
 `conflictDeny` map. Denials happen before DNS lookup or dialing. A configured
 nonempty allowlist that normalizes to no usable entries remains deny-all; it
 does not silently switch to permissive blacklist mode.
+
+## Exact input numbers and structure (R03)
+
+Validated typed, dynamic and proxy inputs now use the same lossless JSON parser
+and exact-number JSON Schema compiler. Dynamic `ValidateArgs`/`Handler` maps and
+numbers inside typed `any`/map/interface fields contain `json.Number`. Replace
+`value.(float64)` assertions with `value.(json.Number)` and explicit `Int64` or
+`Float64` conversion, handling errors. Prefer declared `int64` fields for IDs;
+explicit Go float fields still choose floating-point semantics. Values already
+rounded by the host before constructing a schema/input cannot be recovered.
+Use `json.Number` or integral Go values for exact numeric schema constraints.
+
+Minimum, maximum and enum validation preserves distinctions beyond 2^53,
+including max int64; prepared snapshots and cache identities retain those digits.
+Schema normalization preserves property names such as `id` and literal
+const/enum/default objects. Internal input compilation uses the same default
+JSON Schema draft 2020-12 engine as proxy/output validation; explicit supported
+dialects are honored and external schema loading stays disabled.
+
+All validated input paths reject duplicate object keys recursively (including
+escaped spellings of the same key), trailing JSON documents and malformed JSON.
+Root depth is zero; values deeper than 128 or documents above 100,000 value
+nodes are rejected before dispatch. These are structure limits, not byte budgets;
+hosts still bound input bytes and string lengths. This intentionally replaces
+typed/dynamic last-key-wins behavior. Declared custom `UnmarshalJSON` methods
+remain host-owned after the shared structure/schema check; they can choose their
+own Go representation. Typed field-name matching follows encoding/json rules.

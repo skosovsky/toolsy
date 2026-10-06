@@ -12,7 +12,8 @@ Go 1.27.1+ · [License](LICENSE)
 For ordinary host execution with bound approval and durable replay, see
 [approval_journal](examples/approval_journal). Prepared execution contracts and
 clear-break migration are documented in [execution-contract](docs/execution-contract.md)
-and [migration-task35](docs/migration-task35.md).
+and [migration-task35](docs/migration-task35.md). Input-number, structure and HTTP
+policy changes are in [migration-task41](docs/migration-task41.md).
 
 ```go
 package main
