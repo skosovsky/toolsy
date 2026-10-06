@@ -364,37 +364,55 @@ func TestTimeCalculate_WithHostResultValidator(t *testing.T) {
 }
 
 func TestTimeCalculate_WithHostResultValidator_Reject(t *testing.T) {
+	// Arrange.
 	tools, err := AsTools(WithHostResultValidator(func(_ any) error {
 		return assert.AnError
 	}))
 	require.NoError(t, err)
+	// Act.
 	err = tools[1].Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2024-06-01T12:00:00Z","add_days":1,"add_hours":0}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
+	// Assert.
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	assert.False(t, te.Retryable)
+	assert.False(t, toolsy.ClientCorrectable(te.Code))
+	require.ErrorIs(t, err, assert.AnError)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	assert.Equal(t, "result_validator", contract.Kind)
 }
 
 func TestTimeCurrent_WithHostResultValidator_Reject(t *testing.T) {
+	// Arrange.
 	tools, err := AsTools(WithHostResultValidator(func(_ any) error {
 		return assert.AnError
 	}))
 	require.NoError(t, err)
+	// Act.
 	err = tools[0].Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
+	// Assert.
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	assert.False(t, te.Retryable)
+	assert.False(t, toolsy.ClientCorrectable(te.Code))
+	require.ErrorIs(t, err, assert.AnError)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	assert.Equal(t, "result_validator", contract.Kind)
 }
 
 func TestTimeCurrent_WithHostResultValidator(t *testing.T) {

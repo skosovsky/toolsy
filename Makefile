@@ -8,7 +8,7 @@ MODULES                := $(shell find . -type d \( -name ".*" -not -name "." -o
 lint:
 	@for dir in $(MODULES); do \
 		echo "golangci-lint $(GOLANGCI_LINT_VERSION) - $$dir"; \
-		(cd "$$dir" && $(GOLANGCI_LINT) run ./...) || exit 1; \
+		(cd "$$dir" && $(GOLANGCI_LINT) run --allow-serial-runners ./...) || exit 1; \
 	done
 
 fix:
@@ -16,7 +16,7 @@ fix:
 	@for dir in $(MODULES); do \
 		echo "fix & tidy - $$dir"; \
 		(cd "$$dir" && $(GO) fix ./... && $(GO) mod tidy) || exit 1; \
-		(cd "$$dir" && $(GOLANGCI_LINT) run --fix ./...) || exit 1; \
+		(cd "$$dir" && $(GOLANGCI_LINT) run --allow-serial-runners --fix ./...) || exit 1; \
 	done
 
 test:
@@ -52,10 +52,8 @@ cover:
 task34-preflight: ## non-destructive MCP 2026-07-28 clear-break contract gate
 	@./scripts/task34-preflight.sh
 
-release-patch: lint test ## v0.5.0 -> v0.5.1
-	@chmod +x ./scripts/release.sh
-	@./scripts/release.sh patch "$(MODULES)"
+release-patch: ## v0.5.0 -> v0.5.1
+	@bash ./scripts/release.sh patch
 
-release-break: lint test task34-preflight ## destructive v0.5.1 -> v0.6.0 release after preflight
-	@chmod +x ./scripts/release.sh
-	@./scripts/release.sh break "$(MODULES)"
+release-break: ## destructive v0.5.1 -> v0.6.0 release after preflight
+	@bash ./scripts/release.sh break

@@ -1,0 +1,19 @@
+Independent tool-captured PTY output, reproduced with committed disposable bootstrap at /tmp/toolsy-task41/r05-review-b/pty/bootstrap and fixture source/local bare remote under ../source and ../remote.git.
+Command: GOCACHE=/tmp/toolsy-review-gocache bash ../bootstrap/scripts/release.sh patch
+Working directory: /tmp/toolsy-task41/r05-review-b/pty/source
+Terminal enabled: true
+Success output:
+Verify example.invalid/fixture@v0.0.1 (GOWORK=off)
+Verified candidate v0.0.1 ca55047dc169aa2758ee10da6724f26ff7998ed9 from 1817c7eaf81905987c868832783a574e72b975ac
+Publish verified candidate? [y/N] y
+Published v0.0.1; source checkout unchanged
+Exit code: 0
+Second invocation with terminal Ctrl-C at prompt:
+Verify example.invalid/fixture@v0.0.2 (GOWORK=off)
+Verified candidate v0.0.2 c48b0b8a3515a46d54d91409fe48f7e7be542476 from 1817c7eaf81905987c868832783a574e72b975ac
+Publish verified candidate? [y/N] ^Ccontext canceled
+Exit code: 130
+Postcheck remote tags: v0.0.1 only
+Source private-note.txt: FAKE_NOTE with newline
+Source status: ?? private-note.txt
+Before wrapper fix, independent generic background reader PTY probe exited 149 (SIGTTIN); final wrapper disables job control for CLI, closing finding.

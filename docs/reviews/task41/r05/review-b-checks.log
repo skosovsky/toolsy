@@ -1,0 +1,15 @@
+Independent checks during R05 review:
+go test -race -count=1 ./internal/release: PASS 11.458s
+After committed bootstrap/process cancellation additions: PASS 21.651s
+golangci-lint run --allow-serial-runners ./internal/release/... ./cmd/toolsy-release/...: 0 issues
+git diff --check: PASS
+Strengthened overlay probes: go test -race -count=1 -overlay /tmp/toolsy-task41/r05-review-b/overlay.json -run ^TestReviewerB ./internal/release: PASS 4.604s
+Overlay covers untracked extra module exclusion/tree preservation and tracked go.sum symlink rejection with external target preserved.
+
+Final delta review: Makefile lint/fix add --allow-serial-runners. Local golangci-lint run help confirms flag waits for running golangci-lint instead of lock error. Existing command context deadlines/cancellation remain; no weakening of lint rules or artifact/source preservation. git diff --check PASS. Prior full private checks lock failures are environmental retry evidence, not successful full checks; current retry outcome belongs in final parent report. Acceptance remains100% for R05 criteria.
+
+Attribute-hardening final review: two discovered defects closed: counted core.autocrlf override changing committed LF bytes, and read-tree preventing missing worktree materialization without forced checkout. Force checkout plus explicit Git config overrides and counted-settings filtering now pass all independent probes with race12.335s. Raw probes-final.log retained. Seven transforming-attribute rejection probes preserve source and prevent publication. Bootstrap export-subst preflight independently rejects before build; raw bootstrap-attributes.log. Private guard moved before checkout to prevent smudge execution. Current targeted lint0issues (attributes-lint.log), diffcheckPASS. Document/timetool three stale R04 host result-validator expectations reviewed; targeted races PASS both modules. Final R05 acceptance100%, no unresolved detected defect; production untouched. Final parent 24-module retry outcome remains parent verification evidence, not claimed by this reviewer.
+
+Final source-policy/auth delta reviewed: source Git commands respect source EOL settings; private Git commands force LF and real symlinks. Counted auth preserved while unsafe repository/checkout selectors removed. Fixture Git/wrapper counted config reset isolates fixtures from host auth. Combined independent B probes plus CRLF/auth unit race PASS15.826s (probes-final.log); focused CRLF race PASS2.680s. Acceptance remains100%, no new detected defect.
+
+Final parent execution evidence: actual full CLI -prepare-only patch exited0, session89928. r05-final-graph.log has24 Verify lines and candidate eace82e9. FullChecks=true codepath runs private make lint test (raceall24), then clean tracked status and cleanup. Successful make output is internally captured/discarded; no invented per-test logs. Pinned installed lint2.14.0 and task seed external cache recorded. No code changes after independent final delta acceptance. R05 acceptance refreshed100% with this completed execution evidence.

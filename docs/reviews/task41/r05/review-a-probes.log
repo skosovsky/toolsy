@@ -1,0 +1,7 @@
+=== RUN   TestReviewerOwnedCommandDescendants
+    reviewer_command_test.go:23: cleanup elapsed 2.01215325s
+--- PASS: TestReviewerOwnedCommandDescendants (2.06s)
+=== RUN   TestReviewerPrivatePatternParity
+--- PASS: TestReviewerPrivatePatternParity (1.96s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	5.650s

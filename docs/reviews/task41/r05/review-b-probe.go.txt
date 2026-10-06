@@ -1,0 +1,35 @@
+package release
+import("context";"os";"path/filepath";"testing";"time";"strings")
+func TestReviewerBUntrackedModuleIgnored(t *testing.T) {
+ source, remote := privateFixture(t)
+ writeFixture(t,filepath.Join(source,"local-only/go.mod"),"module impossible.invalid/local\ngo 1.27.1\n")
+ writeFixture(t,filepath.Join(source,"local-only/private.go"),"package private\n")
+ before:=snapshotSource(t,source)
+ ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second);defer cancel()
+ if err:=Run(ctx,fixtureConfig(source));err!=nil {t.Fatal(err)}
+ assertSourceUnchanged(t,source,before)
+ if got:=fixtureGit(t,source,"--git-dir",remote,"ls-tree","-r","--name-only","v0.1.1");len(got)==0||strings.Contains(got,"local-only") {t.Fatalf("unexpected release tree %s",got)}
+}
+func TestReviewerBSymlinkChecksumRejected(t *testing.T) {
+ source, remote:=privateFixture(t)
+ external:=filepath.Join(t.TempDir(),"external-sum")
+ writeFixture(t,external,"private checksum bytes\n")
+ if err:=os.Symlink(external,filepath.Join(source,"go.sum"));err!=nil {t.Fatal(err)}
+ fixtureGit(t,source,"add","go.sum");fixtureGit(t,source,"commit","-m","symlink")
+ before:=snapshotSource(t,source)
+ if err:=Run(context.Background(),fixtureConfig(source));err==nil {t.Fatal("symlink accepted")}
+ assertSourceUnchanged(t,source,before)
+ if tags:=fixtureGit(t,source,"--git-dir",remote,"tag","-l","v0.1.1");tags!="" {t.Fatal(tags)}
+ raw,err:=os.ReadFile(external);if err!=nil||string(raw)!="private checksum bytes\n" {t.Fatalf("external data changed %q %v",raw,err)}
+}
+
+func TestReviewerBFullChecksRunPrivatelyAndRejectMutation(t *testing.T) {
+ source,remote:=privateFixture(t)
+ writeFixture(t,filepath.Join(source,"Makefile"),"lint:\n\t@printf 'package fixture\\nconst Value=9\\n' > value.go\ntest:\n\t@true\n")
+ fixtureGit(t,source,"add","Makefile");fixtureGit(t,source,"commit","-m","mutating checks")
+ before:=snapshotSource(t,source)
+ cfg:=fixtureConfig(source);cfg.FullChecks=true
+ if err:=Run(context.Background(),cfg);err==nil||!strings.Contains(err.Error(),"checks changed tracked") {t.Fatalf("mutation allowed %v",err)}
+ assertSourceUnchanged(t,source,before)
+ if tags:=fixtureGit(t,source,"--git-dir",remote,"tag","-l","v0.1.1");tags!="" {t.Fatal(tags)}
+}

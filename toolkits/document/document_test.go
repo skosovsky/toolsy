@@ -767,6 +767,7 @@ func TestAsTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 }
 
 func TestAsTool_WithHostResultValidator_Reject(t *testing.T) {
+	// Arrange.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
@@ -775,16 +776,24 @@ func TestAsTool_WithHostResultValidator_Reject(t *testing.T) {
 		return assert.AnError
 	}))
 	require.NoError(t, err)
+	// Act.
 	err = tool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"file_path":"` + path + `"}`)},
 		func(toolsy.Chunk) error { return nil },
 	)
+	// Assert.
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	assert.False(t, te.Retryable)
+	assert.False(t, toolsy.ClientCorrectable(te.Code))
+	require.ErrorIs(t, err, assert.AnError)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	assert.Equal(t, "result_validator", contract.Kind)
 }
 
 func TestAsTool_WithHostResultValidator(t *testing.T) {

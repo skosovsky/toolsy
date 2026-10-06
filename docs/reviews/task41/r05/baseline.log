@@ -1,0 +1,7 @@
+--- FAIL: TestReleasePreservesUntrackedSource (0.99s)
+    release_fixture_test.go:94: source note lost/changed: open /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2930656437/001/source/private-note.txt: no such file or directory ""
+    release_fixture_test.go:104: source index changed
+    release_fixture_test.go:108: private note published: FAKE_LOCAL_MARKER
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	1.701s
+FAIL

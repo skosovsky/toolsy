@@ -1,0 +1,11 @@
+Final native CLI execution: PASS, exit 0 (tool session 89928).
+Source fixture commit: 1c396065d21e23bb3f1af273162ee23c59e52a96.
+Candidate: eace82e9d8ead51acee786f310b2149ff1ba6284, v0.0.1.
+Invocation: toolsy-release -prepare-only patch.
+FullChecks=true in cmd/toolsy-release/main.go.
+24 exact ZIP download/compile checks passed with GOWORK=off.
+Private Makefile make lint test (-race) passed, candidate tracked status remained clean, cleanup passed.
+MAKEFLAGS GOLANGCI_LINT=/opt/homebrew/bin/golangci-lint; installed version2.14.0 matches pinned Makefile version.
+External cache: invocation-independent task-owned read-only overlay of existing archives plus checksum-verified public gopkg.in/check.v1 archive.
+Successful Make stdout was captured internally and not retained as individual test logs.
+No production push/publication.

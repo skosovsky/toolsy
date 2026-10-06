@@ -1,0 +1,19 @@
+Verify github.com/skosovsky/toolsy@v0.0.1 (GOWORK=off)
+go mod tidy: exit status 1
+go: downloading github.com/stretchr/testify v1.12.1
+go: downloading github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+go: downloading go.uber.org/goleak v1.3.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading golang.org/x/mod v0.41.0
+go: downloading github.com/google/jsonschema-go v0.4.3
+go: downloading gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+go: downloading golang.org/x/text v0.42.0
+go: downloading github.com/dlclark/regexp2 v1.11.0
+go: downloading github.com/google/go-cmp v0.7.0
+go: downloading golang.org/x/tools v0.49.0
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+go: github.com/skosovsky/toolsy/internal/toolsygen imports
+	gopkg.in/yaml.v3 tested by
+	gopkg.in/yaml.v3.test imports
+	gopkg.in/check.v1: unrecognized import path "gopkg.in/check.v1": https fetch: Get "https://gopkg.in/check.v1?go-get=1": dial tcp: lookup gopkg.in: no such host
+

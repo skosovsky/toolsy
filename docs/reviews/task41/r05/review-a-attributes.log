@@ -1,0 +1,15 @@
+=== RUN   TestReviewerGlobalAutoCRLFParity
+--- PASS: TestReviewerGlobalAutoCRLFParity (1.84s)
+=== RUN   TestReviewerAllowsMetadataAttributes
+--- PASS: TestReviewerAllowsMetadataAttributes (1.91s)
+=== RUN   TestReviewerRejectsGlobalExportAttributes
+--- PASS: TestReviewerRejectsGlobalExportAttributes (0.73s)
+=== RUN   TestReviewerRejectExportIgnoredArtifact
+--- PASS: TestReviewerRejectExportIgnoredArtifact (0.77s)
+=== RUN   TestReviewerOwnedCommandDescendants
+    reviewer_command_test.go:23: cleanup elapsed 2.013833875s
+--- PASS: TestReviewerOwnedCommandDescendants (2.06s)
+=== RUN   TestReviewerPrivatePatternParity
+--- PASS: TestReviewerPrivatePatternParity (2.08s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	10.877s

@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted; rows 05–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is in progress; rows 06–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -179,4 +179,48 @@ Evidence: [R04 acceptance](task41/r04-acceptance.md). Independent reviewers
 `r04_acceptance_a` and `r04_acceptance_b` each accepted all five criteria at 100%
 with no unresolved detected defects. Preliminary formatter/nested/downstream/control
 findings were fixed, and both independently repeated final race/lint and probes.
-Commit ID belongs in the next ledger update.
+Commit: `4f372b2` (`fix: result validation`).
+
+### 05 — R05 / D37 checkout and artifacts (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Release preparation uses a private committed-HEAD checkout. Source branch,
+   index, tracked files, untracked/ignored files and local refs are unchanged on
+   success, failure and cancellation; unexpected files never enter the tree.
+2. Tracked module inventory is complete and explicit; only expected go.mod and
+   go.sum manifests are staged. Portable edits align internal requirements and
+   remove internal development replaces without regex/BSD-sed assumptions.
+3. Rewritten artifacts are verified through a private file module proxy with
+   GOWORK=off, without development replaces; bounded smoke compilation resolves
+   the exact internal module graph. External dependency verification remains.
+4. Disposable repository/local-bare tests reproduce original file inclusion/loss
+   and verify success/rejection/cancel preservation; production publish is never
+   used. Preparation/verification failure cannot publish a candidate.
+5. Release lifecycle, source snapshot, verification and host-platform limits are
+   documented; meaningful checks pass and two independent reviewers accept at
+   100% with no unresolved detected defect.
+
+Decision: source must have no tracked changes; untracked/ignored files stay local.
+All source Git reads disable optional locks. Isolate clone/fetch/edit/verify/commit
+and publication in a private checkout; the source index and refs are never written.
+Discover modules from tracked go.mod files and reject incomplete supplied lists.
+Use native Go manifest tooling and verify artifacts before the final confirmation.
+R06 retains responsibility for explicit ref scope, collision preflight and atomic
+publication; this row does not certify those remaining publication properties.
+
+
+R05 final implementation also rejects transforming Git attributes before checkout
+and bootstrap archive, forces candidate LF/symlink behavior while preserving source
+EOL policy, and preserves counted native-CLI auth while filtering repository/hook
+selectors. The complete private 24-module lint/race suite exposed three stale R04
+post-validator test assertions in document/timetool; only those expectations were
+synchronized to the existing INTERNAL/phase/cause/no-repair contract.
+
+Evidence: [R05 acceptance](task41/r05-acceptance.md). Independent reviewers
+`r05_acceptance_a` and `r05_acceptance_b`: **100%, accepted**, no unresolved detected
+errors. Final full CLI prepare-only execution exited 0 after exact ZIP compilation,
+private make lint/test with race, clean candidate check and cleanup. Earlier lint
+lock and DNS availability failures are recorded; final success uses serial lint,
+pinned installed 2.14.0, and a task-owned external archive cache. Production publish
+was never used. Commit: pending final accepted commit.
