@@ -188,8 +188,10 @@ func (e *RPCError) Error() string {
 }
 
 type HTTPError struct {
-	StatusCode int
-	Operation  string
+	StatusCode          int
+	Operation           string
+	Challenges          []HTTPAuthChallenge
+	ChallengesTruncated bool
 }
 
 type TransportCrashError struct {
@@ -211,7 +213,7 @@ func (e *TransportCrashError) Error() string {
 
 func (e *TransportCrashError) Unwrap() error { return e.Err }
 
-func (e *HTTPError) Error() string {
+func (e HTTPError) Error() string {
 	return fmt.Sprintf("mcp: HTTP %s failed with status %d", e.Operation, e.StatusCode)
 }
 

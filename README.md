@@ -559,6 +559,15 @@ For stable host-side cache identity, `mcp.ComputeSnapshotDigest` validates and h
 
 See [the module README](mcp/README.md) and [task34 migration guide](docs/migration-task34.md).
 
+Remote annotations remain untrusted hints. Use `mcp.WithToolPolicyMapper` for
+explicit host classification; current authorization and discovery generation
+protect cached delivery as well as dispatch. HTTP authentication failures expose
+bounded challenge diagnostics without automatic authentication or retries.
+
+The separate [agents bridge](agents/README.md) reports confirmed terminal outcomes
+and accepted background task references. Hosts own persistence and continuation;
+see the [remote bridge contract](docs/remote-bridge-contract.md).
+
 ## Historical Migration Notes
 
 - Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.

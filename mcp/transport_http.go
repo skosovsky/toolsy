@@ -370,15 +370,16 @@ func (t *StreamableHTTPTransport) postMessageOnce(
 		return err
 	}
 	// #nosec G704 -- endpoint validation and safe dialing are enforced in Start/default client.
-	//nolint:bodyclose // Closed through httptool.CloseResponseBody below.
 	response, err := t.client.Do(request)
 	if err != nil {
 		return err
 	}
-	defer httptool.CloseResponseBody(ctx, response.Body)
 	if response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden {
-		return &HTTPError{StatusCode: response.StatusCode, Operation: "POST authentication"}
+		// Authentication status is sufficient; do not wait for an untrusted body.
+		_ = response.Body.Close()
+		return authenticationHTTPError(response)
 	}
+	defer httptool.CloseResponseBody(ctx, response.Body)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return t.consumeHTTPError(ctx, response, body)
 	}

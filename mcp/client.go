@@ -51,9 +51,10 @@ const (
 type ClientOption func(*ClientOptions)
 
 type ClientOptions struct {
-	Logger     *slog.Logger
-	ClientInfo Implementation
-	Pagination PaginationLimits
+	Logger           *slog.Logger
+	ClientInfo       Implementation
+	Pagination       PaginationLimits
+	ToolPolicyMapper ToolPolicyMapper
 }
 
 func WithClientLogger(logger *slog.Logger) ClientOption {
@@ -910,7 +911,7 @@ func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 			return
 		}
 		for _, candidate := range all {
-			proxy, err := c.toolToProxyAtGeneration(candidate.descriptor, generation)
+			proxy, err := c.toolToProxyAtGeneration(ctx, candidate.descriptor, generation)
 			if err != nil {
 				yield(nil, err)
 				return
@@ -932,7 +933,11 @@ func staleError(kind InvalidationKind, discovered, current uint64) error {
 
 var mcpToolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
-func (c *Client) toolToProxyAtGeneration(descriptor MCPTool, generation uint64) (toolsy.Tool, error) {
+func (c *Client) toolToProxyAtGeneration(
+	ctx context.Context,
+	descriptor MCPTool,
+	generation uint64,
+) (toolsy.Tool, error) {
 	if err := validateMCPTool(descriptor); err != nil {
 		return nil, &InvalidPayloadError{Subject: "tool descriptor", Err: err}
 	}
@@ -968,11 +973,18 @@ func (c *Client) toolToProxyAtGeneration(descriptor MCPTool, generation uint64) 
 		}
 		return c.runMCPToolCall(ctx, descriptor.Name, rawArgs, validator, generation, yield)
 	}
-	options := mcpToolPolicyOptions(descriptor.Annotations)
+	options, err := c.toolPolicyOptions(ctx, descriptor)
+	if err != nil {
+		return nil, err
+	}
 	if outputSchema != nil {
 		options = append(options, toolsy.WithOutputSchema(outputSchema))
 	}
-	return toolsy.NewProxyTool(descriptor.Name, description, schemaJSON, handler, options...)
+	base, err := toolsy.NewProxyTool(descriptor.Name, description, schemaJSON, handler, options...)
+	if err != nil {
+		return nil, err
+	}
+	return &generationTool{Tool: base, client: c, generation: generation}, nil
 }
 
 func validateMCPTool(descriptor MCPTool) error {

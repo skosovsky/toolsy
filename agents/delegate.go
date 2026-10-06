@@ -82,34 +82,43 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 			if err != nil {
 				return fmt.Errorf("agents: create task: %w", err)
 			}
+			defer client.cancelInterruptedTask(ctx, run, task.TaskID)
 			streamAuth, authErr := resolveAuthHeader(ctx, run, streamStepsAuthToolName)
 			if authErr != nil {
-				return fmt.Errorf("agents: get stream steps auth: %w", authErr)
+				return interruptionOutcome(
+					&RemoteOutcomeError{
+						Phase:   PhaseObserve,
+						Outcome: OutcomeUnknown,
+						TaskID:  task.TaskID,
+						Step:    nil,
+						Cause:   authErr,
+					},
+				)
 			}
-			defer func() {
-				if ctx.Err() != nil {
-					cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cancelTaskTimeout)
-					defer cancel()
-					cancelAuth, cancelErr := resolveAuthHeader(cancelCtx, run, cancelTaskAuthToolName)
-					if cancelErr == nil {
-						_ = client.CancelTask(cancelCtx, task.TaskID, cancelAuth)
-					}
-				}
-			}()
+			var lastStep *Step
 			for step, streamErr := range client.StreamSteps(ctx, task.TaskID, streamAuth) {
 				if streamErr != nil {
-					if ctxErr := ctx.Err(); ctxErr != nil {
-						return fmt.Errorf("agents: stream ended: %w", ctxErr)
-					}
-					if toolsy.IsContextInterrupt(streamErr) {
-						return fmt.Errorf("agents: stream error: %w", streamErr)
-					}
-					if textprocessor.IsReadLimitExceeded(streamErr) {
-						return toolsy.MapReadLimitErrorFor(streamErr, client.maxSSEStreamBytes(), "SSE step stream", "")
-					}
-					return fmt.Errorf("agents: stream error: %w", streamErr)
+					return mapStreamOutcome(ctx, task.TaskID, lastStep, streamErr, client.maxSSEStreamBytes())
 				}
+				lastStep = &step
 				if step.IsLast {
+					switch step.Status {
+					case "failed":
+						return &RemoteOutcomeError{
+							Phase:   PhaseObserve,
+							Outcome: OutcomeFailed,
+							TaskID:  task.TaskID,
+							Step:    &step,
+							Cause:   nil,
+						}
+					case "cancelled":
+						return &RemoteOutcomeError{Phase: PhaseObserve,
+							Outcome: OutcomeCancelled,
+							TaskID:  task.TaskID,
+							Step:    &step,
+							Cause:   nil,
+						}
+					}
 					finalData := formatStepOutput(step.Output, step.Artifacts)
 					return yield(toolsy.Chunk{
 						Event:    toolsy.EventResult,
@@ -128,16 +137,28 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 				}
 			}
 			if err := ctx.Err(); err != nil {
-				return fmt.Errorf("agents: stream ended: %w", err)
+				return interruptionOutcome(
+					&RemoteOutcomeError{
+						Phase:   PhaseObserve,
+						Outcome: OutcomeUnknown,
+						TaskID:  task.TaskID,
+						Step:    lastStep,
+						Cause:   err,
+					},
+				)
 			}
-			// If the stream ends without a step with IsLast, we exit without a final chunk
-			// (server-dependent behavior; orchestrator gets no final result in that case).
-			return nil
+			return &RemoteOutcomeError{
+				Phase:   PhaseObserve,
+				Outcome: OutcomeIncomplete,
+				TaskID:  task.TaskID,
+				Step:    lastStep,
+				Cause:   nil,
+			}
 		},
 	)
 }
 
-// AsBackgroundTool creates a toolsy.Tool that starts a task and returns the task_id immediately without waiting for completion.
+// AsBackgroundTool returns an AcceptedTaskReference after creation acknowledgement, without claiming completion.
 func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.Tool, error) {
 	if client == nil {
 		return nil, errors.New("agents: client is nil")
@@ -155,8 +176,49 @@ func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.
 			if err != nil {
 				return fmt.Errorf("agents: create task: %w", err)
 			}
-			out, _ := json.Marshal(map[string]string{"task_id": task.TaskID})
+			out, _ := json.Marshal(AcceptedTaskReference{TaskID: task.TaskID, Accepted: true})
 			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
 		},
+		toolsy.WithOutputSchema(map[string]any{schemaTypeKey: "object", "properties": map[string]any{
+			taskIDKey:  map[string]any{schemaTypeKey: "string", "minLength": 1},
+			"accepted": map[string]any{schemaTypeKey: "boolean", "const": true},
+		}, "required": []string{taskIDKey, "accepted"}, "additionalProperties": false}),
 	)
+}
+
+func (c *Client) cancelInterruptedTask(ctx context.Context, run *toolsy.RunEnv, taskID string) {
+	if ctx.Err() == nil {
+		return
+	}
+	cancelCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cancelTaskTimeout)
+	defer cancel()
+	auth, err := resolveAuthHeader(cancelCtx, run, cancelTaskAuthToolName)
+	if err == nil {
+		_ = c.CancelTask(cancelCtx, taskID, auth)
+	}
+}
+
+func mapStreamOutcome(ctx context.Context, taskID string, lastStep *Step, err error, maxBytes int) error {
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if remote, ok := errors.AsType[*RemoteOutcomeError](err); ok && remote.Step == nil {
+		remote.Step = lastStep
+	}
+	if toolsy.IsContextInterrupt(err) {
+		return interruptionOutcome(
+			&RemoteOutcomeError{
+				Phase:   PhaseObserve,
+				Outcome: OutcomeUnknown,
+				TaskID:  taskID,
+				Step:    lastStep,
+				Cause:   err,
+			},
+		)
+	}
+	if textprocessor.IsReadLimitExceeded(err) {
+		mapped := toolsy.MapReadLimitErrorFor(err, maxBytes, "SSE step stream", "")
+		return errors.Join(mapped, err)
+	}
+	return fmt.Errorf("agents: stream error: %w", err)
 }

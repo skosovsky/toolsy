@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +16,8 @@ import (
 
 const mcpHeaderAnnotation = "x-mcp-header"
 
-// ToolAnnotations carries MCP tool hints mapped into toolsy manifest policy fields.
-// OpenWorldHint is parsed for forward compatibility but intentionally not mapped to manifest fields.
+// ToolAnnotations carries untrusted source hints. ListTools preserves these
+// values for host display and diagnostics; they never grant execution authority.
 type ToolAnnotations struct {
 	Title           string `json:"title,omitempty"`
 	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
@@ -26,28 +27,98 @@ type ToolAnnotations struct {
 	Extra           Meta   `json:"-"`
 }
 
-func mcpToolPolicyOptions(annotations *ToolAnnotations) []toolsy.ToolOption {
-	var opts []toolsy.ToolOption
-	// MCP defaults destructiveHint to true. Preserve fail-closed host policy unless
-	// the server explicitly opts out or declares the tool read-only.
-	readOnly := annotations != nil && annotations.ReadOnlyHint != nil && *annotations.ReadOnlyHint
-	explicitlyDestructive := annotations != nil && annotations.DestructiveHint != nil &&
-		*annotations.DestructiveHint
-	destructive := explicitlyDestructive ||
-		(!readOnly && (annotations == nil || annotations.DestructiveHint == nil))
-	if destructive {
-		opts = append(opts, toolsy.WithDangerous())
+// ToolExecutionProperties is the host's explicit classification of a remote
+// tool. It is not an authorization grant. Idempotent permits the optional host
+// ResultCache to cache results; the host must also supply its trusted partition.
+type ToolExecutionProperties struct {
+	ReadOnly             bool
+	Dangerous            bool
+	Idempotent           bool
+	RequiresConfirmation bool
+}
+
+// ToolPolicyMapper runs during GetTools with the host's discovery context and
+// an owned descriptor snapshot. Capture host-owned authority or use context
+// values supplied by the host; remote annotations and metadata are untrusted.
+// Invocation authorization remains the current Registry/typed policy's job.
+type ToolPolicyMapper func(context.Context, MCPTool) (ToolExecutionProperties, error)
+
+func WithToolPolicyMapper(mapper ToolPolicyMapper) ClientOption {
+	return func(options *ClientOptions) { options.ToolPolicyMapper = mapper }
+}
+
+func (c *Client) toolPolicyOptions(ctx context.Context, descriptor MCPTool) ([]toolsy.ToolOption, error) {
+	properties := ToolExecutionProperties{
+		ReadOnly:             false,
+		Dangerous:            true,
+		Idempotent:           false,
+		RequiresConfirmation: false,
 	}
-	if annotations == nil {
-		return opts
+	if c.opts.ToolPolicyMapper != nil {
+		snapshot, err := cloneToolDescriptor(descriptor)
+		if err != nil {
+			return nil, &InvalidPayloadError{Subject: "tool policy descriptor", Err: err}
+		}
+		properties, err = c.opts.ToolPolicyMapper(ctx, snapshot)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if annotations.ReadOnlyHint != nil && *annotations.ReadOnlyHint {
-		opts = append(opts, toolsy.WithReadOnly())
+	var options []toolsy.ToolOption
+	if properties.Dangerous {
+		options = append(options, toolsy.WithDangerous())
 	}
-	if annotations.IdempotentHint != nil && *annotations.IdempotentHint {
-		opts = append(opts, toolsy.WithIdempotent())
+	if properties.ReadOnly {
+		options = append(options, toolsy.WithReadOnly())
 	}
-	return opts
+	if properties.Idempotent {
+		options = append(options, toolsy.WithIdempotent())
+	}
+	if properties.RequiresConfirmation {
+		options = append(options, toolsy.WithRequiresConfirmation())
+	}
+	return options, nil
+}
+
+func cloneToolDescriptor(descriptor MCPTool) (MCPTool, error) {
+	raw, err := json.Marshal(descriptor)
+	if err != nil {
+		return MCPTool{}, err
+	}
+	var snapshot MCPTool
+	if err = json.Unmarshal(raw, &snapshot); err != nil {
+		return MCPTool{}, err
+	}
+	return snapshot, nil
+}
+
+// generationTool checks adapter authority before the underlying prepared
+// boundary and before each delivery, including cached replay. It leaves host
+// identity types and the proxy's schema binding unchanged.
+type generationTool struct {
+	toolsy.Tool
+
+	client     *Client
+	generation uint64
+}
+
+func (t *generationTool) SupportsPreparedExecution() bool { return true }
+
+func (t *generationTool) Execute(
+	ctx context.Context,
+	env *toolsy.RunEnv,
+	input toolsy.ToolInput,
+	yield func(toolsy.Chunk) error,
+) error {
+	if current := t.client.toolGeneration.Load(); current != t.generation {
+		return staleError(InvalidationTools, t.generation, current)
+	}
+	return t.Tool.Execute(ctx, env, input, func(chunk toolsy.Chunk) error {
+		if current := t.client.toolGeneration.Load(); current != t.generation {
+			return staleError(InvalidationTools, t.generation, current)
+		}
+		return yield(chunk)
+	})
 }
 
 // compileHTTPToolHeaderBindings accepts annotations only on direct

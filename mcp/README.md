@@ -133,6 +133,78 @@ registry, err := builder.Build()
 
 `inputSchema` maps to `ToolManifest.Parameters`; `outputSchema` maps to `ToolManifest.OutputSchema`. `isError: true` becomes a remote execution error, distinct from JSON-RPC, schema and transport errors. Annotations remain hints, not authorization policy.
 
+## Host classification and current authorization
+
+Remote `annotations` are untrusted hints. The default proxy is `Dangerous: true`,
+`ReadOnly: false`, `Idempotent: false`, irrespective of `readOnlyHint`,
+`destructiveHint` or `idempotentHint`. `ListTools` preserves the original typed
+annotations and extension metadata for display and diagnostics; the manifest
+contains only host execution properties, not server claims.
+
+`WithToolPolicyMapper` is an explicit host decision during `GetTools`. It receives
+that call's host context and an owned `MCPTool` descriptor snapshot. For example:
+
+```go
+client, err := mcp.Connect(ctx, transport, mcp.WithToolPolicyMapper(
+    func(ctx context.Context, source mcp.MCPTool) (mcp.ToolExecutionProperties, error) {
+        // This allowlist is host-owned and scoped to the authenticated connection.
+        if source.Name == "catalog.lookup" {
+            return mcp.ToolExecutionProperties{ReadOnly: true, Idempotent: true}, nil
+        }
+        return mcp.ToolExecutionProperties{Dangerous: true}, nil
+    },
+))
+```
+
+The mapper classifies the discovery snapshot; it does not authenticate a caller
+or issue a grant. Current per-invocation authorization remains the Registry or
+typed host policy's responsibility. A mapper error prevents that proxy from
+being delivered. Remote metadata, model text and claimed tool names cannot
+establish authenticated subject/scope or connection trust.
+
+The optional `ResultCache` runs after current host authorization and requires a
+host-owned partition/codec. Server hints alone never enable caching. A host
+mapper's `Idempotent: true` explicitly permits the profile; it does not promise
+remote exactly-once execution. Cached delivery and dispatch both reject stale
+MCP discovery generations, and revoking the current Registry policy prevents
+both handler execution and replay. A policy must enforce consent explicitly;
+`Dangerous` is a classification field, not an automatic approval mechanism.
+The generation guard rejects stale proxy instances; it does not invalidate stored
+cache entries when the host builds a new proxy after rediscovery. The host's cache
+partition must bind the authenticated connection and relevant discovery/dependency
+freshness, for example `client.DiscoveryGeneration(mcp.InvalidationTools)`, to
+prevent reuse across generations or connections with identical manifests.
+
+## Capability boundary
+
+The client remains pinned to MCP `2026-07-28`. It advertises no optional
+server-to-client capabilities: no elicitation, sampling, roots service, Tasks
+runtime or extension runtime. An `input_required` result with supported opaque
+`requestState` is returned to the host without automatic continuation. An
+`inputRequests` requirement for an undeclared capability is a typed
+`UnsupportedFeatureError`; the client sends no hidden follow-up or retry.
+
+`ExtensionRegistry` is a host-owned JSON codec registry. Registering a codec
+permits explicit encode/decode of that identifier only. It does not advertise a
+capability, install protocol handlers or execute a remote extension. Unknown
+identifiers are typed refusals. OAuth discovery/refresh, elicitation UI, persistent
+remote scheduling and new protocol profiles require a separate consumer-driven
+activation, as described in [Task35 activation](../docs/task35-activation.md).
+
+The trust/cache/policy, stale-generation, input-required and extension assertions
+are fixture and local integration tests. They do not constitute live remote
+interoperability verification.
+
+## HTTP authentication failures
+
+HTTP 401/403 returns `*HTTPError` with bounded authentication `Challenges` for
+explicit host inspection. Safe formatting and structured logging omit challenge
+values. The narrow projection retains scheme, known Bearer error codes and safe
+HTTPS `resource_metadata` hints; raw headers, credentials and free-text parameters
+are discarded. Hints remain untrusted, and no discovery, refresh or POST retry
+is triggered. See [the projection contract](docs/http-auth-challenges.md) for
+bounds, unsupported parameters and the host's network/identity responsibilities.
+
 ## Removed APIs
 
 The clear break removes initialize DTOs/lifecycle, `WithClientRoots`, `WithRoots`, roots handlers, `logging/setLevel`, base `ping`, `ErrSessionExpired`, server-request dispatch, resource subscribe/unsubscribe, session/GET/resume internals and every older protocol revision. No deprecated aliases are provided.

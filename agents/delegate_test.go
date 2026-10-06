@@ -108,7 +108,7 @@ func TestAsTool_CancelTaskUsesBoundedContext(t *testing.T) {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tasks") &&
 			!strings.Contains(r.URL.Path, "/cancel"):
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"task_id":"task-1"}`))
+			_, _ = w.Write([]byte(`{"artifacts":[],"task_id":"task-1"}`))
 		case strings.Contains(r.URL.Path, "/cancel"):
 			cancelCalled.Store(true)
 			w.WriteHeader(http.StatusNoContent)
@@ -116,7 +116,7 @@ func TestAsTool_CancelTaskUsesBoundedContext(t *testing.T) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = fmt.Fprintf(
 				w,
-				"data: {\"step_id\":\"s1\",\"task_id\":\"task-1\",\"name\":\"n\",\"status\":\"running\",\"is_last\":false}\n\n",
+				"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"task-1\",\"name\":\"n\",\"status\":\"running\",\"is_last\":false}\n\n",
 			)
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
@@ -175,12 +175,12 @@ func TestAsTool_StreamLimit_MapsValidationWithBytes(t *testing.T) {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tasks") &&
 			!strings.Contains(r.URL.Path, "/cancel"):
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"task_id":"task-limit"}`))
+			_, _ = w.Write([]byte(`{"artifacts":[],"task_id":"task-limit"}`))
 		case strings.Contains(r.URL.Path, "/steps"):
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = fmt.Fprintf(
 				w,
-				"data: {\"step_id\":\"s1\",\"task_id\":\"task-limit\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
+				"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"task-limit\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
 				payload,
 			)
 			if flusher, ok := w.(http.Flusher); ok {
@@ -219,12 +219,12 @@ func TestAsTool_StreamSteps_CancelOverReadLimit_InterruptWins(t *testing.T) {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tasks") &&
 			!strings.Contains(r.URL.Path, "/cancel"):
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"task_id":"task-composite"}`))
+			_, _ = w.Write([]byte(`{"artifacts":[],"task_id":"task-composite"}`))
 		case strings.Contains(r.URL.Path, "/steps"):
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = fmt.Fprintf(
 				w,
-				"data: {\"step_id\":\"s1\",\"task_id\":\"task-composite\",\"name\":\"ok\",\"status\":\"running\",\"is_last\":false}\n\n",
+				"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"task-composite\",\"name\":\"ok\",\"status\":\"running\",\"is_last\":false}\n\n",
 			)
 			if flusher, ok := w.(http.Flusher); ok {
 				flusher.Flush()
@@ -235,7 +235,7 @@ func TestAsTool_StreamSteps_CancelOverReadLimit_InterruptWins(t *testing.T) {
 			}
 			_, _ = fmt.Fprintf(
 				w,
-				"data: {\"step_id\":\"s2\",\"task_id\":\"task-composite\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
+				"data: {\"artifacts\":[],\"step_id\":\"s2\",\"task_id\":\"task-composite\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
 				largeName,
 			)
 			if flusher, ok := w.(http.Flusher); ok {
@@ -321,12 +321,12 @@ func TestAsTool_StreamSteps_TimeoutOverReadLimit_InterruptWins(t *testing.T) {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tasks") &&
 			!strings.Contains(r.URL.Path, "/cancel"):
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"task_id":"task-timeout"}`))
+			_, _ = w.Write([]byte(`{"artifacts":[],"task_id":"task-timeout"}`))
 		case strings.Contains(r.URL.Path, "/steps"):
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = fmt.Fprintf(
 				w,
-				"data: {\"step_id\":\"s1\",\"task_id\":\"task-timeout\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
+				"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"task-timeout\",\"name\":\"%s\",\"status\":\"running\",\"is_last\":false}\n\n",
 				largeName,
 			)
 			if flusher, ok := w.(http.Flusher); ok {

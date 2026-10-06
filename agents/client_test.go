@@ -19,7 +19,7 @@ import (
 func TestCreateTask_Accepts202Accepted(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
-		_, _ = w.Write([]byte(`{"task_id":"task-1","status":"pending"}`))
+		_, _ = w.Write([]byte(`{"artifacts":[],"task_id":"task-1","status":"pending"}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -48,7 +48,9 @@ func TestCreateTask_Non2xxStatus(t *testing.T) {
 	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
 	_, err := client.CreateTask(context.Background(), json.RawMessage(`{"q":"x"}`), "")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "500")
+	var outcome *RemoteOutcomeError
+	require.ErrorAs(t, err, &outcome)
+	require.Contains(t, outcome.Cause.Error(), "500")
 }
 
 func TestCancelTask_Non2xxStatus(t *testing.T) {
@@ -94,11 +96,13 @@ func TestStreamStepsOnce_Non2xxStatus(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
-	_, _, _, err := client.streamStepsOnce(
+	_, _, err := client.streamStepsOnce(
 		context.Background(),
 		"task-1",
 		"",
 		"",
+		&streamBudget{remaining: 1 << 20, limit: 1 << 20},
+		&streamState{seen: make(map[string]string)},
 		func(Step, error) bool { return true },
 	)
 	require.Error(t, err)

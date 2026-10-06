@@ -384,7 +384,7 @@ func TestHandleToolCallResult_ReadLimit_CustomStreamCap(t *testing.T) {
 	require.Contains(t, te.Reason, fmt.Sprintf("%d byte limit", customCap))
 }
 
-func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
+func TestGetTools_RemoteAnnotationsRemainUntrusted(t *testing.T) {
 	toolsList := ToolsListResult{
 		ResultType: ResultTypeComplete,
 		TTLMS:      JSONNumber("0"), CacheScope: CacheScopePrivate,
@@ -426,13 +426,13 @@ func TestGetTools_MapsAnnotationsToManifest(t *testing.T) {
 
 	readTool := byName["read_tool"]
 	require.NotNil(t, readTool)
-	require.True(t, readTool.Manifest().ReadOnly)
-	require.False(t, readTool.Manifest().Dangerous)
+	require.False(t, readTool.Manifest().ReadOnly)
+	require.True(t, readTool.Manifest().Dangerous)
 
 	deleteTool := byName["delete_tool"]
 	require.NotNil(t, deleteTool)
 	require.True(t, deleteTool.Manifest().Dangerous)
-	require.True(t, deleteTool.Manifest().Idempotent)
+	require.False(t, deleteTool.Manifest().Idempotent)
 	require.False(t, deleteTool.Manifest().ReadOnly)
 }
 

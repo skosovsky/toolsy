@@ -18,6 +18,8 @@ type ExtensionCodec interface {
 
 // ExtensionRegistry owns explicitly registered extension identifiers. Merely
 // receiving an unknown extension declaration never registers or enables it.
+// This is an explicit JSON codec registry, not an extension runtime: registration
+// does not advertise capabilities, install handlers or perform remote requests.
 type ExtensionRegistry struct {
 	mu     sync.RWMutex
 	codecs map[string]ExtensionCodec

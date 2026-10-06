@@ -18,7 +18,7 @@ func TestParseSSESteps_MultiLineData(t *testing.T) {
 	// One Step JSON split across multiple data: lines must be concatenated with newline and parsed as one event.
 	// Split at a boundary where newline is valid JSON whitespace (between tokens), not inside a string.
 	raw := "id: ev1\n" +
-		"data: {\"step_id\":\"s1\",\n" +
+		"data: {\"artifacts\":[],\"step_id\":\"s1\",\n" +
 		"data: \"task_id\":\"t1\",\"name\":\"step_one\",\"status\":\"completed\",\"is_last\":true}\n\n"
 	r := strings.NewReader(raw)
 	var steps []Step
@@ -53,9 +53,9 @@ func TestParseSSESteps_MultiLineData(t *testing.T) {
 func TestParseSSESteps_LastEventID(t *testing.T) {
 	// Multiple events: lastID must be the id of the last processed event.
 	raw := "id: first\n" +
-		"data: {\"step_id\":\"a\",\"task_id\":\"t\",\"name\":\"n\",\"status\":\"running\",\"is_last\":false}\n\n" +
+		"data: {\"artifacts\":[],\"step_id\":\"a\",\"task_id\":\"t\",\"name\":\"n\",\"status\":\"running\",\"is_last\":false}\n\n" +
 		"id: second\n" +
-		"data: {\"step_id\":\"b\",\"task_id\":\"t\",\"name\":\"n\",\"status\":\"completed\",\"is_last\":true}\n\n"
+		"data: {\"artifacts\":[],\"step_id\":\"b\",\"task_id\":\"t\",\"name\":\"n\",\"status\":\"completed\",\"is_last\":true}\n\n"
 	r := strings.NewReader(raw)
 	var steps []Step
 	yield := func(s Step, _ error) bool {
@@ -81,7 +81,7 @@ func TestParseSSESteps_EventTypeIgnored(t *testing.T) {
 	// event: line is optional and should not break parsing; id and data are used.
 	raw := "event: step\n" +
 		"id: ev1\n" +
-		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"n\",\"status\":\"completed\",\"is_last\":true}\n\n"
+		"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"n\",\"status\":\"completed\",\"is_last\":true}\n\n"
 	r := strings.NewReader(raw)
 	var steps []Step
 	yield := func(s Step, _ error) bool {
@@ -105,7 +105,7 @@ func TestParseSSESteps_StreamExceedsMaxBytes(t *testing.T) {
 	// Valid JSON large enough to exceed the stream byte cap while reading.
 	payload := strings.Repeat("x", 3000)
 	raw := "id: ev1\n" +
-		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
+		"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
 	const streamCap = 2048
 	limited := httptool.LimitStreamReaderWithContext(context.Background(), strings.NewReader(raw), streamCap)
 	_, _, _, err := parseSSESteps(context.Background(), limited, streamCap, func(Step, error) bool { return true })
@@ -119,7 +119,7 @@ func TestParseSSESteps_CancelOverStreamLimit(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	payload := strings.Repeat("x", 3000)
 	raw := "id: ev1\n" +
-		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
+		"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"" + payload + "\",\"status\":\"running\",\"is_last\":false}\n\n"
 	const streamCap = 2048
 	limited := httptool.LimitStreamReaderWithContext(ctx, strings.NewReader(raw), streamCap)
 	cancel()
@@ -135,7 +135,7 @@ func TestParseSSESteps_InterruptInChainOverReadLimit(t *testing.T) {
 		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
 	)
 	raw := "id: ev1\n" +
-		"data: {\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"x\",\"status\":\"running\",\"is_last\":true}\n\n"
+		"data: {\"artifacts\":[],\"step_id\":\"s1\",\"task_id\":\"t1\",\"name\":\"x\",\"status\":\"running\",\"is_last\":false}\n\n"
 	stream := io.MultiReader(strings.NewReader(raw), &instantErrReader{err: composite})
 	_, _, _, err := parseSSESteps(context.Background(), stream, 1<<20, func(Step, error) bool { return true })
 	require.Error(t, err)

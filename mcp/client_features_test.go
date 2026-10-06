@@ -230,7 +230,7 @@ func TestClient_ToolDescriptorFailuresAreFailClosed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Act.
-			proxy, err := client.toolToProxyAtGeneration(tc.tool, 0)
+			proxy, err := client.toolToProxyAtGeneration(context.Background(), tc.tool, 0)
 
 			// Assert.
 			if tc.as == nil {

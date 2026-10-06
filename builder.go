@@ -376,6 +376,11 @@ func wrapHandlerError(err error) error {
 	if streamErr, ok := errors.AsType[*StreamContractError](err); ok {
 		return NewInternalError(streamErr)
 	}
+	// A handler can know that its timed-out action has an uncertain external
+	// outcome. Preserve its explicit refusal to authorize a retry.
+	if te, ok := AsToolError(err); ok && te.Code == CodeTimeout && !te.Retryable {
+		return err
+	}
 	if te, ok := AsToolError(err); ok && te.Code == CodeInternal && isContextInterrupt(te.Err) {
 		err = te.Err
 	}
@@ -393,9 +398,9 @@ func wrapHandlerError(err error) error {
 	}
 	if textprocessor.IsReadLimitExceeded(err) {
 		if mapped := MapSandboxReadLimitError(err); mapped != nil {
-			return mapped
+			return errors.Join(mapped, err)
 		}
-		return MapReadLimitError(err, 0)
+		return errors.Join(MapReadLimitError(err, 0), err)
 	}
 	if te, ok := AsToolError(err); ok {
 		return te

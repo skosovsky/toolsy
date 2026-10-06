@@ -1,78 +1,55 @@
 # agents
 
-Agent Protocol bridge for [toolsy](https://github.com/skosovsky/toolsy). This module turns a remote sub-agent (exposing the [Agent Protocol](https://agentprotocol.ai) REST API and SSE) into a `toolsy.Tool`, so the orchestrator can delegate work without knowing the protocol.
+This optional bridge converts remote task creation and observation into a `toolsy.Tool`. Core does not depend on Agent Protocol. The host supplies credentials, decides whether creation is authorized and owns task persistence and continuation.
 
-**Principle: Agent-as-a-Tool.** The toolsy core does not depend on agents or the Agent Protocol. This package is a facade: it speaks REST/SSE with the remote agent and implements the toolsy `Tool` interface via `toolsy.NewProxyTool`.
+## Supported contract
 
-## Features
+The base envelopes follow [Agent Protocol v1 OpenAPI 3.0.1 at commit ecbffe0b9e45bdd3ead76299af6d980a1132b32a](https://github.com/agi-inc/agent-protocol/blob/ecbffe0b9e45bdd3ead76299af6d980a1132b32a/schemas/openapi.yml), retained with its license in [testdata](testdata/README.md). Normative `Step.status` values are `created`, `running` and `completed`. Normative Task has no status. BYO object arguments are sent as `additional_input`; the optional string `input` is omitted. Creation accepts a direct Task envelope with a nonempty `task_id` and an `artifacts` array. The old wrapped `{ "task": ... }` response is unsupported.
 
-- **REST client:** `CreateTask`, `CancelTask` with custom HTTP client and runtime auth supplied through `*toolsy.RunEnv` (`toolsy.WithCredentials` on `toolsy.NewRunEnv`). `CreateTask` response bodies use fail-closed `textprocessor.ReadLimitedBytes` (default **4 MB** via `defaultMaxResponseBytes`; override with `WithMaxResponseBody`). Exceed returns `CodeValidationFailed` with the limit in `Reason` — not `errors.Is(err, ErrReadLimitExceeded)` on the tool error chain. `CancelTask` does not read the response body — it checks HTTP status and drains via `CloseResponseBody` only.
-- **SSE streaming:** `StreamSteps` consumes `GET /ap/v1/agent/tasks/{id}/steps?stream=true`, parses steps, and supports **Last-Event-ID** auto-reconnect with a 1s backoff on disconnect. Total SSE byte budget defaults to `httptool.DefaultMaxSSEStreamBytes` (override with `WithMaxSSEStreamBytes` on `NewClient`).
-- **Delegation:** `AsTool` (sync delegation with progress streaming) and `AsBackgroundTool` (fire-and-forget, returns `task_id` for status checks).
+The wire DTO is a supported projection, not a full normative Artifact validator: it reads `artifact_id` and `file_name`; normative `agent_created` and `relative_path` are not exposed. Inline `mime_type` and base64 `data` are extension observations rendered for the caller. Nonempty step/task identifiers and required envelope field presence are validated; this bridge does not certify complete upstream schema conformance.
 
-### Stream completion
+This bridge requires the **toolsy step-stream v1 extension** on the remote server: `GET /ap/v1/agent/tasks/{id}/steps?stream=true` returns SSE step envelopes; `POST /ap/v1/agent/tasks/{id}/cancel` requests cancellation. Terminal extension statuses `failed` and `cancelled` add explicit failure reporting. These endpoints and states are not normative Agent Protocol v1 or A2A requirements. The bridge does not execute the normative effectful POST-step loop or implement another agent protocol.
 
-If the sub-agent server closes the SSE stream without sending a step with `is_last: true`, the tool finishes without a final result chunk (`EventResult`). That behavior indicates a contract violation on the sub-agent server side (Agent Protocol requires the last step to be marked); it is not a bug in toolsy. When the orchestrator sees a tool that simply ends with no result, the issue is with the remote server, not with this client.
+| Step status | `is_last` | Bridge behavior |
+| --- | --- | --- |
+| `created`, `running` | false | Progress observation |
+| `completed` | false | Progress; task completion remains unconfirmed |
+| `completed` | true | Confirmed success; one successful result |
+| `failed` | true | Typed remote failure; partial output in error field |
+| `cancelled` | true | Typed remote cancellation; partial output in error field |
+| Other status or incompatible last flag | any | Typed malformed outcome; no successful result |
+| EOF without a terminal frame, after allowed reconnects | — | Typed incomplete outcome; no successful result |
 
-## Example
+`RemoteOutcomeError` exposes `Phase` (`create` or `observe`), `Outcome`, `TaskID`, optional `Step` and `Cause`. A create response/transport failure can leave acceptance unknown, including an empty reference when none could be recovered. An observation transport/limit failure leaves remote completion unknown while preserving the known reference. Error text omits remote output, task identifiers and transport text; inspect typed fields deliberately. Required step fields, duplicate JSON keys and mismatched task identifiers fail closed.
+
+Local cancellation and timeout retain `errors.Is` semantics and do not claim that the remote action stopped. Once creation may have occurred, timeout errors explicitly set `Retryable=false`; the host reconciles the reference before any new action. Consumer callback errors are preserved and immediately stop observation. A cancelled parent triggers one best-effort cancel request using a fresh five-second context; successful HTTP acknowledgement is not confirmation of remote cancellation. No stream reconnect repeats `CreateTask` or executes a remote action.
+
+## Bounded observations
+
+`WithMaxResponseBody` caps REST responses (default 4 MiB). `WithMaxSSEStreamBytes` caps physical bytes read for **one logical stream across every connection** (default `httptool.DefaultMaxSSEStreamBytes`). Duplicates, comments and replayed bytes count. The reader never resets its remaining budget on reconnect. AsTool keeps the typed outcome/reference when mapping read-limit errors to tool validation errors.
+
+`WithStreamPolicy(agents.StreamPolicy{...})` replaces all observation limits. `DefaultStreamPolicy()` allows two reconnects with a one-second backoff, a five-minute total deadline and a 1 MiB event limit. Zero reconnects disables resume; zero backoff is allowed. Timeout and event size must be positive; event size cannot exceed the supported 16 MiB ceiling. Invalid policy fails before creation. The earlier host deadline takes precedence, including while idle or backing off; the HTTP request context owns body interruption.
+
+The extension accepts UTF-8 SSE with LF or CRLF separators. A blank line dispatches a frame; an unterminated frame at EOF is discarded and cannot confirm success. Physical event bytes, including CRLF and all small lines, share the event cap. Fields remove only the optional single space after `:`; leading/trailing data whitespace is retained. `event:` and `retry:` do not alter the host policy. Empty frames clear their field buffers. An explicit empty `id` (including bare `id`) clears the resume cursor; NUL-bearing IDs are ignored.
+
+On reconnect `Last-Event-ID` carries the last complete frame's cursor. Within a logical stream, exact JSON data replay with the same nonempty ID is suppressed; conflicting data for that ID is malformed. Empty or absent IDs have no deduplication guarantee. ID/data history is bounded by the same cumulative byte budget and released at the end of the iterator. This is observation deduplication, not effect idempotency or durable cross-invocation tracking. Iterator consumer stop closes the response and performs no further request.
+
+## Usage and background acknowledgement
 
 ```go
-package main
-
-import (
-	"context"
-	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/agents"
+client := agents.NewClient("https://agent.example.com",
+    agents.WithStreamPolicy(agents.DefaultStreamPolicy()),
 )
-
-type staticCredentials struct{}
-
-func (staticCredentials) GetAuth(context.Context, string) (string, error) {
-	return "Bearer your-token", nil
-}
-
-func main() {
-	builder := toolsy.NewRegistryBuilder()
-
-	client := agents.NewClient("https://api.example.com/agent")
-
-	schema := []byte(`{
-		"type": "object",
-		"properties": {
-			"repository": {"type": "string", "description": "Repository URL"},
-			"bug_description": {"type": "string"}
-		},
-		"required": ["repository", "bug_description"]
-	}`)
-
-	tool, _ := agents.AsTool(
-		"delegate_to_coder",
-		"Delegates to the coder agent to fix bugs.",
-		schema,
-		client,
-	)
-	builder.Add(tool)
-	reg, _ := builder.Build()
-
-	env := toolsy.NewRunEnv(nil, toolsy.WithCredentials(staticCredentials{}))
-	_ = reg.Execute(context.Background(), toolsy.ToolCall{
-		ToolName: "delegate_to_coder",
-		Input: toolsy.ToolInput{
-			CallID:   "1",
-			ArgsJSON: []byte(`{"repository":"https://example.com/repo","bug_description":"fix the failing test"}`),
-		},
-		Env: env,
-	}, func(toolsy.Chunk) error { return nil })
+tool, err := agents.AsTool("delegate", "Delegate remote work", inputSchema, client)
+if err != nil {
+    return err
 }
 ```
 
-## AsBackgroundTool
+`AsBackgroundTool` returns the declared JSON result `{"task_id":"...","accepted":true}` as `AcceptedTaskReference`. This confirms start acknowledgement only. It does not fabricate a completed business outcome or guarantee durable tracking. The host stores the reference and chooses its own status retrieval and continuation; see the executable [background example](background_example_test.go).
 
-`AsBackgroundTool` creates a tool that starts a task and returns immediately with `task_id` (as JSON `{"task_id":"..."}`). The orchestrator can use another tool or API to poll task status by `task_id`.
+Credentials are resolved separately through `RunEnv.Credentials` for `agents.create_task`, `agents.stream_steps` and `agents.cancel_task`. `WithHTTPClient` merges timeout settings onto the SSRF-safe transport; it does not replace that transport. `WithAllowPrivateIPs` is an explicit host choice for private deployments.
 
-When a `CredentialsProvider` is present, the bridge resolves auth separately for `agents.create_task`, `agents.stream_steps`, and `agents.cancel_task`.
+## Verification boundary
 
-## Requirements
-
-- Go 1.26+
-- Agent Protocol server at `baseURL` (paths: `/ap/v1/agent/tasks`, `/ap/v1/agent/tasks/{id}/cancel`, `/ap/v1/agent/tasks/{id}/steps?stream=true`).
+Tests use the pinned normative envelopes, a distinct extension terminal table, local HTTP/SSE fixtures, aggregate byte/event limits, resume duplicates, idle deadlines and consumer aborts. No live remote interoperability is claimed. There is no A2A runtime, persistent scheduler, automatic retry permission or hidden status manager here.

@@ -1,0 +1,10 @@
+[
+ {"name":"normative success","status":"completed","last":true,"outcome":"","success":true},
+ {"name":"extension failure","status":"failed","last":true,"outcome":"failed","success":false},
+ {"name":"extension cancellation","status":"cancelled","last":true,"outcome":"cancelled","success":false},
+ {"name":"unknown vocabulary","status":"working","last":true,"outcome":"malformed","success":false},
+ {"name":"running last mismatch","status":"running","last":true,"outcome":"malformed","success":false},
+ {"name":"created last mismatch","status":"created","last":true,"outcome":"malformed","success":false},
+ {"name":"failure missing terminal","status":"failed","last":false,"outcome":"malformed","success":false},
+ {"name":"completed partial","status":"completed","last":false,"outcome":"incomplete","success":false}
+]
