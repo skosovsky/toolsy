@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted; rows 22–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted; rows 23–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -766,3 +766,37 @@ Baseline0700cc5 three originalAPI recovery assertionsFAIL; currentcount5PASS2.10
 Evidence: docs/reviews/task41/r21/. Exclusive writer, cooperative local FS operations;
 no crashatomicity/concurrentmutation/hardpreemption or nonlocalFS proof claimed.
 Commit: fix: generator recovery.
+
+### 22 — D01 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Inspect pinned local contexty capabilities/source and run relevant boundary,
+   rolling-summary/budget regressions; document coverage and semantic differences.
+2. Remove generic history compaction package, its example and compaction-specific
+   OTel helper/tests/docs, without recreating chat policy in core/optional adapter.
+3. Keep tool-result transcript/historycodec/ResultCodec behavior and BYOT untouched;
+   affected root/OTel compile/race/lint and transcript regressions remain green.
+4. Migration names removed APIs and provides a compiled host-owned contexty recipe,
+   explicit message projection/token-estimator/summarizer/retention ownership and
+   fallback/error distinctions; root and extension gain no contexty dependency.
+5. Current docs/consumer imports contain no stale deleted API recommendations;
+   retained historical evidence is distinguished; both reviewers100%, no defects.
+
+Spec-first decision: local contexty8416b7b9883a09a26e3fe740d02dd8f78bff0b7f
+already owns rolling summary, tool-round-safe retention and budget execution.
+Clear break removes toolsy/history and compaction-specific observability/example;
+host adopts contexty semantic messages with explicit projection/policy, not a
+claimed drop-in generic API. Tool-result transcript codecs remain in toolsy.
+
+Row22 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Removed generic compaction implementation/contracts/example and dedicated telemetry;
+retained transcripts/historycodec/ResultCodec/BYOT unchanged. Source-pinned contexty
+capabilities and compiled host migration expose projection/retention/fallback breaks.
+Parent rootracePASS(generator52.173s), OTelracePASS1.481s/bothlint0;
+contexty targetedracePASS4.270s and hostrecipecount3PASS1.620s.
+A rootracePASS(generator42.179s), OTelcount3/contextycount2/hostcount3PASS,
+bothlint0. B rootracePASS(generator42.400s), freshcore/historycodecPASS,
+OTel/contexty/hostcount3PASS/bothlint0. Evidence docs/reviews/task41/d01/.
+No contexty dependency added; local checked source only, host-owned projection and
+provider budgeting/cooperative callbacks, no published/liveprovider guarantee.
+Commit: refactor: history boundary.

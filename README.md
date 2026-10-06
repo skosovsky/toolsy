@@ -406,41 +406,13 @@ See [docs/migration-task28.md](docs/migration-task28.md) for strict codecs, erro
 `ToolInput.CallID` is the orchestrator/LLM tool call identifier used for metadata tagging in `Registry`/`Session` execution paths and observability middleware.
 Direct low-level `Tool.Execute(...)` does not auto-fill `Chunk.CallID`.
 
-## Semantic history truncation (BYOT)
+## Conversation compaction
 
-`toolsy` core does not store chat history and does not provide a built-in agent runtime.
-For orchestrators, use `github.com/skosovsky/toolsy/history`:
-
-- `history.ApplySemanticTruncation[T]` for dependency-free semantic compression.
-- BYOT contracts: `TokenCounter[T]`, `ContextSummarizer[T]`, `MessageInspector[T]`.
-- `history.SemanticTruncationReport` for observability handoff.
-
-Minimal flow:
-
-```go
-out, report, err := history.ApplySemanticTruncation(
-	ctx,
-	historySlice,
-	maxTokens,
-	myCounter,
-	mySummarizer,
-	myInspector,
-	history.WithMinRecentMessages[MyMessage](2),
-)
-if err != nil {
-	return err
-}
-_ = out
-_ = report
-```
-
-When output changes, `ApplySemanticTruncation` builds a new result slice with a new backing array.
-If no changes are required, it may return the original slice.
-
-OTel recipe for `SemanticTruncationReport` lives in extension docs:
-`ext/toolsyotel/README.md`.
-
-See runnable core example: `examples/semantic_truncation/main.go`.
+Hosts own conversation retention, token budgets and summarization. Compose
+contexty in the host when needed; toolsy has no mandatory contexty dependency.
+The generic `toolsy/history` package has been removed. See
+[capability mapping and migration](docs/history-compaction-migration.md).
+Tool-result transcripts and `historycodec` remain available independently.
 
 ## Policy and capability recipe
 
@@ -553,7 +525,7 @@ err = sess.Execute(ctx, call, yield)
 
 Use `github.com/skosovsky/toolsy/historycodec` for strict version 2 raw transcripts with explicit delivery/audience and replay metadata. Typed values, effects, controls, runtime context and attachments fail explicitly; project an execution record deliberately before encoding. See [supported transcript contract](historycodec/README.md). For complete typed cache/journal persistence use `ResultCodec`, not the transcript codec. Version 1 is unsupported.
 Use `github.com/skosovsky/toolsy/textprocessor` for standalone UTF-8 truncation without a registry.
-Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history` — see [Semantic history truncation](#semantic-history-truncation-byot).
+Conversation compaction belongs to the host/contexty — see [migration](docs/history-compaction-migration.md).
 
 ## Budget middleware
 

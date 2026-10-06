@@ -614,3 +614,16 @@ WithOnComplete(...)). Accepted acknowledges scheduling, never terminal completio
 background errors/validation are reported through the configured completion hook,
 not the already-returned caller. Parent cancellation is detached by the existing
 async wrapper; host background timeout and Registry.Shutdown define that lifecycle.
+
+## D01 — generic conversation compaction belongs to the host/contexty
+
+Removed `github.com/skosovsky/toolsy/history`, its
+`ApplySemanticTruncation`, generic counter/summarizer/inspector contracts, options
+and `SemanticTruncationReport`; removed `toolsyotel.RecordSemanticTruncation` and
+`examples/semantic_truncation`. Hosts own chat-history policy and its telemetry.
+`historycodec`, tool-result transcripts, `ResultCodec` and typed BYOT execution
+remain available. No mandatory dependency on contexty is introduced.
+
+Contexty capability/semantic mapping and a compiled host recipe are documented
+in `docs/history-compaction-migration.md` with verified source mapping. This is a
+clear break, not an API alias or automatic message conversion.

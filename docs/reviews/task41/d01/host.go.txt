@@ -1,0 +1,31 @@
+package host
+
+import (
+	"context"
+
+	"github.com/skosovsky/contexty"
+)
+
+func CompactConversation(
+	ctx context.Context,
+	messages []contexty.Message,
+	protectedIDs []string,
+	effectiveTokens int,
+	recentMessages int,
+	estimator contexty.TokenEstimator,
+	summarizer contexty.Summarizer,
+) (contexty.BudgetResult, error) {
+	pipeline := contexty.NewBudgetPipeline(
+		contexty.BudgetConfig{
+			Budget:     contexty.EffectiveInputBudget(effectiveTokens),
+			Retention:  contexty.RetentionPolicy{MessageIDs: protectedIDs},
+			Summarizer: summarizer,
+		},
+		estimator,
+		contexty.WithRollingSummary(contexty.RollingSummaryPolicy{
+			Descriptor:     contexty.Descriptor{ID: "host.conversation-summary", Revision: "1"},
+			RecentMessages: recentMessages,
+		}),
+	)
+	return pipeline.Apply(ctx, messages)
+}

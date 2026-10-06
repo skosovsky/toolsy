@@ -18,7 +18,7 @@ toolsyotel.WithTracing(
 
 When enabled, spans include `langfuse.observation.input` / `output` and `gen_ai.tool.call.arguments` / `result`, truncated with `... [truncated]` when over the limit. Payload truncation is **observability display tier** — not a transport read primitive (see [docs/migration-task30.md](../../docs/migration-task30.md)).
 
-Content capture governs **all** payload paths: arguments, delivered chunks, soft errors, hard errors, semantic-truncation errors, and panic diagnostics. With capture off, no error message or panic value is exported in attributes, exception events, or status descriptions. Exception type and fixed statuses remain available; control signals and stream aborts retain neutral status. Panic values are rethrown unchanged.
+Content capture governs **all** payload paths: arguments, delivered chunks, soft errors, hard errors, and panic diagnostics. With capture off, no error message or panic value is exported in attributes, exception events, or status descriptions. Exception type and fixed statuses remain available; control signals and stream aborts retain neutral status. Panic values are rethrown unchanged.
 
 `WithContentRedactor(func(kind toolsyotel.ContentKind, content string) string { ... })` installs a host-owned, vendor-neutral redactor. It does not enable capture. It runs before truncation, and may run concurrently. A redactor panic fails closed to a bounded `[redaction failed]` diagnostic. Streams are redacted per delivered chunk, so host redactors must handle that boundary (e.g. replace entire sensitive chunk contents rather than assume secrets cannot span chunks). Only delivered chunks are captured.
 
@@ -26,57 +26,9 @@ Every captured field has a finite byte limit, including any marker, with valid U
 
 If you wrap tools manually before `RegistryBuilder.Add` (instead of using `Use`), the wrapper must implement `toolsy.ChainUnwrapper` with `UnwrapNext()`. This lets `Build` detect invalid nested `AsAsyncTool` chains. `tracingTool` implements the contract; prefer `Use(WithTracing(...)).Add(...)` for async tools.
 
-## Semantic truncation observability
+## Conversation observability
 
-When you use `history.ApplySemanticTruncation(...)`, forward its report to
-`RecordSemanticTruncation(...)` to get a dedicated span:
-
-```go
-import (
-	"context"
-
-	"github.com/skosovsky/toolsy/history"
-	"github.com/skosovsky/toolsy/ext/toolsyotel"
-	"go.opentelemetry.io/otel/sdk/trace"
-)
-
-func truncateWithTracing(
-	ctx context.Context,
-	historyIn []MyMessage,
-	counter history.TokenCounter[MyMessage],
-	summarizer history.ContextSummarizer[MyMessage],
-	inspector history.MessageInspector[MyMessage],
-	tp *trace.TracerProvider,
-) ([]MyMessage, error) {
-	out, report, err := history.ApplySemanticTruncation(
-		ctx,
-		historyIn,
-		12000,
-		counter,
-		summarizer,
-		inspector,
-		history.WithMinRecentMessages[MyMessage](2),
-	)
-
-	// Always emit semantic truncation telemetry, even when truncation falls back.
-	toolsyotel.RecordSemanticTruncation(
-		ctx,
-		report,
-		err,
-		toolsyotel.WithTracerProvider(tp),
-	)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-```
-
-The emitted span name is `toolsy.semantic_truncation` and includes:
-
-- `toolsy.truncation.tokens_before`
-- `toolsy.truncation.tokens_after`
-- `toolsy.truncation.messages_compressed_count`
-- `toolsy.truncation.fallback_used`
-- `toolsy.truncation.mechanical_used`
-- `toolsy.truncation.summarization_applied`
+Conversation compaction and its telemetry are owned by the host/contexty.
+`RecordSemanticTruncation` was removed together with `toolsy/history`.
+See [the migration](../../docs/history-compaction-migration.md).
+Tool execution tracing and its content policy remain available.

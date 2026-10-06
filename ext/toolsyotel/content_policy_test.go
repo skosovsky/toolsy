@@ -12,7 +12,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/history"
 )
 
 // Include every observable span location, particularly exception event attributes
@@ -28,7 +27,7 @@ func spanContent(span sdktrace.ReadOnlySpan) string {
 
 func TestContentPolicy_AllPayloadPaths(t *testing.T) {
 	const secret = "SECRET_MARKER_938"
-	for _, path := range []string{"result", "soft", "hard", "panic", "semantic"} {
+	for _, path := range []string{"result", "soft", "hard", "panic"} {
 		for _, capture := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/capture=%t", path, capture), func(t *testing.T) {
 				// Arrange.
@@ -53,7 +52,7 @@ func TestContentPolicy_AllPayloadPaths(t *testing.T) {
 
 func TestContentPolicy_RedactionPrecedesExactCap(t *testing.T) {
 	const secret = "SECRET_MARKER_AFTER_LONG_PREFIX"
-	for _, path := range []string{"result", "soft", "hard", "panic", "semantic"} {
+	for _, path := range []string{"result", "soft", "hard", "panic"} {
 		t.Run(path, func(t *testing.T) {
 			// Arrange: matching the end of a long input proves redaction sees uncapped content.
 			tp, rec := newSpanRecorder()
@@ -134,10 +133,6 @@ func contentPolicyTool(path, content string) *stubTool {
 
 func executeContentPolicyPath(t *testing.T, path, content string, tool *stubTool, opts []Option) {
 	t.Helper()
-	if path == "semantic" {
-		RecordSemanticTruncation(context.Background(), history.SemanticTruncationReport{}, errors.New(content), opts...)
-		return
-	}
 	if path == "panic" {
 		defer func() { require.Equal(t, content, recover()) }()
 	}

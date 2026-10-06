@@ -1,0 +1,52 @@
+package host
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/skosovsky/contexty"
+)
+
+type summaryFunc func(context.Context, contexty.SummaryRequest) (contexty.Message, error)
+
+func (f summaryFunc) Summarize(ctx context.Context, r contexty.SummaryRequest) (contexty.Message, error) {
+	return f(ctx, r)
+}
+
+func TestRecipeProtectedPrefixAndRecentTail(t *testing.T) {
+	// Arrange.
+	msgs := []contexty.Message{{ID: "prefix", Role: contexty.RoleSystem}, {ID: "old1", Role: contexty.RoleUser}, {ID: "old2", Role: contexty.RoleAssistant}, {ID: "tail1", Role: contexty.RoleUser}, {ID: "tail2", Role: contexty.RoleAssistant}}
+	calls := 0
+	summarizer := summaryFunc(func(_ context.Context, r contexty.SummaryRequest) (contexty.Message, error) {
+		calls++
+		if len(r.Messages) != 2 || r.Messages[0].ID != "old1" || r.Messages[1].ID != "old2" {
+			t.Fatalf("unexpected summary projection: %+v", r.Messages)
+		}
+		return contexty.Message{ID: "summary", Role: contexty.RoleSystem}, nil
+	})
+	// Act.
+	out, err := CompactConversation(context.Background(), msgs, []string{"prefix"}, 20, 2, &contexty.FixedEstimator{TokensPerMessage: 5}, summarizer)
+	// Assert.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || len(out.Messages) != 4 || out.Messages[0].ID != "prefix" || out.Messages[2].ID != "tail1" || out.Messages[3].ID != "tail2" || out.Decision.AfterTokens != 20 {
+		t.Fatalf("unexpected compaction: %+v calls=%d", out, calls)
+	}
+}
+
+func TestRecipeFailureHasNoSilentFallback(t *testing.T) {
+	// Arrange.
+	cause := errors.New("provider unavailable")
+	msgs := []contexty.Message{{ID: "old1", Role: contexty.RoleUser}, {ID: "old2", Role: contexty.RoleAssistant}, {ID: "tail1", Role: contexty.RoleUser}, {ID: "tail2", Role: contexty.RoleAssistant}}
+	summarizer := summaryFunc(func(context.Context, contexty.SummaryRequest) (contexty.Message, error) {
+		return contexty.Message{}, cause
+	})
+	// Act.
+	out, err := CompactConversation(context.Background(), msgs, nil, 15, 2, &contexty.FixedEstimator{TokensPerMessage: 5}, summarizer)
+	// Assert.
+	if !errors.Is(err, cause) || len(out.Messages) != 0 {
+		t.Fatalf("failure was hidden: %+v %v", out, err)
+	}
+}
