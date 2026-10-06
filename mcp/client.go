@@ -43,6 +43,7 @@ const (
 	mcpLogLevelCritical       = "critical"
 	mcpLogLevelEmergency      = "emergency"
 	mcpLogLevelError          = "error"
+	toolInputSchemaSubject    = "tool inputSchema"
 	toolsListResultSubject    = "tools/list result"
 	toolOutputSchemaSubject   = "tool outputSchema"
 	defaultClientVersion      = "1.0.0"
@@ -54,6 +55,7 @@ type ClientOptions struct {
 	Logger           *slog.Logger
 	ClientInfo       Implementation
 	Pagination       PaginationLimits
+	Subscriptions    SubscriptionLimits
 	ToolPolicyMapper ToolPolicyMapper
 }
 
@@ -67,7 +69,7 @@ func WithClientInfo(info Implementation) ClientOption {
 }
 
 func WithPaginationLimits(limits PaginationLimits) ClientOption {
-	return func(options *ClientOptions) { options.Pagination = limits.normalized() }
+	return func(options *ClientOptions) { options.Pagination = limits }
 }
 
 type InvalidationKind string
@@ -112,17 +114,19 @@ func (s *Subscription) Err() error            { return s.err() }
 func (s *Subscription) Close()                { s.cancel() }
 
 type subscriptionState struct {
-	key       string
-	publicID  string
-	requested SubscriptionFilter
-	effective SubscriptionFilter
-	acked     bool
-	closed    bool
-	events    chan Invalidation
-	done      chan struct{}
-	cancel    context.CancelFunc
-	mu        sync.RWMutex
-	err       error
+	key           string
+	publicID      string
+	requested     SubscriptionFilter
+	effective     SubscriptionFilter
+	acked         bool
+	closed        bool
+	events        chan Invalidation
+	done          chan struct{}
+	cancel        context.CancelFunc
+	mu            sync.RWMutex
+	err           error
+	ctx           context.Context
+	localCanceled bool
 }
 
 type progressState struct {
@@ -139,14 +143,15 @@ type Client struct {
 	opts      ClientOptions
 	logger    *slog.Logger
 
-	mu            sync.RWMutex
-	ready         bool
-	closed        bool
-	server        DiscoverResult
-	subscriptions map[string]*subscriptionState
-	toolBindings  map[string]struct{}
-	toolSchemas   map[string]schemaValidator
-	toolBindingMu sync.Mutex
+	mu                   sync.RWMutex
+	ready                bool
+	closed               bool
+	server               DiscoverResult
+	subscriptions        map[string]*subscriptionState
+	retiredSubscriptions map[string]time.Time
+	toolBindings         map[string]struct{}
+	toolSchemas          map[string]schemaValidator
+	toolBindingMu        sync.Mutex
 
 	progressCounter    atomic.Uint64
 	progressCallbacks  sync.Map
@@ -165,7 +170,19 @@ func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*C
 		ClientInfo: Implementation{Name: "toolsy-mcp-client", Version: defaultClientVersion},
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("mcp: nil client option")
+		}
 		opt(&options)
+	}
+	if err := options.Pagination.validate(); err != nil {
+		return nil, err
+	}
+	options.Pagination = options.Pagination.normalized()
+	var limitsErr error
+	options.Subscriptions, limitsErr = options.Subscriptions.normalized()
+	if limitsErr != nil {
+		return nil, limitsErr
 	}
 	// ClientOption is intentionally open for composition. Re-snapshot the final
 	// value so a custom option cannot retain mutable metadata aliases.
@@ -177,13 +194,14 @@ func Connect(ctx context.Context, transport Transport, opts ...ClientOption) (*C
 		return nil, &InvalidPayloadError{Subject: "clientInfo", Err: err}
 	}
 	client := &Client{
-		transport:     transport,
-		opts:          options,
-		logger:        options.Logger,
-		subscriptions: make(map[string]*subscriptionState),
-		toolBindings:  make(map[string]struct{}),
-		toolSchemas:   make(map[string]schemaValidator),
-		invalidations: make(chan Invalidation, clientEventBufferSize),
+		transport:            transport,
+		opts:                 options,
+		logger:               options.Logger,
+		subscriptions:        make(map[string]*subscriptionState),
+		retiredSubscriptions: make(map[string]time.Time),
+		toolBindings:         make(map[string]struct{}),
+		toolSchemas:          make(map[string]schemaValidator),
+		invalidations:        make(chan Invalidation, clientEventBufferSize),
 	}
 	if err := transport.Start(ctx); err != nil {
 		_ = transport.Close()
@@ -631,9 +649,9 @@ func mapTypedRPCError(err error) error {
 	return err
 }
 
-func (c *Client) maxStreamBytes() int {
-	if transport, ok := c.transport.(StreamByteCapTransport); ok && transport.MaxStreamBytes() > 0 {
-		return transport.MaxStreamBytes()
+func (c *Client) maxFrameBytes() int {
+	if transport, ok := c.transport.(FrameByteCapTransport); ok && transport.MaxFrameBytes() > 0 {
+		return transport.MaxFrameBytes()
 	}
 	return httptool.DefaultMaxSSEStreamBytes
 }
@@ -649,7 +667,7 @@ func (c *Client) mapCallReadLimitFor(ctx context.Context, err error, subject str
 		return err
 	}
 	if textprocessor.IsReadLimitExceeded(err) {
-		mapped := toolsy.MapReadLimitErrorFor(err, c.maxStreamBytes(), subject, "")
+		mapped := toolsy.MapReadLimitErrorFor(err, c.maxFrameBytes(), subject, "")
 		if toolErr, ok := toolsy.AsToolError(mapped); ok {
 			// Preserve diagnostic identity without exposing the transport cause in
 			// the bounded validation reason or mutating a shared error instance.
@@ -719,10 +737,14 @@ func (c *Client) listToolsPage(
 	ctx context.Context,
 	cursor string,
 	generation uint64,
+	budget *toolDiscoveryBudget,
 ) (ToolsListResult, []toolBindingCandidate, error) {
 	raw, err := c.requestAndAwait(ctx, MethodToolsList, ToolsListParams{Cursor: cursor})
 	if err != nil {
 		return ToolsListResult{}, nil, c.mapCallReadLimitFor(ctx, err, "MCP tools list response")
+	}
+	if budgetErr := budget.accept(raw); budgetErr != nil {
+		return ToolsListResult{}, nil, budgetErr
 	}
 	if _, completeErr := requireCompleteResult(raw, MethodToolsList, false); completeErr != nil {
 		return ToolsListResult{}, nil, completeErr
@@ -771,8 +793,12 @@ func (c *Client) prepareToolCandidates(
 				Err:     fmt.Errorf("invalid name %q", descriptor.Name),
 			}
 		}
-		if _, err := decodeSchemaObject(descriptor.InputSchema, true); err != nil {
-			return nil, nil, &InvalidPayloadError{Subject: "tool inputSchema", Err: err}
+		inputSchema, inputErr := decodeSchemaObject(descriptor.InputSchema, true)
+		if inputErr != nil {
+			return nil, nil, &InvalidPayloadError{Subject: toolInputSchemaSubject, Err: inputErr}
+		}
+		if _, err := jsonschemax.Compile(inputSchema); err != nil {
+			return nil, nil, &InvalidPayloadError{Subject: toolInputSchemaSubject, Err: err}
 		}
 		if _, err := decodeSchemaObject(descriptor.OutputSchema, false); err != nil {
 			return nil, nil, &InvalidPayloadError{Subject: toolOutputSchemaSubject, Err: err}
@@ -804,7 +830,7 @@ func (c *Client) prepareToolCandidates(
 	return filtered, candidates, nil
 }
 
-func (c *Client) publishToolAuthority(candidates []toolBindingCandidate, generation uint64) error {
+func (c *Client) publishToolAuthority(ctx context.Context, candidates []toolBindingCandidate, generation uint64) error {
 	bindings := make(map[string][]HTTPToolHeaderBinding, len(candidates))
 	schemas := make(map[string]schemaValidator, len(candidates))
 	names := make(map[string]struct{}, len(candidates))
@@ -815,6 +841,11 @@ func (c *Client) publishToolAuthority(candidates []toolBindingCandidate, generat
 	}
 	c.toolBindingMu.Lock()
 	defer c.toolBindingMu.Unlock()
+	// Publication commits after this cancellation check. Once the trusted facet
+	// starts replacing bindings, cancellation cannot undo a successful commit.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if current := c.toolGeneration.Load(); current != generation {
 		return staleError(InvalidationTools, generation, current)
 	}
@@ -851,67 +882,34 @@ func (c *Client) toolAuthority(name string) (schemaValidator, error) {
 	return validator, nil
 }
 
-// ListTools exposes the typed cacheable wire snapshot.
-func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsListResult, error) {
+// ListToolsPage returns one validated page without changing routing authority.
+// Use DiscoverTools for a complete transactional authority snapshot.
+func (c *Client) ListToolsPage(ctx context.Context, cursor string) (ToolsListResult, error) {
 	if err := c.requireCapability("tools"); err != nil {
 		return ToolsListResult{}, err
 	}
-	generation := c.toolGeneration.Load()
-	result, candidates, err := c.listToolsPage(ctx, cursor, generation)
-	if err != nil {
-		return ToolsListResult{}, err
-	}
-	if cursor == "" && result.NextCursor == "" {
-		if err := c.publishToolAuthority(candidates, generation); err != nil {
-			return ToolsListResult{}, err
-		}
-	}
-	return result, nil
+	budget := newToolDiscoveryBudget(c.opts.Pagination)
+	result, _, err := c.listToolsPage(ctx, cursor, c.toolGeneration.Load(), &budget)
+	return result, err
 }
 
-//nolint:gocognit // Full pagination is deliberately collected before one transactional authority publish.
-func (c *Client) GetTools(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
-	if err := c.requireCapability("tools"); err != nil {
-		return errorSequence[toolsy.Tool](err)
-	}
-	generation := c.toolGeneration.Load()
-	fetch := func(ctx context.Context, cursor string) ([]toolBindingCandidate, string, error) {
-		if current := c.toolGeneration.Load(); current != generation {
-			return nil, "", staleError(InvalidationTools, generation, current)
-		}
-		result, candidates, err := c.listToolsPage(ctx, cursor, generation)
-		if err != nil {
-			return nil, "", err
-		}
-		if current := c.toolGeneration.Load(); current != generation {
-			return nil, "", staleError(InvalidationTools, generation, current)
-		}
-		return candidates, result.NextCursor, nil
-	}
+// DiscoverTools fetches and validates a complete typed snapshot, then publishes
+// routing authority atomically. Page-specific cache hints remain in Pages.
+func (c *Client) DiscoverTools(ctx context.Context) (ToolDiscovery, error) {
+	snapshot, _, err := c.discoverToolCandidates(ctx)
+	return snapshot, err
+}
+
+// Discover builds tool proxies from the same full validated discovery path.
+func (c *Client) Discover(ctx context.Context) iter.Seq2[toolsy.Tool, error] {
 	return func(yield func(toolsy.Tool, error) bool) {
-		all := make([]toolBindingCandidate, 0)
-		seen := make(map[string]struct{})
-		for candidate, err := range IterateCursorWithLimits(ctx, c.opts.Pagination, fetch) {
-			if err != nil {
-				yield(nil, err)
-				return
-			}
-			if _, duplicate := seen[candidate.descriptor.Name]; duplicate {
-				yield(nil, &InvalidPayloadError{
-					Subject: toolsListResultSubject,
-					Err:     fmt.Errorf("duplicate tool name %q across pages", candidate.descriptor.Name),
-				})
-				return
-			}
-			seen[candidate.descriptor.Name] = struct{}{}
-			all = append(all, candidate)
-		}
-		if err := c.publishToolAuthority(all, generation); err != nil {
+		snapshot, candidates, err := c.discoverToolCandidates(ctx)
+		if err != nil {
 			yield(nil, err)
 			return
 		}
-		for _, candidate := range all {
-			proxy, err := c.toolToProxyAtGeneration(ctx, candidate.descriptor, generation)
+		for _, candidate := range candidates {
+			proxy, err := c.toolToProxyAtGeneration(ctx, candidate.descriptor, snapshot.Generation)
 			if err != nil {
 				yield(nil, err)
 				return
@@ -946,7 +944,7 @@ func (c *Client) toolToProxyAtGeneration(
 	}
 	inputSchema, err := decodeSchemaObject(descriptor.InputSchema, true)
 	if err != nil {
-		return nil, &InvalidPayloadError{Subject: "tool inputSchema", Err: err}
+		return nil, &InvalidPayloadError{Subject: toolInputSchemaSubject, Err: err}
 	}
 	outputSchema, err := decodeSchemaObject(descriptor.OutputSchema, false)
 	if err != nil {
@@ -1699,7 +1697,7 @@ func (c *Client) Listen(ctx context.Context, filter SubscriptionFilter) (*Subscr
 	if !filter.ToolsListChanged && !filter.ResourcesListChanged && !filter.PromptsListChanged &&
 		len(filter.ResourceSubscriptions) == 0 {
 		return nil, &InvalidPayloadError{
-			Subject: "subscriptions/listen",
+			Subject: MethodSubscriptionsListen,
 			Err:     errors.New("at least one notification must be selected"),
 		}
 	}
@@ -1730,6 +1728,7 @@ func (c *Client) Listen(ctx context.Context, filter SubscriptionFilter) (*Subscr
 		events:    make(chan Invalidation, clientEventBufferSize),
 		done:      make(chan struct{}),
 		cancel:    cancel,
+		ctx:       listenCtx,
 	}
 	c.mu.Lock()
 	if c.closed {
@@ -1738,12 +1737,29 @@ func (c *Client) Listen(ctx context.Context, filter SubscriptionFilter) (*Subscr
 		_ = pending.Abort(ErrTransportClosed)
 		return nil, ErrTransportClosed
 	}
-	if _, duplicate := c.subscriptions[key]; duplicate {
+	c.pruneRetiredSubscriptions(time.Now())
+	limits := c.opts.Subscriptions
+	if limits.MaxTracked == 0 {
+		limits, _ = limits.normalized()
+	}
+	if len(c.subscriptions) >= limits.MaxActive ||
+		len(c.subscriptions)+len(c.retiredSubscriptions) >= limits.MaxTracked {
+		c.mu.Unlock()
+		cancel()
+		limitErr := &InvalidPayloadError{
+			Subject: MethodSubscriptionsListen,
+			Err:     errors.New("subscription correlation capacity exceeded"),
+		}
+		_ = pending.Abort(limitErr)
+		return nil, limitErr
+	}
+	_, retired := c.retiredSubscriptions[key]
+	if _, duplicate := c.subscriptions[key]; duplicate || retired {
 		c.mu.Unlock()
 		cancel()
 		duplicateErr := &InvalidPayloadError{
 			Subject: "subscriptions/listen request id",
-			Err:     errors.New("duplicate active request id"),
+			Err:     errors.New("duplicate active or retired request id"),
 		}
 		_ = pending.Abort(duplicateErr)
 		return nil, duplicateErr
@@ -1762,7 +1778,7 @@ func (c *Client) Listen(ctx context.Context, filter SubscriptionFilter) (*Subscr
 		ID:     publicID,
 		Events: state.events,
 		done:   state.done,
-		cancel: cancel,
+		cancel: func() { cancelSubscriptionLocally(state) },
 		err:    func() error { state.mu.RLock(); defer state.mu.RUnlock(); return state.err },
 	}, nil
 }
@@ -1793,11 +1809,22 @@ func (c *Client) awaitSubscription(ctx context.Context, pending PendingRequest, 
 	if err == nil && !state.acked {
 		err = errors.New("subscription ended before acknowledgment")
 	}
+	retire := locallyCanceledSubscription(state)
 	state.err = err
 	state.closed = true
 	state.mu.Unlock()
 	c.mu.Lock()
 	delete(c.subscriptions, state.key)
+	if retire && !c.closed {
+		if c.retiredSubscriptions == nil {
+			c.retiredSubscriptions = make(map[string]time.Time)
+		}
+		limits := c.opts.Subscriptions
+		if limits.RetireTTL == 0 {
+			limits, _ = limits.normalized()
+		}
+		c.retiredSubscriptions[state.key] = time.Now().Add(limits.RetireTTL)
+	}
 	c.mu.Unlock()
 	state.mu.Lock()
 	close(state.events)
@@ -1863,12 +1890,19 @@ func (c *Client) handleSubscriptionAcknowledged(raw json.RawMessage) {
 		c.failAllSubscriptions(errors.New("subscription acknowledgment missing or invalid ID"))
 		return
 	}
-	c.mu.RLock()
-	state := c.subscriptions[key]
-	c.mu.RUnlock()
+	state, retired := c.subscriptionRoute(key)
+	if retired {
+		return
+	}
 	if state == nil {
 		c.logger.Warn("mcp: unknown subscription acknowledgment")
 		c.failAllSubscriptions(errors.New("subscription acknowledgment has unknown ID"))
+		return
+	}
+	state.mu.RLock()
+	canceled := locallyCanceledSubscription(state)
+	state.mu.RUnlock()
+	if canceled {
 		return
 	}
 	if err := validateEffectiveSubscriptionFilter(state.requested, ack.Notifications); err != nil {
@@ -1876,6 +1910,10 @@ func (c *Client) handleSubscriptionAcknowledged(raw json.RawMessage) {
 		return
 	}
 	state.mu.Lock()
+	if locallyCanceledSubscription(state) {
+		state.mu.Unlock()
+		return
+	}
 	if state.closed {
 		state.mu.Unlock()
 		failSubscription(state, errors.New("subscription acknowledgment after close"))
@@ -1929,15 +1967,22 @@ func (c *Client) handleSubscriptionInvalidation(kind InvalidationKind, raw json.
 		c.failAllSubscriptions(errors.New("subscription notification missing or invalid ID"))
 		return
 	}
-	c.mu.RLock()
-	state := c.subscriptions[key]
-	c.mu.RUnlock()
+	state, retired := c.subscriptionRoute(key)
+	if retired {
+		c.validateRetiredSubscriptionNotification(kind, raw)
+		return
+	}
 	if state == nil {
 		c.logger.Warn("mcp: notification for unknown subscription")
 		c.failAllSubscriptions(errors.New("subscription notification has unknown ID"))
 		return
 	}
 	state.mu.RLock()
+	if locallyCanceledSubscription(state) {
+		state.mu.RUnlock()
+		c.validateRetiredSubscriptionNotification(kind, raw)
+		return
+	}
 	closed := state.closed
 	acked := state.acked
 	effective := cloneSubscriptionFilter(state.effective)

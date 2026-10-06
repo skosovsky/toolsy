@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -182,13 +183,13 @@ func TestStreamableHTTP_RejectsPrivateEndpointAndOversizedBody(t *testing.T) {
 	private := NewStreamableHTTPTransport("http://127.0.0.1:1/mcp")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(writer, `{"jsonrpc":"2.0","id":1,"result":{"padding":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}`)
+		fmt.Fprintf(writer, `{"jsonrpc":"2.0","id":1,"result":{"padding":"%s"}}`, strings.Repeat("x", 4096))
 	}))
 	defer server.Close()
 	bounded := NewStreamableHTTPTransport(
 		server.URL,
 		WithStreamableHTTPAllowPrivateIPs(true),
-		WithStreamableHTTPMaxStreamBytes(32),
+		WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 1024}),
 	)
 	require.NoError(t, bounded.Start(context.Background()))
 	pending, err := adversarialDeliveredDiscovery(context.Background(), t, bounded)

@@ -349,7 +349,11 @@ func TestListToolsFiltersAndRegistersHeaderBindings(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act.
-	result, err := client.ListTools(context.Background(), "")
+	page, err := client.ListToolsPage(context.Background(), "")
+	require.NoError(t, err)
+	require.Len(t, page.Tools, 1)
+	require.Empty(t, transport.bindings)
+	result, err := client.DiscoverTools(context.Background())
 
 	// Assert.
 	require.NoError(t, err)
@@ -399,7 +403,7 @@ func TestHTTPDirectCallRequiresCurrentAuthoritativeToolDescriptor(t *testing.T) 
 	require.Zero(t, calls.Load())
 
 	// Act and assert: a successfully listed known-empty binding is authoritative.
-	_, err = client.ListTools(context.Background(), "")
+	_, err = client.DiscoverTools(context.Background())
 	require.NoError(t, err)
 	transport.bindingsMu.Lock()
 	_, knownEmpty := transport.bindings["plain"]
@@ -435,7 +439,7 @@ func TestDuplicateToolNamesNeverBecomeRoutingAuthority(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act.
-	_, err = client.ListTools(context.Background(), "")
+	_, err = client.DiscoverTools(context.Background())
 
 	// Assert.
 	require.ErrorContains(t, err, "duplicate tool name")
@@ -491,11 +495,11 @@ func TestPaginatedToolAuthorityPublishesOnlyAfterCompleteTransaction(t *testing.
 	transport := &bindingContractTransport{contractTransport: base, bindings: make(map[string][]HTTPToolHeaderBinding)}
 	client, err := Connect(context.Background(), transport)
 	require.NoError(t, err)
-	_, err = client.ListTools(context.Background(), "")
+	_, err = client.DiscoverTools(context.Background())
 	require.NoError(t, err)
 
 	consume := func() error {
-		for _, iterErr := range client.GetTools(context.Background()) {
+		for _, iterErr := range client.Discover(context.Background()) {
 			if iterErr != nil {
 				return iterErr
 			}
@@ -559,7 +563,7 @@ func TestPublicCallToolValidatesAuthoritativeOutputSchema(t *testing.T) {
 	transport := &bindingContractTransport{contractTransport: base, bindings: make(map[string][]HTTPToolHeaderBinding)}
 	client, err := Connect(context.Background(), transport)
 	require.NoError(t, err)
-	_, err = client.ListTools(context.Background(), "")
+	_, err = client.DiscoverTools(context.Background())
 	require.NoError(t, err)
 
 	// Act.

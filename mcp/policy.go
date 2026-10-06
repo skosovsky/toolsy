@@ -37,7 +37,7 @@ type ToolExecutionProperties struct {
 	RequiresConfirmation bool
 }
 
-// ToolPolicyMapper runs during GetTools with the host's discovery context and
+// ToolPolicyMapper runs during Discover with the host's discovery context and
 // an owned descriptor snapshot. Capture host-owned authority or use context
 // values supplied by the host; remote annotations and metadata are untrusted.
 // Invocation authorization remains the current Registry/typed policy's job.

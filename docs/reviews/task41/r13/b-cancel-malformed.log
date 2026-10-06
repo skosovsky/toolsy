@@ -1,0 +1,23 @@
+--- FAIL: TestR13BCancelInProgressStillValidatesMalformedResource (0.01s)
+    r13_b_probe_test.go:157: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:157
+        	Error:      	Should be true
+        	Test:       	TestR13BCancelInProgressStillValidatesMalformedResource
+        	Messages:   	malformed resource ignored during local-cancel transition
+--- FAIL: TestR13BCancelInProgressStillValidatesMalformedResource (0.01s)
+    r13_b_probe_test.go:157: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:157
+        	Error:      	Should be true
+        	Test:       	TestR13BCancelInProgressStillValidatesMalformedResource
+        	Messages:   	malformed resource ignored during local-cancel transition
+--- FAIL: TestR13BCancelInProgressStillValidatesMalformedResource (0.01s)
+    r13_b_probe_test.go:157: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:157
+        	Error:      	Should be true
+        	Test:       	TestR13BCancelInProgressStillValidatesMalformedResource
+        	Messages:   	malformed resource ignored during local-cancel transition
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	0.770s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]
+FAIL

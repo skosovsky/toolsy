@@ -1,0 +1,26 @@
+2026/10/06 19:34:36 WARN mcp: subscription notification missing metadata
+2026/10/06 19:34:36 WARN mcp: notification for unknown subscription
+2026/10/06 19:34:36 WARN mcp: excluding tool with invalid x-mcp-header tool=invalid err="property \"tenant\" has unsupported x-mcp-header type \"number\""
+2026/10/06 19:34:36 WARN mcp: excluding tool with invalid x-mcp-header tool=invalid err="property \"tenant\" has unsupported x-mcp-header type \"number\""
+--- FAIL: TestTask34StdioRejectsOversizedOutgoingFrameBeforeWrite (0.00s)
+    schema_contract_cycle7_task34_test.go:258: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/schema_contract_cycle7_task34_test.go:258
+        	Error:      	Error "mcp: invalid stdio outgoing frame payload: stdio outgoing frame exceeds 256 byte limit: read operation exceeded configured byte limit" does not contain "256-byte limit"
+        	Test:       	TestTask34StdioRejectsOversizedOutgoingFrameBeforeWrite
+2026/10/06 19:34:44 WARN mcp: notification for unknown subscription
+--- FAIL: TestPendingRequestBudgetReleasesOnTerminalPaths (0.00s)
+    --- FAIL: TestPendingRequestBudgetReleasesOnTerminalPaths/false (0.00s)
+        transport_resource_limits_test.go:119: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/transport_resource_limits_test.go:119
+            	Error:      	Error "mcp: invalid JSON-RPC pending requests payload: mcp: in-flight requests limit exceeded (1)" does not contain "request limit"
+            	Test:       	TestPendingRequestBudgetReleasesOnTerminalPaths/false
+    --- FAIL: TestPendingRequestBudgetReleasesOnTerminalPaths/true (0.00s)
+        transport_resource_limits_test.go:119: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/transport_resource_limits_test.go:119
+            	Error:      	Error "mcp: invalid JSON-RPC pending requests payload: mcp: queued bytes limit exceeded (100)" does not contain "request limit"
+            	Test:       	TestPendingRequestBudgetReleasesOnTerminalPaths/true
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	18.779s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]
+FAIL

@@ -16,7 +16,7 @@ import (
 )
 
 func quietStdioTransport(executable string, args []string, opts ...StdioTransportOption) *StdioTransport {
-	all := append([]StdioTransportOption{WithLogger(slog.New(slog.DiscardHandler))}, opts...)
+	all := append([]StdioTransportOption{WithStdioLogger(slog.New(slog.DiscardHandler))}, opts...)
 	return NewStdioTransport(executable, args, all...)
 }
 
@@ -64,7 +64,11 @@ func TestStdioTransport_StdoutExceedsMaxStreamBytes(t *testing.T) {
 		`IFS= read -r request; for i in 1 2 3 4 5 6 7 8 9 10; do echo '{"jsonrpc":"2.0","method":"notifications/pad","params":{"p":"%s"}}'; done; sleep 30`,
 		padding,
 	)
-	transport := quietStdioTransport("/bin/sh", []string{"-c", script}, WithStdioMaxStreamBytes(2048))
+	transport := quietStdioTransport(
+		"/bin/sh",
+		[]string{"-c", script},
+		WithStdioLimits(TransportLimits{MaxFrameBytes: 2048, MaxLifetimeBytes: 2048}),
+	)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	require.NoError(t, transport.Start(ctx))

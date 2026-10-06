@@ -27,7 +27,7 @@ func TestClient_NonToolCancellationUsesActiveRequestID(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		for _, iterErr := range client.GetTools(ctx) {
+		for _, iterErr := range client.Discover(ctx) {
 			done <- iterErr
 			return
 		}
@@ -114,7 +114,7 @@ func TestClient_ToolsInvalidationAbortsInFlightSnapshot(t *testing.T) {
 
 	// Act.
 	var discoveryErr error
-	for _, iterErr := range client.GetTools(context.Background()) {
+	for _, iterErr := range client.Discover(context.Background()) {
 		discoveryErr = iterErr
 	}
 
@@ -154,7 +154,7 @@ func TestClient_TerminalYieldAbortDoesNotSendObsoleteCancellation(t *testing.T) 
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	var tool toolsy.Tool
-	for discovered, iterErr := range client.GetTools(context.Background()) {
+	for discovered, iterErr := range client.Discover(context.Background()) {
 		require.NoError(t, iterErr)
 		tool = discovered
 	}

@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 )
 
-// rpcJSONLineScannerMaxBytes bounds an individual JSON-RPC scanner token.
-const rpcJSONLineScannerMaxBytes = 1024 * 1024
+// defaultTransportMaxFrameBytes is the default per-message frame budget.
+const defaultTransportMaxFrameBytes = 1024 * 1024
 
 func contextUntilPendingTerminal(
 	parent context.Context,
@@ -152,12 +152,15 @@ type HTTPToolHeaderBinding struct {
 }
 
 // ToolHeaderTransport accepts tool header descriptors discovered by the client.
+// ReplaceToolHeaderBindings atomically replaces all bindings or returns an error
+// without changing them. It must finish in bounded time and must not reenter
+// Client methods: the client holds its authority lock during replacement.
 type ToolHeaderTransport interface {
 	ReplaceToolHeaderBindings(bindings map[string][]HTTPToolHeaderBinding) error
 }
 
-type StreamByteCapTransport interface {
-	MaxStreamBytes() int
+type FrameByteCapTransport interface {
+	MaxFrameBytes() int
 }
 
 const (

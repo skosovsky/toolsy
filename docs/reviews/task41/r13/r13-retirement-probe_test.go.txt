@@ -1,0 +1,66 @@
+package mcp
+
+import (
+ "context"
+ "encoding/json"
+ "testing"
+ "time"
+
+ "github.com/stretchr/testify/require"
+)
+
+func retirementClient(t *testing.T, opts ...ClientOption) (*Client, *fakeTransport) {
+ t.Helper()
+ transport := newFakeTransport()
+ transport.requestHook = func(request capturedRequest) (json.RawMessage, error, bool) {
+  if request.Method == MethodServerDiscover { return completeDiscovery(ServerCapabilities{Tools: &ToolsCapability{ListChanged: true}}), nil, true }
+  if request.Method == MethodSubscriptionsListen {
+   require.NoError(t, transport.emit(MethodSubscriptionsAcknowledged, map[string]any{
+    "notifications": SubscriptionFilter{ToolsListChanged: true}, "_meta": Meta{metaSubscriptionID: request.ID},
+   }))
+   return nil, nil, false
+  }
+  return nil, nil, true
+ }
+ client, err := Connect(t.Context(), transport, opts...)
+ require.NoError(t, err)
+ t.Cleanup(func() { require.NoError(t, client.Close()) })
+ return client, transport
+}
+
+func TestCanceledSubscriptionLateMessagesLeaveSiblingLive(t *testing.T) {
+ for _, closeParent := range []bool{false, true} {
+  t.Run(boolSubscriptionCase(closeParent), func(t *testing.T) {
+   // Arrange: two independent live subscriptions with acknowledged filters.
+   client, transport := retirementClient(t)
+   ctx, cancel := context.WithCancel(t.Context())
+   defer cancel()
+   a, err := client.Listen(ctx, SubscriptionFilter{ToolsListChanged: true})
+   require.NoError(t, err)
+   b, err := client.Listen(t.Context(), SubscriptionFilter{ToolsListChanged: true})
+   require.NoError(t, err)
+   defer b.Close()
+   // Act: local cancellation retires A before late traffic is processed.
+   if closeParent { cancel() } else { a.Close() }
+   select { case <-a.Done(): case <-time.After(time.Second): t.Fatal("A did not close") }
+   for range 5 {
+    require.NoError(t, transport.emit(MethodSubscriptionsAcknowledged, map[string]any{
+     "notifications": SubscriptionFilter{ToolsListChanged: true}, "_meta": Meta{metaSubscriptionID: json.RawMessage(a.ID)},
+    }))
+    require.NoError(t, transport.emit(MethodToolsListChanged, map[string]any{"_meta": Meta{metaSubscriptionID: json.RawMessage(a.ID)}}))
+   }
+   // Assert: no generation drift or failure of B from retired traffic.
+   require.Zero(t, client.DiscoveryGeneration(InvalidationTools))
+   select { case <-b.Done(): t.Fatalf("B failed: %v", b.Err()); default: }
+   require.NoError(t, transport.emit(MethodToolsListChanged, map[string]any{"_meta": Meta{metaSubscriptionID: json.RawMessage(b.ID)}}))
+   select { case event := <-b.Events: require.Equal(t, b.ID, event.SubscriptionID); case <-time.After(time.Second): t.Fatal("B stopped receiving") }
+   require.Equal(t, uint64(1), client.DiscoveryGeneration(InvalidationTools))
+  })
+ }
+}
+
+func boolSubscriptionCase(parent bool) string {
+ if parent { return "parent-cancel" }
+ return "close"
+}
+

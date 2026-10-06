@@ -75,12 +75,12 @@ func TestRemoteHintsRequireHostTrustForCacheAndCurrentPolicy(t *testing.T) {
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, client.Close()) })
 			var proxy toolsy.Tool
-			for item, iterErr := range client.GetTools(ctx) {
+			for item, iterErr := range client.Discover(ctx) {
 				require.NoError(t, iterErr)
 				proxy = item
 			}
 			require.NotNil(t, proxy)
-			source, err := client.ListTools(ctx, "")
+			source, err := client.ListToolsPage(ctx, "")
 			require.NoError(t, err)
 			require.True(t, *source.Tools[0].Annotations.IdempotentHint)
 			require.Equal(t, trusted, proxy.Manifest().Idempotent)

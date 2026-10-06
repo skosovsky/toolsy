@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/mcp
+cpu: Apple M1 Max
+BenchmarkR13ToolDiscovery/1-10  	    1334	    173756 ns/op	  135417 B/op	    2025 allocs/op
+BenchmarkR13ToolDiscovery/1-10  	    1419	    176877 ns/op	  135475 B/op	    2026 allocs/op
+BenchmarkR13ToolDiscovery/1-10  	    1311	    199830 ns/op	  135440 B/op	    2025 allocs/op
+BenchmarkR13ToolDiscovery/32-10 	      56	   4806423 ns/op	 3506866 B/op	   50142 allocs/op
+BenchmarkR13ToolDiscovery/32-10 	      49	   4477345 ns/op	 3507977 B/op	   50149 allocs/op
+BenchmarkR13ToolDiscovery/32-10 	      62	   4432347 ns/op	 3508364 B/op	   50149 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	2.865s

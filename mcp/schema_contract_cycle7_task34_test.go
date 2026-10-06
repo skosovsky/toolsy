@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/internal/jsonschemax"
+	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestTask34PinnedSchemaRequiresIntegerResourceSizes(t *testing.T) {
@@ -234,7 +235,11 @@ func TestTask34StdioRejectsOversizedOutgoingFrameBeforeWrite(t *testing.T) {
 	// Arrange. PrepareRequest performs the bound check before delivery, so no
 	// process or writer is needed to prove the oversized frame cannot reach I/O.
 	const frameLimit = 256
-	transport := NewStdioTransport("", nil, WithStdioMaxStreamBytes(frameLimit))
+	transport := NewStdioTransport(
+		"",
+		nil,
+		WithStdioLimits(TransportLimits{MaxFrameBytes: frameLimit, MaxQueueBytes: frameLimit}),
+	)
 	transport.started = true
 	transport.peer = newRPCPeer(t.Context(), slog.Default(), transport.send)
 	params := ToolsCallParams{
@@ -251,7 +256,7 @@ func TestTask34StdioRejectsOversizedOutgoingFrameBeforeWrite(t *testing.T) {
 	var payloadErr *InvalidPayloadError
 	require.ErrorAs(t, err, &payloadErr)
 	require.Equal(t, "stdio outgoing frame", payloadErr.Subject)
-	require.ErrorContains(t, err, "256-byte limit")
+	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 }
 
 func task34PinnedSchema(t *testing.T) map[string]any {

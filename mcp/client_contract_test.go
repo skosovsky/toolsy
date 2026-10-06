@@ -291,7 +291,7 @@ func TestClient_MissingCapabilityRejectedWithoutRPC(t *testing.T) {
 
 	// Act.
 	var gotErr error
-	for _, iterErr := range client.GetTools(context.Background()) {
+	for _, iterErr := range client.Discover(context.Background()) {
 		gotErr = iterErr
 	}
 
@@ -337,7 +337,7 @@ func TestClient_ToolStructuredResultMapsOutputSchemaAndTypedEnvelope(t *testing.
 	client, err := Connect(context.Background(), transport)
 	require.NoError(t, err)
 	var proxy toolsy.Tool
-	for item, iterErr := range client.GetTools(context.Background()) {
+	for item, iterErr := range client.Discover(context.Background()) {
 		require.NoError(t, iterErr)
 		proxy = item
 	}
@@ -454,7 +454,7 @@ func TestClient_CancellationUsesActiveRequestIDExactlyOnce(t *testing.T) {
 	client, err := Connect(context.Background(), transport)
 	require.NoError(t, err)
 	var proxy toolsy.Tool
-	for item, iterErr := range client.GetTools(context.Background()) {
+	for item, iterErr := range client.Discover(context.Background()) {
 		require.NoError(t, iterErr)
 		proxy = item
 	}
@@ -564,7 +564,7 @@ func TestClient_ProgressIsFractionalAndMonotonic(t *testing.T) {
 	client, err := Connect(context.Background(), transport)
 	require.NoError(t, err)
 	var proxy toolsy.Tool
-	for item, iterErr := range client.GetTools(context.Background()) {
+	for item, iterErr := range client.Discover(context.Background()) {
 		require.NoError(t, iterErr)
 		proxy = item
 	}

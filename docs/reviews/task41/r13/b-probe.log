@@ -1,0 +1,32 @@
+--- FAIL: TestR13BStdioOversizedNotificationHasLimitIdentity (0.01s)
+    r13_b_probe_test.go:21: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:21
+        	Error:      	Target error should be in err chain:
+        	            	expected: "read operation exceeded configured byte limit"
+        	            	in chain: "mcp: invalid stdio outgoing frame payload: encoded frame exceeds 256-byte limit"
+        	            		"encoded frame exceeds 256-byte limit"
+        	Test:       	TestR13BStdioOversizedNotificationHasLimitIdentity
+2026/10/06 19:29:25 WARN mcp: invalid subscription acknowledgment err="expected non-null JSON object"
+--- FAIL: TestR13BStdioOversizedNotificationHasLimitIdentity (0.01s)
+    r13_b_probe_test.go:21: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:21
+        	Error:      	Target error should be in err chain:
+        	            	expected: "read operation exceeded configured byte limit"
+        	            	in chain: "mcp: invalid stdio outgoing frame payload: encoded frame exceeds 256-byte limit"
+        	            		"encoded frame exceeds 256-byte limit"
+        	Test:       	TestR13BStdioOversizedNotificationHasLimitIdentity
+2026/10/06 19:29:25 WARN mcp: invalid subscription acknowledgment err="expected non-null JSON object"
+--- FAIL: TestR13BStdioOversizedNotificationHasLimitIdentity (0.00s)
+    r13_b_probe_test.go:21: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:21
+        	Error:      	Target error should be in err chain:
+        	            	expected: "read operation exceeded configured byte limit"
+        	            	in chain: "mcp: invalid stdio outgoing frame payload: encoded frame exceeds 256-byte limit"
+        	            		"encoded frame exceeds 256-byte limit"
+        	Test:       	TestR13BStdioOversizedNotificationHasLimitIdentity
+2026/10/06 19:29:25 WARN mcp: invalid subscription acknowledgment err="expected non-null JSON object"
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	0.970s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]
+FAIL

@@ -198,7 +198,7 @@ func TestStreamableHTTP_DecoratorTargetGuardAndInertEventIDs(t *testing.T) {
 	t.Cleanup(func() { peer.close(ErrTransportClosed) })
 	pending, _, err := peer.beginRequest(MethodServerDiscover, migrationDiscoveryParams())
 	require.NoError(t, err)
-	parser := &StreamableHTTPTransport{peer: peer, maxStreamBytes: 2048}
+	parser := &StreamableHTTPTransport{peer: peer, maxFrameBytes: 2048}
 	provenance := &sseRequestProvenance{requestID: pending.ID(), method: MethodServerDiscover}
 	// Act: original whitespace and empty event IDs cannot create replay state.
 	request, decoratorErr := transport.buildRequest(t.Context(), nil, nil)
@@ -380,7 +380,7 @@ func TestStreamableHTTP_ForgedSessionHeadersCannotBeDecorated(t *testing.T) {
 }
 
 func TestStreamableHTTP_OversizedPOSTSSEFailsClosedWithoutRetry(t *testing.T) {
-	// Arrange: retain original256-byte data and32-byte stream cap.
+	// Arrange: response exceeds the frame cap while the request fits.
 	var posts, gets atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -390,13 +390,13 @@ func TestStreamableHTTP_OversizedPOSTSSEFailsClosedWithoutRetry(t *testing.T) {
 		}
 		posts.Add(1)
 		w.Header().Set("Content-Type", eventStreamMediaType)
-		_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.Repeat("x", 256))
+		_, _ = fmt.Fprintf(w, "data: %s\n\n", strings.Repeat("x", 4096))
 	}))
 	t.Cleanup(server.Close)
-	transport := newSSEMigrationTransport(t, server.URL, WithStreamableHTTPMaxStreamBytes(32))
+	transport := newSSEMigrationTransport(t, server.URL, WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 1024}))
 	// Act.
 	_, err := sseMigrationRequest(t.Context(), t, transport)
-	// Assert: original limit, not invalid JSON, closes peer with no retry.
+	// Assert: the frame limit closes the peer before JSON parsing, without retry.
 	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.Eventually(t, func() bool { return transport.peer.closed.Load() }, time.Second, time.Millisecond)
 	after, afterErr := transport.PrepareRequest(t.Context(), MethodServerDiscover, migrationDiscoveryParams())

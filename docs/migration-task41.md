@@ -428,3 +428,49 @@ new metadata or rely on a boolean schema, deliberately migrate those records.
 Never evict durable completed-operation records to force redispatch. Cache entries
 may be invalidated under the host's ordinary reuse policy; journal outcomes require
 fenced reconciliation. Codec and opaque host value ownership remain unchanged.
+
+
+## R13 / D20 / D21 / D22 — MCP correlation and bounded discovery
+
+Clear break: WithLogger becomes WithStdioLogger. Replace the old combined
+WithStdioMaxStreamBytes / WithStreamableHTTPMaxStreamBytes options with
+WithStdioLimits / WithStreamableHTTPLimits using TransportLimits. Frame/queue/
+in-flight/lifetime bounds have separate meanings. Default frames are 1MiB,
+retained outgoing bytes 16MiB and in-flight requests 64; lifetime zero is unlimited.
+Set MaxLifetimeBytes explicitly if process/per-response total traffic must be
+bounded. Set a larger frame cap explicitly for large responses or requests.
+Negative/nil transport/client options fail early. FrameByteCapTransport.MaxFrameBytes
+replaces the old StreamByteCapTransport.MaxStreamBytes custom facet.
+
+Clear break: Client.ListTools becomes ListToolsPage; it never updates tool routing
+authority, even for a single complete page. Use DiscoverTools for a full typed
+validated snapshot and transactional publication, or Discover (formerly GetTools)
+for generated proxies. Full discovery bounds aggregate raw bytes/items/pages/
+cursors before accumulating descriptors/compiling schemas; input and output schemas
+must validate before authority publication. Original page cache hints remain in
+ToolDiscovery.Pages, with no fabricated aggregate TTL. Update manual HTTP callers
+that previously relied on the single-page ListTools side effect. Host authorization
+and cache freshness are still separate from remote descriptors/mapper properties.
+
+Locally canceled subscriptions retain bounded ID correlation (64 active/1024
+tracked IDs/one minute by default). Capacity reserves eventual retirement space;
+new Listen fails at saturation instead of evicting live/retired routes. Late ACKs
+and notifications for retained locally canceled IDs do not alter generations or
+cancel unrelated subscriptions. Outside the configured time window the strict
+unknown-ID policy applies again. Truly unknown/malformed traffic remains a protocol
+error. Configure SubscriptionLimits for the trusted deployment's cancellation and
+latency envelope; custom transports must not reuse IDs in that window. This is
+bounded correlation, not a claim to accept arbitrary infinitely delayed traffic.
+
+See [MCP limits and minimal transport](../mcp/README.md#transport-discovery-and-subscription-limits)
+for supported callback, queue, overflow, framing and cancellation guarantees.
+
+R13 publication checks cancellation under the authority lock immediately before
+starting the synchronous commit. Once `ReplaceToolHeaderBindings` starts, later
+cancellation cannot roll back a successful commit. This trusted facet must replace
+atomically (errors retain old bindings), finish in bounded time, and must not
+reenter Client methods. Holding the authority lock preserves matching client and
+transport snapshots; a reentrant transaction would require a different port
+contract. Descriptor mapper callbacks retain their existing reentry behavior.
+Transport queue/count refusals expose `TransportLimitError` with
+`ErrTransportLimitExceeded`; frame failures preserve `ErrReadLimitExceeded`.

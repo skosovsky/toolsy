@@ -1,0 +1,229 @@
+=== RUN   TestR13AIndependentRetirementExpiry
+2026/10/06 19:36:02 WARN mcp: notification for unknown subscription
+--- PASS: TestR13AIndependentRetirementExpiry (0.04s)
+=== RUN   TestR13AIndependentMalformedRetired
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}
+2026/10/06 19:36:02 WARN mcp: notification for unknown subscription
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":null}
+2026/10/06 19:36:02 WARN mcp: subscription notification missing metadata
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{}}
+2026/10/06 19:36:02 WARN mcp: subscription notification missing ID
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{
+2026/10/06 19:36:02 WARN mcp: invalid subscription notification err="unexpected EOF"
+--- PASS: TestR13AIndependentMalformedRetired (0.03s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":null} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{ (0.01s)
+=== RUN   TestR13AIndependentPendingCapacityLifecycle
+--- PASS: TestR13AIndependentPendingCapacityLifecycle (0.00s)
+=== RUN   TestR13AIndependentSSEExactRawBounds
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\n"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r\n"
+--- PASS: TestR13AIndependentSSEExactRawBounds (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\n" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r\n" (0.00s)
+=== RUN   TestR13AIndependentDiscoveryDuplicatesAtomic
+--- PASS: TestR13AIndependentDiscoveryDuplicatesAtomic (0.01s)
+=== RUN   TestR13AIndependentInvalidConfigsNoStart
+--- PASS: TestR13AIndependentInvalidConfigsNoStart (0.00s)
+=== RUN   TestR13AIndependentStdioCRLFFrameBudget
+--- PASS: TestR13AIndependentStdioCRLFFrameBudget (0.25s)
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- PASS: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.00s)
+=== RUN   TestR13AIndependentRetiredResourceMalformedFailsSibling
+--- PASS: TestR13AIndependentRetiredResourceMalformedFailsSibling (0.01s)
+=== RUN   TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached
+--- PASS: TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached (0.01s)
+=== RUN   TestR13AIndependentMapperCanReenterPageInspection
+--- PASS: TestR13AIndependentMapperCanReenterPageInspection (0.01s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentRetirementExpiry
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+--- PASS: TestR13AIndependentRetirementExpiry (0.04s)
+=== RUN   TestR13AIndependentMalformedRetired
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":null}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing metadata
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{}}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing ID
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{
+2026/10/06 19:36:03 WARN mcp: invalid subscription notification err="unexpected EOF"
+--- PASS: TestR13AIndependentMalformedRetired (0.03s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":null} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{ (0.01s)
+=== RUN   TestR13AIndependentPendingCapacityLifecycle
+--- PASS: TestR13AIndependentPendingCapacityLifecycle (0.00s)
+=== RUN   TestR13AIndependentSSEExactRawBounds
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\n"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r\n"
+--- PASS: TestR13AIndependentSSEExactRawBounds (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\n" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r\n" (0.00s)
+=== RUN   TestR13AIndependentDiscoveryDuplicatesAtomic
+--- PASS: TestR13AIndependentDiscoveryDuplicatesAtomic (0.01s)
+=== RUN   TestR13AIndependentInvalidConfigsNoStart
+--- PASS: TestR13AIndependentInvalidConfigsNoStart (0.00s)
+=== RUN   TestR13AIndependentStdioCRLFFrameBudget
+--- PASS: TestR13AIndependentStdioCRLFFrameBudget (0.25s)
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- PASS: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.00s)
+=== RUN   TestR13AIndependentRetiredResourceMalformedFailsSibling
+--- PASS: TestR13AIndependentRetiredResourceMalformedFailsSibling (0.01s)
+=== RUN   TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached
+--- PASS: TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached (0.01s)
+=== RUN   TestR13AIndependentMapperCanReenterPageInspection
+--- PASS: TestR13AIndependentMapperCanReenterPageInspection (0.01s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentRetirementExpiry
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+--- PASS: TestR13AIndependentRetirementExpiry (0.04s)
+=== RUN   TestR13AIndependentMalformedRetired
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":null}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing metadata
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{}}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing ID
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{
+2026/10/06 19:36:03 WARN mcp: invalid subscription notification err="unexpected EOF"
+--- PASS: TestR13AIndependentMalformedRetired (0.04s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":null} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{ (0.01s)
+=== RUN   TestR13AIndependentPendingCapacityLifecycle
+--- PASS: TestR13AIndependentPendingCapacityLifecycle (0.00s)
+=== RUN   TestR13AIndependentSSEExactRawBounds
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\n"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r\n"
+--- PASS: TestR13AIndependentSSEExactRawBounds (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\n" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r\n" (0.00s)
+=== RUN   TestR13AIndependentDiscoveryDuplicatesAtomic
+--- PASS: TestR13AIndependentDiscoveryDuplicatesAtomic (0.01s)
+=== RUN   TestR13AIndependentInvalidConfigsNoStart
+--- PASS: TestR13AIndependentInvalidConfigsNoStart (0.00s)
+=== RUN   TestR13AIndependentStdioCRLFFrameBudget
+--- PASS: TestR13AIndependentStdioCRLFFrameBudget (0.25s)
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- PASS: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.01s)
+=== RUN   TestR13AIndependentRetiredResourceMalformedFailsSibling
+--- PASS: TestR13AIndependentRetiredResourceMalformedFailsSibling (0.01s)
+=== RUN   TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached
+--- PASS: TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached (0.01s)
+=== RUN   TestR13AIndependentMapperCanReenterPageInspection
+--- PASS: TestR13AIndependentMapperCanReenterPageInspection (0.01s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentRetirementExpiry
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+--- PASS: TestR13AIndependentRetirementExpiry (0.04s)
+=== RUN   TestR13AIndependentMalformedRetired
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}
+2026/10/06 19:36:03 WARN mcp: notification for unknown subscription
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":null}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing metadata
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{}}
+2026/10/06 19:36:03 WARN mcp: subscription notification missing ID
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{
+2026/10/06 19:36:03 WARN mcp: invalid subscription notification err="unexpected EOF"
+--- PASS: TestR13AIndependentMalformedRetired (0.03s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":null} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{ (0.01s)
+=== RUN   TestR13AIndependentPendingCapacityLifecycle
+--- PASS: TestR13AIndependentPendingCapacityLifecycle (0.00s)
+=== RUN   TestR13AIndependentSSEExactRawBounds
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\n"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r\n"
+--- PASS: TestR13AIndependentSSEExactRawBounds (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\n" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r\n" (0.00s)
+=== RUN   TestR13AIndependentDiscoveryDuplicatesAtomic
+--- PASS: TestR13AIndependentDiscoveryDuplicatesAtomic (0.01s)
+=== RUN   TestR13AIndependentInvalidConfigsNoStart
+--- PASS: TestR13AIndependentInvalidConfigsNoStart (0.00s)
+=== RUN   TestR13AIndependentStdioCRLFFrameBudget
+--- PASS: TestR13AIndependentStdioCRLFFrameBudget (0.26s)
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- PASS: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.00s)
+=== RUN   TestR13AIndependentRetiredResourceMalformedFailsSibling
+--- PASS: TestR13AIndependentRetiredResourceMalformedFailsSibling (0.01s)
+=== RUN   TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached
+--- PASS: TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached (0.01s)
+=== RUN   TestR13AIndependentMapperCanReenterPageInspection
+--- PASS: TestR13AIndependentMapperCanReenterPageInspection (0.00s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentRetirementExpiry
+2026/10/06 19:36:04 WARN mcp: notification for unknown subscription
+--- PASS: TestR13AIndependentRetirementExpiry (0.04s)
+=== RUN   TestR13AIndependentMalformedRetired
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}
+2026/10/06 19:36:04 WARN mcp: notification for unknown subscription
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":null}
+2026/10/06 19:36:04 WARN mcp: subscription notification missing metadata
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{}}
+2026/10/06 19:36:04 WARN mcp: subscription notification missing ID
+=== RUN   TestR13AIndependentMalformedRetired/{"_meta":{
+2026/10/06 19:36:04 WARN mcp: invalid subscription notification err="unexpected EOF"
+--- PASS: TestR13AIndependentMalformedRetired (0.03s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{"io.modelcontextprotocol/subscriptionId":999}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":null} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{}} (0.01s)
+    --- PASS: TestR13AIndependentMalformedRetired/{"_meta":{ (0.01s)
+=== RUN   TestR13AIndependentPendingCapacityLifecycle
+--- PASS: TestR13AIndependentPendingCapacityLifecycle (0.00s)
+=== RUN   TestR13AIndependentSSEExactRawBounds
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\n"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r"
+=== RUN   TestR13AIndependentSSEExactRawBounds/"\r\n"
+--- PASS: TestR13AIndependentSSEExactRawBounds (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\n" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r" (0.00s)
+    --- PASS: TestR13AIndependentSSEExactRawBounds/"\r\n" (0.00s)
+=== RUN   TestR13AIndependentDiscoveryDuplicatesAtomic
+--- PASS: TestR13AIndependentDiscoveryDuplicatesAtomic (0.01s)
+=== RUN   TestR13AIndependentInvalidConfigsNoStart
+--- PASS: TestR13AIndependentInvalidConfigsNoStart (0.00s)
+=== RUN   TestR13AIndependentStdioCRLFFrameBudget
+--- PASS: TestR13AIndependentStdioCRLFFrameBudget (0.25s)
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- PASS: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.00s)
+=== RUN   TestR13AIndependentRetiredResourceMalformedFailsSibling
+--- PASS: TestR13AIndependentRetiredResourceMalformedFailsSibling (0.01s)
+=== RUN   TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached
+--- PASS: TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached (0.01s)
+=== RUN   TestR13AIndependentMapperCanReenterPageInspection
+--- PASS: TestR13AIndependentMapperCanReenterPageInspection (0.01s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	3.359s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]

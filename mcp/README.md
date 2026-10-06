@@ -45,12 +45,12 @@ to `toolsy.CodeValidationFailed` with the actual transport byte cap and operatio
 subject. The underlying cause remains inspectable. Cancellation, deadlines and
 timeout causes take precedence and do not become validation failures.
 
-The SSE scanner has one byte of token headroom beyond the stream budget, so a
-long line cannot replace the reader's budget failure with a scanner-only error.
-The bounded stream reader remains authoritative: requesting more bytes after
-exhausting its budget fails closed, including an unfinished line exactly at the
-cap. An unfinished line below the cap instead fails the terminal/framing contract.
-Scanner headroom does not increase the readable byte budget.
+Frame limits count raw framing bytes, including LF/CRLF for stdio and all SSE
+lines through the event delimiter. Scanner headroom permits counting delimiters;
+it does not increase the configured cap. Optional lifetime readers preserve their
+inspectable read-limit cause. No cumulative traffic cap applies by default.
+Admission failures for queued bytes or in-flight work expose
+`TransportLimitError` and `ErrTransportLimitExceeded`.
 
 Every wire result requires `resultType`. `complete` is returned as a method-specific typed result. `input_required` is accepted only from `tools/call`, `resources/read` and `prompts/get` and is surfaced distinctly; the library does not automatically answer or retry MRTR rounds. A host-driven retry uses a fresh request ID, current-round `inputResponses` and the server's byte-exact opaque `requestState`. Use `CallTool`, `ReadResourceRound` and `GetPromptRound` for explicit rounds; convenience APIs return `InputRequiredError` rather than hiding interim results.
 
@@ -124,7 +124,7 @@ Normalization follows [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-
 
 ```go
 builder := toolsy.NewRegistryBuilder()
-for proxy, err := range client.GetTools(ctx) {
+for proxy, err := range client.Discover(ctx) {
 	if err != nil {
 		return err
 	}
@@ -139,11 +139,11 @@ registry, err := builder.Build()
 
 Remote `annotations` are untrusted hints. The default proxy is `Dangerous: true`,
 `ReadOnly: false`, `Idempotent: false`, irrespective of `readOnlyHint`,
-`destructiveHint` or `idempotentHint`. `ListTools` preserves the original typed
+`destructiveHint` or `idempotentHint`. `ListToolsPage` preserves the original typed
 annotations and extension metadata for display and diagnostics; the manifest
 contains only host execution properties, not server claims.
 
-`WithToolPolicyMapper` is an explicit host decision during `GetTools`. It receives
+`WithToolPolicyMapper` is an explicit host decision during `Discover`. It receives
 that call's host context and an owned `MCPTool` descriptor snapshot. For example:
 
 ```go
@@ -234,3 +234,71 @@ apply to one owned safe pool; invalid settings fail Start before dispatch. Close
 releases owned idle connections after active posts finish. TLSConfig is cloned;
 referenced certificates, root pools and callback state remain immutable host
 state. A positive timeout also bounds each SSE response; zero uses caller context.
+
+
+## Transport, discovery and subscription limits
+
+`TransportLimits` configures `WithStdioLimits` / `WithStreamableHTTPLimits`:
+default MaxFrameBytes=1MiB, MaxQueueBytes=16MiB, MaxInFlight=64. Frames and active
+request correlation are bounded separately from traffic lifetime. MaxQueueBytes
+bounds retained outgoing requests/writes; pending response slots are bounded by
+MaxInFlight and each response frame. Caller-retained completed outcomes are host
+objects, not a library queue. Incoming notifications dispatch synchronously, so
+there is no unbounded notification queue. Client event channels hold 64 events;
+overflow drops advisory delivery while validated active invalidations still advance
+current authority. Host callbacks must finish/cooperate with cancellation.
+
+MaxLifetimeBytes=0 leaves cumulative traffic unlimited. Positive lifetime bounds
+stdio stdout for that process, or each HTTP SSE response body. A frame cap applies
+to each stdio JSON line including its newline, and to each SSE event's raw lines
+and delimiters (comments included), resetting at an empty line. HTTP JSON bodies
+are one frame. Exact frame bounds are inclusive; outgoing stdio adds one LF byte, while incoming
+LF/CRLF counts its actual one/two delimiter bytes. Encoded outgoing RPC payloads
+are conservatively strictly below
+MaxFrameBytes. Oversized scanner tokens preserve the typed read-limit sentinel.
+Neither a frame cap nor lifetime cap is a timeout; caller contexts still matter.
+Negative limits and nil options fail before Start/Connect dispatch. Configure
+larger frame bounds explicitly for deliberately large messages.
+
+`WithPaginationLimits` separately bounds pages/cursor bytes, total tool count
+(default 10000), and cumulative raw tool-list response bytes (default 16MiB).
+Limits apply before descriptor accumulation/schema compilation. `ListToolsPage`
+returns a validated page with its original cache hints and never publishes routing
+authority. `DiscoverTools` returns a full `ToolDiscovery` (Tools, Pages, Generation)
+and atomically publishes the validated complete authority. Failed or stale discovery
+preserves existing authority unless an actual invalidation has already revoked it.
+`Discover` builds proxies through that same full discovery path. Page TTLs are not
+collapsed into an invented aggregate TTL. No unrestricted client authority setter
+is available. Transport header-binding publication is a trusted client facet,
+not a permission grant to a model or an authenticated subject.
+
+`WithSubscriptionLimits` defaults to MaxActive=64, MaxTracked=1024 and RetireTTL=1m.
+Tracked capacity includes active routes with reserved space for local cancellation;
+saturation refuses new Listen without evicting an active or recently retired ID.
+After Close or parent cancellation, late well-formed messages for a locally retired
+ID are ignored without generation change or sibling cancellation. In-flight traffic
+can race with cancellation already beginning. IDs beyond the bounded retirement
+window become unknown and trigger the strict unknown-ID policy. Malformed messages
+and unexpected active-route messages retain strict validation. Custom transports
+must not reuse a request ID within the correlation window. No wall-clock timer or
+unbounded tombstone map is created; expired entries are pruned on new admission or
+lookup while the retained count stays bounded.
+
+A minimal custom `Transport` implements Start, PrepareRequest, Notify,
+OnNotification and Close. PrepareRequest returns a stable ID before wire delivery;
+PreparedRequest adds exactly-once Deliver/Abort to PendingRequest.ID/Await. Await
+must honor context and must terminate on transport Close. Register correlation
+before Deliver; do not invoke notifications from PrepareRequest. Optional facets
+report real capabilities (terminal hooks, sent/cancel correlation, request-scoped
+HTTP notifications, validated header bindings, FrameByteCapTransport). Keep those
+facets narrow; implementing an unrelated giant interface is unnecessary. Custom
+ports must independently enforce their frame/queue/lifetime guarantees. Built-in
+bounds do not automatically constrain arbitrary host transport code.
+
+`ToolHeaderTransport.ReplaceToolHeaderBindings` is a synchronous atomic replace:
+on error it must leave previous bindings intact, finish in bounded time, and must
+not reenter Client methods. The client holds its authority lock to commit matching
+client and transport snapshots. This restriction applies only to the replacement
+facet, not descriptor mappers or other callbacks. Cancellation is checked under
+that lock before publication starts; cancellation after this commit point does not
+roll back a successful publication. Generation changes still invalidate authority.

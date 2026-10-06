@@ -1,0 +1,22 @@
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+=== RUN   TestR13AIndependentCanceledPublicationBeforeCommit
+--- PASS: TestR13AIndependentCanceledPublicationBeforeCommit (0.01s)
+=== RUN   TestR13AIndependentTypedRetainedLimits
+--- PASS: TestR13AIndependentTypedRetainedLimits (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	1.809s

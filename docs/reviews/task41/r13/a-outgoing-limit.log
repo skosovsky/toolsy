@@ -1,0 +1,12 @@
+=== RUN   TestR13AIndependentStdioOutgoingNotificationTypedLimit
+    r13_acceptance_a_probe_test.go:70: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_acceptance_a_probe_test.go:70
+        	Error:      	Target error should be in err chain:
+        	            	expected: "read operation exceeded configured byte limit"
+        	            	in chain: "mcp: invalid stdio outgoing frame payload: encoded frame exceeds 128-byte limit"
+        	            		"encoded frame exceeds 128-byte limit"
+        	Test:       	TestR13AIndependentStdioOutgoingNotificationTypedLimit
+--- FAIL: TestR13AIndependentStdioOutgoingNotificationTypedLimit (0.01s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	0.642s
+FAIL

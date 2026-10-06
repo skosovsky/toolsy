@@ -451,7 +451,10 @@ func TestStdioBlockingWriteCancellationRaceCount(t *testing.T) {
 
 func TestStdioOutgoingFrameLimitRejectsRequestAndNotificationBeforeEnqueue(t *testing.T) {
 	// Arrange.
-	transport, writer, stop := newAdversarialStdioTransport(t, WithStdioMaxStreamBytes(512))
+	transport, writer, stop := newAdversarialStdioTransport(
+		t,
+		WithStdioLimits(TransportLimits{MaxFrameBytes: 512, MaxQueueBytes: 512}),
+	)
 	defer stop()
 
 	// Act.
@@ -481,7 +484,10 @@ func TestStdioOutgoingFrameLimitRejectsRequestAndNotificationBeforeEnqueue(t *te
 func TestStdioWriteQueueByteBudgetReleasesAcrossSixtyFourCancellationRaces(t *testing.T) {
 	// Arrange.
 	const byteBudget = 4096
-	transport, writer, stop := newAdversarialStdioTransport(t, WithStdioMaxStreamBytes(byteBudget))
+	transport, writer, stop := newAdversarialStdioTransport(
+		t,
+		WithStdioLimits(TransportLimits{MaxFrameBytes: byteBudget, MaxQueueBytes: byteBudget}),
+	)
 	defer stop()
 	blockerDone := make(chan error, 1)
 	go func() { blockerDone <- transport.send(t.Context(), []byte(`{"jsonrpc":"2.0","method":"blocker"}`)) }()
@@ -540,7 +546,10 @@ func TestRequestScopedSSEFailsOnEOFAndByteLimit(t *testing.T) {
 	// Arrange.
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	transport := NewStreamableHTTPTransport("https://example.com/mcp", WithStreamableHTTPMaxStreamBytes(128))
+	transport := NewStreamableHTTPTransport(
+		"https://example.com/mcp",
+		WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 128}),
+	)
 	transport.peer = newRPCPeer(ctx, nil, func(context.Context, []byte) error { return nil })
 	transport.peer.setNotificationHandler(MethodProgress, func(json.RawMessage) {})
 	provenance := &sseRequestProvenance{

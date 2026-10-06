@@ -19,6 +19,7 @@ import (
 )
 
 const (
+	stdioTransportKind         = "stdio"
 	maxStdioLogLineBytes       = 256
 	stdioStderrReadBufferBytes = 4096
 	stdioWriteQueueSize        = 64
@@ -51,21 +52,10 @@ const (
 	stdioWriteFinished
 )
 
-func WithLogger(logger *slog.Logger) StdioTransportOption {
+func WithStdioLogger(logger *slog.Logger) StdioTransportOption {
 	return func(transport *StdioTransport) {
 		if logger != nil {
 			transport.logger = logger
-		}
-	}
-}
-
-// WithStdioMaxStreamBytes limits protocol bytes read from child stdout, each
-// encoded outgoing frame, and aggregate bytes retained in the write queue.
-// Stderr is consumed independently with bounded per-line logging.
-func WithStdioMaxStreamBytes(limit int) StdioTransportOption {
-	return func(transport *StdioTransport) {
-		if limit > 0 {
-			transport.maxStreamBytes = limit
 		}
 	}
 }
@@ -75,31 +65,35 @@ type StdioTransport struct {
 	args       []string
 	logger     *slog.Logger
 
-	maxStreamBytes int
-	mu             sync.Mutex
-	started        bool
-	closed         bool
-	lifetimeCtx    context.Context
-	cancel         context.CancelFunc
-	cmd            *exec.Cmd
-	processTree    processTree
-	stdin          io.WriteCloser
-	stdout         io.ReadCloser
-	stderr         io.ReadCloser
-	readerDone     chan struct{}
-	writerDone     chan struct{}
-	stderrDone     chan struct{}
-	processDone    chan struct{}
-	processErr     chan error
-	processCause   error
-	writeQueue     chan *stdioWrite
-	activeWrites   atomic.Int32
-	peer           *rpcPeer
-	terminalErr    error
-	enqueueMu      sync.RWMutex
-	queuedBytes    int
-	notifyHandlers map[string]NotificationHandler
-	closeOnce      sync.Once
+	maxFrameBytes    int
+	limits           TransportLimits
+	limitsErr        error
+	maxQueueBytes    int
+	maxLifetimeBytes int
+	mu               sync.Mutex
+	started          bool
+	closed           bool
+	lifetimeCtx      context.Context
+	cancel           context.CancelFunc
+	cmd              *exec.Cmd
+	processTree      processTree
+	stdin            io.WriteCloser
+	stdout           io.ReadCloser
+	stderr           io.ReadCloser
+	readerDone       chan struct{}
+	writerDone       chan struct{}
+	stderrDone       chan struct{}
+	processDone      chan struct{}
+	processErr       chan error
+	processCause     error
+	writeQueue       chan *stdioWrite
+	activeWrites     atomic.Int32
+	peer             *rpcPeer
+	terminalErr      error
+	enqueueMu        sync.RWMutex
+	queuedBytes      int
+	notifyHandlers   map[string]NotificationHandler
+	closeOnce        sync.Once
 }
 
 func NewStdioTransport(
@@ -108,10 +102,10 @@ func NewStdioTransport(
 	opts ...StdioTransportOption,
 ) *StdioTransport {
 	transport := &StdioTransport{
-		executable:     executable,
-		args:           append([]string(nil), args...),
-		logger:         slog.Default(),
-		maxStreamBytes: httptool.DefaultMaxSSEStreamBytes,
+		executable: executable,
+		args:       append([]string(nil), args...),
+		logger:     slog.Default(),
+
 		readerDone:     make(chan struct{}),
 		writerDone:     make(chan struct{}),
 		stderrDone:     make(chan struct{}),
@@ -121,12 +115,29 @@ func NewStdioTransport(
 		notifyHandlers: make(map[string]NotificationHandler),
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			transport.limitsErr = errors.New("mcp: nil stdio option")
+			continue
+		}
 		opt(transport)
 	}
+	normalized, err := transport.limits.normalized()
+	if err != nil {
+		normalized, _ = (TransportLimits{}).normalized()
+	}
+	if transport.limitsErr == nil {
+		transport.limitsErr = err
+	}
+	transport.limits = normalized
+	transport.maxFrameBytes, transport.maxQueueBytes, transport.maxLifetimeBytes = normalized.MaxFrameBytes, normalized.MaxQueueBytes, normalized.MaxLifetimeBytes
+	transport.writeQueue = make(chan *stdioWrite, normalized.MaxInFlight)
 	return transport
 }
 
 func (t *StdioTransport) Start(ctx context.Context) error {
+	if t.limitsErr != nil {
+		return t.limitsErr
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -151,9 +162,13 @@ func (t *StdioTransport) Start(ctx context.Context) error {
 	t.cmd = process.cmd
 	t.processTree = process.tree
 	t.stdin = process.stdin
-	t.stdout = httptool.LimitStreamReadCloserWithContext(lifetimeCtx, process.stdout, t.maxStreamBytes)
+	t.stdout = process.stdout
+	if t.maxLifetimeBytes > 0 {
+		t.stdout = httptool.LimitStreamReadCloserWithContext(lifetimeCtx, process.stdout, t.maxLifetimeBytes)
+	}
 	t.stderr = process.stderr
 	t.peer = newRPCPeer(lifetimeCtx, t.logger, t.send)
+	t.peer.limits = t.limits
 	for method, handler := range t.notifyHandlers {
 		t.peer.setNotificationHandler(method, handler)
 	}
@@ -224,10 +239,10 @@ func (t *StdioTransport) sendTracked(ctx context.Context, body []byte, onSent fu
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if len(body) >= t.maxStreamBytes {
+	if len(body) >= t.maxFrameBytes {
 		return &InvalidPayloadError{
 			Subject: "stdio outgoing frame",
-			Err:     fmt.Errorf("encoded frame exceeds %d-byte limit", t.maxStreamBytes),
+			Err:     frameLimitError("stdio outgoing frame", t.maxFrameBytes),
 		}
 	}
 	frame := append(append([]byte(nil), body...), '\n')
@@ -242,12 +257,12 @@ func (t *StdioTransport) sendTracked(ctx context.Context, body []byte, onSent fu
 		}
 		return ErrTransportClosed
 	}
-	if len(frame) > t.maxStreamBytes-t.queuedBytes {
+	if len(frame) > t.maxQueueBytes-t.queuedBytes {
 		t.mu.Unlock()
 		t.enqueueMu.RUnlock()
 		return &InvalidPayloadError{
 			Subject: "stdio outgoing queue",
-			Err:     fmt.Errorf("retained frames exceed %d-byte budget", t.maxStreamBytes),
+			Err:     &TransportLimitError{Resource: "queued bytes", Limit: t.maxQueueBytes},
 		}
 	}
 	t.queuedBytes += len(frame)
@@ -417,10 +432,10 @@ func (t *StdioTransport) PrepareRequest(
 	if err != nil {
 		return nil, err
 	}
-	if len(body) >= t.maxStreamBytes {
+	if len(body) >= t.maxFrameBytes {
 		frameErr := &InvalidPayloadError{
 			Subject: "stdio outgoing frame",
-			Err:     fmt.Errorf("encoded frame exceeds %d-byte limit", t.maxStreamBytes),
+			Err:     frameLimitError("stdio outgoing frame", t.maxFrameBytes),
 		}
 		peer.failPending(pending, frameErr)
 		return nil, frameErr
@@ -472,13 +487,28 @@ func (t *StdioTransport) OnNotification(method string, handler NotificationHandl
 func (t *StdioTransport) readLoop() {
 	defer close(t.readerDone)
 	scanner := bufio.NewScanner(t.stdout)
-	scanner.Buffer(nil, rpcJSONLineScannerMaxBytes)
+	scanner.Buffer(nil, t.maxFrameBytes+2)
+	frameBytes := 0
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		advance, token, err := bufio.ScanLines(data, atEOF)
+		frameBytes = advance
+		return advance, token, err
+	})
 	for scanner.Scan() {
 		// Scanner may yield a final partial token after a reader failure. A
 		// byte-budget or cancellation error must not become a JSON syntax error,
 		// and an incomplete frame must never complete a correlated request.
 		if err := scanner.Err(); err != nil {
-			t.closeAsync(&TransportCrashError{Transport: "stdio", Err: err})
+			t.closeAsync(&TransportCrashError{Transport: stdioTransportKind, Err: err})
+			return
+		}
+		if frameBytes > t.maxFrameBytes {
+			t.closeAsync(
+				&TransportCrashError{
+					Transport: stdioTransportKind,
+					Err:       frameLimitError("stdio frame", t.maxFrameBytes),
+				},
+			)
 			return
 		}
 		line := append([]byte(nil), scanner.Bytes()...)
@@ -491,6 +521,9 @@ func (t *StdioTransport) readLoop() {
 		}
 	}
 	err := scanner.Err()
+	if errors.Is(err, bufio.ErrTooLong) {
+		err = frameLimitError("stdio frame", t.maxFrameBytes)
+	}
 	if err == nil {
 		err = errors.New("process stdout closed")
 	}
@@ -506,7 +539,7 @@ func (t *StdioTransport) readLoop() {
 		case <-time.After(stdioProcessExitGrace):
 		}
 	}
-	t.closeAsync(&TransportCrashError{Transport: "stdio", Err: err})
+	t.closeAsync(&TransportCrashError{Transport: stdioTransportKind, Err: err})
 }
 
 func (t *StdioTransport) processCrashError() error {
@@ -567,7 +600,7 @@ func formatStderrLine(line []byte, truncated bool) string {
 	return value + suffix
 }
 
-func (t *StdioTransport) MaxStreamBytes() int { return t.maxStreamBytes }
+func (t *StdioTransport) MaxFrameBytes() int { return t.maxFrameBytes }
 
 func (t *StdioTransport) failureCause(fallback error) error {
 	t.mu.Lock()
@@ -641,4 +674,4 @@ func (t *StdioTransport) stopProcess(cmd *exec.Cmd, tree processTree) error {
 }
 
 var _ Transport = (*StdioTransport)(nil)
-var _ StreamByteCapTransport = (*StdioTransport)(nil)
+var _ FrameByteCapTransport = (*StdioTransport)(nil)

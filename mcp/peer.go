@@ -33,21 +33,22 @@ type rpcIDRange struct {
 }
 
 type pendingRequest struct {
-	id           json.RawMessage
-	key          string
-	peer         *rpcPeer
-	ch           chan callResult
-	once         sync.Once
-	terminalOnce sync.Once
-	terminal     chan struct{}
-	deliveryOnce sync.Once
-	deliveryDone chan struct{}
-	sent         atomic.Bool
-	cancelled    atomic.Bool
-	cancelNotify atomic.Bool
-	mu           sync.Mutex
-	done         bool
-	hooks        []func()
+	id            json.RawMessage
+	key           string
+	retainedBytes int
+	peer          *rpcPeer
+	ch            chan callResult
+	once          sync.Once
+	terminalOnce  sync.Once
+	terminal      chan struct{}
+	deliveryOnce  sync.Once
+	deliveryDone  chan struct{}
+	sent          atomic.Bool
+	cancelled     atomic.Bool
+	cancelNotify  atomic.Bool
+	mu            sync.Mutex
+	done          bool
+	hooks         []func()
 }
 
 func (p *pendingRequest) ID() json.RawMessage { return bytes.Clone(p.id) }
@@ -130,12 +131,14 @@ func (p *pendingRequest) OnComplete(hook func()) {
 
 type rpcPeer struct {
 	logger *slog.Logger
+	limits TransportLimits
 	send   func(context.Context, []byte) error
 	ctx    context.Context
 
 	requestID       atomic.Uint64
 	pendingMu       sync.Mutex
 	pending         map[string]*pendingRequest
+	pendingBytes    int
 	cancelledRanges []rpcIDRange
 	notifyMu        sync.RWMutex
 	notify          map[string]NotificationHandler
@@ -155,7 +158,12 @@ func newRPCPeer(
 
 	peerCtx, cancel := context.WithCancel(ctx)
 	return &rpcPeer{
-		logger:  logger,
+		logger: logger,
+		limits: TransportLimits{
+			MaxFrameBytes: defaultTransportMaxFrameBytes,
+			MaxQueueBytes: defaultTransportMaxQueueBytes,
+			MaxInFlight:   defaultTransportMaxInFlight,
+		},
 		send:    send,
 		ctx:     peerCtx,
 		pending: make(map[string]*pendingRequest),
@@ -194,19 +202,34 @@ func (p *rpcPeer) beginRequest(method string, params any) (*pendingRequest, []by
 	if err != nil {
 		return nil, nil, err
 	}
+	if len(body) >= p.limits.MaxFrameBytes {
+		return nil, nil, &InvalidPayloadError{
+			Subject: "JSON-RPC outgoing frame",
+			Err:     frameLimitError("outgoing frame", p.limits.MaxFrameBytes),
+		}
+	}
 	pending := &pendingRequest{
-		id:           bytes.Clone(idRaw),
-		key:          key,
-		peer:         p,
-		ch:           make(chan callResult, 1),
-		terminal:     make(chan struct{}),
-		deliveryDone: make(chan struct{}),
+		id:            bytes.Clone(idRaw),
+		key:           key,
+		retainedBytes: len(body),
+		peer:          p,
+		ch:            make(chan callResult, 1),
+		terminal:      make(chan struct{}),
+		deliveryDone:  make(chan struct{}),
 	}
 	p.pendingMu.Lock()
 	if p.closed.Load() {
 		p.pendingMu.Unlock()
 		return nil, nil, ErrTransportClosed
 	}
+	if err := retainedWorkLimit(len(p.pending), p.pendingBytes, len(body), p.limits); err != nil {
+		p.pendingMu.Unlock()
+		return nil, nil, &InvalidPayloadError{
+			Subject: "JSON-RPC pending requests",
+			Err:     err,
+		}
+	}
+	p.pendingBytes += pending.retainedBytes
 	p.pending[key] = pending
 	p.pendingMu.Unlock()
 	return pending, body, nil
@@ -219,6 +242,7 @@ func (p *rpcPeer) cancelPending(expected *pendingRequest) bool {
 	if p.pending[expected.key] == expected {
 		expected.cancelled.Store(true)
 		delete(p.pending, expected.key)
+		p.pendingBytes -= expected.retainedBytes
 		id, idErr := strconv.ParseUint(string(expected.id), 10, 64)
 		if idErr != nil || !p.addCancelledLocked(id) {
 			overflow = &InvalidPayloadError{
@@ -244,6 +268,7 @@ func (p *rpcPeer) failPending(pending *pendingRequest, err error) {
 	claimed := p.pending[pending.key] == pending
 	if claimed {
 		delete(p.pending, pending.key)
+		p.pendingBytes -= pending.retainedBytes
 	} else if pending.cancelled.Load() && !pending.sent.Load() {
 		_, stateErr = p.consumeCancelledLocked(pending.key)
 	}
@@ -402,8 +427,8 @@ func (p *rpcPeer) dispatchEnvelope(
 			Err:     errors.New("response must contain id and exactly one of result or error"),
 		}
 		// A malformed response with a valid, active correlation ID must still
-		// complete that call. Stdio deliberately keeps reading after bad frames,
-		// so merely returning the validation error would otherwise hang Await.
+		// complete that call before transport termination. A custom caller may
+		// also inspect the correlated pending error independently of dispatch.
 		p.failCorrelatedResponse(message.ID, payloadErr)
 		return payloadErr
 	}
@@ -415,6 +440,7 @@ func (p *rpcPeer) dispatchEnvelope(
 	pending := p.pending[key]
 	if pending != nil {
 		delete(p.pending, key)
+		p.pendingBytes -= pending.retainedBytes
 	} else if cancelled, stateErr := p.consumeCancelledLocked(key); stateErr != nil {
 		p.pendingMu.Unlock()
 		p.close(stateErr)
@@ -585,6 +611,7 @@ func (p *rpcPeer) failCorrelatedResponse(id json.RawMessage, err error) {
 	pending := p.pending[key]
 	if pending != nil {
 		delete(p.pending, key)
+		p.pendingBytes -= pending.retainedBytes
 	}
 	p.pendingMu.Unlock()
 	if pending != nil {
@@ -627,6 +654,7 @@ func (p *rpcPeer) close(err error) {
 		p.pendingMu.Lock()
 		pending := p.pending
 		p.pending = make(map[string]*pendingRequest)
+		p.pendingBytes = 0
 		p.cancelledRanges = nil
 		p.pendingMu.Unlock()
 		for _, request := range pending {

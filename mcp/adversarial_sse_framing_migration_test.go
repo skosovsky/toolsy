@@ -17,7 +17,7 @@ func TestStreamableHTTP_EmptySSEDataDoesNotCompleteRequest(t *testing.T) {
 	pending, _, err := peer.beginRequest(MethodServerDiscover, migrationDiscoveryParams())
 	require.NoError(t, err)
 	t.Cleanup(func() { peer.close(ErrTransportClosed) })
-	transport := &StreamableHTTPTransport{maxStreamBytes: httptool.DefaultMaxSSEStreamBytes, peer: peer}
+	transport := &StreamableHTTPTransport{maxFrameBytes: httptool.DefaultMaxSSEStreamBytes, peer: peer}
 	provenance := &sseRequestProvenance{requestID: pending.ID(), method: MethodServerDiscover}
 	// Act.
 	err = transport.consumeRequestSSE(t.Context(), strings.NewReader("id: primed\ndata:\n\n"), provenance)
@@ -39,8 +39,8 @@ func TestStreamableHTTP_SSEAcceptsStandardLineEndingsAndLeadingBOM(t *testing.T)
 			pending, _, err := peer.beginRequest(MethodServerDiscover, migrationDiscoveryParams())
 			require.NoError(t, err)
 			transport := &StreamableHTTPTransport{
-				maxStreamBytes: httptool.DefaultMaxSSEStreamBytes,
-				peer:           peer,
+				maxFrameBytes: httptool.DefaultMaxSSEStreamBytes,
+				peer:          peer,
 			}
 			stream := "\ufeffid: cursor" + separator +
 				fmt.Sprintf(`data: {"jsonrpc":"2.0","id":%s,"result":{}}`, pending.ID()) +
@@ -68,7 +68,7 @@ func TestStreamableHTTP_SSEDiscardsIncompleteEventAtEOF(t *testing.T) {
 	pending, _, err := peer.beginRequest(MethodServerDiscover, migrationDiscoveryParams())
 	require.NoError(t, err)
 	t.Cleanup(func() { peer.close(ErrTransportClosed) })
-	transport := &StreamableHTTPTransport{maxStreamBytes: httptool.DefaultMaxSSEStreamBytes, peer: peer}
+	transport := &StreamableHTTPTransport{maxFrameBytes: httptool.DefaultMaxSSEStreamBytes, peer: peer}
 	provenance := &sseRequestProvenance{requestID: pending.ID(), method: MethodServerDiscover}
 	stream := fmt.Sprintf("id: next\ndata: {\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{}}\n", pending.ID())
 	// Act.
@@ -84,13 +84,13 @@ func TestStreamableHTTP_SSEDiscardsIncompleteEventAtEOF(t *testing.T) {
 
 func TestStreamableHTTP_SSELineUsesConfiguredStreamLimit(t *testing.T) {
 	// Arrange.
-	const payloadSize = rpcJSONLineScannerMaxBytes + 1024
+	const payloadSize = defaultTransportMaxFrameBytes + 1024
 	peer := newRPCPeer(context.Background(), nil, func(context.Context, []byte) error { return nil })
 	pending, _, err := peer.beginRequest(MethodServerDiscover, migrationDiscoveryParams())
 	require.NoError(t, err)
 	transport := &StreamableHTTPTransport{
-		maxStreamBytes: 2 * payloadSize,
-		peer:           peer,
+		maxFrameBytes: 2 * payloadSize,
+		peer:          peer,
 	}
 	result := strings.Repeat("x", payloadSize)
 	stream := fmt.Sprintf(

@@ -42,13 +42,13 @@ func TestTask34PaginationPreservesChangingPerPageCacheSnapshots(t *testing.T) {
 	defer client.Close()
 
 	// Act.
-	first, firstErr := client.ListTools(t.Context(), "")
-	second, secondErr := client.ListTools(t.Context(), first.NextCursor)
+	first, firstErr := client.ListToolsPage(t.Context(), "")
+	second, secondErr := client.ListToolsPage(t.Context(), first.NextCursor)
 	firstDigest, firstDigestErr := ComputeSnapshotDigest(first)
 	secondDigest, secondDigestErr := ComputeSnapshotDigest(second)
 	iterated := 0
 	var iterationErr error
-	for _, itemErr := range client.GetTools(context.Background()) {
+	for _, itemErr := range client.Discover(context.Background()) {
 		if itemErr != nil {
 			iterationErr = itemErr
 			break

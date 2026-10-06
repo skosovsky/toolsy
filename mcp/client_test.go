@@ -104,7 +104,7 @@ type streamCapCaptureTransport struct {
 	streamCap int
 }
 
-func (t *streamCapCaptureTransport) MaxStreamBytes() int { return t.streamCap }
+func (t *streamCapCaptureTransport) MaxFrameBytes() int { return t.streamCap }
 
 type notifyCaptureTransport struct {
 	notifyCtx context.Context
@@ -413,7 +413,7 @@ func TestGetTools_RemoteAnnotationsRemainUntrusted(t *testing.T) {
 	ctx := context.Background()
 
 	var tools []toolsy.Tool
-	for tool, iterErr := range client.GetTools(ctx) {
+	for tool, iterErr := range client.Discover(ctx) {
 		require.NoError(t, iterErr)
 		tools = append(tools, tool)
 	}
@@ -453,7 +453,7 @@ func TestGetTools_ReadLimitExceeded(t *testing.T) {
 	t.Parallel()
 	client := newReadyCaptureClient(t, &connectCaptureTransport{callErr: textprocessor.ErrReadLimitExceeded})
 	var iterErr error
-	for _, err := range client.GetTools(context.Background()) {
+	for _, err := range client.Discover(context.Background()) {
 		if err != nil {
 			iterErr = err
 			break
@@ -507,7 +507,7 @@ func TestGetTools_ReadLimit_CustomStreamCap(t *testing.T) {
 		streamCap: customCap,
 	})
 	var iterErr error
-	for _, err := range client.GetTools(context.Background()) {
+	for _, err := range client.Discover(context.Background()) {
 		if err != nil {
 			iterErr = err
 			break

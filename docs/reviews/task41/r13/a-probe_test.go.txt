@@ -1,0 +1,119 @@
+package mcp
+import("context";"encoding/json";"errors";"fmt";"strings";"testing";"time";"github.com/stretchr/testify/require";"github.com/skosovsky/toolsy/textprocessor")
+func TestR13AIndependentRetirementExpiry(t *testing.T){
+ // Arrange.
+ c,tr:=retirementClient(t,WithSubscriptionLimits(SubscriptionLimits{MaxActive:2,MaxTracked:2,RetireTTL:20*time.Millisecond}))
+ a,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,e)
+ b,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,e);defer b.Close()
+ // Act.
+ a.Close();<-a.Done();require.NoError(t,tr.emit(MethodToolsListChanged,map[string]any{"_meta":Meta{metaSubscriptionID:json.RawMessage(a.ID)}}))
+ // Assert.
+ require.Zero(t,c.InvalidationGeneration());select{case <-b.Done():t.Fatal(b.Err());default:}
+ time.Sleep(30*time.Millisecond)
+ require.NoError(t,tr.emit(MethodToolsListChanged,map[string]any{"_meta":Meta{metaSubscriptionID:json.RawMessage(a.ID)}}))
+ select{case <-b.Done():require.ErrorContains(t,b.Err(),"unknown ID");case<-time.After(time.Second):t.Fatal("expired correlation ignored")}
+}
+func TestR13AIndependentMalformedRetired(t *testing.T){for _,raw:=range []string{`{"_meta":{"io.modelcontextprotocol/subscriptionId":999}}`,`{"_meta":null}`,`{"_meta":{}}`,`{"_meta":{`,}{t.Run(raw,func(t *testing.T){
+ // Arrange.
+ c,tr:=retirementClient(t);a,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,e);b,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,e);defer b.Close();a.Close();<-a.Done()
+ // Act.
+ c.handleSubscriptionInvalidation(InvalidationTools,json.RawMessage(raw))
+ // Assert.
+ select{case<-b.Done():require.Error(t,b.Err());case<-time.After(time.Second):t.Fatal("strict malformed policy lost")};_ = tr
+})}}
+func TestR13AIndependentPendingCapacityLifecycle(t *testing.T){
+ // Arrange.
+ p:=newRPCPeer(t.Context(),nil,func(context.Context,[]byte)error{return nil});defer p.close(ErrTransportClosed);p.limits.MaxInFlight=1
+ a,_,e:=p.beginRequest("a",struct{}{});require.NoError(t,e)
+ // Act/Assert.
+ _,_,e=p.beginRequest("b",struct{}{});require.Error(t,e);require.NoError(t,p.dispatch([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":{}}`,a.ID()))));require.Zero(t,p.pendingBytes)
+ b,_,e:=p.beginRequest("b",struct{}{});require.NoError(t,e);e=p.dispatch([]byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":{},"error":{}}`,b.ID())));require.Error(t,e);require.Zero(t,p.pendingBytes)
+ _,_,e=p.beginRequest("c",struct{}{});require.NoError(t,e);p.close(context.Canceled);require.Zero(t,p.pendingBytes)
+}
+func TestR13AIndependentSSEExactRawBounds(t *testing.T){for _,delim:=range []string{"\n","\r","\r\n"}{t.Run(fmt.Sprintf("%q",delim),func(t *testing.T){
+ // Arrange.
+ frame:=":"+strings.Repeat("x",30)+delim+delim;tr:=&StreamableHTTPTransport{maxFrameBytes:len(frame)}
+ // Act/Assert.
+ e:=tr.consumeRequestSSE(t.Context(),strings.NewReader(frame),&sseRequestProvenance{});require.False(t,errors.Is(e,textprocessor.ErrReadLimitExceeded))
+ tr.maxFrameBytes--;e=tr.consumeRequestSSE(t.Context(),strings.NewReader(frame),&sseRequestProvenance{});require.ErrorIs(t,e,textprocessor.ErrReadLimitExceeded)
+})}}
+func TestR13AIndependentDiscoveryDuplicatesAtomic(t *testing.T){
+ // Arrange.
+ phase:=0;base:=newContractTransport(func(method string,raw json.RawMessage)(json.RawMessage,error){if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil};var params ToolsListParams;require.NoError(t,json.Unmarshal(raw,&params)); name,next:="old","";if phase==1{name,next="dup","cursor";if params.Cursor!=""{next=""}};return json.Marshal(ToolsListResult{ResultType:ResultTypeComplete,TTLMS:JSONNumber("0"),CacheScope:CacheScopePrivate,Tools:[]MCPTool{{Name:name,InputSchema:json.RawMessage(`{"type":"object"}`)}},NextCursor:next})})
+ tr:=&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)};c,e:=Connect(t.Context(),tr);require.NoError(t,e);defer c.Close();_,e=c.DiscoverTools(t.Context());require.NoError(t,e)
+ // Act/Assert.
+ phase=1;_,e=c.DiscoverTools(t.Context());require.ErrorContains(t,e,"duplicate");require.Contains(t,tr.bindings,"old");require.NotContains(t,tr.bindings,"dup")
+}
+func TestR13AIndependentInvalidConfigsNoStart(t *testing.T){for _,opt:=range []ClientOption{nil,WithPaginationLimits(PaginationLimits{MaxItems:-1}),WithSubscriptionLimits(SubscriptionLimits{MaxActive:3,MaxTracked:2}),WithSubscriptionLimits(SubscriptionLimits{RetireTTL:-1})}{
+ // Arrange/Act.
+ tr:=newFakeTransport();c,e:=Connect(t.Context(),tr,opt)
+ // Assert.
+ require.Nil(t,c);require.Error(t,e);require.Empty(t,tr.requests)
+};_ = errors.Is}
+
+func TestR13AIndependentStdioCRLFFrameBudget(t *testing.T){
+ // Arrange: scanner accepts CRLF JSON lines but raw frame exceeds budget by one.
+ body:=`{"jsonrpc":"2.0","method":"notifications/vendor/pad","params":{"x":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}`
+ tr:=quietStdioTransport("/bin/sh",[]string{"-c","printf '%s\\r\\n' '"+body+"'; sleep 30"},WithStdioLimits(TransportLimits{MaxFrameBytes:len(body)+1}))
+ delivered:=make(chan struct{},1);tr.OnNotification("notifications/vendor/pad",func(json.RawMessage){delivered<-struct{}{}})
+ require.NoError(t,tr.Start(t.Context()));defer tr.Close()
+ // Act/Assert: do not dispatch raw over-budget frame.
+ select{case<-delivered:t.Fatal("over-budget CRLF frame dispatched");case<-time.After(250*time.Millisecond):}
+}
+
+func TestR13AIndependentStdioOutgoingNotificationTypedLimit(t *testing.T){
+ // Arrange.
+ tr:=quietStdioTransport("/bin/sh",[]string{"-c","sleep 30"},WithStdioLimits(TransportLimits{MaxFrameBytes:128}));require.NoError(t,tr.Start(t.Context()));defer tr.Close()
+ // Act.
+ e:=tr.Notify(t.Context(),"notifications/vendor/pad",map[string]any{"pad":strings.Repeat("x",256)})
+ // Assert.
+ require.ErrorIs(t,e,textprocessor.ErrReadLimitExceeded)
+}
+
+func TestR13AIndependentRetiredResourceMalformedFailsSibling(t *testing.T){
+ // Arrange.
+ c,tr:=retirementClient(t);a,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,e);b,e:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,e);defer b.Close();a.Close();<-a.Done()
+ raw,e:=json.Marshal(map[string]any{"_meta":Meta{metaSubscriptionID:json.RawMessage(a.ID)}});require.NoError(t,e)
+ // Act.
+ c.handleSubscriptionInvalidation(InvalidationResource,raw)
+ // Assert.
+ select{case<-b.Done():require.ErrorContains(t,b.Err(),"invalid retired resource");case<-time.After(time.Second):t.Fatal("invalid retired URI ignored")};_ = tr
+}
+func TestR13AIndependentPageNeverPublishesAndTypedSnapshotsDetached(t *testing.T){
+ // Arrange.
+ base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil};return json.RawMessage(`{"resultType":"complete","ttlMs":12,"cacheScope":"private","tools":[{"name":"tool","inputSchema":{"type":"object"}}]}`),nil})
+ tr:=&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)};c,e:=Connect(t.Context(),tr);require.NoError(t,e);defer c.Close()
+ // Act/Assert.
+ page,e:=c.ListToolsPage(t.Context(),"");require.NoError(t,e);require.Len(t,page.Tools,1);require.Empty(t,tr.bindings)
+ snapshot,e:=c.DiscoverTools(t.Context());require.NoError(t,e);require.Contains(t,tr.bindings,"tool");require.Equal(t,JSONNumber("12"),snapshot.Pages[0].TTLMS)
+ snapshot.Tools[0].Name="changed";snapshot.Tools[0].InputSchema[0]='x';require.Contains(t,c.toolBindings,"tool");_,e=c.DiscoverTools(t.Context());require.NoError(t,e)
+}
+
+func TestR13AIndependentMapperCanReenterPageInspection(t *testing.T){
+ // Arrange.
+ base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil};return json.RawMessage(`{"resultType":"complete","ttlMs":0,"cacheScope":"private","tools":[{"name":"tool","inputSchema":{"type":"object"}}]}`),nil})
+ var c *Client;calls:=0;mapper:=func(ctx context.Context,d MCPTool)(ToolExecutionProperties,error){calls++;_,e:=c.ListToolsPage(ctx,"");return ToolExecutionProperties{},e}
+ var e error;c,e=Connect(t.Context(),base,WithToolPolicyMapper(mapper));require.NoError(t,e);defer c.Close()
+ // Act.
+ done:=make(chan error,1);go func(){for _,e:=range c.Discover(t.Context()){if e!=nil{done<-e;return}};done<-nil}()
+ // Assert.
+ select{case e:=<-done:require.NoError(t,e);require.Equal(t,1,calls);case<-time.After(time.Second):t.Fatal("mapper reentry blocked")}
+}
+
+func TestR13AIndependentCanceledPublicationBeforeCommit(t *testing.T){
+ // Arrange.
+ phase:=false;arrived:=make(chan struct{});base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil};name:="old";if phase{name="new";close(arrived)};return json.Marshal(ToolsListResult{ResultType:ResultTypeComplete,TTLMS:JSONNumber("0"),CacheScope:CacheScopePrivate,Tools:[]MCPTool{{Name:name,InputSchema:json.RawMessage(`{"type":"object"}`)}}})});tr:=&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)};c,e:=Connect(t.Context(),tr);require.NoError(t,e);defer c.Close();_,e=c.DiscoverTools(t.Context());require.NoError(t,e);phase=true
+ ctx,cancel:=context.WithCancel(t.Context());defer cancel();done:=make(chan error,1);c.toolBindingMu.Lock()
+ // Act.
+ go func(){_,e:=c.DiscoverTools(ctx);done<-e}();<-arrived;cancel();c.toolBindingMu.Unlock()
+ // Assert.
+ select{case e:=<-done:require.ErrorIs(t,e,context.Canceled);case<-time.After(time.Second):t.Fatal("canceled publication stuck")};require.Contains(t,tr.bindings,"old");require.NotContains(t,tr.bindings,"new")
+}
+func TestR13AIndependentTypedRetainedLimits(t *testing.T){for _,bytes:=range []bool{false,true}{
+ // Arrange.
+ p:=newRPCPeer(t.Context(),nil,func(context.Context,[]byte)error{return nil});p.limits.MaxInFlight=1;if bytes{p.limits.MaxInFlight=10;p.limits.MaxQueueBytes=80};a,_,e:=p.beginRequest("a",struct{}{});require.NoError(t,e)
+ // Act.
+ _,_,e=p.beginRequest("b",struct{}{})
+ // Assert.
+ require.ErrorIs(t,e,ErrTransportLimitExceeded);var limit *TransportLimitError;require.ErrorAs(t,e,&limit);if bytes{require.Equal(t,"queued bytes",limit.Resource);require.Equal(t,80,limit.Limit)}else{require.Equal(t,"in-flight requests",limit.Resource);require.Equal(t,1,limit.Limit)};p.failPending(a,context.Canceled);p.close(ErrTransportClosed)
+}}

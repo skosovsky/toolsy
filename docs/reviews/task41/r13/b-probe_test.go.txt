@@ -1,0 +1,199 @@
+package mcp
+
+import (
+ "context"
+ "encoding/json"
+ "strings"
+ "testing"
+ "time"
+ "github.com/stretchr/testify/require"
+ "github.com/skosovsky/toolsy/textprocessor"
+)
+
+func TestR13BStdioOversizedNotificationHasLimitIdentity(t *testing.T) {
+ // Arrange.
+ port := NewStdioTransport("/bin/sh", []string{"-c", "sleep 30"}, WithStdioLimits(TransportLimits{MaxFrameBytes: 256}))
+ require.NoError(t, port.Start(t.Context()))
+ defer port.Close()
+ // Act.
+ err := port.Notify(t.Context(), "notifications/vendor/test", map[string]any{"padding":strings.Repeat("x", 300)})
+ // Assert.
+ require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+func TestR13BRealTTLAndReadmission(t *testing.T) {
+ // Arrange.
+ c, tr := retirementClient(t, WithSubscriptionLimits(SubscriptionLimits{MaxActive:2,MaxTracked:2,RetireTTL:20*time.Millisecond}))
+ a, err := c.Listen(t.Context(), SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,err)
+ b, err := c.Listen(t.Context(), SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,err)
+ defer b.Close()
+ // Act/Assert: retained A denies admission, then real TTL expiration frees it.
+ a.Close(); <-a.Done()
+ _,err=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true}); require.Error(t,err)
+ time.Sleep(40*time.Millisecond)
+ d,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,err); defer d.Close()
+ require.NoError(t,tr.emit(MethodToolsListChanged,map[string]any{"_meta":Meta{metaSubscriptionID:json.RawMessage(b.ID)}}))
+ select {case <-b.Events: case <-time.After(time.Second): t.Fatal("B lost its route")}
+ require.Equal(t,uint64(1),c.DiscoveryGeneration(InvalidationTools))
+}
+
+func TestR13BRetiredMalformedAcknowledgmentRemainsStrict(t *testing.T) {
+ // Arrange.
+ c,tr:=retirementClient(t)
+ a,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,err)
+ b,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true}); require.NoError(t,err)
+ defer b.Close(); a.Close(); <-a.Done()
+ // Act: required notifications field has wrong type despite valid retired ID.
+ require.NoError(t,tr.emit(MethodSubscriptionsAcknowledged,map[string]any{"notifications":false,"_meta":Meta{metaSubscriptionID:json.RawMessage(a.ID)}}))
+ // Assert.
+ select {case <-b.Done(): require.Error(t,b.Err()); case <-time.After(time.Second):t.Fatal("malformed ACK ignored")}
+}
+
+func TestR13BNegativePaginationIteratorRefusesBeforeFetch(t *testing.T) {
+ for _,limits:=range []PaginationLimits{{MaxPages:-1},{MaxItems:-1},{MaxBytes:-1},{MaxCursorBytes:-1}} {
+ // Arrange.
+ fetched:=false
+ // Act.
+ for _,err:=range IterateCursorWithLimits(context.Background(),limits,func(context.Context,string)([]int,string,error){fetched=true;return []int{1},"",nil}){
+ // Assert.
+ require.Error(t,err)
+ }
+ require.False(t,fetched)
+ }
+}
+
+type r13BPublicationPort struct {
+ *bindingContractTransport
+ entered chan struct{}
+ resume chan struct{}
+ block bool
+}
+func(p *r13BPublicationPort) ReplaceToolHeaderBindings(bindings map[string][]HTTPToolHeaderBinding)error{
+ if p.block {close(p.entered); <-p.resume}
+ return p.bindingContractTransport.ReplaceToolHeaderBindings(bindings)
+}
+func TestR13BCancellationAfterPublicationCommitCompletes(t *testing.T){
+ // Arrange: full discovery blocks inside the trusted publication facet.
+ name:="old"
+ base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){
+ if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil}
+ return json.Marshal(ToolsListResult{ResultType:ResultTypeComplete,TTLMS:JSONNumber("0"),CacheScope:CacheScopePrivate,Tools:[]MCPTool{{Name:name,InputSchema:json.RawMessage(`{"type":"object"}`)}}})
+ })
+ port:=&r13BPublicationPort{bindingContractTransport:&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)},entered:make(chan struct{}),resume:make(chan struct{})}
+ c,err:=Connect(t.Context(),port); require.NoError(t,err); defer c.Close()
+ _,err=c.DiscoverTools(t.Context()); require.NoError(t,err)
+ name="new"; port.block=true
+ ctx,cancel:=context.WithCancel(t.Context()); defer cancel()
+ done:=make(chan error,1)
+ // Act.
+ go func(){_,err:=c.DiscoverTools(ctx);done<-err}()
+ <-port.entered; cancel(); close(port.resume)
+ err=<-done
+ // Assert: cancellation after the documented synchronous commit begins does not roll back.
+ require.NoError(t,err)
+ port.bindingsMu.Lock();require.Contains(t,port.bindings,"new");require.NotContains(t,port.bindings,"old");port.bindingsMu.Unlock()
+}
+
+func TestR13BPageSnapshotDoesNotAuthorizePublicCall(t *testing.T){
+ // Arrange.
+ calls:=0
+ base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){
+ switch method {
+ case MethodServerDiscover:return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil
+ case MethodToolsList:return json.RawMessage(`{"resultType":"complete","ttlMs":123,"cacheScope":"private","tools":[{"name":"one","inputSchema":{"type":"object"},"outputSchema":{"type":"integer"}}]}`),nil
+ case MethodToolsCall:calls++;return json.RawMessage(`{"resultType":"complete","content":[],"structuredContent":7}`),nil
+ }
+ t.Fatalf("unexpected %s",method);return nil,nil
+ })
+ port:=&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)}
+ c,err:=Connect(t.Context(),port);require.NoError(t,err);defer c.Close()
+ // Act/Assert: inspecting even terminal page does not authorize tools/call.
+ page,err:=c.ListToolsPage(t.Context(),"");require.NoError(t,err);require.Equal(t,JSONNumber("123"),page.TTLMS)
+ _,_,err=c.CallTool(t.Context(),ToolsCallParams{Name:"one",Arguments:json.RawMessage(`{}`)});require.ErrorContains(t,err,"authority");require.Zero(t,calls)
+ snapshot,err:=c.DiscoverTools(t.Context());require.NoError(t,err);require.Len(t,snapshot.Pages,1);require.Equal(t,JSONNumber("123"),snapshot.Pages[0].TTLMS)
+ raw,err:=json.Marshal(snapshot);require.NoError(t,err);var restored ToolDiscovery;require.NoError(t,json.Unmarshal(raw,&restored));require.Equal(t,snapshot,restored)
+ _,_,err=c.CallTool(t.Context(),ToolsCallParams{Name:"one",Arguments:json.RawMessage(`{}`)});require.NoError(t,err);require.Equal(t,1,calls)
+}
+
+func TestR13BPublicRequestCapacityAndAbortRelease(t *testing.T){
+ // Arrange: a child never replies, prepared requests occupy count capacity.
+ tr:=NewStdioTransport("/bin/sh",[]string{"-c","sleep 30"},WithStdioLimits(TransportLimits{MaxInFlight:1}))
+ require.NoError(t,tr.Start(t.Context()));defer tr.Close()
+ first,err:=tr.PrepareRequest(t.Context(),"test",migrationDiscoveryParams());require.NoError(t,err)
+ // Act/Assert.
+ _,err=tr.PrepareRequest(t.Context(),"test",migrationDiscoveryParams());require.ErrorContains(t,err,"in-flight")
+ require.NoError(t,first.Abort(context.Canceled))
+ next,err:=tr.PrepareRequest(t.Context(),"test",migrationDiscoveryParams());require.NoError(t,err);require.NoError(t,next.Abort(context.Canceled))
+}
+
+func TestR13BRetiredIDCannotBeReusedByCustomPort(t *testing.T){
+ // Arrange: violate custom transport ID uniqueness intentionally.
+ c,tr:=retirementClient(t)
+ a,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,err)
+ a.Close();<-a.Done()
+ var id uint64;require.NoError(t,json.Unmarshal(json.RawMessage(a.ID),&id));tr.peer.requestID.Store(id-1)
+ // Act.
+ reused,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true})
+ // Assert: no new delivery and no old correlation eviction.
+ require.Nil(t,reused);require.ErrorContains(t,err,"retired request id")
+}
+
+func TestR13BCancelInProgressStillValidatesMalformedResource(t *testing.T){
+ // Arrange: pause the advisory cancellation notification while A is locally canceled
+ // but before its await goroutine transfers the route to the retirement map.
+ c,tr:=retirementClient(t)
+ a,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,err)
+ b,err:=c.Listen(t.Context(),SubscriptionFilter{ToolsListChanged:true});require.NoError(t,err);defer b.Close()
+ entered,resume:=make(chan struct{}),make(chan struct{})
+ tr.mu.Lock();tr.notifyHook=func(n capturedNotification){
+ if n.Method!=MethodCancelled{return};var params CancelledParams;_ = json.Unmarshal(n.Params,&params)
+ if string(params.RequestID)==a.ID{close(entered);<-resume}
+ };tr.mu.Unlock()
+ // Act.
+ a.Close();<-entered
+ require.NoError(t,tr.emit(MethodResourceUpdated,map[string]any{"_meta":Meta{metaSubscriptionID:json.RawMessage(a.ID)}}))
+ // Assert: missing mandatory URI must not become valid solely due to cancel timing.
+ failed:=b.Err()!=nil
+ close(resume);<-a.Done()
+ require.True(t,failed,"malformed resource ignored during local-cancel transition")
+}
+
+func TestR13BCancellationBeforePublicationCommitPreservesAuthority(t *testing.T){
+ // Arrange: hold the same authority lock that publication must acquire.
+ name:="old"; fetched:=make(chan struct{},1)
+ base:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){
+ if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil}
+ raw,err:=json.Marshal(ToolsListResult{ResultType:ResultTypeComplete,TTLMS:JSONNumber("0"),CacheScope:CacheScopePrivate,Tools:[]MCPTool{{Name:name,InputSchema:json.RawMessage(`{"type":"object"}`)}}})
+ if name=="new" {fetched<-struct{}{}}
+ return raw,err
+ })
+ port:=&bindingContractTransport{contractTransport:base,bindings:make(map[string][]HTTPToolHeaderBinding)}
+ c,err:=Connect(t.Context(),port);require.NoError(t,err);defer c.Close()
+ _,err=c.DiscoverTools(t.Context());require.NoError(t,err)
+ name="new";ctx,cancel:=context.WithCancel(t.Context());defer cancel();done:=make(chan error,1)
+ c.toolBindingMu.Lock()
+ // Act: canceled while waiting to enter commit; no publication facet invocation.
+ go func(){_,err:=c.DiscoverTools(ctx);done<-err}()
+ <-fetched;time.Sleep(30*time.Millisecond);cancel();c.toolBindingMu.Unlock()
+ err=<-done
+ // Assert.
+ require.ErrorIs(t,err,context.Canceled)
+ port.bindingsMu.Lock();require.Contains(t,port.bindings,"old");require.NotContains(t,port.bindings,"new");port.bindingsMu.Unlock()
+}
+
+func TestR13BPublicTypedCountAndByteRefusals(t *testing.T){
+ for _,bytes:=range []bool{false,true}{
+ // Arrange.
+ limits:=TransportLimits{MaxInFlight:1}
+ if bytes{limits=TransportLimits{MaxQueueBytes:1}}
+ tr:=NewStdioTransport("/bin/sh",[]string{"-c","sleep 30"},WithStdioLimits(limits));require.NoError(t,tr.Start(t.Context()))
+ var first PreparedRequest;var err error
+ if !bytes {first,err=tr.PrepareRequest(t.Context(),"test",migrationDiscoveryParams());require.NoError(t,err)}
+ // Act.
+ _,err=tr.PrepareRequest(t.Context(),"test",migrationDiscoveryParams())
+ // Assert.
+ require.ErrorIs(t,err,ErrTransportLimitExceeded);var detail *TransportLimitError;require.ErrorAs(t,err,&detail)
+ if bytes{require.Equal(t,"queued bytes",detail.Resource);require.Equal(t,1,detail.Limit)}else{require.Equal(t,"in-flight requests",detail.Resource);require.Equal(t,1,detail.Limit);require.NoError(t,first.Abort(context.Canceled))}
+ require.NoError(t,tr.Close())
+ }
+}

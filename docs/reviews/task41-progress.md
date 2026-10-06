@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted (commit pending); rows 13–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted (commit pending); rows 14–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -462,3 +462,46 @@ those findings, with final independent repeated probes/root/MCP race checks.
 Parent all 24 modules pass race tests; root/MCP/filejournal lint zero issues.
 Baseline business terminal loses delivery; corrected probe delivers unchanged.
 Commit hash is recorded in the next row.
+
+### 13 — R13 / D20 / D21 / D22 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Local subscription cancellation retires correlation within explicit bounded
+   count/time limits; late ACK/notification cannot alter generations or cancel B.
+   Truly unknown/malformed messages retain strict protocol handling; ID reuse
+   during retirement and saturation behavior are explicit and fail closed.
+2. Separate per-frame, retained queue/in-flight and optional lifetime transport
+   budgets; ordinary long-lived stdio/SSE is not capped by cumulative default
+   traffic. Oversized frames/queues fail before retention/dispatch; contexts and
+   typed limit causes remain inspectable. Negative/nil configuration fails early.
+3. Full tool discovery bounds aggregate raw bytes/items/pages/cursors before
+   descriptor accumulation/schema compilation. Failed/stale/canceled/duplicate
+   discovery canceled before the commit point does not publish authority; later
+   cancellation cannot undo a started successful synchronous commit. Descriptors
+   remain untrusted.
+4. ListToolsPage exposes page snapshots without authority publication; one typed
+   DiscoverTools path validates/publishes full authority, and Discover proxies
+   share its implementation. Clear API naming/migration; no unrestricted authority
+   setter. Custom transport minimal contract/facets are documented accurately.
+5. AAA public subscription/budget/discovery regressions, baseline cancellation
+   probe and affected race/lint checks pass; current docs/examples synchronized;
+   two independent acceptance reviewers return 100%, no unresolved detected bugs.
+
+Decision: bounded retirement protects locally canceled IDs only; messages outside
+that correlation window are unknown and strict. Default frame/queue/in-flight
+bounds are distinct from optional lifetime traffic limits. Full discovery is the
+sole client authority publication path; page inspection is explicitly nonauthoritative.
+
+D22: retain the minimal transport and bounded synchronous atomic header-replace
+facet. Only ReplaceToolHeaderBindings forbids Client reentry while the matching
+client/transport authority lock is held. Descriptor mapper reentry remains allowed.
+Cancellation is rechecked under that lock before starting publication; cancellation
+after the commit point does not roll back success. This preserves coherent snapshots
+without inventing a reentrant transaction protocol for a host-owned facet.
+
+Row13 final gate: acceptance A 100% (forced MCP race19.805s, independent probes
+count5, lint0), acceptance B 100% (MCP race21.211s, independent probes count5,
+lint0); no unresolved detected defects. Parent full MCP race21.349s, focused
+count5 race3.237s, lint0. Evidence: docs/reviews/task41/r13/. Initial findings and
+verdicts are superseded by final accepted reviews. Commit: fix: mcp lifetimes.

@@ -26,8 +26,8 @@ func (w *recordingWriter) Write(body []byte) (int, error) {
 func TestStdio_StderrVolumeAndLongLinesNeverCrashTransport(t *testing.T) {
 	// Arrange.
 	logger := slog.New(slog.DiscardHandler)
-	transport := NewStdioTransport("unused", nil, WithLogger(logger))
-	stderr := strings.NewReader(strings.Repeat("x", 2*rpcJSONLineScannerMaxBytes) + "\nnext\n")
+	transport := NewStdioTransport("unused", nil, WithStdioLogger(logger))
+	stderr := strings.NewReader(strings.Repeat("x", 2*defaultTransportMaxFrameBytes) + "\nnext\n")
 
 	// Act.
 	transport.forwardStderr(context.Background(), stderr)
@@ -157,6 +157,7 @@ func TestStdio_BlockedWriteHonorsContextCancellation(t *testing.T) {
 	transport := NewStdioTransport(
 		os.Args[0],
 		[]string{"-test.run=TestStdioHelperProcess", "--", "never-read"},
+		WithStdioLimits(TransportLimits{MaxFrameBytes: 8 << 20}),
 	)
 	require.NoError(t, transport.Start(context.Background()))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -200,6 +201,7 @@ func TestStdio_CancellingQueuedWriteDoesNotAbortActiveWrite(t *testing.T) {
 	transport := NewStdioTransport(
 		os.Args[0],
 		[]string{"-test.run=TestStdioHelperProcess", "--", "never-read"},
+		WithStdioLimits(TransportLimits{MaxFrameBytes: 8 << 20}),
 	)
 	require.NoError(t, transport.Start(context.Background()))
 	activeCtx, cancelActive := context.WithCancel(context.Background())

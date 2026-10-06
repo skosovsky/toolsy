@@ -74,8 +74,13 @@ func TestMigratedSSEByteLimitRemainsCumulative(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	transport := NewStreamableHTTPTransport(server.URL,
-		WithStreamableHTTPAllowPrivateIPs(true), WithStreamableHTTPMaxStreamBytes(1024))
+	transport := NewStreamableHTTPTransport(
+		server.URL,
+		WithStreamableHTTPAllowPrivateIPs(
+			true,
+		),
+		WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 1024, MaxLifetimeBytes: 1024}),
+	)
 	require.NoError(t, transport.Start(t.Context()))
 	t.Cleanup(func() { _ = transport.Close() })
 	pending, err := transport.PrepareRequest(t.Context(), MethodServerDiscover, migrationDiscoveryParams())

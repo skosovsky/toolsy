@@ -49,14 +49,6 @@ func WithStreamableHTTPLogger(logger *slog.Logger) StreamableHTTPOption {
 	}
 }
 
-func WithStreamableHTTPMaxStreamBytes(limit int) StreamableHTTPOption {
-	return func(transport *StreamableHTTPTransport) {
-		if limit > 0 {
-			transport.maxStreamBytes = limit
-		}
-	}
-}
-
 func WithStreamableHTTPAllowPrivateIPs(allow bool) StreamableHTTPOption {
 	return func(transport *StreamableHTTPTransport) { transport.allowPrivateIPs = allow }
 }
@@ -80,7 +72,10 @@ type StreamableHTTPTransport struct {
 	decorator    HTTPRequestDecorator
 
 	allowPrivateIPs bool
-	maxStreamBytes  int
+	maxFrameBytes   int
+	limits          TransportLimits
+	limitsErr       error
+	queuedBytes     int
 	mu              sync.RWMutex
 	started         bool
 	closed          bool
@@ -100,17 +95,30 @@ type StreamableHTTPTransport struct {
 
 func NewStreamableHTTPTransport(endpoint string, opts ...StreamableHTTPOption) *StreamableHTTPTransport {
 	transport := &StreamableHTTPTransport{
-		endpoint:        endpoint,
-		logger:          slog.Default(),
-		maxStreamBytes:  httptool.DefaultMaxSSEStreamBytes,
+		endpoint: endpoint,
+		logger:   slog.Default(),
+
 		notifyHandlers:  make(map[string]NotificationHandler),
 		requestHandlers: make(map[string]RequestScopedNotificationHandler),
 		toolHeaders:     make(map[string][]HTTPToolHeaderBinding),
 		activePosts:     make(map[uint64]context.CancelFunc),
 	}
 	for _, opt := range opts {
+		if opt == nil {
+			transport.limitsErr = errors.New("mcp: nil HTTP option")
+			continue
+		}
 		opt(transport)
 	}
+	normalized, err := transport.limits.normalized()
+	if err != nil {
+		normalized, _ = (TransportLimits{}).normalized()
+	}
+	if transport.limitsErr == nil {
+		transport.limitsErr = err
+	}
+	transport.limits = normalized
+	transport.maxFrameBytes = normalized.MaxFrameBytes
 	transport.client, transport.settingsErr = httptool.NewConfiguredSafeHTTPClient(
 		httptool.SafeDialOptions{AllowPrivateIPs: transport.allowPrivateIPs},
 		httptool.CheckRedirectRemote(transport.allowPrivateIPs, nil), transport.httpSettings,
@@ -119,6 +127,9 @@ func NewStreamableHTTPTransport(endpoint string, opts ...StreamableHTTPOption) *
 }
 
 func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
+	if t.limitsErr != nil {
+		return t.limitsErr
+	}
 	if t.settingsErr != nil {
 		return t.settingsErr
 	}
@@ -141,6 +152,7 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	t.peer = newRPCPeer(t.lifetimeCtx, t.logger, func(context.Context, []byte) error {
 		return errors.New("mcp: HTTP transport cannot send server responses")
 	})
+	t.peer.limits = t.limits
 	for method, handler := range t.notifyHandlers {
 		t.peer.setNotificationHandler(method, handler)
 	}
@@ -315,6 +327,12 @@ func (t *StreamableHTTPTransport) postMessageTracked(
 		}
 		return ErrTransportClosed
 	}
+	if err := retainedWorkLimit(len(t.activePosts), t.queuedBytes, len(body), t.limits); err != nil {
+		t.mu.Unlock()
+		cancelPost()
+		return &InvalidPayloadError{Subject: "HTTP outgoing queue", Err: err}
+	}
+	t.queuedBytes += len(body)
 	t.nextPostID++
 	postID := t.nextPostID
 	t.activePosts[postID] = cancelPost
@@ -323,6 +341,7 @@ func (t *StreamableHTTPTransport) postMessageTracked(
 	defer func() {
 		t.mu.Lock()
 		delete(t.activePosts, postID)
+		t.queuedBytes -= len(body)
 		t.mu.Unlock()
 		cancelPost()
 		t.postWG.Done()
@@ -392,7 +411,7 @@ func (t *StreamableHTTPTransport) consumeSuccessfulHTTPResponse(
 	}
 	switch contentType {
 	case "application/json":
-		payload, readErr := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
+		payload, readErr := httptool.ReadBodyLimited(ctx, response.Body, t.maxFrameBytes)
 		if readErr != nil {
 			return readErr
 		}
@@ -421,7 +440,7 @@ func (t *StreamableHTTPTransport) consumeHTTPError(
 	response *http.Response,
 	requestBody []byte,
 ) error {
-	payload, err := httptool.ReadBodyLimited(ctx, response.Body, t.maxStreamBytes)
+	payload, err := httptool.ReadBodyLimited(ctx, response.Body, t.maxFrameBytes)
 	if err == nil && len(bytes.TrimSpace(payload)) > 0 &&
 		validateNon2xxRPCError(response.StatusCode, requestBody, payload) == nil &&
 		t.peer.dispatch(payload) == nil {
@@ -903,16 +922,30 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 	reader io.Reader,
 	provenance *sseRequestProvenance,
 ) error {
-	limited := httptool.LimitStreamReaderWithContext(ctx, reader, t.maxStreamBytes)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	limited := reader
+	if t.limits.MaxLifetimeBytes > 0 {
+		limited = httptool.LimitStreamReaderWithContext(ctx, reader, t.limits.MaxLifetimeBytes)
+	}
 	scanner := bufio.NewScanner(limited)
-	// The bounded reader must observe budget exhaustion before the scanner's
-	// token ceiling can replace its typed cause. Headroom is not readable budget.
-	scannerLimit := t.maxStreamBytes
+	// Scanner headroom accepts an inclusive frame plus line delimiters.
+	// Oversized tokens are mapped to the same typed frame-limit cause.
+	scannerLimit := t.maxFrameBytes + 1
 	if scannerLimit < math.MaxInt {
 		scannerLimit++
 	}
 	scanner.Buffer(nil, scannerLimit)
-	scanner.Split(splitSSELines)
+	lineBytesConsumed := 0
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		advance, token := splitSSELines(data, atEOF)
+		if token != nil {
+			lineBytesConsumed = advance
+		}
+		return advance, token, nil
+	})
+	frameBytes := 0
 	var data strings.Builder
 	dataSeen := false
 	terminal := false
@@ -948,6 +981,16 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 	}
 	firstLine := true
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if lineBytesConsumed > t.maxFrameBytes-frameBytes {
+			return &InvalidPayloadError{
+				Subject: streamableHTTPSSESubject,
+				Err:     frameLimitError("SSE frame", t.maxFrameBytes),
+			}
+		}
+		frameBytes += lineBytesConsumed
 		lineBytes := scanner.Bytes()
 		if firstLine {
 			lineBytes = bytes.TrimPrefix(lineBytes, []byte{0xef, 0xbb, 0xbf})
@@ -961,6 +1004,7 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 		}
 		line := string(lineBytes)
 		if line == "" {
+			frameBytes = 0
 			if err := dispatch(); err != nil {
 				return err
 			}
@@ -983,6 +1027,9 @@ func (t *StreamableHTTPTransport) consumeRequestSSE(
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			err = frameLimitError("SSE frame", t.maxFrameBytes)
+		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
@@ -1235,7 +1282,7 @@ func notificationCorrelationKey(raw json.RawMessage) (string, error) {
 }
 
 func allowedSSEMethod(originMethod, notificationMethod string) bool {
-	if originMethod == "subscriptions/listen" {
+	if originMethod == MethodSubscriptionsListen {
 		switch notificationMethod {
 		case "notifications/subscriptions/acknowledged", "notifications/tools/list_changed",
 			"notifications/resources/list_changed",
@@ -1248,26 +1295,26 @@ func allowedSSEMethod(originMethod, notificationMethod string) bool {
 	return notificationMethod == "notifications/progress" || notificationMethod == "notifications/message"
 }
 
-func splitSSELines(data []byte, atEOF bool) (int, []byte, error) {
+func splitSSELines(data []byte, atEOF bool) (int, []byte) {
 	for index, char := range data {
 		switch char {
 		case '\n':
-			return index + 1, data[:index], nil
+			return index + 1, data[:index]
 		case '\r':
 			if index+1 == len(data) && !atEOF {
-				return 0, nil, nil
+				return 0, nil
 			}
 			advance := index + 1
 			if index+1 < len(data) && data[index+1] == '\n' {
 				advance++
 			}
-			return advance, data[:index], nil
+			return advance, data[:index]
 		}
 	}
 	if atEOF && len(data) > 0 {
-		return len(data), data, nil
+		return len(data), data
 	}
-	return 0, nil, nil
+	return 0, nil
 }
 
 func isTerminalHTTPTransportError(err error) bool {
@@ -1308,7 +1355,7 @@ func (t *StreamableHTTPTransport) terminate(cause error) {
 	go func() { _ = t.Close() }()
 }
 
-func (t *StreamableHTTPTransport) MaxStreamBytes() int { return t.maxStreamBytes }
+func (t *StreamableHTTPTransport) MaxFrameBytes() int { return t.maxFrameBytes }
 
 func (t *StreamableHTTPTransport) failureCause(fallback error) error {
 	t.mu.RLock()
@@ -1356,4 +1403,4 @@ func (t *StreamableHTTPTransport) Close() error {
 
 var _ Transport = (*StreamableHTTPTransport)(nil)
 var _ ToolHeaderTransport = (*StreamableHTTPTransport)(nil)
-var _ StreamByteCapTransport = (*StreamableHTTPTransport)(nil)
+var _ FrameByteCapTransport = (*StreamableHTTPTransport)(nil)

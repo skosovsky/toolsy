@@ -106,7 +106,7 @@ func migrationToolScript(t *testing.T, transport *fakeTransport, onCall func(cap
 func migrationProgressProxy(ctx context.Context, t *testing.T, client *Client) toolsy.Tool {
 	t.Helper()
 	var proxy toolsy.Tool
-	for item, err := range client.GetTools(ctx) {
+	for item, err := range client.Discover(ctx) {
 		require.NoError(t, err)
 		proxy = item
 	}

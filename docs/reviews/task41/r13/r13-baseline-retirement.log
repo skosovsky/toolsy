@@ -1,0 +1,31 @@
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive/close
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+    r13_retirement_probe_test.go:54: B failed: subscription acknowledgment has unknown ID
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive/parent-cancel
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+2026/10/06 19:16:14 WARN mcp: unknown subscription acknowledgment
+2026/10/06 19:16:14 WARN mcp: notification for unknown subscription
+    r13_retirement_probe_test.go:54: B failed: subscription acknowledgment has unknown ID
+--- FAIL: TestCanceledSubscriptionLateMessagesLeaveSiblingLive (0.19s)
+    --- FAIL: TestCanceledSubscriptionLateMessagesLeaveSiblingLive/close (0.02s)
+    --- FAIL: TestCanceledSubscriptionLateMessagesLeaveSiblingLive/parent-cancel (0.16s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	1.674s
+FAIL

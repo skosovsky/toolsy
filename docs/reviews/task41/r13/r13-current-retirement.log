@@ -1,0 +1,8 @@
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive/close
+=== RUN   TestCanceledSubscriptionLateMessagesLeaveSiblingLive/parent-cancel
+--- PASS: TestCanceledSubscriptionLateMessagesLeaveSiblingLive (0.05s)
+    --- PASS: TestCanceledSubscriptionLateMessagesLeaveSiblingLive/close (0.01s)
+    --- PASS: TestCanceledSubscriptionLateMessagesLeaveSiblingLive/parent-cancel (0.03s)
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	1.721s

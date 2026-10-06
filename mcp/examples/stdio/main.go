@@ -25,7 +25,7 @@ func main() {
 	defer client.Close()
 
 	builder := toolsy.NewRegistryBuilder()
-	for proxy, iterErr := range client.GetTools(ctx) {
+	for proxy, iterErr := range client.Discover(ctx) {
 		if iterErr != nil {
 			panic(iterErr)
 		}

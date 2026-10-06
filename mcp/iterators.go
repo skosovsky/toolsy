@@ -9,11 +9,15 @@ import (
 const (
 	defaultPaginationMaxPages       = 1000
 	defaultPaginationMaxCursorBytes = 1024 * 1024
+	defaultPaginationMaxItems       = 10000
+	defaultPaginationMaxBytes       = 16 * 1024 * 1024
 )
 
 // PaginationLimits bounds discovery pagination controlled by an MCP server.
 type PaginationLimits struct {
 	MaxPages       int // MaxPages limits fetched pages; zero selects the default.
+	MaxItems       int // MaxItems bounds items in one complete discovery; zero selects 10000.
+	MaxBytes       int // MaxBytes bounds aggregate raw tool-discovery response bytes; zero selects 16MiB.
 	MaxCursorBytes int // MaxCursorBytes limits cumulative cursor bytes; zero selects the default.
 }
 
@@ -22,16 +26,30 @@ type paginationState struct {
 	seen        map[string]struct{}
 	pages       int
 	cursorBytes int
+	items       int
 }
 
 func (l PaginationLimits) normalized() PaginationLimits {
-	if l.MaxPages <= 0 {
+	if l.MaxPages == 0 {
 		l.MaxPages = defaultPaginationMaxPages
 	}
-	if l.MaxCursorBytes <= 0 {
+	if l.MaxCursorBytes == 0 {
 		l.MaxCursorBytes = defaultPaginationMaxCursorBytes
 	}
+	if l.MaxItems == 0 {
+		l.MaxItems = defaultPaginationMaxItems
+	}
+	if l.MaxBytes == 0 {
+		l.MaxBytes = defaultPaginationMaxBytes
+	}
 	return l
+}
+
+func (l PaginationLimits) validate() error {
+	if l.MaxPages < 0 || l.MaxCursorBytes < 0 || l.MaxItems < 0 || l.MaxBytes < 0 {
+		return errors.New("mcp: pagination limits cannot be negative")
+	}
+	return nil
 }
 
 // IterateCursor is a generic helper for MCP cursor-based pagination.
@@ -43,6 +61,7 @@ func IterateCursor[T any](
 	return IterateCursorWithLimits(ctx, PaginationLimits{
 		MaxPages:       0,
 		MaxCursorBytes: 0,
+		MaxItems:       0, MaxBytes: 0,
 	}, fetch)
 }
 
@@ -52,7 +71,17 @@ func IterateCursorWithLimits[T any](
 	limits PaginationLimits,
 	fetch func(ctx context.Context, cursor string) (items []T, nextCursor string, err error),
 ) iter.Seq2[T, error] {
-	limits = limits.normalized()
+	if err := limits.validate(); err != nil {
+		return errorSequence[T](err)
+	}
+	return iterateCursorWithValidatedLimits(ctx, limits.normalized(), fetch)
+}
+
+func iterateCursorWithValidatedLimits[T any](
+	ctx context.Context,
+	limits PaginationLimits,
+	fetch func(context.Context, string) ([]T, string, error),
+) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var cursor string
 		state := paginationState{
@@ -60,6 +89,7 @@ func IterateCursorWithLimits[T any](
 			seen:        make(map[string]struct{}),
 			pages:       0,
 			cursorBytes: 0,
+			items:       0,
 		}
 		for {
 			if err := ctx.Err(); err != nil {
@@ -72,6 +102,11 @@ func IterateCursorWithLimits[T any](
 				yieldPaginationError(yield, err)
 				return
 			}
+			if err := state.acceptItems(len(items)); err != nil {
+				yieldPaginationError(yield, err)
+				return
+			}
+
 			if !yieldPaginationItems(yield, items) {
 				return
 			}
@@ -85,6 +120,14 @@ func IterateCursorWithLimits[T any](
 			cursor = nextCursor
 		}
 	}
+}
+
+func (s *paginationState) acceptItems(count int) error {
+	if count > s.limits.MaxItems-s.items {
+		return &InvalidPayloadError{Subject: "pagination items", Err: errors.New("aggregate item limit exceeded")}
+	}
+	s.items += count
+	return nil
 }
 
 func (s *paginationState) acceptCursor(cursor string) error {

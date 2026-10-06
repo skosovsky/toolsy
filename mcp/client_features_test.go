@@ -294,7 +294,7 @@ func TestClient_ToolsListChangedMakesExistingProxyStale(t *testing.T) {
 	require.NoError(t, err)
 	var proxy toolsy.Tool
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	for item, iterErr := range client.GetTools(context.Background()) {
+	for item, iterErr := range client.Discover(context.Background()) {
 		require.NoError(t, iterErr)
 		proxy = item
 	}

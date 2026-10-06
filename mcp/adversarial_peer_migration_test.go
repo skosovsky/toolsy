@@ -20,6 +20,7 @@ func TestRPCPeer_BeginRequestCloseRaceNeverLeaks(t *testing.T) {
 		nil,
 		func(context.Context, []byte) error { return nil },
 	)
+	peer.limits.MaxInFlight = 512 // This fixture isolates shutdown races, not admission limits.
 	var wait sync.WaitGroup
 	errorsCh := make(chan error, 512)
 

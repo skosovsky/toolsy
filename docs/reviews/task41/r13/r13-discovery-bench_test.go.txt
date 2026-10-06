@@ -1,0 +1,17 @@
+package mcp
+import("context";"encoding/json";"fmt";"testing")
+func BenchmarkR13ToolDiscovery(b *testing.B){
+ for _, count:=range []int{1,32}{
+  b.Run(fmt.Sprint(count),func(b *testing.B){
+   items:=make([]MCPTool,count)
+   for i:=range items{items[i]=MCPTool{Name:fmt.Sprintf("tool%d",i),InputSchema:json.RawMessage(`{"type":"object","properties":{"n":{"type":"integer"}}}`)}}
+   raw,err:=json.Marshal(ToolsListResult{ResultType:ResultTypeComplete,TTLMS:JSONNumber("0"),CacheScope:CacheScopePrivate,Tools:items})
+   if err!=nil{b.Fatal(err)}
+   transport:=newContractTransport(func(method string,_ json.RawMessage)(json.RawMessage,error){if method==MethodServerDiscover{return completeDiscovery(ServerCapabilities{Tools:&ToolsCapability{}}),nil};return raw,nil})
+   client,err:=Connect(context.Background(),transport);if err!=nil{b.Fatal(err)}
+   defer client.Close()
+   b.ReportAllocs();b.ResetTimer()
+   for i:=0;i<b.N;i++{for _,err:=range client.GetTools(context.Background()){if err!=nil{b.Fatal(err)}}}
+  })
+ }
+}

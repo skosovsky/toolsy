@@ -1,0 +1,20 @@
+--- FAIL: TestR13BDiscoveryCanceledDuringPublication (0.01s)
+    r13_b_probe_test.go:93: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:93
+        	Error:      	Expected error with "context canceled" in chain but got nil.
+        	Test:       	TestR13BDiscoveryCanceledDuringPublication
+--- FAIL: TestR13BDiscoveryCanceledDuringPublication (0.01s)
+    r13_b_probe_test.go:93: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:93
+        	Error:      	Expected error with "context canceled" in chain but got nil.
+        	Test:       	TestR13BDiscoveryCanceledDuringPublication
+--- FAIL: TestR13BDiscoveryCanceledDuringPublication (0.01s)
+    r13_b_probe_test.go:93: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/mcp/r13_b_probe_test.go:93
+        	Error:      	Expected error with "context canceled" in chain but got nil.
+        	Test:       	TestR13BDiscoveryCanceledDuringPublication
+FAIL
+FAIL	github.com/skosovsky/toolsy/mcp	0.916s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]
+FAIL

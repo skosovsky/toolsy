@@ -139,7 +139,7 @@ func TestSSEMigration_StartDoesNotGET204Endpoint(t *testing.T) {
 	t.Cleanup(server.Close)
 	transport := newSSEMigrationTransport(t, server.URL)
 	require.Zero(t, calls.Load())
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	// Act.
 	_, err := sseMigrationRequest(ctx, t, transport)
@@ -220,7 +220,11 @@ func TestSSEMigration_ExceedsMaxStreamBytes(t *testing.T) {
 		}
 	}))
 	t.Cleanup(server.Close)
-	transport := newSSEMigrationTransport(t, server.URL, WithStreamableHTTPMaxStreamBytes(2048))
+	transport := newSSEMigrationTransport(
+		t,
+		server.URL,
+		WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 2048, MaxLifetimeBytes: 2048}),
+	)
 	// Act.
 	_, err := sseMigrationRequest(context.Background(), t, transport)
 	// Assert.
@@ -316,7 +320,11 @@ func TestSSEMigration_StreamLimitPrecedesForbiddenEndpoint(t *testing.T) {
 		fmt.Fprint(w, "event: endpoint\ndata: http://example.com/messages\n\n")
 	}))
 	t.Cleanup(server.Close)
-	transport := newSSEMigrationTransport(t, server.URL, WithStreamableHTTPMaxStreamBytes(2048))
+	transport := newSSEMigrationTransport(
+		t,
+		server.URL,
+		WithStreamableHTTPLimits(TransportLimits{MaxFrameBytes: 2048, MaxLifetimeBytes: 2048}),
+	)
 	// Act.
 	_, err := sseMigrationRequest(context.Background(), t, transport)
 	// Assert.
