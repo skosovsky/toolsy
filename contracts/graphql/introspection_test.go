@@ -25,7 +25,6 @@ func TestPostIntrospection_ExceedsResponseLimit(t *testing.T) {
 	defer server.Close()
 
 	_, err := postIntrospection(context.Background(), server.URL, Options{
-		HTTPClient:       server.Client(),
 		MaxResponseBytes: maxBytes,
 		AllowPrivateIPs:  true,
 	})
@@ -52,7 +51,6 @@ func TestPostIntrospection_CancelOverReadLimit_InterruptWins(t *testing.T) {
 	cancel()
 
 	_, err := postIntrospection(ctx, server.URL, Options{
-		HTTPClient:       server.Client(),
 		MaxResponseBytes: 10,
 		AllowPrivateIPs:  true,
 	})
@@ -106,7 +104,7 @@ func TestPostIntrospection_Non2xxStatus(t *testing.T) {
 	_, err := postIntrospection(
 		context.Background(),
 		server.URL,
-		Options{HTTPClient: server.Client(), AllowPrivateIPs: true},
+		Options{AllowPrivateIPs: true},
 	)
 	if err == nil {
 		t.Fatal("expected error for 500 response")
@@ -133,7 +131,7 @@ func TestExecuteGraphQL_Non2xxStatus(t *testing.T) {
 		"query { demo }",
 		"demo",
 		nil,
-		&Options{HTTPClient: server.Client(), AllowPrivateIPs: true},
+		&Options{AllowPrivateIPs: true},
 		func(toolsy.Chunk) error { return nil },
 	)
 	if err == nil {

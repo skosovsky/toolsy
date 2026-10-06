@@ -203,3 +203,43 @@ failure after the server accepted a push leaves publication outcome uncertain:
 inspect the remote before retrying. Local cleanup does not roll back remote tags.
 All release regressions use disposable local bare remotes; no production
 publication is used for verification.
+
+## HTTP pool ownership and explicit settings (R07 / D18 / D19)
+
+Replace `WithHTTPClient` / `Options.HTTPClient` and `MergeHTTPClient` with explicit
+`httptool.ClientSettings{Timeout: ..., TLSConfig: ...}` through
+`WithHTTPSettings` / `Options.HTTPSettings`. MCP uses
+`WithStreamableHTTPSettings` instead of `WithStreamableHTTPClient`; invalid
+settings fail Start, and transport Close releases its owned idle pool. Custom Do, transport, proxy, roots or
+tracing clients are no longer silently accepted. Roots/client certificates belong
+in TLSConfig and are applied to the pinned safe transport; custom Do/proxy/dial
+ports are unsupported. TLSConfig is cloned. Referenced root pools, certificate
+slices/private keys and callbacks remain immutable host-owned state.
+
+`agents.NewClient` now returns `(*Client, error)`. Each client owns one reusable
+pool for its REST/SSE lifetime. At disposal stop initiating calls, then invoke
+`CloseIdleConnections`. `httptool.AsToolsWithCleanup`, `web.AsToolsWithCleanup`,
+`document.AsToolWithCleanup`, `openapi.ParseURLWithCleanup` and
+`graphql.IntrospectWithCleanup` return `(tools, closeIdle, error)` (document
+returns a single tool). The closer releases only owned idle resources and leaves
+active calls unaffected; it is not terminal Close. Compatibility factories keep
+the same simpler return shape and automatic bounded idle expiry. One-shot
+`web.ScrapePage` disposes its own pool on return. No caller HTTP client is accepted
+or closed. Pools retain at most 32 idle connections overall, two per host, for
+at most 90 seconds. These are idle bounds, not request/concurrency limits.
+
+Timeout must be nonnegative. Zero leaves the request under its context deadline;
+HTTP probe tools preserve their 30-second default. Agent SSE has a separate
+logical StreamPolicy deadline; a positive HTTP timeout also limits each response
+body lifetime. TLS handshake and dial have finite transport deadlines.
+
+DNS lookup and sequential attempts share a total dial deadline. Validate every
+resolved IP before the first attempt; then dial only those addresses, without
+re-resolving. Allocate each attempt a share of remaining time and stop on caller
+cancellation. Host deny precedence, DNS pinning and redirect credential/effect
+policies remain. No environment proxy bypass is introduced.
+
+Stream byte caps retain stop-after-budget semantics. An exactly exhausted cap
+without EOF on that Read produces a limit error on the next nonempty Read; the
+reader cannot prove exact EOF without probing past the cap. Empty reads consume
+nothing, and cancellation takes precedence. No speculative EOF read is made.

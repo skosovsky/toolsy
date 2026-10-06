@@ -396,7 +396,6 @@ func TestHTTPGet_CancelDuringDo(t *testing.T) {
 	tools, err := AsTools(
 		WithAllowedDomains([]string{"127.0.0.1"}),
 		WithAllowPrivateIPs(true),
-		WithHTTPClient(srv.Client()),
 	)
 	require.NoError(t, err)
 	getTool := tools[0]
@@ -435,7 +434,6 @@ func TestHTTPGet_CancelDuringGetAuth(t *testing.T) {
 		WithCredentialOrigins([]string{srv.URL}),
 		WithAllowedDomains([]string{"127.0.0.1"}),
 		WithAllowPrivateIPs(true),
-		WithHTTPClient(srv.Client()),
 	)
 	require.NoError(t, err)
 

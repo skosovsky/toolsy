@@ -8,7 +8,7 @@ Limits are independent: `WithMaxBytes` bounds final JSON bytes after escaping (d
 
 PDF is disabled by default. `WithInProcessPDF(true)` opts into the third-party parser: source, page count and returned text are checked, but page decoding, compressed streams, object graphs and parser CPU/allocations cannot be bounded by this parser API. Context is checked between pages, not during a page decode. Do not use this opt-in for hostile PDFs when hard memory/time isolation is required; parse in host-owned isolated workers instead. This toolkit does not implement an execution sandbox. Rejected PDFs never enter the parser.
 
-Remote reads require `WithAllowRemote(true)` and retain DNS pinning/private-IP validation across redirects through httptool. There is no document-specific host blacklist. `WithHTTPClient` merges only Timeout onto the safe transport; custom transports are not trusted. Private-IP override is host-controlled and intended for tests.
+Remote reads require `WithAllowRemote(true)` and retain DNS pinning/private-IP validation across redirects through httptool. There is no document-specific host blacklist. `WithHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})` applies explicit settings to one owned safe transport; custom Do/transport/proxy ports are unsupported. Private-IP override is host-controlled and intended for tests.
 
 Remote GET redirects must remain within the original scheme/hostname/effective-port origin, including when private IPs are explicitly allowed. Configure the final document URL explicitly. Redirect refusal exposes `*httptool.RedirectError` with outer nonretryable `CodeRemoteExecution` and does not authorize argument correction or blind retry. Initial URL validation remains an input-validation error.
 
@@ -21,3 +21,5 @@ extract, err := document.AsTool(document.WithLocalRoot(root))
 ```
 
 Clear break: default unrestricted local access is removed; result adds source; PDF parsing requires explicit opt-in; parser budgets no longer derive from wire-envelope estimates. Result formatter/validator ports remain domain-independent. Dependencies: core toolsy, httptool, ledongthuc/pdf. No artifact store or backend domain model is introduced.
+
+`AsToolWithCleanup` returns the tool and its owned idle-pool closer. Stop new calls before cleanup; active calls remain unaffected. Ordinary `AsTool` retains bounded 90-second idle expiry. TLSConfig is cloned; its referenced roots, certificates and callback state stay host-owned and immutable.

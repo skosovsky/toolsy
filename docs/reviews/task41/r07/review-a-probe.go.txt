@@ -1,0 +1,25 @@
+package agents_test
+import("context";"crypto/tls";"crypto/x509";"errors";"net/http";"net/http/httptest";"testing";"time";"github.com/skosovsky/toolsy/agents";"github.com/skosovsky/toolsy/toolkits/httptool")
+func TestReviewerMTLSAndSafeSettings(t *testing.T){
+ // Arrange: real TLS peer requires an actual client certificate.
+ s:=httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){if len(r.TLS.PeerCertificates)==0 {t.Error("missing mTLS")};w.WriteHeader(204)}));s.TLS=&tls.Config{ClientAuth:tls.RequireAnyClientCert};s.StartTLS();defer s.Close()
+ roots:=x509.NewCertPool();roots.AddCert(s.Certificate());settings:=httptool.ClientSettings{Timeout:time.Second,TLSConfig:&tls.Config{RootCAs:roots,Certificates:s.TLS.Certificates}}
+ c,e:=agents.NewClient(s.URL,agents.WithAllowPrivateIPs(true),agents.WithHTTPSettings(settings));if e!=nil{t.Fatal(e)};defer c.CloseIdleConnections()
+ // Act / Assert: custom TLS is effective, retained pool supports repeated calls.
+ for range 5{if e=c.CancelTask(t.Context(),"x","");e!=nil{t.Fatal(e)}}
+ blocked,e:=agents.NewClient(s.URL,agents.WithHTTPSettings(settings));if e!=nil{t.Fatal(e)};defer blocked.CloseIdleConnections();if e=blocked.CancelTask(t.Context(),"x","");e==nil{t.Fatal("TLS settings bypassed SSRF")}
+}
+func TestReviewerIdleCleanupLeavesActiveAndReusable(t *testing.T){
+ // Arrange.
+ entered,release:=make(chan struct{}),make(chan struct{});s:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){if r.URL.Path=="/ap/v1/agent/tasks/active/cancel"{close(entered);<-release};w.WriteHeader(204)}));defer s.Close();c,e:=agents.NewClient(s.URL,agents.WithAllowPrivateIPs(true));if e!=nil{t.Fatal(e)};defer c.CloseIdleConnections();done:=make(chan error,1)
+ // Act: dispose idle pool while a response is outstanding.
+ go func(){done<-c.CancelTask(t.Context(),"active","")}();select{case <-entered:case <-time.After(time.Second):t.Fatal("not entered")};c.CloseIdleConnections();close(release)
+ // Assert: active call succeeds and idle close is not terminal.
+ if e=<-done;e!=nil{t.Fatal(e)};if e=c.CancelTask(t.Context(),"later","");e!=nil{t.Fatal(e)}
+}
+func TestReviewerTimeoutBodyAndCallerCancellation(t *testing.T){
+ // Arrange.
+ s:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){select {case <-r.Context().Done():case <-time.After(150*time.Millisecond):}}));defer s.Close();c,e:=agents.NewClient(s.URL,agents.WithAllowPrivateIPs(true),agents.WithHTTPSettings(httptool.ClientSettings{Timeout:30*time.Millisecond}));if e!=nil{t.Fatal(e)};defer c.CloseIdleConnections()
+ // Act / Assert.
+ start:=time.Now();e=c.CancelTask(t.Context(),"timeout","");if !errors.Is(e,context.DeadlineExceeded)||time.Since(start)>time.Second{t.Fatalf("timeout=%v elapsed=%v",e,time.Since(start))};ctx,cancel:=context.WithCancel(t.Context());cancel();e=c.CancelTask(ctx,"cancel","");if !errors.Is(e,context.Canceled){t.Fatalf("cancel=%v",e)}
+}

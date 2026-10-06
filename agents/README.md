@@ -37,9 +37,13 @@ On reconnect `Last-Event-ID` carries the last complete frame's cursor. Within a 
 ## Usage and background acknowledgement
 
 ```go
-client := agents.NewClient("https://agent.example.com",
+client, err := agents.NewClient("https://agent.example.com",
     agents.WithStreamPolicy(agents.DefaultStreamPolicy()),
 )
+if err != nil {
+    return err
+}
+defer client.CloseIdleConnections()
 tool, err := agents.AsTool("delegate", "Delegate remote work", inputSchema, client)
 if err != nil {
     return err
@@ -48,10 +52,18 @@ if err != nil {
 
 `AsBackgroundTool` returns the declared JSON result `{"task_id":"...","accepted":true}` as `AcceptedTaskReference`. This confirms start acknowledgement only. It does not fabricate a completed business outcome or guarantee durable tracking. The host stores the reference and chooses its own status retrieval and continuation; see the executable [background example](background_example_test.go).
 
-Credentials are resolved separately through `RunEnv.Credentials` for `agents.create_task`, `agents.stream_steps` and `agents.cancel_task`. `WithHTTPClient` merges timeout settings onto the SSRF-safe transport; it does not replace that transport. `WithAllowPrivateIPs` is an explicit host choice for private deployments.
+Credentials are resolved separately through `RunEnv.Credentials` for `agents.create_task`, `agents.stream_steps` and `agents.cancel_task`. `WithHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})` applies explicit settings to the SSRF-safe transport. `NewClient` returns a construction error for invalid settings; custom Do/transport/proxy ports are unsupported. `WithAllowPrivateIPs` is an explicit host choice for private deployments.
 
 Redirects are allowed only for GET/HEAD reads within the original scheme, hostname and effective port. Create/cancel POST requests never redirect, including same-origin redirects and redirects that rewrite POST to GET. Hosts configure the final endpoint explicitly. A refused redirect exposes `*httptool.RedirectError` through the error chain; the original request may have produced effects. Create failures retain their unknown-outcome classification. Redirect refusal never authorizes argument repair or blind redispatch.
 
 ## Verification boundary
 
 Tests use the pinned normative envelopes, a distinct extension terminal table, local HTTP/SSE fixtures, aggregate byte/event limits, resume duplicates, idle deadlines and consumer aborts. No live remote interoperability is claimed. There is no A2A runtime, persistent scheduler, automatic retry permission or hidden status manager here.
+
+Each Client owns one pool for REST and SSE calls. On configuration disposal, stop
+new calls and invoke `client.CloseIdleConnections()`; active calls are unaffected.
+Idle connections are bounded and expire after 90 seconds even without explicit
+cleanup. A zero HTTP timeout leaves requests bounded by their context (logical
+SSE reads additionally use StreamPolicy). A positive HTTP timeout also limits SSE
+responses, so choose it for the intended stream duration. TLS roots, certificates
+and callback state referenced by the cloned TLSConfig must remain immutable.

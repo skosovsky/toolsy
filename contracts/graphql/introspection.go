@@ -63,13 +63,31 @@ type introField struct {
 
 // Introspect calls the GraphQL endpoint with the introspection query, then builds one tool per root query/mutation.
 func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.Tool, error) {
+	tools, _, err := IntrospectWithCleanup(ctx, endpoint, opts)
+	return tools, err
+}
+
+// IntrospectWithCleanup returns tools sharing one owned safe pool and its idle closer.
+// Stop new calls before disposal; active calls remain unaffected.
+func IntrospectWithCleanup(ctx context.Context, endpoint string, opts Options) ([]toolsy.Tool, func(), error) {
+	client, _, clientErr := opts.httpClient()
+	if clientErr != nil {
+		return nil, nil, clientErr
+	}
+	opts.client = client
+	success := false
+	defer func() {
+		if !success {
+			client.CloseIdleConnections()
+		}
+	}()
 	data, err := postIntrospection(ctx, endpoint, opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ir, err := parseIntroResponse(data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	schema := ir.Data.Schema
 	allowedOps := opts.Operations
@@ -80,13 +98,13 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 	for _, o := range allowedOps {
 		o = strings.ToLower(o)
 		if o != "query" && o != "mutation" {
-			return nil, fmt.Errorf("graphql: unsupported operation %s", o)
+			return nil, nil, fmt.Errorf("graphql: unsupported operation %s", o)
 		}
 		allowedSet[o] = true
 	}
 	typeMap, err := buildTypeMap(schema.Types)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var tools []toolsy.Tool
 	usedNames := make(map[string]bool)
@@ -102,7 +120,7 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 		usedNames,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tools, err = appendToolsForOperationKind(
 		tools,
@@ -116,13 +134,20 @@ func Introspect(ctx context.Context, endpoint string, opts Options) ([]toolsy.To
 		usedNames,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return tools, nil
+	success = true
+	return tools, client.CloseIdleConnections, nil
 }
 
 func postIntrospection(ctx context.Context, endpoint string, opts Options) ([]byte, error) {
-	client := opts.httpClient()
+	client, owned, clientErr := opts.httpClient()
+	if clientErr != nil {
+		return nil, clientErr
+	}
+	if owned {
+		defer client.CloseIdleConnections()
+	}
 	body := map[string]string{operationQuery: introspectionQuery}
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
@@ -310,7 +335,14 @@ func executeGraphQL(
 		}
 	}
 	// #nosec G704 -- endpoint from caller config, not user input
-	resp, err := opts.httpClient().Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
+	client, owned, clientErr := opts.httpClient()
+	if clientErr != nil {
+		return clientErr
+	}
+	if owned {
+		defer client.CloseIdleConnections()
+	}
+	resp, err := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if err != nil {
 		return fmt.Errorf("graphql: do: %w", err)
 	}

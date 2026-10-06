@@ -34,7 +34,6 @@ func TestParseURL_ExceedsSpecSizeLimit(t *testing.T) {
 	defer server.Close()
 
 	_, err := ParseURL(context.Background(), server.URL, Options{
-		HTTPClient:      server.Client(),
 		AllowPrivateIPs: true,
 	})
 	if err == nil {
@@ -61,7 +60,6 @@ func TestParseURL_CancelOverReadLimit_InterruptWins(t *testing.T) {
 	cancel()
 
 	_, err := ParseURL(ctx, server.URL, Options{
-		HTTPClient:      server.Client(),
 		AllowPrivateIPs: true,
 	})
 	if err == nil {
@@ -112,7 +110,6 @@ func TestParseURL_Non2xxStatus(t *testing.T) {
 	defer server.Close()
 
 	_, err := ParseURL(context.Background(), server.URL, Options{
-		HTTPClient:      server.Client(),
 		AllowPrivateIPs: true,
 	})
 	if err == nil {

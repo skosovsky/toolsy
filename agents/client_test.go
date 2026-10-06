@@ -23,7 +23,7 @@ func TestCreateTask_Accepts202Accepted(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	task, err := client.CreateTask(context.Background(), json.RawMessage(`{"q":"x"}`), "")
 	require.NoError(t, err)
 	require.Equal(t, "task-1", task.TaskID)
@@ -35,7 +35,7 @@ func TestCancelTask_Accepts204NoContent(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	require.NoError(t, client.CancelTask(context.Background(), "task-1", ""))
 }
 
@@ -45,7 +45,7 @@ func TestCreateTask_Non2xxStatus(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	_, err := client.CreateTask(context.Background(), json.RawMessage(`{"q":"x"}`), "")
 	require.Error(t, err)
 	var outcome *RemoteOutcomeError
@@ -59,7 +59,7 @@ func TestCancelTask_Non2xxStatus(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	err := client.CancelTask(context.Background(), "task-1", "")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "400")
@@ -73,9 +73,8 @@ func TestCreateTask_ExceedsResponseLimit(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(
+	client := mustClient(t,
 		srv.URL,
-		WithHTTPClient(srv.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxResponseBody(20),
 	)
@@ -95,7 +94,7 @@ func TestStreamStepsOnce_Non2xxStatus(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithHTTPClient(srv.Client()), WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	_, _, err := client.streamStepsOnce(
 		context.Background(),
 		"task-1",
@@ -123,9 +122,8 @@ func TestCreateTask_CancelOverResponseLimit(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(
+	client := mustClient(t,
 		srv.URL,
-		WithHTTPClient(srv.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxResponseBody(responseCap),
 	)

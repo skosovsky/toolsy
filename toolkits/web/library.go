@@ -75,6 +75,12 @@ func ScrapePage(ctx context.Context, rawURL string, opts ...Option) (string, err
 		opt(&o)
 	}
 	applyDefaults(&o)
+	client, err := newScrapeHTTPClient(&o)
+	if err != nil {
+		return "", err
+	}
+	o.httpClient = client
+	defer client.CloseIdleConnections()
 	result, err := doScrape(ctx, &o, rawURL)
 	if err != nil {
 		return "", err

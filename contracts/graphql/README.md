@@ -25,3 +25,11 @@ root data and oversized/invalid JSON fail execution without publishing sliced JS
 Introspection and execution responses default to a 512 KiB byte bound. Host credentials,
 endpoint authorization and business permissions remain host responsibilities. Discovery
 publishes query/mutation names deterministically; subscriptions are unsupported.
+
+`Options.HTTPSettings` accepts `httptool.ClientSettings` for explicit timeout/TLS
+configuration. Custom HTTPClient/Do/transport/proxy ports are unsupported.
+`IntrospectWithCleanup` returns generated tools and one owned idle-pool closer;
+discovery and all operations share that pool. Stop new calls before disposal;
+active calls remain unaffected. Ordinary `Introspect` retains bounded 90-second
+idle expiry. TLSConfig is cloned; referenced roots, certificates and callback
+state must remain immutable.

@@ -33,7 +33,6 @@ func TestExecuteRejectsOversizedResponse(t *testing.T) {
 				[]byte(`{}`),
 				&Options{
 					BaseURL:          server.URL,
-					HTTPClient:       server.Client(),
 					MaxResponseBytes: 5,
 					AllowPrivateIPs:  true,
 				},
@@ -63,7 +62,6 @@ func TestExecuteNonSuccessStatus(t *testing.T) {
 		[]byte(`{}`),
 		&Options{
 			BaseURL:         server.URL,
-			HTTPClient:      server.Client(),
 			AllowPrivateIPs: true,
 		},
 		func(toolsy.Chunk) error { return nil },

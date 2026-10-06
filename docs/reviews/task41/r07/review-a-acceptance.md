@@ -1,0 +1,17 @@
+# Independent R07 / D18 / D19 acceptance — reviewer A
+
+Final decision: accepted, 100% (five criteria, 20/20 each). No unresolved detected functional, security, lifecycle, documentation or validation defect in this task scope.
+
+1. Owned reusable pools: 20/20. Inspected Agent, OpenAPI, GraphQL, HTTP tools, web, document, MCP factories and execution paths. Public 20-call connection fixtures count one accepted connection and owned idle closure. Safe transport has 32 global idle connections, two per host, 90-second idle expiry. Compatibility factory paths retain the same shared pool.
+2. Explicit settings and preserved admission: 20/20. Removed custom client ports; every owned constructor uses shared configured safe transport. Timeout and cloned TLS config are applied. Independent real TLS probe required a client certificate and custom roots, succeeded through public Agent client; same settings without private-IP opt-in failed SSRF admission. Proxy/DialTLS override absent; redirect and host policy regressions passed.
+3. Lifecycle: 20/20. Inspected cleanup variants, failure cleanup, MCP Close, Agent idle cleanup and one-shot ScrapePage. Independent active-call probe closes idle resources while request outstanding, then verifies successful completion and a later call; idle cleanup is not terminal. No caller HTTP client accepted or closed.
+4. Pinned sequential dialing and stream cap: 20/20. All resolved IPs checked before first attempt; one lookup supplies addresses for all attempts, each bounded by remaining total context deadline. Existing adversarial probes validate mixed public/private rejection before dialing, fallback, timeout and cancellation. Stream cap stops without speculative EOF read, empty reads consume nothing, cancellation takes precedence; accurate docs.
+5. Verification and migration: 20/20. Independently reran seven affected module race suites and seven target lint suites. Initial Agent lint found missing fields on ClientSettings literal; parent fixed explicit zero fields; final Agent lint 0 issues and race PASS1.433s. Other six lint suites pass. Independent overlay probes pass1.677s. git diff --check passes. Current README and migration accurately disclose API breaks, immutable TLS referenced state and lifecycle.
+
+Evidence under /tmp/toolsy-task41/r07-review-a:
+- agents.log, contracts_openapi.log, contracts_graphql.log, toolkits_httptool.log, toolkits_web.log, toolkits_document.log, mcp.log — seven independent race suites, PASS; MCP20.383s.
+- lint-*.log — independent lint suites. lint-agents.log records the initial detected gate; lint-agents-final.log 0 issues and agents-final.log PASS record closure.
+- probe_test.go, overlay.json, probe-final.log — independent public Agent mTLS, SSRF, active-call idle cleanup, positive timeout and caller cancellation probes. All pass.
+- Initial probe.log server cleanup hang was an unbounded disposable test handler waiting on context without consuming request body; stopped only that test PID and bounded fixture cleanup. Not a product defect; final probe has 15-second test deadline and bounded server handler.
+
+Scope limitations: local macOS execution; no production publication. Independent TLS/active-call probes exercised Agent public API; common configured safe transport and all consumers were also inspected, with their own public pool fixtures and full module race suites. No claim that testing proves absence of every possible bug.

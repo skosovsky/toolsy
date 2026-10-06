@@ -131,7 +131,7 @@ func TestAsTool_CancelTaskUsesBoundedContext(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithAllowPrivateIPs(true))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true))
 	tool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 	require.NoError(t, err)
 
@@ -192,7 +192,7 @@ func TestAsTool_StreamLimit_MapsValidationWithBytes(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
 	tool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 	require.NoError(t, err)
 
@@ -247,7 +247,7 @@ func TestAsTool_StreamSteps_CancelOverReadLimit_InterruptWins(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
 	tool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 	require.NoError(t, err)
 
@@ -289,9 +289,8 @@ func TestAsTool_CreateTaskResponseLimit_MapsValidation(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(
+	client := mustClient(t,
 		srv.URL,
-		WithHTTPClient(srv.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxResponseBody(responseCap),
 	)
@@ -339,7 +338,7 @@ func TestAsTool_StreamSteps_TimeoutOverReadLimit_InterruptWins(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	client := NewClient(srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
+	client := mustClient(t, srv.URL, WithAllowPrivateIPs(true), WithMaxSSEStreamBytes(streamCap))
 	tool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 	require.NoError(t, err)
 

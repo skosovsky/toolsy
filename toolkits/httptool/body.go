@@ -40,11 +40,18 @@ const DefaultMaxSSEStreamBytes = 16 * 1024 * 1024
 // Unlike ReadLimitedBytes, Read may return partial data together with ErrReadLimitExceeded.
 type limitedStreamReader struct {
 	r   io.Reader
+	ctx context.Context
 	n   int64
 	max int64
 }
 
 func (l *limitedStreamReader) Read(p []byte) (int, error) {
+	if err := l.ctx.Err(); err != nil {
+		return 0, err
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
 	if l.n >= l.max {
 		return 0, textprocessor.ErrReadLimitExceeded
 	}
@@ -54,18 +61,19 @@ func (l *limitedStreamReader) Read(p []byte) (int, error) {
 	}
 	n, err := l.r.Read(p)
 	l.n += int64(n)
-	if l.n > l.max {
-		return n, textprocessor.ErrReadLimitExceeded
-	}
 	return n, err
 }
 
-// LimitStreamReaderWithContext wraps r with a byte budget and honors ctx cancellation during Read.
+// LimitStreamReaderWithContext stops after maxBytes physical bytes, without probing
+// past the budget. An exact-size stream whose last Read did not report EOF returns
+// ErrReadLimitExceeded on the next nonempty Read; this is a stop-after-budget cap,
+// not inclusive size validation. Empty reads consume nothing. Cancellation takes
+// precedence, but the underlying Read must itself unblock for cancellation.
 func LimitStreamReaderWithContext(ctx context.Context, r io.Reader, maxBytes int) io.Reader {
 	if maxBytes <= 0 {
 		maxBytes = DefaultMaxSSEStreamBytes
 	}
-	return &limitedStreamReader{r: textprocessor.ReaderWithContext(ctx, r), n: 0, max: int64(maxBytes)}
+	return &limitedStreamReader{r: textprocessor.ReaderWithContext(ctx, r), ctx: ctx, n: 0, max: int64(maxBytes)}
 }
 
 type limitedReadCloser struct {

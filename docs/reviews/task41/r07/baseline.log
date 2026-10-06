@@ -1,0 +1,5 @@
+--- FAIL: TestBaselinePublicAgentPoolReuse (0.02s)
+    reuse_regression_test.go:22: opened=20 connections for 20 calls, want 1
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/agents	0.462s

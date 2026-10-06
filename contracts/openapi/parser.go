@@ -20,71 +20,64 @@ import (
 
 // ParseURL fetches the OpenAPI spec from specURL, parses it, filters by opts, and returns one toolsy.Tool per operation.
 func ParseURL(ctx context.Context, specURL string, opts Options) ([]toolsy.Tool, error) {
-	for _, method := range opts.AllowedMethods {
-		switch method {
-		case http.MethodGet,
-			http.MethodPost,
-			http.MethodPut,
-			http.MethodPatch,
-			http.MethodDelete,
-			http.MethodHead,
-			http.MethodOptions:
-		default:
-			return nil, unsupported("selected HTTP method " + method)
-		}
+	tools, _, err := ParseURLWithCleanup(ctx, specURL, opts)
+	return tools, err
+}
+
+// ParseURLWithCleanup returns tools sharing one owned safe pool and its idle closer.
+// Stop new calls before disposal; active calls remain unaffected.
+func ParseURLWithCleanup(ctx context.Context, specURL string, opts Options) ([]toolsy.Tool, func(), error) {
+	client, _, clientErr := opts.httpClient()
+	if clientErr != nil {
+		return nil, nil, clientErr
 	}
-	client := opts.httpClient()
+	opts.client = client
+	success := false
+	defer func() {
+		if !success {
+			client.CloseIdleConnections()
+		}
+	}()
+	if methodErr := validateSelectedMethods(opts.AllowedMethods); methodErr != nil {
+		return nil, nil, methodErr
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, specURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("openapi: request: %w", err)
+		return nil, nil, fmt.Errorf("openapi: request: %w", err)
 	}
 	resp, err := client.Do(req) //nolint:bodyclose // drained and closed via httptool.CloseResponseBody
 	if err != nil {
-		return nil, fmt.Errorf("openapi: fetch spec: %w", err)
+		return nil, nil, fmt.Errorf("openapi: fetch spec: %w", err)
 	}
 	defer httptool.CloseResponseBody(ctx, resp.Body)
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
-		return nil, fmt.Errorf("openapi: spec status %d", resp.StatusCode)
+		return nil, nil, fmt.Errorf("openapi: spec status %d", resp.StatusCode)
 	}
 	data, err := textprocessor.ReadLimitedBytes(ctx, resp.Body, defaultMaxSpecBytes)
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return nil, nil, ctx.Err()
 		}
 		if toolsy.IsContextInterrupt(err) {
-			return nil, err
+			return nil, nil, err
 		}
 		if textprocessor.IsReadLimitExceeded(err) {
-			return nil, fmt.Errorf("openapi: spec exceeds %d byte limit: %w", defaultMaxSpecBytes, err)
+			return nil, nil, fmt.Errorf("openapi: spec exceeds %d byte limit: %w", defaultMaxSpecBytes, err)
 		}
-		return nil, fmt.Errorf("openapi: read spec: %w", err)
+		return nil, nil, fmt.Errorf("openapi: read spec: %w", err)
 	}
 
-	decoded, err := jsonschemax.Decode(data)
-	if err != nil {
-		return nil, fmt.Errorf("openapi: JSON spec: %w", err)
+	doc, source, docErr := loadOpenAPIDocument(ctx, data)
+	if docErr != nil {
+		return nil, nil, docErr
 	}
-	source, ok := decoded.(map[string]any)
-	if !ok {
-		return nil, unsupported("document must be an object")
+	tools, buildErr := docToTools(doc, source, specURL, &opts)
+	if buildErr != nil {
+		return nil, nil, buildErr
 	}
-	version, _ := source["openapi"].(string)
-	if !strings.HasPrefix(version, "3.0.") {
-		return nil, unsupported("only JSON OpenAPI 3.0.x is supported")
-	}
-	if referenceErr := checkReferences(source); referenceErr != nil {
-		return nil, referenceErr
-	}
-	loader := openapi3.NewLoader()
-	doc, err := loader.LoadFromData(data)
-	if err != nil {
-		return nil, fmt.Errorf("openapi: parse spec: %w", err)
-	}
-
-	if err := doc.Validate(ctx); err != nil {
-		return nil, fmt.Errorf("openapi: invalid contract: %w", err)
-	}
-	return docToTools(doc, source, specURL, &opts)
+	success = true
+	return tools, client.CloseIdleConnections, nil
 }
 
 // docToTools constructs tools only after the entire selected set has passed construction.
@@ -219,4 +212,49 @@ func sourceBaseURL(source, item, operation map[string]any, specURL string) (stri
 	}
 	base = origin.ResolveReference(relative).String()
 	return base, nil
+}
+
+func validateSelectedMethods(methods []string) error {
+	for _, method := range methods {
+		switch method {
+		case http.MethodGet,
+			http.MethodPost,
+			http.MethodPut,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodHead,
+			http.MethodOptions:
+		default:
+			return unsupported("selected HTTP method " + method)
+		}
+	}
+	return nil
+}
+
+func loadOpenAPIDocument(ctx context.Context, data []byte) (*openapi3.T, map[string]any, error) {
+	decoded, err := jsonschemax.Decode(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("openapi: JSON spec: %w", err)
+	}
+	source, ok := decoded.(map[string]any)
+	if !ok {
+		return nil, nil, unsupported("document must be an object")
+	}
+	version, _ := source["openapi"].(string)
+	if !strings.HasPrefix(version, "3.0.") {
+		return nil, nil, unsupported("only JSON OpenAPI 3.0.x is supported")
+	}
+	if referenceErr := checkReferences(source); referenceErr != nil {
+		return nil, nil, referenceErr
+	}
+	loader := openapi3.NewLoader()
+	doc, err := loader.LoadFromData(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("openapi: parse spec: %w", err)
+	}
+
+	if err := doc.Validate(ctx); err != nil {
+		return nil, nil, fmt.Errorf("openapi: invalid contract: %w", err)
+	}
+	return doc, source, nil
 }

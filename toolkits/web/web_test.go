@@ -93,7 +93,7 @@ func TestWebScrape_Success(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	scrapeTool := tools[1]
 
@@ -125,7 +125,6 @@ func TestWebScrape_ExceedsMaxBody(t *testing.T) {
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(
 		provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(maxPage),
 	)
@@ -162,7 +161,6 @@ func TestWebScrape_MarkdownExpansionExceedsCap(t *testing.T) {
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(
 		provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(maxPage),
 	)
@@ -325,7 +323,6 @@ func TestWebScrape_CancelDuringDo(t *testing.T) {
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(
 		provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 	)
 	require.NoError(t, err)
@@ -385,7 +382,6 @@ func TestWebScrape_CustomScraper_ExceedsCap(t *testing.T) {
 	tools, err := AsTools(
 		provider,
 		WithScraper(custom),
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(maxPage),
 	)
@@ -414,7 +410,7 @@ func TestWebScrape_ScriptAndStyleStripped(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	scrapeTool := tools[1]
 
@@ -496,7 +492,7 @@ func TestWebScrape_RedirectToLoopbackBlocked(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	err = tools[1].Execute(
@@ -521,7 +517,7 @@ func TestWebScrape_WithCustomScraper(t *testing.T) {
 		return "custom output", nil
 	}}
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithScraper(custom), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithScraper(custom), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	var result ScrapeWireResult
@@ -570,7 +566,7 @@ func TestWebScrape_BlockedRedirectDomain_Rejected(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true),
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true),
 		WithBlockedDomains([]string{"blocked-internal.example"}))
 	require.NoError(t, err)
 
@@ -676,7 +672,6 @@ func TestWebScrape_WithHostResultValidator_Reject(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithHostResultValidator(func(_ any) error {
 			return assert.AnError
@@ -730,7 +725,6 @@ func TestWebScrape_WithHostResultValidator_Envelope(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithHostResultValidator(func(v any) error {
 			_, ok := v.(ScrapeWireResult)
@@ -770,7 +764,6 @@ func TestWebScrape_WithScrapeFormatter(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"fmt": "custom"}, nil
@@ -823,7 +816,6 @@ func TestWebScrape_FormatterAndValidator(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"page": "ok"}, nil
@@ -863,7 +855,6 @@ func TestWebScrape_WithMaxPageBytes_WithResultFormatter(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(60),
 		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
@@ -903,7 +894,6 @@ func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(maxWire),
 	)
@@ -957,7 +947,7 @@ func TestWebScrape_Non2xxStatus(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	err = tools[1].Execute(
 		context.Background(),
@@ -978,7 +968,7 @@ func TestWebScrape_Accepts2xxWithoutBody(t *testing.T) {
 	defer server.Close()
 
 	provider := &mockSearchProvider{}
-	tools, err := AsTools(provider, WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tools, err := AsTools(provider, WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	var result ScrapeWireResult
 	require.NoError(
@@ -1096,7 +1086,6 @@ func TestWebScrape_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 
 	provider := &mockSearchProvider{}
 	tools, err := AsTools(provider,
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(80),
 		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {

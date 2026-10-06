@@ -58,7 +58,14 @@ func execute(ctx context.Context, run *toolsy.RunEnv, name, method, path string,
 		}
 	}
 	// #nosec G704 -- authority comes from host Options or the source contract, never argument input.
-	response, err := opts.httpClient().Do(request) //nolint:bodyclose // deferred bounded close helper
+	client, owned, clientErr := opts.httpClient()
+	if clientErr != nil {
+		return clientErr
+	}
+	if owned {
+		defer client.CloseIdleConnections()
+	}
+	response, err := client.Do(request) //nolint:bodyclose // deferred bounded close helper
 	if err != nil {
 		return fmt.Errorf("openapi: do request: %w", err)
 	}

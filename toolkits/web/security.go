@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/url"
 
@@ -19,21 +18,13 @@ func validateScrapeURL(
 	return httptool.ValidateRemoteURLWithBlacklist(ctx, rawURL, allowPrivateIPs, blockedDomains)
 }
 
-func scrapeHTTPClient(o *options) (*http.Client, error) {
-	if o.httpClient != nil {
-		if _, ok := o.httpClient.(*http.Client); !ok {
-			return nil, errors.New(
-				"toolkit/web: default SSRF protection requires *http.Client; pass WithHTTPClient(&http.Client{...})",
-			)
-		}
-	}
-	dialOpts := httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // blacklist mode; IP policy via AllowPrivateIPs
-		BlockedHosts:    o.blockedDomains,
-		AllowPrivateIPs: o.allowPrivateIPs,
-	}
-	safe := httptool.NewSafeHTTPClient(
-		dialOpts,
+func newScrapeHTTPClient(o *options) (*http.Client, error) {
+	return httptool.NewConfiguredSafeHTTPClient(
+		httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // Unset fields retain safe defaults.
+			BlockedHosts:    o.blockedDomains,
+			AllowPrivateIPs: o.allowPrivateIPs,
+		},
 		httptool.CheckRedirectRemote(o.allowPrivateIPs, o.blockedDomains),
+		o.httpSettings,
 	)
-	return httptool.MergeHTTPClient(safe, o.httpClient), nil
 }

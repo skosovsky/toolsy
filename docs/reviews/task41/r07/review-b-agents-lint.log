@@ -1,0 +1,5 @@
+agents/client.go:67:22: httptool.ClientSettings is missing fields Timeout, TLSConfig (exhaustruct_v5)
+		HTTPSettings:      httptool.ClientSettings{},
+		                   ^
+1 issues:
+* exhaustruct_v5: 1

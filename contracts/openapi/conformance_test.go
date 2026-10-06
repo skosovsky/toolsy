@@ -41,7 +41,7 @@ func discoverFixture(t *testing.T, spec string, handler http.HandlerFunc) ([]too
 		}
 	}))
 	t.Cleanup(server.Close)
-	options := Options{HTTPClient: server.Client(), AllowPrivateIPs: true}
+	options := Options{AllowPrivateIPs: true}
 	return ParseURL(t.Context(), server.URL+"/spec.json", options)
 }
 

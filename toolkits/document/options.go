@@ -6,14 +6,10 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+
 	"github.com/skosovsky/toolsy"
 )
-
-// HTTPClient is the minimal HTTP surface used for remote document fetch. Pass [*http.Client] with Timeout only;
-// Transport is always merged from the default SSRF-safe client.
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
 
 // Option configures AsTool (limits, remote fetch, tool name).
 type Option func(*options)
@@ -25,7 +21,8 @@ type options struct {
 	inProcessPDF        bool
 	allowRemote         bool
 	allowPrivateIPs     bool
-	httpClient          HTTPClient
+	httpClient          *http.Client
+	httpSettings        httptool.ClientSettings
 	toolName            string
 	toolDesc            string
 	resultFormatter     func(ExtractWireResult) (any, error)
@@ -75,11 +72,9 @@ func WithAllowPrivateIPs(allow bool) Option {
 	}
 }
 
-// WithHTTPClient sets the HTTP client for URL downloads. Only Timeout is merged onto the default SSRF-safe client.
-func WithHTTPClient(c HTTPClient) Option {
-	return func(o *options) {
-		o.httpClient = c
-	}
+// WithHTTPSettings applies explicit timeout/TLS settings to the owned safe pool.
+func WithHTTPSettings(settings httptool.ClientSettings) Option {
+	return func(o *options) { o.httpSettings = settings }
 }
 
 // WithToolName sets the name of the extract tool.

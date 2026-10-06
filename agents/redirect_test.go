@@ -44,7 +44,7 @@ func TestRPCRejectsRedirects(t *testing.T) {
 						http.Redirect(w, r, location, status)
 					}))
 					t.Cleanup(source.Close)
-					client := NewClient(source.URL, WithAllowPrivateIPs(true))
+					client := mustClient(t, source.URL, WithAllowPrivateIPs(true))
 					// Act.
 					var err error
 					if operation == "create" {
@@ -107,7 +107,7 @@ func TestPublicStreamRedirectOrigin(t *testing.T) {
 			t.Cleanup(source.Close)
 			policy := testPolicy()
 			policy.MaxReconnects = 0
-			client := NewClient(source.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
+			client := mustClient(t, source.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
 			var steps []Step
 			var streamErr error
 			// Act.

@@ -44,26 +44,45 @@ type ScrapeWireResult struct {
 
 // AsTools returns web_search and web_scrape tools. SearchProvider is required for web_search.
 func AsTools(provider SearchProvider, opts ...Option) ([]toolsy.Tool, error) {
+	value, _, err := AsToolsWithCleanup(provider, opts...)
+	return value, err
+}
+
+// AsToolsWithCleanup returns the tools and an owned idle-pool closer. Stop new calls
+// before disposal; the closer leaves active calls unaffected and is not terminal Close.
+func AsToolsWithCleanup(provider SearchProvider, opts ...Option) ([]toolsy.Tool, func(), error) {
 	if provider == nil {
-		return nil, errors.New("toolkit/web: SearchProvider is required")
+		return nil, nil, errors.New("toolkit/web: SearchProvider is required")
 	}
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	applyDefaults(&o)
+	client, clientErr := newScrapeHTTPClient(&o)
+	if clientErr != nil {
+		return nil, nil, clientErr
+	}
+	o.httpClient = client
+	success := false
+	defer func() {
+		if !success {
+			client.CloseIdleConnections()
+		}
+	}()
 
 	searchTool, err := buildSearchTool(provider, &o)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/web: build search tool: %w", err)
+		return nil, nil, fmt.Errorf("toolkit/web: build search tool: %w", err)
 	}
 
 	scrapeTool, err := buildScrapeTool(&o)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/web: build scrape tool: %w", err)
+		return nil, nil, fmt.Errorf("toolkit/web: build scrape tool: %w", err)
 	}
 
-	return []toolsy.Tool{searchTool, scrapeTool}, nil
+	success = true
+	return []toolsy.Tool{searchTool, scrapeTool}, client.CloseIdleConnections, nil
 }
 
 func buildSearchTool(provider SearchProvider, o *options) (toolsy.Tool, error) {
@@ -216,10 +235,7 @@ func doScrape(ctx context.Context, o *options, rawURL string) (ScrapeWireResult,
 	if err != nil {
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: new request: %w", err))
 	}
-	client, err := scrapeHTTPClient(o)
-	if err != nil {
-		return ScrapeWireResult{}, err
-	}
+	client := o.httpClient
 	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
 		if _, ok := toolsy.AsToolError(doErr); ok {

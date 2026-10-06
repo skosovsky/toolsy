@@ -370,7 +370,6 @@ func TestExtract_Remote_ExceedsMaxBytes(t *testing.T) {
 
 	tool, err := testAsTool(
 		WithAllowRemote(true),
-		WithHTTPClient(server.Client()),
 		WithLimits(Limits{SourceBytes: maxBytes}),
 		WithAllowPrivateIPs(true),
 		WithMaxBytes(maxBytes),
@@ -403,7 +402,6 @@ func TestExtract_RemoteSourceBudgetIndependentOfWire(t *testing.T) {
 
 	tool, err := testAsTool(
 		WithAllowRemote(true),
-		WithHTTPClient(server.Client()),
 		WithLimits(Limits{SourceBytes: contentCap}),
 		WithAllowPrivateIPs(true),
 		WithMaxBytes(wireMax),
@@ -471,7 +469,6 @@ func TestExtract_Remote_CancelDuringDo(t *testing.T) {
 
 	tool, err := testAsTool(
 		WithAllowRemote(true),
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 	)
 	require.NoError(t, err)
@@ -500,7 +497,7 @@ func TestExtract_Remote_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -526,7 +523,7 @@ func TestExtract_Remote_Non2xxStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
@@ -547,7 +544,7 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -591,7 +588,7 @@ func TestExtract_Remote_Redirect_RejectsForeignOriginWhenPrivateAllowed(t *testi
 	}))
 	defer server.Close()
 
-	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
@@ -671,7 +668,6 @@ func TestAsTool_RemoteURL_WithFormatterAndValidator(t *testing.T) {
 
 	tool, err := testAsTool(
 		WithAllowRemote(true),
-		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxBytes(50),
 		WithResultFormatter(func(res ExtractWireResult) (any, error) {

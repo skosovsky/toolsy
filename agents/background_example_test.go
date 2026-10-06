@@ -16,7 +16,11 @@ func ExampleAsBackgroundTool() {
 		_, _ = w.Write([]byte(`{"task_id":"remote-1","artifacts":[]}`))
 	}))
 	defer server.Close()
-	client := agents.NewClient(server.URL, agents.WithAllowPrivateIPs(true))
+	client, err := agents.NewClient(server.URL, agents.WithAllowPrivateIPs(true))
+	if err != nil {
+		panic(err)
+	}
+	defer client.CloseIdleConnections()
 	tool, err := agents.AsBackgroundTool("start", "Start remote work", []byte(`{"type":"object"}`), client)
 	if err != nil {
 		panic(err)

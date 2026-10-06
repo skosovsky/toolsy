@@ -29,15 +29,33 @@ type ExtractWireResult struct {
 
 // AsTool returns a single tool that extracts text from PDF, CSV, or DOCX (by file path or URL).
 func AsTool(opts ...Option) (toolsy.Tool, error) {
+	value, _, err := AsToolWithCleanup(opts...)
+	return value, err
+}
+
+// AsToolWithCleanup returns the tools and an owned idle-pool closer. Stop new calls
+// before disposal; the closer leaves active calls unaffected and is not terminal Close.
+func AsToolWithCleanup(opts ...Option) (toolsy.Tool, func(), error) {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	if o.maxBytes < 0 || o.limits.SourceBytes < 0 || o.limits.ParsedBytes < 0 || o.limits.MaxItems < 0 ||
 		o.limits.ItemBytes < 0 {
-		return nil, errors.New("toolkit/document: limits must not be negative")
+		return nil, nil, errors.New("toolkit/document: limits must not be negative")
 	}
 	applyDefaults(&o)
+	client, clientErr := newDocumentHTTPClient(&o)
+	if clientErr != nil {
+		return nil, nil, clientErr
+	}
+	o.httpClient = client
+	success := false
+	defer func() {
+		if !success {
+			client.CloseIdleConnections()
+		}
+	}()
 
 	toolOpts := []toolsy.ToolOption{}
 	if !o.allowRemote {
@@ -68,9 +86,10 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 			toolOpts...,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("toolkit/document: build tool: %w", err)
+			return nil, nil, fmt.Errorf("toolkit/document: build tool: %w", err)
 		}
-		return tool, nil
+		success = true
+		return tool, client.CloseIdleConnections, nil
 	}
 
 	tool, err := toolsy.NewTool[extractArgs, format.JSONResult](
@@ -86,9 +105,10 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 		toolOpts...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/document: build tool: %w", err)
+		return nil, nil, fmt.Errorf("toolkit/document: build tool: %w", err)
 	}
-	return tool, nil
+	success = true
+	return tool, client.CloseIdleConnections, nil
 }
 
 func doExtract(ctx context.Context, o *options, filePath, url string) (ExtractWireResult, error) {
@@ -229,10 +249,7 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	if err != nil {
 		return "", "", toolsy.NewInternalError(fmt.Errorf("toolkit/document: request: %w", err))
 	}
-	client, err := documentHTTPClient(o)
-	if err != nil {
-		return "", "", err
-	}
+	client := o.httpClient
 	resp, doErr := client.Do(req) //nolint:bodyclose // closed via httptool.CloseResponseBody
 	if doErr != nil {
 		if _, ok := toolsy.AsToolError(doErr); ok {
@@ -244,19 +261,14 @@ func fetchRemoteToTemp(ctx context.Context, o *options, rawURL string) (string, 
 	return copyRemoteResponseToTemp(ctx, resp, rawURL, o)
 }
 
-func documentHTTPClient(o *options) (*http.Client, error) {
-	if o.httpClient != nil {
-		if _, ok := o.httpClient.(*http.Client); !ok {
-			return nil, errors.New(
-				"toolkit/document: default SSRF protection requires *http.Client; pass WithHTTPClient(&http.Client{...})",
-			)
-		}
-	}
-	safe := httptool.NewSafeHTTPClient(
-		httptool.SafeDialOptions{AllowPrivateIPs: o.allowPrivateIPs}, //nolint:exhaustruct_v5 // IP-only blacklist mode
+func newDocumentHTTPClient(o *options) (*http.Client, error) {
+	return httptool.NewConfiguredSafeHTTPClient(
+		httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // Unset fields retain safe defaults.
+			AllowPrivateIPs: o.allowPrivateIPs,
+		},
 		httptool.CheckRedirectRemote(o.allowPrivateIPs, nil),
+		o.httpSettings,
 	)
-	return httptool.MergeHTTPClient(safe, o.httpClient), nil
 }
 
 func formatFromURL(u string) string {

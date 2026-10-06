@@ -481,7 +481,9 @@ func TestStreamableHTTP_RejectsMethodChangingRedirect(t *testing.T) {
 
 func TestStreamableHTTP_SafeClientRejectsRedirectToLoopback(t *testing.T) {
 	// Arrange.
-	client := defaultStreamableHTTPClient(false)
+	transport := NewStreamableHTTPTransport("https://example.com/mcp")
+	t.Cleanup(func() { _ = transport.Close() })
+	client := transport.client
 	redirect, err := http.NewRequest(http.MethodGet, "http://127.0.0.1/private", nil)
 	require.NoError(t, err)
 	original, err := http.NewRequest(http.MethodGet, "https://example.com/mcp", nil)

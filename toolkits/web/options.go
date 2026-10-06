@@ -2,13 +2,10 @@ package web
 
 import (
 	"net/http"
-)
+	"slices"
 
-// HTTPClient is the minimal HTTP surface used by web scrape. Pass [*http.Client] with Timeout only;
-// Transport is always merged from the default SSRF-safe client.
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+)
 
 // Option configures AsTools (page limit, HTTP client, scraper, SSRF options, tool names).
 type Option func(*options)
@@ -24,7 +21,8 @@ type options struct {
 	maxSearchSourceBytes int
 	maxSourceBytes       int
 	maxMarkdownBytes     int
-	httpClient           HTTPClient
+	httpClient           *http.Client
+	httpSettings         httptool.ClientSettings
 	scraper              Scraper
 	allowPrivateIPs      bool
 	blockedDomains       []string
@@ -94,11 +92,9 @@ func WithMaxSearchBytes(n int) Option {
 	}
 }
 
-// WithHTTPClient sets the HTTP client for scraping. Only Timeout is merged; Transport is always SSRF-safe.
-func WithHTTPClient(c HTTPClient) Option {
-	return func(o *options) {
-		o.httpClient = c
-	}
+// WithHTTPSettings applies explicit timeout/TLS settings to the owned safe pool.
+func WithHTTPSettings(settings httptool.ClientSettings) Option {
+	return func(o *options) { o.httpSettings = settings }
 }
 
 // WithScraper sets a custom scraper (e.g. for JS-rendered pages). Default uses html-to-markdown.
@@ -122,7 +118,7 @@ func WithAllowPrivateIPs(allow bool) Option {
 // Use both "example.com" and ".example.com" to block the apex and descendants.
 func WithBlockedDomains(domains []string) Option {
 	return func(o *options) {
-		o.blockedDomains = domains
+		o.blockedDomains = slices.Clone(domains)
 	}
 }
 

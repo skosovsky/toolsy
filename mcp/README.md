@@ -227,3 +227,10 @@ make task34-preflight
 ```
 
 `make release-break` is the actual destructive release workflow: after lint, tests and preflight it may create a release commit, create tags and push tags. Run it only when intentionally publishing the clear break.
+
+`WithStreamableHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})`
+replaces the removed `WithStreamableHTTPClient` accept-and-ignore option. Settings
+apply to one owned safe pool; invalid settings fail Start before dispatch. Close
+releases owned idle connections after active posts finish. TLSConfig is cloned;
+referenced certificates, root pools and callback state remain immutable host
+state. A positive timeout also bounds each SSE response; zero uses caller context.

@@ -1,0 +1,8 @@
+=== RUN   TestReviewerMTLSAndSafeSettings
+--- PASS: TestReviewerMTLSAndSafeSettings (0.02s)
+=== RUN   TestReviewerIdleCleanupLeavesActiveAndReusable
+--- PASS: TestReviewerIdleCleanupLeavesActiveAndReusable (0.00s)
+=== RUN   TestReviewerTimeoutBodyAndCallerCancellation
+--- PASS: TestReviewerTimeoutBodyAndCallerCancellation (0.15s)
+PASS
+ok  	github.com/skosovsky/toolsy/agents	1.677s

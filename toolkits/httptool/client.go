@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
@@ -52,40 +53,26 @@ func NewSafeHTTPClient(opts SafeDialOptions, redirect func(*http.Request, []*htt
 	return client
 }
 
-// MergeHTTPClient applies timeout from base onto a safe client. Custom Transport on base is ignored.
-func MergeHTTPClient(safe *http.Client, base HTTPClient) *http.Client {
-	if base == nil {
-		return safe
+func defaultHTTPClient(o *options) (*http.Client, error) {
+	settings := o.httpSettings
+	if settings.Timeout == 0 {
+		settings.Timeout = defaultTimeout
 	}
-	std, ok := base.(*http.Client)
-	if !ok || std == nil {
-		return safe
-	}
-	if std.Timeout <= 0 {
-		return safe
-	}
-	merged := *safe
-	merged.Timeout = std.Timeout
-	return &merged
-}
-
-func defaultHTTPClient(o *options) *http.Client {
-	opts := SafeDialOptions{ //nolint:exhaustruct_v5 // whitelist mode; IP policy defaults
-		AllowedHosts:    o.allowedDomains,
-		AllowPrivateIPs: o.allowPrivateIPs,
-	}
-	safe := NewSafeHTTPClient(opts, CheckRedirectAllowed(o.allowedDomains, o.allowPrivateIPs))
-	safe.Timeout = defaultTimeout
-	if o.httpClient == nil {
-		return safe
-	}
-	return MergeHTTPClient(safe, o.httpClient)
+	return NewConfiguredSafeHTTPClient(
+		SafeDialOptions{ //nolint:exhaustruct_v5 // Unset fields retain safe defaults.
+			AllowedHosts:    o.allowedDomains,
+			AllowPrivateIPs: o.allowPrivateIPs,
+		},
+		CheckRedirectAllowed(o.allowedDomains, o.allowPrivateIPs),
+		settings,
+	)
 }
 
 // CheckRedirectAllowed follows only requests that started as GET/HEAD, validating
 // destinations against allowedDomains. Foreign origins lose credential headers.
 // Other initial methods are refused even when HTTP rewrites the redirect to GET.
 func CheckRedirectAllowed(allowedDomains []string, allowPrivateIPs bool) func(*http.Request, []*http.Request) error {
+	allowedDomains = slices.Clone(allowedDomains)
 	return func(redirectReq *http.Request, via []*http.Request) error {
 		if err := validateRedirectRead(redirectReq, via); err != nil {
 			return err
@@ -111,6 +98,7 @@ func CheckRedirectAllowed(allowedDomains []string, allowPrivateIPs bool) func(*h
 // All other redirects fail with RedirectError before a second dispatch. Hosts
 // must configure the final RPC endpoint explicitly; request bodies are never rerouted.
 func CheckRedirectRemote(allowPrivateIPs bool, blockedHosts []string) func(*http.Request, []*http.Request) error {
+	blockedHosts = slices.Clone(blockedHosts)
 	return func(redirectReq *http.Request, via []*http.Request) error {
 		if err := validateRedirectRead(redirectReq, via); err != nil {
 			return err

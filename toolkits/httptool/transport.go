@@ -2,6 +2,7 @@ package httptool
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -10,6 +11,9 @@ import (
 )
 
 const defaultDialTimeout = 30 * time.Second
+const defaultIdleConnTimeout = 90 * time.Second
+const defaultMaxIdleConns = 32
+const defaultTLSHandshakeTimeout = 10 * time.Second
 
 // IsPrivateIP reports whether ip is loopback, link-local unicast, or private (RFC1918, etc.).
 func IsPrivateIP(ip net.IP) bool {
@@ -55,7 +59,7 @@ type SafeDialOptions struct {
 
 // SafeDialTransport returns an [*http.Transport] with SSRF-safe dialing.
 // At dial time it resolves the host, checks each IP with IsBlockedIP (unless AllowPrivateIPs),
-// and connects to the first resolved address (DNS-rebinding pin). URL-level checks in
+// and tries the checked addresses without another lookup (DNS-rebinding pin). URL-level checks in
 // ValidateRemoteURL use the same IP policy at validate time before the request is sent.
 func SafeDialTransport(opts SafeDialOptions) *http.Transport {
 	isBlocked := opts.IsBlockedIP
@@ -68,7 +72,13 @@ func SafeDialTransport(opts SafeDialOptions) *http.Transport {
 	}
 	policy := normalizeHostPolicy(opts.AllowedHosts, opts.BlockedHosts)
 	return &http.Transport{
-		DialContext: safeDialContext(isBlocked, opts.AllowPrivateIPs, timeout, policy),
+		DialContext:           safeDialContext(isBlocked, opts.AllowPrivateIPs, timeout, policy),
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          defaultMaxIdleConns,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       defaultIdleConnTimeout,
+		TLSHandshakeTimeout:   defaultTLSHandshakeTimeout,
+		ExpectContinueTimeout: time.Second,
 	}
 }
 
@@ -114,6 +124,19 @@ func safeDialContext(
 	timeout time.Duration,
 	policy hostPolicy,
 ) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return safeDialContextWithPorts(isBlocked, allowPrivateIPs, timeout, policy,
+		net.DefaultResolver.LookupIPAddr,
+		func(attempt context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{} //nolint:exhaustruct_v5 // Attempt context supplies the deadline; remaining dialer defaults are intentional.
+			return d.DialContext(attempt, network, address)
+		})
+}
+
+func safeDialContextWithPorts(
+	isBlocked func(net.IP) bool, allowPrivateIPs bool, timeout time.Duration, policy hostPolicy,
+	lookup func(context.Context, string) ([]net.IPAddr, error),
+	dial func(context.Context, string, string) (net.Conn, error),
+) func(context.Context, string, string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, err := net.SplitHostPort(addr)
 		if err != nil {
@@ -122,7 +145,9 @@ func safeDialContext(
 		if !hostAllowed(host, policy) {
 			return nil, toolsy.NewValidationError("SSRF: host not allowed")
 		}
-		ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+		bounded, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		ips, err := lookup(bounded, host)
 		if err != nil {
 			return nil, err
 		}
@@ -134,8 +159,33 @@ func safeDialContext(
 				return nil, toolsy.NewValidationError("SSRF: private or loopback IP not allowed")
 			}
 		}
-		dialAddr := net.JoinHostPort(ips[0].IP.String(), port)
-		d := net.Dialer{Timeout: timeout} //nolint:exhaustruct_v5 // defaults for DNS pin dial
-		return d.DialContext(ctx, network, dialAddr)
+		return dialPinnedAddresses(bounded, network, ips, port, timeout, dial)
 	}
+}
+
+func dialPinnedAddresses(
+	ctx context.Context,
+	network string,
+	ips []net.IPAddr,
+	port string,
+	timeout time.Duration,
+	dial func(context.Context, string, string) (net.Conn, error),
+) (net.Conn, error) {
+	bounded, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	var failures []error
+	for i, ip := range ips {
+		if err := bounded.Err(); err != nil {
+			return nil, errors.Join(append(failures, err)...)
+		}
+		deadline, _ := bounded.Deadline()
+		attempt, stop := context.WithTimeout(bounded, time.Until(deadline)/time.Duration(len(ips)-i))
+		conn, err := dial(attempt, network, net.JoinHostPort(ip.String(), port))
+		stop()
+		if err == nil {
+			return conn, nil
+		}
+		failures = append(failures, err)
+	}
+	return nil, errors.Join(failures...)
 }

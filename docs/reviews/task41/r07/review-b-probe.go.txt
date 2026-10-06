@@ -1,0 +1,47 @@
+package main
+
+import (
+ "context"
+ "crypto/ecdsa"
+ "crypto/elliptic"
+ "crypto/rand"
+ "crypto/tls"
+ "crypto/x509"
+ "crypto/x509/pkix"
+ "errors"
+ "fmt"
+ "math/big"
+ "net/http"
+ "net/http/httptest"
+ "sync/atomic"
+ "time"
+ "github.com/skosovsky/toolsy/agents"
+ "github.com/skosovsky/toolsy/toolkits/httptool"
+)
+
+func must(err error) { if err != nil { panic(err) } }
+func main() {
+ key, err := ecdsa.GenerateKey(elliptic.P256(),rand.Reader); must(err)
+ template := &x509.Certificate{SerialNumber:big.NewInt(1), Subject:pkix.Name{CommonName:"review-client"}, NotBefore:time.Now().Add(-time.Hour), NotAfter:time.Now().Add(time.Hour), KeyUsage:x509.KeyUsageDigitalSignature|x509.KeyUsageCertSign, ExtKeyUsage:[]x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, BasicConstraintsValid:true, IsCA:true}
+ der,err := x509.CreateCertificate(rand.Reader,template,template,&key.PublicKey,key);must(err)
+ clientCert,err := x509.ParseCertificate(der);must(err)
+ clientRoots := x509.NewCertPool();clientRoots.AddCert(clientCert)
+ var hits atomic.Int64
+ server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+  if len(r.TLS.PeerCertificates)!=1 { panic("missing client certificate") };hits.Add(1)
+  if r.URL.Query().Get("wait")!="" { <-r.Context().Done();return };w.WriteHeader(http.StatusNoContent)
+ }))
+ server.TLS=&tls.Config{ClientAuth:tls.RequireAndVerifyClientCert,ClientCAs:clientRoots,MinVersion:tls.VersionTLS12};server.StartTLS();defer server.Close()
+ serverRoots:=x509.NewCertPool();serverRoots.AddCert(server.Certificate())
+ settings:=httptool.ClientSettings{Timeout:time.Second,TLSConfig:&tls.Config{RootCAs:serverRoots,Certificates:[]tls.Certificate{{Certificate:[][]byte{der},PrivateKey:key}},MinVersion:tls.VersionTLS12}}
+ agent,err:=agents.NewClient(server.URL,agents.WithAllowPrivateIPs(true),agents.WithHTTPSettings(settings));must(err);defer agent.CloseIdleConnections()
+ for range 20 { must(agent.CancelTask(context.Background(),"task","")) }
+ if hits.Load()!=20 { panic("mTLS calls missing") }
+ blocked,err:=agents.NewClient(server.URL,agents.WithHTTPSettings(settings));must(err);defer blocked.CloseIdleConnections()
+ if err=blocked.CancelTask(context.Background(),"task","");err==nil||hits.Load()!=20 { panic("TLS bypassed SSRF") }
+ settings.Timeout=30*time.Millisecond
+ client,err:=httptool.NewConfiguredSafeHTTPClient(httptool.SafeDialOptions{AllowPrivateIPs:true},nil,settings);must(err);defer client.CloseIdleConnections()
+ started:=time.Now();_,err=client.Get(server.URL+"/?wait=1")
+ if !errors.Is(err,context.DeadlineExceeded)||time.Since(started)>time.Second { panic(fmt.Sprintf("timeout %v %s",err,time.Since(started))) }
+ fmt.Printf("PASS: 20 agent mTLS calls; TLS retained SSRF blocking; configured HTTP timeout %s\n",time.Since(started))
+}

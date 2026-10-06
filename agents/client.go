@@ -21,7 +21,7 @@ import (
 
 // ClientOptions configures the Agent Protocol HTTP client.
 type ClientOptions struct {
-	HTTPClient        *http.Client
+	HTTPSettings      httptool.ClientSettings
 	allowPrivateIPs   bool
 	maxResponseBytes  int
 	maxSSEStreamBytes int
@@ -37,16 +37,14 @@ func WithAllowPrivateIPs(allow bool) func(*ClientOptions) {
 
 // Client is the REST client for the Agent Protocol API.
 type Client struct {
-	baseURL string
-	opts    ClientOptions
+	baseURL   string
+	opts      ClientOptions
+	transport *http.Client
 }
 
-// WithHTTPClient sets a custom HTTP client (e.g. for TLS timeout). Only Timeout is merged onto
-// the default SSRF-safe client; custom Transport is ignored.
-func WithHTTPClient(client *http.Client) func(*ClientOptions) {
-	return func(o *ClientOptions) {
-		o.HTTPClient = client
-	}
+// WithHTTPSettings applies explicit timeout/TLS settings to the owned safe pool.
+func WithHTTPSettings(settings httptool.ClientSettings) func(*ClientOptions) {
+	return func(o *ClientOptions) { o.HTTPSettings = settings }
 }
 
 // WithMaxResponseBody sets the maximum REST response body size in bytes (default 4 MiB).
@@ -63,10 +61,10 @@ func WithMaxSSEStreamBytes(n int) func(*ClientOptions) {
 	}
 }
 
-// NewClient creates a client for the Agent Protocol server at baseURL. Options can customize the HTTP client.
-func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
+// NewClient creates an Agent Protocol client with one owned safe pool. Invalid HTTP settings fail construction.
+func NewClient(baseURL string, opts ...func(*ClientOptions)) (*Client, error) {
 	o := ClientOptions{
-		HTTPClient:        nil,
+		HTTPSettings:      httptool.ClientSettings{Timeout: 0, TLSConfig: nil},
 		allowPrivateIPs:   false,
 		maxResponseBytes:  0,
 		maxSSEStreamBytes: 0,
@@ -76,7 +74,17 @@ func NewClient(baseURL string, opts ...func(*ClientOptions)) *Client {
 		opt(&o)
 	}
 	baseURL = strings.TrimSuffix(baseURL, "/")
-	return &Client{baseURL: baseURL, opts: o}
+	client, err := httptool.NewConfiguredSafeHTTPClient(
+		httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // Unset fields retain safe defaults.
+			AllowPrivateIPs: o.allowPrivateIPs,
+		},
+		httptool.CheckRedirectRemote(o.allowPrivateIPs, nil),
+		o.HTTPSettings,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{baseURL: baseURL, opts: o, transport: client}, nil
 }
 
 func (c *Client) maxResponseBytes() int {
@@ -94,8 +102,12 @@ func (c *Client) maxSSEStreamBytes() int {
 }
 
 func (c *Client) httpClient() *http.Client {
-	return httptool.MergeHTTPClient(defaultHTTPClient(c.opts.allowPrivateIPs), c.opts.HTTPClient)
+	return c.transport
 }
+
+// CloseIdleConnections releases this client's owned idle pool; active calls are unaffected.
+// Stop initiating calls before disposing the configuration. This is not terminal Close.
+func (c *Client) CloseIdleConnections() { c.transport.CloseIdleConnections() }
 
 // CreateTask sends POST /ap/v1/agent/tasks with object args in additional_input. Unknown acceptance is reported explicitly.
 func (c *Client) CreateTask(ctx context.Context, args json.RawMessage, authHeader string) (*Task, error) {

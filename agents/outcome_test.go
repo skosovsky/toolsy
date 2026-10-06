@@ -83,7 +83,7 @@ func TestDelegateTerminalOutcomes(t *testing.T) {
 				_, _ = w.Write([]byte(stepFrame("s", tt.Status, tt.Last)))
 			}))
 			defer server.Close()
-			client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(testPolicy()))
+			client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(testPolicy()))
 			tool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 			require.NoError(t, err)
 			var chunks []toolsy.Chunk
@@ -128,7 +128,7 @@ func TestDelegateEOFAndAcceptedReference(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(testPolicy()))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(testPolicy()))
 	syncTool, err := AsTool("delegate", "delegate", []byte(`{"type":"object"}`), client)
 	require.NoError(t, err)
 	// Act/Assert: EOF is typed incomplete and never repeats POST.
@@ -171,7 +171,7 @@ func TestCreateCollectionUnknown(t *testing.T) {
 				),
 			)
 			defer server.Close()
-			client := NewClient(server.URL, WithAllowPrivateIPs(true))
+			client := mustClient(t, server.URL, WithAllowPrivateIPs(true))
 			// Act.
 			_, err := client.CreateTask(t.Context(), json.RawMessage(`{}`), "")
 			// Assert.
@@ -207,7 +207,7 @@ func TestDelegatePostCreationTimeoutPreservesReference(t *testing.T) {
 		"delegate",
 		"delegate",
 		[]byte(`{"type":"object"}`),
-		NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy)),
+		mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy)),
 	)
 	require.NoError(t, err)
 	// Act.
@@ -248,7 +248,7 @@ func TestDelegateConsumerAbortIsPreserved(t *testing.T) {
 		"delegate",
 		"delegate",
 		[]byte(`{"type":"object"}`),
-		NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy)),
+		mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy)),
 	)
 	require.NoError(t, err)
 	// Act.
@@ -284,7 +284,7 @@ func TestPostCreationCredentialTimeoutIsNotRetryable(t *testing.T) {
 		"delegate",
 		"delegate",
 		[]byte(`{"type":"object"}`),
-		NewClient(server.URL, WithAllowPrivateIPs(true)),
+		mustClient(t, server.URL, WithAllowPrivateIPs(true)),
 	)
 	require.NoError(t, err)
 	// Act.
@@ -357,7 +357,7 @@ func TestInvalidAdditionalInputHasNoRemoteOutcome(t *testing.T) {
 	var creates atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { creates.Add(1) }))
 	defer server.Close()
-	client := NewClient(server.URL, WithAllowPrivateIPs(true))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true))
 	for _, input := range []string{`"prompt"`, `null`, `{"x":1,"x":2}`} {
 		t.Run(input, func(t *testing.T) {
 			// Act.

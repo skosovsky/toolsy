@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted awaiting commit; rows 07–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted awaiting commit; rows 08–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -249,4 +249,38 @@ Evidence: [R06 acceptance](task41/r06-acceptance.md). Independent reviewers
 with no unresolved detected defects, independent race/lint and hostile-config /
 concurrent collision probes. The previous-commit regression reproduces unrelated
 tag publication. Final root checks recorded in the acceptance report.
-Commit: pending final accepted commit.
+Commit: `4ddcb4f` (`fix: release tags`).
+
+### 07 — R07 / D18 / D19 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Agent/OpenAPI/GraphQL public clients/tools reuse one owned safe pool per
+   configuration, with bounded idle retention; HTTP/web/document consumers share
+   the same policy and do not create pools per call. MCP retains one owned safe
+   pool, applies explicit settings and closes owned idle connections on Close.
+2. Explicit timeout/TLS settings replace accept-and-ignore HTTPClient ports;
+   TLS settings are applied to safe pinned transports, redirect/host/IP policies
+   remain enforced, and unsupported custom Do/proxy/transport is not accepted.
+3. Agents expose CloseIdleConnections; tool/contract factories expose optional
+   cleanup-returning variants. Cleanup closes only owned idle resources, while
+   compatibility factories retain automatic bounded idle expiry.
+4. All resolved IPs are checked before dialing; bounded sequential attempts use
+   those pinned addresses with one total timeout and caller cancellation. Stream
+   reader remains stop-after-budget (exact cap cannot establish EOF), documented
+   and covered including empty reads; no unbounded EOF probe.
+5. AAA keep-alive/TLS/SSRF/cancellation fixtures and affected-module race/lint
+   pass; migration is accurate; both independent reviewers accept 100% with no
+   unresolved detected defect.
+
+Decision: remove legacy custom HTTPClient / MergeHTTPClient surface; use
+ClientSettings for timeout and TLS over the owned safe transport. Agent NewClient
+returns (*Client, error) to reject invalid settings during construction. Existing
+AsTools/ParseURL/Introspect factories remain, with explicit cleanup-returning
+variants for host lifecycle ownership. No custom dial/Do/proxy port is introduced.
+
+Evidence: [R07 acceptance](task41/r07-acceptance.md). Independent reviewers
+`r07_acceptance_a` and `r07_acceptance_b`: 100% each (five × 20/20), no unresolved
+detected defects. Seven-module race/lint, real mTLS/SSRF/timeout and active-call
+cleanup probes passed after current README and lint gates were fixed. Previous
+commit reproduces 20 pools for 20 calls. Commit: pending final accepted commit.

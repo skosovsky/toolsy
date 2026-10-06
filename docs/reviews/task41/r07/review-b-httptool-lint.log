@@ -1,0 +1,9 @@
+toolkits/httptool/client.go:62:3: httptool.SafeDialOptions is missing fields BlockedHosts, IsBlockedIP, DialTimeout (exhaustruct_v5)
+		SafeDialOptions{
+		^
+toolkits/httptool/client.go:65:6: directive `//nolint:exhaustruct_v5 // Other transport/settings fields use safe defaults.` is unused for linter "exhaustruct_v5" (nolintlint)
+		}, //nolint:exhaustruct_v5 // Other transport/settings fields use safe defaults.
+		   ^
+2 issues:
+* exhaustruct_v5: 1
+* nolintlint: 1

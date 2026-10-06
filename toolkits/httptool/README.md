@@ -83,7 +83,7 @@ See `IsBlockedIP` in godoc for details.
 
 - **SSRF protection:** `AsTools` uses `SafeDialTransport` with DNS-rebinding pin and `CheckRedirect` validation by default. URL checks use the same `LookupIPAddr` + `IsBlockedIP` path as dial time. Use `WithAllowPrivateIPs(true)` only in tests (e.g. httptest on 127.0.0.1).
 
-- **Custom client:** `WithHTTPClient` merges only `Timeout` onto the safe client; Transport and CheckRedirect from a custom client are ignored.
+- **HTTP settings:** `WithHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})` applies timeout and TLS settings to an owned safe transport. Custom Do/transport/proxy/redirect ports are unsupported.
 
 - **Headers:** `WithHeaders` sets non-secret metadata; authentication uses the explicit origin binding above.
 
@@ -125,3 +125,19 @@ tools, err := httptool.AsTools(
 	httptool.WithAllowPrivateIPs(true), // testing only
 )
 ```
+
+A tool set owns one reusable pool, with at most 32 idle connections overall, two
+per host, and 90-second idle expiry. `AsToolsWithCleanup` additionally returns an
+idle closer for host disposal. Stop starting calls before cleanup; active calls
+remain unaffected. `NewConfiguredSafeHTTPClient` applies `ClientSettings` and
+returns construction errors (including negative timeout); its caller owns the
+returned client. TLSConfig is cloned, while referenced certificates, roots and
+callback state must stay immutable. Defaults do not use environment proxies.
+
+Safe dialing checks all DNS answers, then attempts those pinned IPs sequentially
+within one total dial deadline, including lookup. Each attempt receives a share
+of the remaining deadline; caller cancellation stops further attempts. DNS is
+never resolved again between attempts. Stream readers use stop-after-budget
+semantics: exactly exhausting a byte cap without an EOF in the last Read yields
+a limit error on the next nonempty Read, without probing beyond the budget. Empty
+reads consume nothing; cancellation takes precedence.

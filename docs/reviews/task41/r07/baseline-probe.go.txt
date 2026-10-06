@@ -1,0 +1,23 @@
+package agents
+
+import (
+ "net"
+ "net/http"
+ "net/http/httptest"
+ "sync/atomic"
+ "testing"
+)
+
+func TestBaselinePublicAgentPoolReuse(t *testing.T) {
+ // Arrange.
+ var opened atomic.Int64
+ server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter,_ *http.Request){ w.WriteHeader(http.StatusNoContent) }))
+ server.Config.ConnState = func(_ net.Conn,state http.ConnState){ if state==http.StateNew { opened.Add(1) } }
+ server.Start()
+ t.Cleanup(server.Close)
+ client := NewClient(server.URL, WithAllowPrivateIPs(true))
+ // Act.
+ for range 20 { if err:=client.CancelTask(t.Context(),"task","");err!=nil { t.Fatal(err) } }
+ // Assert.
+ if count:=opened.Load();count!=1 { t.Fatalf("opened=%d connections for 20 calls, want 1",count) }
+}

@@ -26,7 +26,7 @@ func TestLogicalStreamBudgetAcrossReconnect(t *testing.T) {
 	defer server.Close()
 	policy := testPolicy()
 	policy.MaxReconnects = 5
-	client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy), WithMaxSSEStreamBytes(100))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy), WithMaxSSEStreamBytes(100))
 	var streamErr error
 	// Act.
 	for _, err := range client.StreamSteps(t.Context(), "t", "") {
@@ -61,7 +61,7 @@ func TestResumeDuplicateEvents(t *testing.T) {
 			defer server.Close()
 			policy := testPolicy()
 			policy.MaxReconnects = 2
-			client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
+			client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
 			var steps []Step
 			var streamErr error
 			// Act.
@@ -108,7 +108,7 @@ func TestEmptyEventIDResetsResumeCursor(t *testing.T) {
 	defer server.Close()
 	policy := testPolicy()
 	policy.MaxReconnects = 2
-	client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
 	// Act.
 	for _, err := range client.StreamSteps(t.Context(), "t", "") {
 		require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestStreamConsumerStopsWithoutReconnect(t *testing.T) {
 		_, _ = w.Write([]byte(stepFrame("s", "running", false)))
 	}))
 	defer server.Close()
-	client := NewClient(server.URL, WithAllowPrivateIPs(true))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true))
 	// Act.
 	for _, err := range client.StreamSteps(t.Context(), "t", "") {
 		require.NoError(t, err)
@@ -176,7 +176,7 @@ func TestInvalidStreamPolicyFailsBeforeCreation(t *testing.T) {
 	defer server.Close()
 	policy := testPolicy()
 	policy.MaxEventBytes = math.MaxInt
-	client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
 	// Act.
 	_, err := client.CreateTask(t.Context(), []byte(`{}`), "")
 	// Assert.
@@ -195,7 +195,7 @@ func TestBackoffCancellationDoesNotReconnect(t *testing.T) {
 	policy := testPolicy()
 	policy.MaxReconnects = 2
 	policy.Backoff = time.Hour
-	client := NewClient(server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
+	client := mustClient(t, server.URL, WithAllowPrivateIPs(true), WithStreamPolicy(policy))
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	var streamErr error

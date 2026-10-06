@@ -32,17 +32,34 @@ type postArgs struct {
 
 // AsTools returns two tools: http_get and http_post. Options configure client, allowed domains, headers, and limits.
 func AsTools(opts ...Option) ([]toolsy.Tool, error) {
+	value, _, err := AsToolsWithCleanup(opts...)
+	return value, err
+}
+
+// AsToolsWithCleanup returns the tools and an owned idle-pool closer. Stop new calls
+// before disposal; the closer leaves active calls unaffected and is not terminal Close.
+func AsToolsWithCleanup(opts ...Option) ([]toolsy.Tool, func(), error) {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	applyDefaults(&o)
 	if err := normalizeCredentialOrigins(&o); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	o.httpClient = defaultHTTPClient(&o)
+	client, clientErr := defaultHTTPClient(&o)
+	if clientErr != nil {
+		return nil, nil, clientErr
+	}
+	o.httpClient = client
+	success := false
+	defer func() {
+		if !success {
+			client.CloseIdleConnections()
+		}
+	}()
 	if hasForbiddenHeaders(o.headers) {
-		return nil, errors.New(
+		return nil, nil, errors.New(
 			"toolkit/httptool: static authentication headers are not allowed; use explicit credential origin binding",
 		)
 	}
@@ -60,7 +77,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		toolsy.WithReadOnly(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/httptool: build get tool: %w", err)
+		return nil, nil, fmt.Errorf("toolkit/httptool: build get tool: %w", err)
 	}
 
 	postTool, err := toolsy.NewTool[postArgs, format.JSONResult](
@@ -77,10 +94,11 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		toolsy.WithRequiresConfirmation(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/httptool: build post tool: %w", err)
+		return nil, nil, fmt.Errorf("toolkit/httptool: build post tool: %w", err)
 	}
 
-	return []toolsy.Tool{getTool, postTool}, nil
+	success = true
+	return []toolsy.Tool{getTool, postTool}, client.CloseIdleConnections, nil
 }
 
 func doGET(ctx context.Context, run *toolsy.RunEnv, toolName string, o *options, rawURL string) (httpResult, error) {

@@ -61,31 +61,23 @@ func WithStreamableHTTPAllowPrivateIPs(allow bool) StreamableHTTPOption {
 	return func(transport *StreamableHTTPTransport) { transport.allowPrivateIPs = allow }
 }
 
-// WithStreamableHTTPClient copies safe client settings. Its Transport is ignored
-// so SSRF-safe dialing and redirect checks cannot be replaced.
-func WithStreamableHTTPClient(client *http.Client) StreamableHTTPOption {
-	return func(transport *StreamableHTTPTransport) { transport.baseClient = client }
+// WithStreamableHTTPSettings configures timeout/TLS on the owned safe pool.
+// Invalid settings fail Start before any remote dispatch.
+func WithStreamableHTTPSettings(settings httptool.ClientSettings) StreamableHTTPOption {
+	return func(transport *StreamableHTTPTransport) { transport.httpSettings = settings }
 }
 
 func WithStreamableHTTPRequestDecorator(decorator HTTPRequestDecorator) StreamableHTTPOption {
 	return func(transport *StreamableHTTPTransport) { transport.decorator = decorator }
 }
 
-func defaultStreamableHTTPClient(allowPrivateIPs bool) *http.Client {
-	client := httptool.NewSafeHTTPClient(
-		httptool.SafeDialOptions{AllowPrivateIPs: allowPrivateIPs},
-		httptool.CheckRedirectRemote(allowPrivateIPs, nil),
-	)
-	client.Timeout = 0
-	return client
-}
-
 type StreamableHTTPTransport struct {
-	endpoint   string
-	logger     *slog.Logger
-	client     *http.Client
-	baseClient *http.Client
-	decorator  HTTPRequestDecorator
+	endpoint     string
+	logger       *slog.Logger
+	client       *http.Client
+	httpSettings httptool.ClientSettings
+	settingsErr  error
+	decorator    HTTPRequestDecorator
 
 	allowPrivateIPs bool
 	maxStreamBytes  int
@@ -110,7 +102,6 @@ func NewStreamableHTTPTransport(endpoint string, opts ...StreamableHTTPOption) *
 	transport := &StreamableHTTPTransport{
 		endpoint:        endpoint,
 		logger:          slog.Default(),
-		client:          defaultStreamableHTTPClient(false),
 		maxStreamBytes:  httptool.DefaultMaxSSEStreamBytes,
 		notifyHandlers:  make(map[string]NotificationHandler),
 		requestHandlers: make(map[string]RequestScopedNotificationHandler),
@@ -120,14 +111,17 @@ func NewStreamableHTTPTransport(endpoint string, opts ...StreamableHTTPOption) *
 	for _, opt := range opts {
 		opt(transport)
 	}
-	transport.client = httptool.MergeHTTPClient(
-		defaultStreamableHTTPClient(transport.allowPrivateIPs),
-		transport.baseClient,
+	transport.client, transport.settingsErr = httptool.NewConfiguredSafeHTTPClient(
+		httptool.SafeDialOptions{AllowPrivateIPs: transport.allowPrivateIPs},
+		httptool.CheckRedirectRemote(transport.allowPrivateIPs, nil), transport.httpSettings,
 	)
 	return transport
 }
 
 func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
+	if t.settingsErr != nil {
+		return t.settingsErr
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -1353,6 +1347,9 @@ func (t *StreamableHTTPTransport) Close() error {
 			cancel()
 		}
 		t.postWG.Wait()
+		if t.client != nil {
+			t.client.CloseIdleConnections()
+		}
 	})
 	return nil
 }

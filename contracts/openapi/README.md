@@ -11,3 +11,11 @@ Path parameters support required scalar values with `simple` style. Query parame
 Schema projection preserves type, enum, numeric/string/array/object limits, pattern, uniqueness, required, additionalProperties, allOf/anyOf/oneOf/not, descriptions and defaults. Local schema references are expanded under the traversal budget. OpenAPI 3.0 exclusive bounds become JSON Schema numeric bounds; nullable extends the declared type while retaining other constraints (including enum). Unsupported schema keywords, directional readOnly/writeOnly, discriminator and XML shapes are rejected recursively. Formats are rejected rather than advertised without matching OpenAPI validation semantics. Defaults are annotations and are not inserted into requests.
 
 GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS operations are supported. Selected TRACE operations and unsupported AllowedMethods entries are rejected. Server selection uses operation, path and document precedence; relative URLs resolve against the fetched specification URL, and host BaseURL overrides source servers. Naming follows stable sorted path/method traversal; collisions receive a bounded identity hash suffix. Only declared successful response statuses are accepted; content-free responses must have no body and produce an explicit empty result. JSON responses are emitted as JSON and pass the core wire validation. Declared successful JSON response schemas must share one contract and are published as the executable output schema; heterogeneous response contracts and non-JSON declared success content are rejected. Response reads have an exact byte limit: oversized JSON or text returns an error, never sliced JSON. Non-2xx HTTP statuses are errors. Links, callbacks and business authorization are outside this adapter's execution boundary.
+
+`Options.HTTPSettings` accepts `httptool.ClientSettings` for explicit timeout/TLS
+configuration. Custom HTTPClient/Do/transport/proxy ports are unsupported.
+`ParseURLWithCleanup` returns generated tools and one owned idle-pool closer;
+discovery and all operations share that pool. Stop new calls before disposal;
+active calls remain unaffected. Ordinary `ParseURL` retains bounded 90-second
+idle expiry. TLSConfig is cloned; referenced roots, certificates and callback
+state must remain immutable.

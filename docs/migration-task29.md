@@ -1,3 +1,5 @@
+> Historical task29 migration. For current HTTP settings and lifecycle use [task41](migration-task41.md); MergeHTTPClient and custom HTTPClient options have been removed.
+
 # Migration guide: Task29 Enterprise Toolkits
 
 ## Breaking changes

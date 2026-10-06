@@ -1,14 +1,12 @@
 package graphql
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+)
 
 const defaultMaxResponseBytes = 512 * 1024
-
-// HTTPClient is the minimal HTTP surface used by GraphQL tools. Pass [*http.Client] with Timeout only;
-// Transport is always merged from the default SSRF-safe client.
-type HTTPClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
 
 // Selection is a host-owned finite output field tree; no GraphQL source is accepted.
 type Selection struct {
@@ -19,7 +17,8 @@ type Selection struct {
 // Options configures the GraphQL introspector and executor.
 type Options struct {
 	Selections              map[string][]Selection // keys: query.field or mutation.field
-	HTTPClient              HTTPClient
+	HTTPSettings            httptool.ClientSettings
+	client                  *http.Client
 	IntrospectionAuthHeader string
 	Operations              []string // e.g. []string{"query"} or []string{"query","mutation"}
 	MaxResponseBytes        int
@@ -27,15 +26,18 @@ type Options struct {
 	AllowPrivateIPs bool
 }
 
-func (o *Options) httpClient() HTTPClient {
-	allowPrivate := false
-	if o != nil {
-		allowPrivate = o.AllowPrivateIPs
-		if o.HTTPClient != nil {
-			return resolveHTTPClient(o.HTTPClient, allowPrivate)
-		}
+func (o *Options) httpClient() (*http.Client, bool, error) {
+	if o.client != nil {
+		return o.client, false, nil
 	}
-	return defaultHTTPClient(allowPrivate)
+	client, err := httptool.NewConfiguredSafeHTTPClient(
+		httptool.SafeDialOptions{ //nolint:exhaustruct_v5 // Unset fields retain safe defaults.
+			AllowPrivateIPs: o.AllowPrivateIPs,
+		},
+		httptool.CheckRedirectRemote(o.AllowPrivateIPs, nil),
+		o.HTTPSettings,
+	)
+	return client, true, err
 }
 
 func (o *Options) maxResponseBytes() int {
