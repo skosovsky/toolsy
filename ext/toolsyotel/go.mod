@@ -3,7 +3,7 @@ module github.com/skosovsky/toolsy/ext/toolsyotel
 go 1.27.1
 
 require (
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.16.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
@@ -24,5 +24,3 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..
