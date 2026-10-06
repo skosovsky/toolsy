@@ -15,7 +15,11 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
-const wordDocXML = "word/document.xml"
+const (
+	wordDocXML         = "word/document.xml"
+	wordMLTransitional = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+	wordMLStrict       = "http://purl.oclc.org/ooxml/wordprocessingml/main"
+)
 
 const (
 	maxZipEntries       = defaultMaxItems
@@ -103,7 +107,8 @@ func parseDOCXWithLimits(ctx context.Context, r io.ReaderAt, size int64, limits 
 	return extractTextFromWordXMLWithLimits(ctx, raw, limits)
 }
 
-// extractTextFromWordXML parses word/document.xml and extracts text from w:t elements.
+// extractTextFromWordXML extracts WordML text, TAB/LF run separators and LF paragraphs.
+// Page/column breaks flatten to LF; this text subset does not reconstruct Word layout.
 func extractTextFromWordXML(ctx context.Context, raw []byte, maxBytes int) (string, error) {
 	return extractTextFromWordXMLWithLimits(
 		ctx,
@@ -161,14 +166,22 @@ func appendWordMLFromStartElement(
 	b *strings.Builder,
 	limits Limits,
 ) error {
-	wml := t.Name.Space == "" || strings.Contains(t.Name.Space, "wordprocessingml")
-	if t.Name.Local == "p" && wml && b.Len() > 0 {
-		if b.Len()+1 > limits.ParsedBytes {
-			return toolsy.MapToolkitCapError(ctx, "document: docx text", limits.ParsedBytes, "docx extracted text", "")
-		}
-		b.WriteString("\n")
+	if !isWordMLNamespace(t.Name.Space) {
+		return nil
 	}
-	if t.Name.Local != "t" || !wml {
+	switch t.Name.Local {
+	case "p":
+		if b.Len() > 0 {
+			return appendWordMLSeparator(ctx, b, limits.ParsedBytes, '\n')
+		}
+		return nil
+	case "tab":
+		return appendWordMLSeparator(ctx, b, limits.ParsedBytes, '\t')
+	case "br", "cr":
+		return appendWordMLSeparator(ctx, b, limits.ParsedBytes, '\n')
+	case "t":
+		// Only text node contents are consumed here; styled runs add no implicit space.
+	default:
 		return nil
 	}
 	itemBytes := 0
@@ -202,6 +215,20 @@ func appendWordMLFromStartElement(
 			return toolsy.NewValidationError("docx text node contains nested element")
 		}
 	}
+}
+
+func isWordMLNamespace(namespace string) bool {
+	return namespace == "" || namespace == wordMLTransitional || namespace == wordMLStrict
+}
+
+func appendWordMLSeparator(ctx context.Context, b *strings.Builder, maxBytes int, separator byte) error {
+	if ie := toolsy.ToolkitContextError(ctx, "document: docx separator"); ie != nil {
+		return ie
+	}
+	if b.Len() >= maxBytes {
+		return toolsy.MapToolkitCapError(ctx, "document: docx text", maxBytes, "docx extracted text", "")
+	}
+	return b.WriteByte(separator)
 }
 
 // Preflight the bounded EOCD before [zip.NewReader] allocates per-entry metadata. ZIP64 is unsupported.

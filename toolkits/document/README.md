@@ -23,3 +23,17 @@ extract, err := document.AsTool(document.WithLocalRoot(root))
 Clear break: default unrestricted local access is removed; result adds source; PDF parsing requires explicit opt-in; parser budgets no longer derive from wire-envelope estimates. Result formatter/validator ports remain domain-independent. Dependencies: core toolsy, httptool, ledongthuc/pdf. No artifact store or backend domain model is introduced.
 
 `AsToolWithCleanup` returns the tool and its owned idle-pool closer. Stop new calls before cleanup; active calls remain unaffected. Ordinary `AsTool` retains bounded 90-second idle expiry. TLSConfig is cloned; its referenced roots, certificates and callback state stay host-owned and immutable.
+
+
+DOCX text subset recognizes the exact WordprocessingML transitional namespace
+`http://schemas.openxmlformats.org/wordprocessingml/2006/main`, strict namespace
+`http://purl.oclc.org/ooxml/wordprocessingml/main`, and legacy unnamespaced XML.
+Prefixes are arbitrary; foreign namespace nodes are ignored (URI substring matching
+is removed). This does not validate the full OOXML schema or reconstruct layout.
+WordML `tab` produces TAB; `br`/`cr` produce LF, including default/textWrapping,
+page and column break types flattened to LF. Adjacent styled text runs concatenate
+without invented spaces; paragraph separators remain LF. Each inserted separator
+counts against ParsedBytes before append. XML parsing is synchronous with context
+checks at bounded token intervals and text/separator checkpoints; finite input does
+not promise a hard CPU deadline or bounded decoder intermediates. Use host isolation
+when hostile parsing requires stronger guarantees.

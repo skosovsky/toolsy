@@ -1,0 +1,14 @@
+package document
+import("context";"testing";"github.com/stretchr/testify/require";"github.com/skosovsky/toolsy")
+func TestR20AAdversarialExactNamespaceAndEntities(t *testing.T) {
+ for _, tc := range []struct { name, xml, want string }{
+  {"textWrapping", `<d xmlns="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><t>A</t><br type="textWrapping"/><t>B</t></d>`, "A\nB"},
+  {"entityThenBreak", `<d><t>&#xE9;&amp;</t><tab/><t>z</t></d>`, "é&\tz"},
+  {"nearNamespace", `<d xmlns="http://schemas.openxmlformats.org/wordprocessingml/2006/main/"><t>evil</t><tab/><br/></d>`, ""},
+  {"strictDefault", `<d xmlns="http://purl.oclc.org/ooxml/wordprocessingml/main"><t>A</t><cr/><t>B</t></d>`, "A\nB"},
+ } { t.Run(tc.name,func(t *testing.T){got,err:=extractTextFromWordXMLWithLimits(t.Context(),[]byte(tc.xml),Limits{ParsedBytes:128,ItemBytes:32});require.NoError(t,err);require.Equal(t,tc.want,got)}) }
+ raw:=[]byte(`<d><t>é</t><tab/><br/><cr/></d>`)
+ got,err:=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:5,ItemBytes:2});require.NoError(t,err);require.Equal(t,"é\t\n\n",got)
+ got,err=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:4,ItemBytes:2});require.ErrorIs(t,err,toolsy.ErrValidation);require.Empty(t,got)
+ ctx,cancel:=context.WithCancel(t.Context());cancel();got,err=extractTextFromWordXMLWithLimits(ctx,raw,Limits{ParsedBytes:1,ItemBytes:1});require.ErrorIs(t,err,context.Canceled);require.Empty(t,got)
+}

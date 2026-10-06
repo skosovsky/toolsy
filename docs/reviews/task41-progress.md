@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is in progress; rows 20–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is in progress; rows 21–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -696,3 +696,36 @@ Evidence docs/reviews/task41/r19/. Core outer tool interrupt classification rema
 existing Canceled/TIMEOUT behavior, original causes preserved; no hard preemption,
 intermediate-allocation or liveexternal-network guarantee.
 Commit: fix: markdown causes.
+
+### 20 — R20 / D35 DOCX (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Public document extraction preserves WordML tab as TAB and br/cr as LF;
+   default/textWrapping/page/column breaks are explicitly flattened to LF. Styled
+   runs/text fragments concatenate without invented spaces; paragraph breaks retained.
+2. Every inserted separator counts against ParsedBytes before append; inclusive
+   boundary/overlimit/combined UTF-8, raw expansion/item/source/final wire guards
+   remain bounded, failure emits no partial result and cancellation retains cause.
+3. Exact supported WordML namespaces (transitional, strict and legacy no namespace)
+   replace URI substring matching; arbitrary prefixes work and foreign namespaces
+   do not masquerade as WordML. Supported text-only subset/layout loss explicit.
+4. API/README/migration describe whitespace, page/column flattening, limits and
+   cooperative bounded XML parsing without hard CPU/allocation preemption claims;
+   no duplicate legacy separator/namespace path remains.
+5. AAA public DOCX baseline/current whitespace/styled-runs/namespace probes plus
+   separator-cap/context regressions and affected race/lint pass; both independent
+   reviewers100%, no unresolved detected defects.
+
+Decision D35 DOCX: exact namespaced text-only subset, legacy unnamespaced fixtures
+retained intentionally; foreign namespace nodes ignored, no full OOXML validation.
+Bounded cooperative XML parsing remains synchronous, host owns harder isolation.
+
+Row20 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+A documentfullracePASS2.620s/lint0, independentcount5PASS1.523s/finalpublic
+count3PASS1.272s; B fullracePASS2.513s/lint0, independent+public/helpercount5
+PASS1.611s/finalpubliccount3PASS. Parent fullracecount3PASS5.271s/finalpinnedlint0.
+Baseline publicDOCXwhitespace threeNamespaces+foreignspoof FAIL as expected;
+currentpermanentpublic/helpertestsPASS. Evidence docs/reviews/task41/r20/.
+Text-only supported node namespace subset; page/column flattened to LF, no complete
+OOXML/layout or hard parser preemption/intermediate-allocation isolation claim.
+Commit: fix: docx whitespace.

@@ -570,3 +570,24 @@ must cooperate with context and enforce maxBytes; hostile work requiring hard li
 belongs in a host sandbox. No abandoned converter goroutine is created. Source,
 Markdown and JSON budgets remain independent; library mode returns plain Markdown
 and applies source/extraction limits, without a tool JSON envelope/wire budget.
+
+
+## R20 / D35 DOCX — bounded WordML whitespace
+
+DOCX extraction maps WordML tab to TAB and br/cr to LF, counting each inserted byte
+against ParsedBytes before append. Default/textWrapping/page/column breaks flatten
+to LF; extraction does not reconstruct pages, columns or Word layout. Adjacent styled
+runs still concatenate directly, existing paragraph separators remain LF. No silent
+truncation or partial result on overflow.
+
+WordML recognition now uses exact transitional
+`http://schemas.openxmlformats.org/wordprocessingml/2006/main`, strict
+`http://purl.oclc.org/ooxml/wordprocessingml/main`, or legacy empty namespace. XML
+prefix spelling is irrelevant. Foreign namespace nodes, including URIs containing
+wordprocessingml as a substring, are ignored. This remains a text-only subset, not
+a complete OOXML validator/layout engine; no nested text nodes are accepted.
+
+Source snapshot, ZIP/expanded XML, text node, extracted-text and final JSON bounds
+remain in force. XML parsing is synchronous with cooperative token/context checks,
+not hard CPU/intermediate-allocation preemption. Host sandbox/parser adapter owns
+stronger guarantees for hostile content. Stored format/tool result shape unchanged.

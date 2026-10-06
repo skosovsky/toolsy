@@ -1,0 +1,78 @@
+--- FAIL: TestR20PublicDOCXWhitespaceAndRuns (0.01s)
+    --- FAIL: TestR20PublicDOCXWhitespaceAndRuns/http://schemas.openxmlformats.org/wordprocessingml/2006/main (0.01s)
+        docx_whitespace_public_test.go:26: 
+            	Error Trace:	/private/tmp/toolsy-task41/r20-baseline/toolkits/document/docx_whitespace_public_test.go:26
+            	Error:      	Not equal: 
+            	            	expected: "first\tsecond\nthird\nfourth\npage\ncolumn\nwrapped\nstyled"
+            	            	actual  : "firstsecondthirdfourthpagecolumnwrapped\nstyled"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,7 +1,2 @@
+            	            	-first	second
+            	            	-third
+            	            	-fourth
+            	            	-page
+            	            	-column
+            	            	-wrapped
+            	            	+firstsecondthirdfourthpagecolumnwrapped
+            	            	 styled
+            	Test:       	TestR20PublicDOCXWhitespaceAndRuns/http://schemas.openxmlformats.org/wordprocessingml/2006/main
+    --- FAIL: TestR20PublicDOCXWhitespaceAndRuns/http://purl.oclc.org/ooxml/wordprocessingml/main (0.00s)
+        docx_whitespace_public_test.go:26: 
+            	Error Trace:	/private/tmp/toolsy-task41/r20-baseline/toolkits/document/docx_whitespace_public_test.go:26
+            	Error:      	Not equal: 
+            	            	expected: "first\tsecond\nthird\nfourth\npage\ncolumn\nwrapped\nstyled"
+            	            	actual  : "firstsecondthirdfourthpagecolumnwrapped\nstyled"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,7 +1,2 @@
+            	            	-first	second
+            	            	-third
+            	            	-fourth
+            	            	-page
+            	            	-column
+            	            	-wrapped
+            	            	+firstsecondthirdfourthpagecolumnwrapped
+            	            	 styled
+            	Test:       	TestR20PublicDOCXWhitespaceAndRuns/http://purl.oclc.org/ooxml/wordprocessingml/main
+    --- FAIL: TestR20PublicDOCXWhitespaceAndRuns/#00 (0.00s)
+        docx_whitespace_public_test.go:26: 
+            	Error Trace:	/private/tmp/toolsy-task41/r20-baseline/toolkits/document/docx_whitespace_public_test.go:26
+            	Error:      	Not equal: 
+            	            	expected: "first\tsecond\nthird\nfourth\npage\ncolumn\nwrapped\nstyled"
+            	            	actual  : "firstsecondthirdfourthpagecolumnwrapped\nstyled"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,7 +1,2 @@
+            	            	-first	second
+            	            	-third
+            	            	-fourth
+            	            	-page
+            	            	-column
+            	            	-wrapped
+            	            	+firstsecondthirdfourthpagecolumnwrapped
+            	            	 styled
+            	Test:       	TestR20PublicDOCXWhitespaceAndRuns/#00
+--- FAIL: TestR20PublicDOCXForeignNamespaceIgnored (0.00s)
+    docx_whitespace_public_test.go:37: 
+        	Error Trace:	/private/tmp/toolsy-task41/r20-baseline/toolkits/document/docx_whitespace_public_test.go:37
+        	Error:      	Not equal: 
+        	            	expected: "safeend"
+        	            	actual  : "safespoofend"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1 +1 @@
+        	            	-safeend
+        	            	+safespoofend
+        	Test:       	TestR20PublicDOCXForeignNamespaceIgnored
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/document	0.523s

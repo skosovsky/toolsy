@@ -1,0 +1,17 @@
+package document
+import("testing"; "context"; "errors"; "strings"; "github.com/skosovsky/toolsy")
+func TestR20BAdversarialSeparators(t *testing.T){
+ // Arrange: namespace aliases, explicit wrapping break and foreign separators.
+ raw:=[]byte(`<x:d xmlns:x="http://purl.oclc.org/ooxml/wordprocessingml/main" xmlns:f="http://purl.oclc.org/ooxml/wordprocessingml/main/evil"><x:p><x:t>é</x:t><f:tab/><x:tab/><x:br x:type="textWrapping"/><x:cr/><x:t>Z</x:t></x:p></x:d>`)
+ // Act/Assert: 2 UTF-8 bytes + 3 separators + Z = 6 inclusive.
+ got,err:=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:6,ItemBytes:2});if err!=nil||got!="é\t\n\nZ"{t.Fatalf("exact: %q %v",got,err)}
+ for _,cap:=range []int{1,2,3,4,5}{got,err=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:cap,ItemBytes:2});if !errors.Is(err,toolsy.ErrValidation)||got!=""{t.Fatalf("cap=%d: %q %v",cap,got,err)}}
+ ctx,cancel:=context.WithCancel(t.Context());cancel();got,err=extractTextFromWordXMLWithLimits(ctx,raw,Limits{ParsedBytes:1,ItemBytes:1});if !errors.Is(err,context.Canceled)||got!=""{t.Fatalf("cancel: %q %v",got,err)}
+}
+func TestR20BSeparatorOnlyBudget(t *testing.T){
+ // Arrange: every whitespace node contributes even without a text node.
+ raw:=[]byte("<d><p>"+strings.Repeat("<tab/><br/><cr/>",100)+"</p></d>")
+ // Act/Assert.
+ got,err:=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:300,ItemBytes:1});if err!=nil||got!=strings.Repeat("\t\n\n",100){t.Fatalf("exact len=%d %v",len(got),err)}
+ got,err=extractTextFromWordXMLWithLimits(t.Context(),raw,Limits{ParsedBytes:299,ItemBytes:1});if !errors.Is(err,toolsy.ErrValidation)||got!=""{t.Fatalf("over: len=%d %v",len(got),err)}
+}
