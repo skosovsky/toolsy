@@ -1,0 +1,332 @@
+diff --git a/docs/migration-task41.md b/docs/migration-task41.md
+index 775a462..51f9aa6 100644
+--- a/docs/migration-task41.md
++++ b/docs/migration-task41.md
+@@ -959,3 +959,29 @@ but not effects in host SQL functions. `WithAllowedTables` remains inspection-on
+ and read-only tool metadata describes the host's configured connection intention.
+ The runnable local `toolkits/sqltool/examples/host` verifies its actual SQLite
+ read-only connection and finite budget integration, with no postgres/mysql claim.
++
++
++## D36 — time locations, calendar arithmetic and StateStore
++
++`WithLocation` applies to both `time_current` local display and `time_calculate`
++calendar arithmetic/output. A non-nil `WithLocationProvider` overrides the static
++location on every call of either tool; provider nil/error results fail without
++fallback. A nil provider disables the dynamic override. An RFC3339 base's offset
++specifies its instant; the toolkit converts that instant into the host location,
++adds calendar days with AddDate, then exact elapsed hours with Add, preserving
++fractional seconds. Zero deltas still express the instant in the host zone.
++
++One calendar day can be 23/25 hours across ordinary DST changes, while 24 elapsed
++hours can shift wall time. Ambiguous/nonexistent local times follow Go normalization
++with no promised choice of offset; actual rules come from timezone data. Arithmetic
++is retained, not a newly fixed defect. Precise public DST/negative/order fixtures
++replace misleading/vacuous historical examples. Runnable timetool/examples/host
++explicitly resolves a host timezone key through a bounded StateStore callback.
++
++Current persisted storage is `RunEnv.StateStore` via `WithStateStore`: borrowed host
++Load/Save, separate from Get/SetSessionState's in-memory map and excluded from
++SessionSnapshot. Active legacy run.State references were already removed by earlier
++rows; memory remains explicitly backed by StateStore. No automatic timezone key,
++state framework, durable local fixture guarantee or hard callback cancellation is
++introduced. Host provider lifetime, concurrent access and upstream bounds remain
++host responsibilities.
+diff --git a/toolkits/memory/README.md b/toolkits/memory/README.md
+index 5467c61..17e707b 100644
+--- a/toolkits/memory/README.md
++++ b/toolkits/memory/README.md
+@@ -20,7 +20,7 @@ go get github.com/skosovsky/toolsy/toolkits/memory
+ 
+ ## Configuration and security
+ 
+-- Host owns persistence, lifetime and session isolation through `RunEnv.StateStore`.
++- Host owns persistence, lifetime and session isolation through `RunEnv.StateStore`, supplied with `toolsy.WithStateStore`. This Load/Save port is separate from the in-memory `GetSessionState`/`SetSessionState` map; `SessionSnapshot` does not include external store contents.
+ - Defaults: 128 facts, 256 UTF-8 bytes per key, 4096 per value, 512 KiB stored JSON, 1 MiB final JSON response. `WithMaxFacts`, `WithMaxKeyBytes`, `WithMaxValueBytes`, `WithMaxStoreBytes`, `WithMaxOutputBytes` override them. Zero restores the default; negative values fail `NewScratchpad` construction. There is no unlimited mode.
+ - Pin validates the complete proposed state before Save; facts are never truncated or evicted. Invalid or over-budget existing state fails closed before mutation. Read returns all facts or a limit error; this backend has no pagination contract.
+ - Use one Scratchpad instance as the sole writer for each session state key. Its context-aware admission gate serializes complete Load/modify/Save calls through that instance across all sessions. Canceled waiters return without waiting for the current callback or invoking storage. Multiple instances, processes or other writers require host coordination; `StateStore.Load/Save` is not CAS and this toolkit promises no distributed atomicity.
+diff --git a/toolkits/timetool/README.md b/toolkits/timetool/README.md
+index eca4ce6..cd81dfa 100644
+--- a/toolkits/timetool/README.md
++++ b/toolkits/timetool/README.md
+@@ -1,6 +1,6 @@
+ # Toolsy: Time Toolkit (timetool)
+ 
+-**Description:** Gives the agent a sense of time: current time (UTC and local) and DST-safe date arithmetic (add days/hours) so the LLM does not hallucinate dates.
++**Description:** Current time (UTC and host local) and checked arithmetic: calendar days followed by elapsed hours.
+ 
+ ## Installation
+ 
+@@ -15,7 +15,7 @@ go get github.com/skosovsky/toolsy/toolkits/timetool
+ | Tool             | Description                                     | Input                                                        |
+ | ---------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+ | `time_current`   | Get current time in UTC and local with weekday  | `{}`                                                         |
+-| `time_calculate` | Add days or hours to a date (DST-safe), RFC3339 | `{"base_date": "string", "add_days": int, "add_hours": int}` |
++| `time_calculate` | Add calendar days then elapsed hours, RFC3339 | `{"base_date": "string", "add_days": int, "add_hours": int}` |
+ 
+ Result: `time_current` returns `{"utc": "...", "local": "...", "weekday": "...", "unix": N}`. `time_calculate` returns `{"result": "RFC3339", "weekday": "..."}`.
+ 
+@@ -28,23 +28,24 @@ if err != nil { /* location cannot represent an RFC3339 instant */ }
+ // result.UTC, result.Local, result.Weekday, result.Unix
+ ```
+ 
+-## IoC (host customization)
++## Host location and StateStore
+ 
+-```go
+-	timetool.AsTools(
+-		timetool.WithLocationProvider(func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error) {
+-			// resolve timezone from session state
+-			return time.LoadLocation("Europe/Moscow")
+-		}),
+-		timetool.WithResultFormatter(func(r timetool.CurrentResult) (any, error) {
+-			return map[string]any{"server_time": r.UTC}, nil
+-		}),
+-		timetool.WithCalculateResultFormatter(func(r timetool.CalculateResult) (any, error) {
+-			return map[string]any{"when": r.Result}, nil
+-		}),
+-		timetool.WithHostResultValidator(func(v any) error { return nil }),
+-	)
+-```
++`WithLocation` sets the local display zone **and** calculate's calendar zone.
++`WithLocationProvider` resolves a zone for each invocation of either tool and
++has priority over the static location. A provider error or nil location fails
++without static fallback. Passing a nil provider disables that override.
++
++Run `go run ./examples/host` from this module for a [complete host example](examples/host/main.go).
++It reads a host-defined timezone key through `env.StateStore`, checks a finite
++returned-byte budget, resolves a host-selected zone and supplies it explicitly.
++The fixture store is local and immutable; it does not claim durable persistence.
++The toolkit does not select a timezone key or automatically read session state.
++Host callbacks own storage authorization, upstream bounds and context cooperation.
++
++`RunEnv.StateStore` is the borrowed `Load`/`Save` persistence port supplied with
++`toolsy.WithStateStore`. `GetSessionState`/`SetSessionState` use the separate
++in-memory Session map. `SessionSnapshot` excludes external StateStore contents.
++The memory toolkit uses this same explicit `run.StateStore` port for its scratchpad.
+ 
+ ## Time and bounds contract
+ 
+@@ -56,29 +57,21 @@ Hour duration multiplication is checked before conversion to `time.Duration`; ca
+ 
+ `WithMaxWireBytes(n)` bounds both default and host-formatted complete JSON after escaping. Default: 64 KiB; zero selects the finite default; negative values reject construction. Overlimit output is rejected with no truncation, including multibyte and escaped strings. Host formatters remain responsible for their own computation/allocation bounds and business DTOs; the wire limit does not bound arbitrary callback allocations. Host validators run before marshaling. The tools are read-only and confer no authority for subsequent actions.
+ 
+-## Quick start
++## DST examples
+ 
+-```go
+-package main
+-
+-import (
+-	"github.com/skosovsky/toolsy"
+-	"github.com/skosovsky/toolsy/toolkits/timetool"
+-)
+-
+-func main() {
+-	builder := toolsy.NewRegistryBuilder()
+-
+-	tools, err := timetool.AsTools()
+-	if err != nil {
+-		panic(err)
+-	}
+-	for _, tool := range tools {
+-		builder.Add(tool)
+-	}
+-}
+-```
++For America/New_York under the timezone rules used by Go:
++
++| Base instant in local time | Delta | Result in local time | Elapsed |
++| --- | --- | --- | --- |
++| 2026-03-07 12:00 -05:00 | 1 calendar day | 2026-03-08 12:00 -04:00 | 23 hours |
++| 2026-03-07 12:00 -05:00 | 24 elapsed hours | 2026-03-08 13:00 -04:00 | 24 hours |
++| 2026-10-31 12:00 -04:00 | 1 calendar day | 2026-11-01 12:00 -05:00 | 25 hours |
++| 2026-10-31 12:00 -04:00 | 24 elapsed hours | 2026-11-01 11:00 -05:00 | 24 hours |
+ 
++Order matters: 2026-03-07 01:30 -05:00 plus one day then two hours yields
++2026-03-08 04:30 -04:00. Adding hours before the day would yield 03:30 instead.
++Rules come from the host/embedded Go timezone database, not a universal fixed DST
++schedule. The tests and host example use embedded stdlib tzdata for availability.
+ 
+ Nil options reject construction. Host ports and callbacks are borrowed; the host
+ owns their lifetime and synchronization. See the [shared constructor and ownership
+diff --git a/toolkits/timetool/bounds_test.go b/toolkits/timetool/bounds_test.go
+index 801a45f..37fa4e2 100644
+--- a/toolkits/timetool/bounds_test.go
++++ b/toolkits/timetool/bounds_test.go
+@@ -54,14 +54,19 @@ func TestTimeNilLocationAndArithmeticBounds(t *testing.T) {
+ 		}),
+ 	)
+ 	require.NoError(t, err)
+-	for _, tool := range tools {
++	for index, tool := range tools {
++		input := []byte(`{}`)
++		if index == 1 {
++			input = []byte(`{"base_date":"2026-03-07T17:00:00Z","add_days":0,"add_hours":0}`)
++		}
+ 		err = tool.Execute(
+ 			context.Background(),
+ 			toolsy.NewRunEnv(nil),
+-			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2026-03-07T17:00:00Z"}`)},
++			toolsy.ToolInput{ArgsJSON: input},
+ 			func(toolsy.Chunk) error { t.Fatal("unexpected output"); return nil },
+ 		)
+ 		require.ErrorIs(t, err, toolsy.ErrValidation)
++		require.ErrorContains(t, err, "location provider returned nil")
+ 	}
+ 	for _, args := range []calculateArgs{
+ 		{BaseDate: "2026-01-01T00:00:00Z", AddDays: math.MaxInt},
+diff --git a/toolkits/timetool/doc.go b/toolkits/timetool/doc.go
+index f7ee1b2..c9033d1 100644
+--- a/toolkits/timetool/doc.go
++++ b/toolkits/timetool/doc.go
+@@ -1,3 +1,7 @@
+-// Package timetool provides temporal tools for agents: current time (UTC and local)
+-// and date arithmetic (add days/hours) using DST-safe stdlib time.
++// Package timetool exposes current time and checked date arithmetic in a host-selected location.
++// Both tools use WithLocation or the per-call WithLocationProvider override. RFC3339 input
++// specifies an instant; calculation converts it to that location, adds calendar days with
++// time.AddDate, then elapsed hours with time.Add. Days need not be 24 hours across DST.
++// Ambiguous/nonexistent local times follow Go timezone normalization, without guaranteed
++// offset choice. Hosts own any provider StateStore access; no automatic timezone persistence.
+ package timetool
+diff --git a/toolkits/timetool/options.go b/toolkits/timetool/options.go
+index bd513b0..72cdcc4 100644
+--- a/toolkits/timetool/options.go
++++ b/toolkits/timetool/options.go
+@@ -34,7 +34,7 @@ const (
+ 	defaultCurrentName   = "time_current"
+ 	defaultCurrentDesc   = "Get current time in UTC and local timezone with weekday"
+ 	defaultCalculateName = "time_calculate"
+-	defaultCalculateDesc = "Add days or hours to a date (DST-safe); returns result in RFC3339"
++	defaultCalculateDesc = "Add calendar days then elapsed hours in the host timezone; returns RFC3339"
+ )
+ 
+ func applyDefaults(o *options) {
+@@ -61,7 +61,8 @@ func applyDefaults(o *options) {
+ 	}
+ }
+ 
+-// WithLocation sets the timezone for "local" in time_current (default: system local, fallback UTC).
++// WithLocation selects both time_current local display and time_calculate calendar arithmetic/formatting.
++// Nil uses system local (UTC fallback). An RFC3339 base offset still determines its instant.
+ // Overridden by [WithLocationProvider] when set.
+ func WithLocation(loc *time.Location) Option {
+ 	return func(o *options) {
+@@ -69,7 +70,9 @@ func WithLocation(loc *time.Location) Option {
+ 	}
+ }
+ 
+-// WithLocationProvider sets a dynamic timezone resolver with priority over [WithLocation].
++// WithLocationProvider resolves the timezone for both tools on each invocation, overriding [WithLocation].
++// Nil disables the provider; a non-nil provider returning nil or an error fails the call without fallback.
++// The host owns any StateStore access, cancellation and synchronization inside the borrowed callback.
+ func WithLocationProvider(p LocationProvider) Option {
+ 	return func(o *options) {
+ 		o.locationProvider = p
+diff --git a/toolkits/timetool/timetool_test.go b/toolkits/timetool/timetool_test.go
+index f4feaa1..a661162 100644
+--- a/toolkits/timetool/timetool_test.go
++++ b/toolkits/timetool/timetool_test.go
+@@ -113,101 +113,6 @@ func TestTimeCalculate_EmptyBaseDate_ValidationToolError(t *testing.T) {
+ 	require.Contains(t, te.Reason, "base_date")
+ }
+ 
+-func TestTimeCalculate_DST_AddDateCorrect(t *testing.T) {
+-	// In a DST transition day, Add(24*time.Hour) can yield wrong calendar day; AddDate(0,0,1) is correct.
+-	loc, err := time.LoadLocation("America/New_York")
+-	require.NoError(t, err)
+-	tools, err := AsTools(WithLocation(loc))
+-	require.NoError(t, err)
+-	calculateTool := tools[1]
+-
+-	// 2026-03-08 02:00 EST -> add 1 day -> 2026-03-09 (DST starts March 8 2026 in US)
+-	base := "2026-03-08T07:00:00Z" // 02:00 EST
+-	var result CalculateResult
+-	require.NoError(
+-		t,
+-		calculateTool.Execute(
+-			context.Background(),
+-			toolsy.NewRunEnv(nil),
+-			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
+-			func(c toolsy.Chunk) error {
+-				result = decodeTimeChunk[CalculateResult](t, c)
+-				return nil
+-			},
+-		),
+-	)
+-	parsed, err := time.Parse(time.RFC3339, result.Result)
+-	require.NoError(t, err)
+-	require.Equal(t, 9, parsed.Day())
+-	require.Equal(t, time.March, parsed.Month())
+-}
+-
+-func TestTimeCalculate_DST_FallBack_November(t *testing.T) {
+-	// America/New_York: DST ends first Sunday of November. Add 1 calendar day in that zone.
+-	loc, err := time.LoadLocation("America/New_York")
+-	require.NoError(t, err)
+-	tools, err := AsTools(WithLocation(loc))
+-	require.NoError(t, err)
+-	calculateTool := tools[1]
+-
+-	// 2026-11-01 00:30 EDT (UTC 04:30) -> add 1 calendar day in NY -> 2026-11-02 00:30 EST (wall clock)
+-	base := "2026-11-01T04:30:00Z"
+-	var result CalculateResult
+-	require.NoError(
+-		t,
+-		calculateTool.Execute(
+-			context.Background(),
+-			toolsy.NewRunEnv(nil),
+-			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
+-			func(c toolsy.Chunk) error {
+-				result = decodeTimeChunk[CalculateResult](t, c)
+-				return nil
+-			},
+-		),
+-	)
+-	parsed, err := time.Parse(time.RFC3339, result.Result)
+-	require.NoError(t, err)
+-	require.Equal(t, 2, parsed.Day())
+-	require.Equal(t, time.November, parsed.Month())
+-	require.Equal(t, 2026, parsed.Year())
+-	// Wall clock in NY: 00:30 (hour 0, min 30)
+-	parsedNY := parsed.In(loc)
+-	require.Equal(t, 0, parsedNY.Hour(), "wall clock hour in NY should be 00:30")
+-	require.Equal(t, 30, parsedNY.Minute())
+-}
+-
+-func TestTimeCalculate_DST_SpringForward_WallClockPreserved(t *testing.T) {
+-	// America/New_York: spring forward March 8 2026. Add 1 calendar day in that zone; result must be March 9.
+-	loc, err := time.LoadLocation("America/New_York")
+-	require.NoError(t, err)
+-	tools, err := AsTools(WithLocation(loc))
+-	require.NoError(t, err)
+-	calculateTool := tools[1]
+-
+-	base := "2026-03-08T07:00:00Z" // 02:00 EST
+-	var result CalculateResult
+-	require.NoError(
+-		t,
+-		calculateTool.Execute(
+-			context.Background(),
+-			toolsy.NewRunEnv(nil),
+-			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"` + base + `","add_days":1,"add_hours":0}`)},
+-			func(c toolsy.Chunk) error {
+-				result = decodeTimeChunk[CalculateResult](t, c)
+-				return nil
+-			},
+-		),
+-	)
+-	parsed, err := time.Parse(time.RFC3339, result.Result)
+-	require.NoError(t, err)
+-	parsedNY := parsed.In(loc)
+-	require.Equal(t, 9, parsedNY.Day(), "next calendar day after DST boundary")
+-	require.Equal(t, time.March, parsedNY.Month())
+-	// Arithmetic is in zone; wall clock may be 02:00 or 03:00 depending on tz data and transition handling
+-	require.GreaterOrEqual(t, parsedNY.Hour(), 0)
+-	require.Less(t, parsedNY.Hour(), 24)
+-}
+-
+ func TestAsTools_ToolCountAndNames(t *testing.T) {
+ 	tools, err := AsTools()
+ 	require.NoError(t, err)

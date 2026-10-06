@@ -1,0 +1,71 @@
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:92: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:92
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+--- FAIL: TestLocationProviderFailureHasNoStaticFallback (0.00s)
+    calendar_contract_test.go:119: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:119
+        	Error:      	Target error should be in err chain:
+        	            	expected: "host timezone unavailable"
+        	            	in chain: "VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'\n- at '': missing properties 'add_days', 'add_hours'"
+        	            		"validation failed"
+        	Test:       	TestLocationProviderFailureHasNoStaticFallback
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:92: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:92
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+--- FAIL: TestLocationProviderFailureHasNoStaticFallback (0.00s)
+    calendar_contract_test.go:119: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:119
+        	Error:      	Target error should be in err chain:
+        	            	expected: "host timezone unavailable"
+        	            	in chain: "VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'\n- at '': missing properties 'add_days', 'add_hours'"
+        	            		"validation failed"
+        	Test:       	TestLocationProviderFailureHasNoStaticFallback
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:92: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:92
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+--- FAIL: TestLocationProviderFailureHasNoStaticFallback (0.00s)
+    calendar_contract_test.go:119: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:119
+        	Error:      	Target error should be in err chain:
+        	            	expected: "host timezone unavailable"
+        	            	in chain: "VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'\n- at '': missing properties 'add_days', 'add_hours'"
+        	            		"validation failed"
+        	Test:       	TestLocationProviderFailureHasNoStaticFallback
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/timetool	0.795s
+--- FAIL: TestHostStateTimezoneExample (0.00s)
+    main_test.go:19: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/examples/host/main_test.go:19
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing property 'add_hours'
+        	Test:       	TestHostStateTimezoneExample
+--- FAIL: TestHostStateTimezoneExample (0.00s)
+    main_test.go:19: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/examples/host/main_test.go:19
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing property 'add_hours'
+        	Test:       	TestHostStateTimezoneExample
+--- FAIL: TestHostStateTimezoneExample (0.00s)
+    main_test.go:19: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/examples/host/main_test.go:19
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing property 'add_hours'
+        	Test:       	TestHostStateTimezoneExample
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/timetool/examples/host	0.644s
+FAIL

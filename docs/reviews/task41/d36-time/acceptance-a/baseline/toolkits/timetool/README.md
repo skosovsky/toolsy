@@ -1,6 +1,6 @@
 # Toolsy: Time Toolkit (timetool)
 
-**Description:** Current time (UTC and host local) and checked arithmetic: calendar days followed by elapsed hours.
+**Description:** Gives the agent a sense of time: current time (UTC and local) and DST-safe date arithmetic (add days/hours) so the LLM does not hallucinate dates.
 
 ## Installation
 
@@ -15,7 +15,7 @@ go get github.com/skosovsky/toolsy/toolkits/timetool
 | Tool             | Description                                     | Input                                                        |
 | ---------------- | ----------------------------------------------- | ------------------------------------------------------------ |
 | `time_current`   | Get current time in UTC and local with weekday  | `{}`                                                         |
-| `time_calculate` | Add calendar days then elapsed hours, RFC3339 | `{"base_date": "string", "add_days": int, "add_hours": int}` |
+| `time_calculate` | Add days or hours to a date (DST-safe), RFC3339 | `{"base_date": "string", "add_days": int, "add_hours": int}` |
 
 Result: `time_current` returns `{"utc": "...", "local": "...", "weekday": "...", "unix": N}`. `time_calculate` returns `{"result": "RFC3339", "weekday": "..."}`.
 
@@ -28,24 +28,23 @@ if err != nil { /* location cannot represent an RFC3339 instant */ }
 // result.UTC, result.Local, result.Weekday, result.Unix
 ```
 
-## Host location and StateStore
+## IoC (host customization)
 
-`WithLocation` sets the local display zone **and** calculate's calendar zone.
-`WithLocationProvider` resolves a zone for each invocation of either tool and
-has priority over the static location. A provider error or nil location fails
-without static fallback. Passing a nil provider disables that override.
-
-Run `go run ./examples/host` from this module for a [complete host example](examples/host/main.go).
-It reads a host-defined timezone key through `env.StateStore`, checks a finite
-returned-byte budget, resolves a host-selected zone and supplies it explicitly.
-The fixture store is local and immutable; it does not claim durable persistence.
-The toolkit does not select a timezone key or automatically read session state.
-Host callbacks own storage authorization, upstream bounds and context cooperation.
-
-`RunEnv.StateStore` is the borrowed `Load`/`Save` persistence port supplied with
-`toolsy.WithStateStore`. `GetSessionState`/`SetSessionState` use the separate
-in-memory Session map. `SessionSnapshot` excludes external StateStore contents.
-The memory toolkit uses this same explicit `run.StateStore` port for its scratchpad.
+```go
+	timetool.AsTools(
+		timetool.WithLocationProvider(func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error) {
+			// resolve timezone from session state
+			return time.LoadLocation("Europe/Moscow")
+		}),
+		timetool.WithResultFormatter(func(r timetool.CurrentResult) (any, error) {
+			return map[string]any{"server_time": r.UTC}, nil
+		}),
+		timetool.WithCalculateResultFormatter(func(r timetool.CalculateResult) (any, error) {
+			return map[string]any{"when": r.Result}, nil
+		}),
+		timetool.WithHostResultValidator(func(v any) error { return nil }),
+	)
+```
 
 ## Time and bounds contract
 
@@ -57,21 +56,29 @@ Hour duration multiplication is checked before conversion to `time.Duration`; ca
 
 `WithMaxWireBytes(n)` bounds both default and host-formatted complete JSON after escaping. Default: 64 KiB; zero selects the finite default; negative values reject construction. Overlimit output is rejected with no truncation, including multibyte and escaped strings. Host formatters remain responsible for their own computation/allocation bounds and business DTOs; the wire limit does not bound arbitrary callback allocations. Host validators run before marshaling. The tools are read-only and confer no authority for subsequent actions.
 
-## DST examples
+## Quick start
 
-For America/New_York under the timezone rules used by Go:
+```go
+package main
 
-| Base instant in local time | Delta | Result in local time | Elapsed |
-| --- | --- | --- | --- |
-| 2026-03-07 12:00 -05:00 | 1 calendar day | 2026-03-08 12:00 -04:00 | 23 hours |
-| 2026-03-07 12:00 -05:00 | 24 elapsed hours | 2026-03-08 13:00 -04:00 | 24 hours |
-| 2026-10-31 12:00 -04:00 | 1 calendar day | 2026-11-01 12:00 -05:00 | 25 hours |
-| 2026-10-31 12:00 -04:00 | 24 elapsed hours | 2026-11-01 11:00 -05:00 | 24 hours |
+import (
+	"github.com/skosovsky/toolsy"
+	"github.com/skosovsky/toolsy/toolkits/timetool"
+)
 
-Order matters: 2026-03-07 01:30 -05:00 plus one day then two hours yields
-2026-03-08 04:30 -04:00. Adding hours before the day would yield 03:30 instead.
-Rules come from the host/embedded Go timezone database, not a universal fixed DST
-schedule. The tests and host example use embedded stdlib tzdata for availability.
+func main() {
+	builder := toolsy.NewRegistryBuilder()
+
+	tools, err := timetool.AsTools()
+	if err != nil {
+		panic(err)
+	}
+	for _, tool := range tools {
+		builder.Add(tool)
+	}
+}
+```
+
 
 Nil options reject construction. Host ports and callbacks are borrowed; the host
 owns their lifetime and synchronization. See the [shared constructor and ownership

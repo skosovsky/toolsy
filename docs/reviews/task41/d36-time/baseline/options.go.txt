@@ -34,7 +34,7 @@ const (
 	defaultCurrentName   = "time_current"
 	defaultCurrentDesc   = "Get current time in UTC and local timezone with weekday"
 	defaultCalculateName = "time_calculate"
-	defaultCalculateDesc = "Add calendar days then elapsed hours in the host timezone; returns RFC3339"
+	defaultCalculateDesc = "Add days or hours to a date (DST-safe); returns result in RFC3339"
 )
 
 func applyDefaults(o *options) {
@@ -61,8 +61,7 @@ func applyDefaults(o *options) {
 	}
 }
 
-// WithLocation selects both time_current local display and time_calculate calendar arithmetic/formatting.
-// Nil uses system local (UTC fallback). An RFC3339 base offset still determines its instant.
+// WithLocation sets the timezone for "local" in time_current (default: system local, fallback UTC).
 // Overridden by [WithLocationProvider] when set.
 func WithLocation(loc *time.Location) Option {
 	return func(o *options) {
@@ -70,9 +69,7 @@ func WithLocation(loc *time.Location) Option {
 	}
 }
 
-// WithLocationProvider resolves the timezone for both tools on each invocation, overriding [WithLocation].
-// Nil disables the provider; a non-nil provider returning nil or an error fails the call without fallback.
-// The host owns any StateStore access, cancellation and synchronization inside the borrowed callback.
+// WithLocationProvider sets a dynamic timezone resolver with priority over [WithLocation].
 func WithLocationProvider(p LocationProvider) Option {
 	return func(o *options) {
 		o.locationProvider = p

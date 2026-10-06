@@ -1,0 +1,3 @@
+go: errors parsing go.mod:
+go.mod:9: malformed module path "/Users/skosovsky/Library/Mobile": empty path element
+go.mod:10: malformed module path "/Users/skosovsky/Library/Mobile": empty path element

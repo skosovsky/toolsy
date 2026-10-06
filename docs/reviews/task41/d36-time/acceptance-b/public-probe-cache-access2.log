@@ -1,0 +1,6 @@
+go: downloading github.com/google/jsonschema-go v0.4.3
+go: downloading github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+# acceptanceb
+/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/builder.go:9:2: github.com/google/jsonschema-go@v0.4.3: verifying module: github.com/google/jsonschema-go@v0.4.3: open /Users/skosovsky/go/pkg/sumdb/sum.golang.org/latest: operation not permitted
+FAIL	acceptanceb [setup failed]
+FAIL

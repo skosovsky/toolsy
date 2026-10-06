@@ -1,0 +1,1 @@
+PASS: active root/toolkit API and README contain no stale run.State/env.State/RunEnv.State references. StateStore source and docs remain explicit.

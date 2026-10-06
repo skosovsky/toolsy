@@ -959,29 +959,3 @@ but not effects in host SQL functions. `WithAllowedTables` remains inspection-on
 and read-only tool metadata describes the host's configured connection intention.
 The runnable local `toolkits/sqltool/examples/host` verifies its actual SQLite
 read-only connection and finite budget integration, with no postgres/mysql claim.
-
-
-## D36 — time locations, calendar arithmetic and StateStore
-
-`WithLocation` applies to both `time_current` local display and `time_calculate`
-calendar arithmetic/output. A non-nil `WithLocationProvider` overrides the static
-location on every call of either tool; provider nil/error results fail without
-fallback. A nil provider disables the dynamic override. An RFC3339 base's offset
-specifies its instant; the toolkit converts that instant into the host location,
-adds calendar days with AddDate, then exact elapsed hours with Add, preserving
-fractional seconds. Zero deltas still express the instant in the host zone.
-
-One calendar day can be 23/25 hours across ordinary DST changes, while 24 elapsed
-hours can shift wall time. Ambiguous/nonexistent local times follow Go normalization
-with no promised choice of offset; actual rules come from timezone data. Arithmetic
-is retained, not a newly fixed defect. Precise public DST/negative/order fixtures
-replace misleading/vacuous historical examples. Runnable timetool/examples/host
-explicitly resolves a host timezone key through a bounded StateStore callback.
-
-Current persisted storage is `RunEnv.StateStore` via `WithStateStore`: borrowed host
-Load/Save, separate from Get/SetSessionState's in-memory map and excluded from
-SessionSnapshot. Active legacy run.State references were already removed by earlier
-rows; memory remains explicitly backed by StateStore. No automatic timezone key,
-state framework, durable local fixture guarantee or hard callback cancellation is
-introduced. Host provider lifetime, concurrent access and upstream bounds remain
-host responsibilities.

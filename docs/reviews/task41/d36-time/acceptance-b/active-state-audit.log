@@ -1,0 +1,1 @@
+Active production Go + current documentation audit: no run.State/env.State field reference. Historical migration note records prior removal, no runtime alias. runenv.go StateStore port and state_api.go session/snapshot boundary separately inspected.

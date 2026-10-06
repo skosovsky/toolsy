@@ -1,0 +1,25 @@
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:91: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:91
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:91: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:91
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+--- FAIL: TestLocationProviderResolvesBothToolsOnEveryCall (0.00s)
+    calendar_contract_test.go:91: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/timetool/calendar_contract_test.go:91
+        	Error:      	Received unexpected error:
+        	            	VALIDATION_FAILED: jsonschema validation failed with 'https://toolsy.invalid/schemas/wire-schema#'
+        	            	- at '': missing properties 'add_days', 'add_hours'
+        	Test:       	TestLocationProviderResolvesBothToolsOnEveryCall
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/timetool	0.768s
+?   	github.com/skosovsky/toolsy/toolkits/timetool/examples/host	[no test files]
+FAIL

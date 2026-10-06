@@ -1,0 +1,6 @@
+commit 9ac37e39e208611acded6b13949e3e6cdff51655
+Good "git" signature for skosovsky@gmail.com with ECDSA key SHA256:gjuu8BpXTmSdPtx/ZqpsJPy5oC8ape+mvj5ttCRD16U
+Author: Sergey Kosovsky <skosovsky@gmail.com>
+Date:   Wed Oct 7 00:32:53 2026 +0700
+
+    refactor: sql subset

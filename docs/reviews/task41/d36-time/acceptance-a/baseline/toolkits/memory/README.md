@@ -20,7 +20,7 @@ go get github.com/skosovsky/toolsy/toolkits/memory
 
 ## Configuration and security
 
-- Host owns persistence, lifetime and session isolation through `RunEnv.StateStore`, supplied with `toolsy.WithStateStore`. This Load/Save port is separate from the in-memory `GetSessionState`/`SetSessionState` map; `SessionSnapshot` does not include external store contents.
+- Host owns persistence, lifetime and session isolation through `RunEnv.StateStore`.
 - Defaults: 128 facts, 256 UTF-8 bytes per key, 4096 per value, 512 KiB stored JSON, 1 MiB final JSON response. `WithMaxFacts`, `WithMaxKeyBytes`, `WithMaxValueBytes`, `WithMaxStoreBytes`, `WithMaxOutputBytes` override them. Zero restores the default; negative values fail `NewScratchpad` construction. There is no unlimited mode.
 - Pin validates the complete proposed state before Save; facts are never truncated or evicted. Invalid or over-budget existing state fails closed before mutation. Read returns all facts or a limit error; this backend has no pagination contract.
 - Use one Scratchpad instance as the sole writer for each session state key. Its context-aware admission gate serializes complete Load/modify/Save calls through that instance across all sessions. Canceled waiters return without waiting for the current callback or invoking storage. Multiple instances, processes or other writers require host coordination; `StateStore.Load/Save` is not CAS and this toolkit promises no distributed atomicity.

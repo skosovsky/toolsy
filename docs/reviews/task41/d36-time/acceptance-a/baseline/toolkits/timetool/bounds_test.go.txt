@@ -54,19 +54,14 @@ func TestTimeNilLocationAndArithmeticBounds(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	for index, tool := range tools {
-		input := []byte(`{}`)
-		if index == 1 {
-			input = []byte(`{"base_date":"2026-03-07T17:00:00Z","add_days":0,"add_hours":0}`)
-		}
+	for _, tool := range tools {
 		err = tool.Execute(
 			context.Background(),
 			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: input},
+			toolsy.ToolInput{ArgsJSON: []byte(`{"base_date":"2026-03-07T17:00:00Z"}`)},
 			func(toolsy.Chunk) error { t.Fatal("unexpected output"); return nil },
 		)
 		require.ErrorIs(t, err, toolsy.ErrValidation)
-		require.ErrorContains(t, err, "location provider returned nil")
 	}
 	for _, args := range []calculateArgs{
 		{BaseDate: "2026-01-01T00:00:00Z", AddDays: math.MaxInt},

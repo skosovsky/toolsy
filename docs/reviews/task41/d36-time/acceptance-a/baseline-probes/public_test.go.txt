@@ -1,0 +1,32 @@
+package acceptancea
+import("context";"encoding/json";"errors";"testing";"time";_ "time/tzdata";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/timetool")
+type unexpectedStore struct{t *testing.T}
+func(s unexpectedStore) Load(context.Context,string)([]byte,error){s.t.Fatal("automatic state read");return nil,nil}
+func(s unexpectedStore) Save(context.Context,string,[]byte)error{s.t.Fatal("automatic state write");return nil}
+func execute(t *testing.T,opts []timetool.Option,idx int,ctx context.Context,env *toolsy.RunEnv)(map[string]any,error){t.Helper(); tools,e:=timetool.AsTools(opts...);if e!=nil{t.Fatal(e)};input:=`{}`;if idx==1{input=`{"base_date":"2026-03-07T22:30:00.123456789+05:30","add_days":0,"add_hours":0}`};var out map[string]any;e=tools[idx].Execute(ctx,env,toolsy.ToolInput{ArgsJSON:[]byte(input)},func(c toolsy.Chunk)error{return json.Unmarshal(c.Data,&out)});return out,e}
+func TestStaticAndNilProviderWithoutAutomaticState(t *testing.T){
+ // Arrange: an external StateStore must not be consulted implicitly.
+ zone:=time.FixedZone("host",-5*3600);env:=toolsy.NewRunEnv(nil,toolsy.WithStateStore(unexpectedStore{t}));calls:=0
+ opts:=[]timetool.Option{timetool.WithLocation(zone),timetool.WithLocationProvider(func(context.Context,*toolsy.RunEnv)(*time.Location,error){calls++;return time.UTC,nil}),timetool.WithLocationProvider(nil)}
+ for _,idx:=range []int{0,1}{
+ // Act.
+ out,err:=execute(t,opts,idx,t.Context(),env)
+ // Assert.
+ if err!=nil{t.Fatal(err)};field:="local";if idx==1{field="result";if out[field]!="2026-03-07T12:00:00.123456789-05:00"{t.Fatal(out)}};stamp,err:=time.Parse(time.RFC3339Nano,out[field].(string));if err!=nil{t.Fatal(err)};_,off:=stamp.Zone();if off!=-5*3600{t.Fatal(off)}
+ };if calls!=0{t.Fatal(calls)}
+}
+func TestProviderContextEnvAndNilPriority(t *testing.T){
+ for _,idx:=range []int{0,1}{
+ // Arrange: provider observes exact caller context/env and owns cooperative cancellation.
+ ctx,cancel:=context.WithCancel(t.Context());cancel();env:=toolsy.NewRunEnv(nil);calls:=0
+ opts:=[]timetool.Option{timetool.WithLocation(time.UTC),timetool.WithLocationProvider(func(got context.Context,run *toolsy.RunEnv)(*time.Location,error){calls++;if got!=ctx||run!=env{t.Fatal("callback identity lost")};return nil,got.Err()})}
+ // Act.
+ out,err:=execute(t,opts,idx,ctx,env)
+ // Assert: either framework prechecks cancellation or callback cooperates; no output/fallback.
+ if !errors.Is(err,context.Canceled)||out!=nil{t.Fatalf("%v %v",out,err)};if calls>1{t.Fatal(calls)}
+ // Arrange/Act: explicit nil returned zone must fail even with static UTC.
+ out,err=execute(t,[]timetool.Option{timetool.WithLocation(time.UTC),timetool.WithLocationProvider(func(context.Context,*toolsy.RunEnv)(*time.Location,error){return nil,nil})},idx,t.Context(),env)
+ // Assert.
+ if !errors.Is(err,toolsy.ErrValidation)||out!=nil{t.Fatalf("%v %v",out,err)}
+ }
+}

@@ -1,0 +1,5 @@
+toolkits/timetool/examples/host/main.go:42:16: Magic number: 64, in <condition> detected (mnd)
+	if len(raw) > 64 {
+	              ^
+1 issues:
+* mnd: 1
