@@ -70,7 +70,11 @@ func ControlErrorFromSignal(sig ControlSignal) error {
 }
 
 // IsControlError reports whether err is a control-plane signal error.
+// Diagnostic control causes inside known contract/outcome failures are not signals.
 func IsControlError(err error) bool {
+	if requiresOutcomeReconciliation(err) {
+		return false
+	}
 	return errors.Is(err, ErrPause) ||
 		errors.Is(err, ErrYield) ||
 		errors.Is(err, ErrHalt) ||

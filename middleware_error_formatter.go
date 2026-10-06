@@ -54,12 +54,15 @@ func (t *errorFormatterTool) Execute(
 }
 
 func shouldBypassErrorFormatting(err error) bool {
-	return IsControlError(err) ||
+	return requiresOutcomeReconciliation(err) || IsControlError(err) ||
 		errors.Is(err, ErrStreamAborted) ||
 		isContextInterrupt(err)
 }
 
 func unwrapInterruptErr(err error) error {
+	if requiresOutcomeReconciliation(err) {
+		return err
+	}
 	if te, ok := AsToolError(err); ok && te.Code == CodeInternal && isContextInterrupt(te.Err) {
 		return te.Err
 	}
@@ -67,6 +70,9 @@ func unwrapInterruptErr(err error) error {
 }
 
 func formatExecutionError(err error) string {
+	if requiresOutcomeReconciliation(err) {
+		return outcomeReconciliationMessage
+	}
 	err = unwrapInterruptErr(err)
 	if errors.Is(err, context.Canceled) {
 		reason := sanitizeErrorReason(err.Error())
@@ -102,7 +108,12 @@ func formatExecutionError(err error) string {
 	return "Error executing tool: " + reason + ". Hint: Retry later or refine the query."
 }
 
+const outcomeReconciliationMessage = "Error executing tool: the operation requires host reconciliation. Do not repeat the invocation as argument correction or retry it blindly."
+
 func formatToolErrorMessage(te *ToolError) string {
+	if requiresOutcomeReconciliation(te) {
+		return outcomeReconciliationMessage
+	}
 	reason := strings.TrimSpace(te.SafeMessage)
 	if reason == "" {
 		reason = strings.TrimSpace(te.Reason)
@@ -175,6 +186,9 @@ func toolErrorFromExecutionErr(err error) *ToolError {
 	if err == nil {
 		return NewInternalError(errors.New("tool execution failed"))
 	}
+	if requiresOutcomeReconciliation(err) {
+		return NewInternalError(err)
+	}
 	err = unwrapInterruptErr(err)
 	if errors.Is(err, context.Canceled) {
 		return nil
@@ -214,6 +228,9 @@ func readLimitToolError(err error) *ToolError {
 }
 
 func errorChunkLLMMessage(te *ToolError, err error) string {
+	if requiresOutcomeReconciliation(err) || requiresOutcomeReconciliation(te) {
+		return outcomeReconciliationMessage
+	}
 	if te != nil && te.Code == CodeInternal && isContextInterrupt(te.Err) {
 		return formatExecutionError(unwrapInterruptErr(te))
 	}
@@ -224,6 +241,9 @@ func errorChunkLLMMessage(te *ToolError, err error) string {
 }
 
 func toolErrorFromExistingToolError(te *ToolError, err error) *ToolError {
+	if requiresOutcomeReconciliation(err) || requiresOutcomeReconciliation(te) {
+		return NewInternalError(err)
+	}
 	err = unwrapInterruptErr(err)
 	if isContextInterrupt(err) {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrTimeout) {

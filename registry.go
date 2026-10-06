@@ -514,9 +514,8 @@ func normalizeExecutionInterrupt(err error) error {
 	if err == nil {
 		return nil
 	}
-	var outcomeErr *OperationOutcomeError
 	var streamErr *StreamContractError
-	if errors.As(err, &outcomeErr) || errors.As(err, &streamErr) {
+	if requiresOutcomeReconciliation(err) || errors.As(err, &streamErr) {
 		return err // contract outcome must not be downgraded to retryable timeout.
 	}
 	if errors.Is(err, context.Canceled) {
@@ -554,7 +553,7 @@ func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chu
 			return nil
 		})
 
-		if !consumerStopped && err != nil && !isContextInterrupt(err) {
+		if !consumerStopped && err != nil && (!isContextInterrupt(err) || requiresOutcomeReconciliation(err)) {
 			yield(Chunk{}, err)
 		}
 	}
@@ -616,9 +615,9 @@ func (r *Registry) handleBatchToolError(
 			*suspendErr = execErr
 		}
 		suspendMu.Unlock()
-	case errors.Is(execErr, ErrStreamAborted):
+	case !requiresOutcomeReconciliation(execErr) && errors.Is(execErr, ErrStreamAborted):
 		recordStreamAbort(execErr)
-	case isContextInterrupt(execErr):
+	case !requiresOutcomeReconciliation(execErr) && isContextInterrupt(execErr):
 	default:
 		errChunk := NewErrorChunkFromErr(execErr)
 		prepared, prepErr := prepareChunk(errChunk)

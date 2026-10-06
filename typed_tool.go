@@ -27,13 +27,16 @@ type ArgsBinder[T any] func(ctx context.Context, req ArgsBindRequest) (Validated
 // ArgValidator validates typed arguments after schema parse.
 type ArgValidator[T any] func(T) error
 
-// ResultValidator validates typed results before marshaling.
+// ResultValidator validates typed results after the handler and before marshaling.
+// Failures become noncorrectable ResultContractError values, preserving the cause.
 type ResultValidator[R any] func(R) error
 
-// EffectValidator validates host-owned effects before they reach the outcome contract.
+// EffectValidator validates host-owned effects after the handler.
+// Failures never authorize argument repair or rollback of external effects.
 type EffectValidator[E any] func([]E) error
 
-// PostconditionValidator validates the complete typed result/effects/control envelope.
+// PostconditionValidator validates the complete typed result/effects/control envelope
+// after the handler; failures never authorize argument repair or redispatch.
 type PostconditionValidator[R, E any] func(ToolResult[R, E]) error
 
 // TypedPolicyRequest is the compile-time policy request for typed tools.
@@ -387,31 +390,20 @@ func wrapArgValidatorError(err error) error {
 }
 
 func wrapResultValidatorError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if _, ok := AsToolError(err); ok {
-		return err
-	}
-	return NewValidationError("result validation failed: " + err.Error())
+	return wrapPostHandlerContractError("result_validator", err)
 }
 
 func wrapEffectValidatorError(err error) error {
-	if err == nil {
-		return nil
-	}
-	if _, ok := AsToolError(err); ok {
-		return err
-	}
-	return NewValidationError("effect validation failed: " + err.Error())
+	return wrapPostHandlerContractError("effect_validator", err)
 }
 
 func wrapPostconditionError(err error) error {
+	return wrapPostHandlerContractError("postcondition", err)
+}
+
+func wrapPostHandlerContractError(phase string, err error) error {
 	if err == nil {
 		return nil
 	}
-	if _, ok := AsToolError(err); ok {
-		return err
-	}
-	return NewValidationError("postcondition failed: " + err.Error())
+	return NewInternalError(&ResultContractError{Kind: phase, Cause: err})
 }

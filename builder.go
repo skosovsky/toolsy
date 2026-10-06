@@ -364,11 +364,11 @@ func (t *tool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield 
 
 // wrapHandlerError passes through [ToolError] and control errors; wraps other errors as internal [ToolError].
 func wrapHandlerError(err error) error {
+	if requiresOutcomeReconciliation(err) {
+		return NewInternalError(err)
+	}
 	if err == nil {
 		return nil
-	}
-	if outcomeErr, ok := errors.AsType[*OperationOutcomeError](err); ok {
-		return NewInternalError(outcomeErr)
 	}
 	if IsControlError(err) {
 		return err

@@ -407,3 +407,11 @@ func wrapYieldError(err error) error {
 	}
 	return fmt.Errorf("%w: %w", ErrStreamAborted, err)
 }
+
+// requiresOutcomeReconciliation guards known post-dispatch contract failures
+// before generic timeout, retry and argument-repair classification.
+func requiresOutcomeReconciliation(err error) bool {
+	var outcome *OperationOutcomeError
+	var result *ResultContractError
+	return errors.As(err, &outcome) || errors.As(err, &result)
+}

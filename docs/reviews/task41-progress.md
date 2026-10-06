@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted; rows 04–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted; rows 05–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -151,4 +151,32 @@ visits schema objects only, preserving property names and literal values.
 Evidence: [R03 acceptance](task41/r03-acceptance.md). Independent reviewers
 `r03_acceptance_a` and `r03_acceptance_b` each accepted all five criteria at 100%
 with no unresolved detected defect. Both ran their own race/lint checks and
-numeric/schema adversarial overlays. Commit ID belongs in the next update.
+numeric/schema adversarial overlays. Commit: `322ec4a` (`fix: input precision`).
+
+### 04 — R04 / D12 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Result/effect/postcondition failures after the handler are nonretryable,
+   noncorrectable INTERNAL errors with inspectable phase and original cause;
+   a validator-supplied ToolError cannot replace this classification.
+2. Public handler-effect counter and host argument-repair fixtures prove one
+   dispatch and zero results on every postvalidator failure; baseline fails.
+3. Pre-handler argument validation remains correctable with zero effects;
+   success still emits one valid result.
+4. Journal records unknown on posthandler contract rejection and never blindly
+   redispatches; completed results survive delivery errors. After-claim checks
+   use honest may-have-dispatched diagnostics without unfenced claim rollback.
+5. Docs/examples match phase/recovery semantics; targeted race/lint pass;
+   both independent reviewers find no unresolved detected defects.
+
+Decision: ResultContractError.Kind names result_validator, effect_validator or
+postcondition for these failures; outer INTERNAL always wins over callback codes.
+OperationOutcomeError records local DispatchInvoked without claiming external
+success or proof of not-started. All unfinished claimed attempts remain unknown.
+
+Evidence: [R04 acceptance](task41/r04-acceptance.md). Independent reviewers
+`r04_acceptance_a` and `r04_acceptance_b` each accepted all five criteria at 100%
+with no unresolved detected defects. Preliminary formatter/nested/downstream/control
+findings were fixed, and both independently repeated final race/lint and probes.
+Commit ID belongs in the next ledger update.

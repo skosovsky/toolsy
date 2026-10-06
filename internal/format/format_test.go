@@ -71,7 +71,7 @@ func TestApplyWithEnvelope_NilEnvelopeUsesFormatter(t *testing.T) {
 	require.JSONEq(t, `{"items":2}`, string(raw))
 }
 
-func TestApplyWithEnvelope_ValidatorReject_CodeValidationFailed(t *testing.T) {
+func TestApplyWithEnvelope_ValidatorReject_ResultContract(t *testing.T) {
 	_, err := ApplyWithEnvelope(
 		"hello",
 		func(s string) string { return s },
@@ -82,7 +82,7 @@ func TestApplyWithEnvelope_ValidatorReject_CodeValidationFailed(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
 }
 
 func TestWireContentCap(t *testing.T) {
@@ -171,4 +171,22 @@ func TestJSONResult_MarshalJSON_ValidPassthrough(t *testing.T) {
 	data, err := jr.MarshalJSON()
 	require.NoError(t, err)
 	require.Equal(t, string(raw), string(data))
+}
+
+func TestHostValidatorPreservesPostHandlerCause(t *testing.T) {
+	// Arrange.
+	cause := toolsy.NewValidationError("repair", "query")
+	// Act.
+	_, err := ApplyWithEnvelope("value", func(s string) string { return s }, nil, func(any) error { return cause }, 0)
+	// Assert.
+	te, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeInternal, te.Code)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	require.False(t, te.Retryable)
+	require.Empty(t, te.FixableArgs)
+	require.ErrorIs(t, err, cause)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	require.Equal(t, "result_validator", contract.Kind)
 }

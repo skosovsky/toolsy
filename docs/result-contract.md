@@ -39,7 +39,10 @@ the core prepared profile port does not invent their construction lifecycle.
 Validation runs inside the handler continuation before cache/journal capture and
 again before delivering profile replay. Producer rejection is sticky even when a
 raw/stream handler ignores the yield error. `ResultContractError` distinguishes
-invalid JSON, missing value and schema mismatch; it is an internal non-retryable
+invalid JSON, missing value and schema mismatch; its Kind also identifies typed
+post-handler result_validator, effect_validator and postcondition failures, with
+the original callback error retained as Cause. Callback ToolError codes cannot
+override this classification. It is an internal non-retryable
 failure, not correctable model arguments. Terminal streams retain their distinct
 `StreamContractError` classifications.
 

@@ -515,7 +515,13 @@ func TestSQLInspect_WithHostResultValidator_Reject(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	require.False(t, te.Retryable)
+	require.ErrorIs(t, err, assert.AnError)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	require.Equal(t, "result_validator", contract.Kind)
 }
 
 func TestSQLExecute_WithHostResultValidator_Reject(t *testing.T) {
@@ -538,7 +544,13 @@ func TestSQLExecute_WithHostResultValidator_Reject(t *testing.T) {
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
-	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
+	assert.Equal(t, toolsy.CodeInternal, te.Code)
+	require.False(t, toolsy.ClientCorrectable(te.Code))
+	require.False(t, te.Retryable)
+	require.ErrorIs(t, err, assert.AnError)
+	var contract *toolsy.ResultContractError
+	require.ErrorAs(t, err, &contract)
+	require.Equal(t, "result_validator", contract.Kind)
 }
 
 func TestSQLExecute_WithHostResultValidator(t *testing.T) {

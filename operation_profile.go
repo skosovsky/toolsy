@@ -33,14 +33,19 @@ func (e *PendingApprovalError) Error() string { return "toolsy: approval_require
 func (e *PendingApprovalError) Unwrap() error { return ErrPause }
 
 // OperationOutcomeError preserves the cause while explicitly forbidding blind
-// retry after dispatch. The journal, not a transport error, decides recovery.
+// retry after claim. Dispatch may have occurred; the journal decides recovery.
 type OperationOutcomeError struct {
 	Cause     error
 	Binding   OperationBinding
 	AttemptID string
+	// DispatchInvoked records whether this profile called the dispatch continuation.
+	// It does not prove an external effect or authorize rolling back a claim.
+	DispatchInvoked bool
 }
 
-func (e *OperationOutcomeError) Error() string { return "toolsy: unknown_outcome after dispatch" }
+func (e *OperationOutcomeError) Error() string {
+	return "toolsy: unknown_outcome after claim; dispatch may have occurred"
+}
 func (e *OperationOutcomeError) Unwrap() error { return e.Cause }
 
 // OperationStateError gives the host a bound continuation reference, not a grant
@@ -211,6 +216,7 @@ func (p *OperationProfile) dispatch(
 	yield func(Chunk) error,
 ) (err error) {
 	finished := false
+	dispatchInvoked := false
 	defer func() {
 		if !finished {
 			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationCleanupTimeout)
@@ -228,7 +234,12 @@ func (p *OperationProfile) dispatch(
 				err = errors.Join(err, &OperationStoreError{Stage: "unknown_finish", Cause: finishErr})
 			}
 			err = NewInternalError(
-				&OperationOutcomeError{Cause: err, Binding: claim.Binding, AttemptID: claim.AttemptID},
+				&OperationOutcomeError{
+					Cause:           err,
+					Binding:         claim.Binding,
+					AttemptID:       claim.AttemptID,
+					DispatchInvoked: dispatchInvoked,
+				},
 			)
 		}
 	}()
@@ -242,6 +253,7 @@ func (p *OperationProfile) dispatch(
 		return &OperationError{Kind: "approval_expired"}
 	}
 	capture := operationCapture{ctx: ctx, maxBytes: p.maxBytes, yield: yield, result: nil, err: nil}
+	dispatchInvoked = true
 	err = invoke(capture.accept)
 	if err != nil {
 		return err

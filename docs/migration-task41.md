@@ -94,3 +94,38 @@ hosts still bound input bytes and string lengths. This intentionally replaces
 typed/dynamic last-key-wins behavior. Declared custom `UnmarshalJSON` methods
 remain host-owned after the shared structure/schema check; they can choose their
 own Go representation. Typed field-name matching follows encoding/json rules.
+
+## Post-handler validation and claimed operations (R04 / D12)
+
+Typed `ResultValidator`, `EffectValidator` and `Postcondition` failures now have
+an outer nonretryable `CodeInternal` error with no fixable arguments. Use
+`errors.As` for `*ResultContractError`: its `Kind` identifies the failing phase
+(`result_validator`, `effect_validator`, `postcondition`), and `Unwrap` retains
+the exact original cause. Even a callback-supplied correctable/retryable ToolError
+cannot override the known post-handler classification. Inspect the **outer**
+ToolError for routing; finding a validation sentinel deeper in the cause chain
+does not authorize argument correction or redispatch. Registry/Session timeout
+normalization also preserves this classification when the callback cause is
+context.DeadlineExceeded.
+
+Pre-handler argument/schema errors keep their existing correction semantics.
+A post-handler rejection emits no result and does not undo external effects.
+See the runnable [contract_recovery example](../examples/contract_recovery/main.go).
+
+`OperationOutcomeError` now says “after claim; dispatch may have occurred”. Its
+`DispatchInvoked` field records whether this profile invoked its continuation;
+false is local diagnostic evidence, not a fenced proof of externally not-started
+and not permission to roll back the claim. Cancellation, lease/approval expiry
+before invoke and post-handler failures all leave an unfinished claimed attempt
+unknown. Reconcile through the bound operation reference; repeated delivery does
+not blindly dispatch it. A persisted completed result stays completed if delivery
+later fails. Use keyed error literals when constructing OperationOutcomeError.
+
+The public error-chunk formatter preserves nonretryable INTERNAL and emits host
+reconciliation guidance for these known failures. WithErrorFormatter leaves them
+as hard errors. Batch/iterator/control routing cannot treat a diagnostic timeout,
+stream-abort or control sentinel in their cause as permission to suppress the
+contract failure or pause the host. errors.Is still exposes the original cause.
+Shared web/RAG/SQL host result validators use the same result_validator phase;
+this does not claim that a read performed an external write. Formatter callbacks
+and output byte-cap policies are separate contracts.

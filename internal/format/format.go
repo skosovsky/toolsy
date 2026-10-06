@@ -48,7 +48,7 @@ func ApplyWithEnvelope[T any, E any](
 	}
 	if validator != nil {
 		if err := validator(out); err != nil {
-			return nil, validationError(err)
+			return nil, toolsy.NewInternalError(&toolsy.ResultContractError{Kind: "result_validator", Cause: err})
 		}
 	}
 	data, err := json.Marshal(out)
@@ -105,13 +105,6 @@ func ValidateWireJSON(raw json.RawMessage, maxBytes int) (json.RawMessage, error
 		return nil, err
 	}
 	return raw, nil
-}
-
-func validationError(err error) error {
-	if te, ok := errors.AsType[*toolsy.ToolError](err); ok {
-		return te
-	}
-	return toolsy.NewValidationError(err.Error())
 }
 
 // JSONResult wraps pre-marshaled JSON for toolsy.NewTool without double-encoding.

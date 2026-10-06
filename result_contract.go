@@ -22,6 +22,8 @@ func hasCustomResultEncoding[R any]() bool {
 
 // ResultContractError reports an invalid tool output, not correctable arguments.
 // A handler may already have caused effects; this error never authorizes retry.
+// Kind identifies the wire failure or post-handler phase: result_validator,
+// effect_validator or postcondition. Cause retains the original callback error.
 type ResultContractError struct {
 	Kind  string
 	Cause error

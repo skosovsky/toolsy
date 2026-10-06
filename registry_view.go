@@ -189,7 +189,7 @@ func (v *RegistryView) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2
 			return nil
 		})
 
-		if !consumerStopped && err != nil && !isContextInterrupt(err) {
+		if !consumerStopped && err != nil && (!isContextInterrupt(err) || requiresOutcomeReconciliation(err)) {
 			yield(Chunk{}, err)
 		}
 	}

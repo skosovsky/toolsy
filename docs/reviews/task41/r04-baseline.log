@@ -1,0 +1,40 @@
+--- FAIL: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+    --- FAIL: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+        post_handler_regression_test.go:50: handler effects=2 results=0
+        post_handler_regression_test.go:51:
+                Error Trace:    /private/tmp/toolsy-task41/r01-original/post_handler_regression_test.go:51
+                Error:          Should be false
+                Test:           TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+FAIL
+FAIL    github.com/skosovsky/toolsy     0.560s
+FAIL

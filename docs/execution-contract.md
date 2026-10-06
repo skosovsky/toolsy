@@ -55,3 +55,13 @@ The memory store is not durable. `adapters/execution/filejournal` provides a bou
 ## Executable result boundary
 
 Built-in builders compile output schemas at construction and validate successful JSON result bytes before a profile can persist them and before delivery, including replay. Validation failure after an action remains uncertain under the operation profile; it never authorizes redispatch. Independent streams validate each JSON result without promising cardinality. Terminal streams additionally retain their producer-completion/cardinality contract. The [result contract](result-contract.md) defines representations, exceptions and clear-break migration.
+
+## Claimed attempt diagnostics
+
+OperationOutcomeError reports an unknown outcome after claim: dispatch may have
+occurred. DispatchInvoked records only whether the local profile called its
+continuation, without proving an external effect or authorizing claim rollback.
+Even context/lease/approval checks failing before invoke leave the claimed attempt
+unknown under the existing fenced recovery contract. Typed post-handler contract
+errors retain ResultContractError phase/cause and never authorize input repair.
+A completed persisted result remains completed after delivery failure.

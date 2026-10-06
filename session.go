@@ -150,7 +150,7 @@ func (s *Session) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chun
 			return nil
 		})
 
-		if !consumerStopped && err != nil && !isContextInterrupt(err) {
+		if !consumerStopped && err != nil && (!isContextInterrupt(err) || requiresOutcomeReconciliation(err)) {
 			yield(Chunk{}, err)
 		}
 	}
