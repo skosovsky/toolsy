@@ -118,12 +118,10 @@ func CheckRedirectRemote(allowPrivateIPs bool, blockedHosts []string) func(*http
 		if origin(redirectReq.URL) != origin(via[0].URL) {
 			return refusedRedirect("destination origin differs from the original request", nil)
 		}
-		if err := ValidateRemoteURL(redirectReq.Context(), redirectReq.URL.String(), allowPrivateIPs); err != nil {
-			return refusedRedirect("destination rejected by URL policy", err)
-		}
-		hostLower := strings.ToLower(strings.TrimSpace(redirectReq.URL.Hostname()))
-		if HostBlocked(hostLower, blockedHosts) {
-			return refusedRedirect("destination rejected by host policy", nil)
+		if _, err := ValidateRemoteURLWithBlacklist(
+			redirectReq.Context(), redirectReq.URL.String(), allowPrivateIPs, blockedHosts,
+		); err != nil {
+			return refusedRedirect("destination rejected by URL or host policy", err)
 		}
 		return nil
 	}
@@ -186,11 +184,11 @@ func ValidateRemoteURLWithBlacklist(
 	if err != nil {
 		return nil, err
 	}
-	if err := validateRemoteURLParsed(ctx, u, allowPrivateIPs); err != nil {
-		return nil, err
-	}
 	if HostBlocked(hostLower, blockedHosts) {
 		return nil, toolsy.NewValidationError("SSRF: domain is blocked")
+	}
+	if err := validateRemoteURLParsed(ctx, u, allowPrivateIPs); err != nil {
+		return nil, err
 	}
 	return u, nil
 }

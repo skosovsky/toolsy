@@ -69,7 +69,7 @@ func TestHostAllowed_WhitelistMode(t *testing.T) {
 
 func TestHostAllowed_BlacklistMode(t *testing.T) {
 	t.Parallel()
-	policy := normalizeHostPolicy(nil, []string{"internal.corp"})
+	policy := normalizeHostPolicy(nil, []string{"internal.corp", ".internal.corp"})
 	assert.False(t, hostAllowed("internal.corp", policy))
 	assert.False(t, hostAllowed("sub.internal.corp", policy))
 	assert.True(t, hostAllowed("example.com", policy))

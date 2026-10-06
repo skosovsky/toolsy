@@ -118,7 +118,8 @@ func WithAllowPrivateIPs(allow bool) Option {
 	}
 }
 
-// WithBlockedDomains sets a blacklist of hostnames (e.g. internal domains). Optional.
+// WithBlockedDomains sets exact hostname or leading-dot descendant deny entries.
+// Use both "example.com" and ".example.com" to block the apex and descendants.
 func WithBlockedDomains(domains []string) Option {
 	return func(o *options) {
 		o.blockedDomains = domains

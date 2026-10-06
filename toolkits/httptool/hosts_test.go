@@ -20,7 +20,7 @@ func TestMatchHost(t *testing.T) {
 		{"api.evil.com", ".evil.com", true},
 		{"evil.com", ".evil.com", false},
 		{"api.example.com", "api.example.com", true},
-		{"sub.api.example.com", "api.example.com", true},
+		{"sub.api.example.com", "api.example.com", false},
 		{"notapi.example.com", "api.example.com", false},
 	}
 	for _, tt := range tests {

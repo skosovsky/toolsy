@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/skosovsky/toolsy"
@@ -39,11 +38,13 @@ func IsBlockedIP(ip net.IP) bool {
 //
 // Host policy (fail-closed):
 //   - When AllowedHosts is non-empty (strict whitelist): only listed hosts are permitted.
-//     BlockedHosts is not used to grant access. A host listed in both AllowedHosts and
-//     BlockedHosts is denied (conflicting policy).
+//     Every matching BlockedHosts entry takes precedence, including suffix overlap.
+//     A configured nonempty allowlist with only blank entries permits no hosts.
 //   - When AllowedHosts is empty (blacklist mode): hosts matching BlockedHosts are denied.
 //
 // IP policy: IsBlockedIP is always applied at dial time unless AllowPrivateIPs is true.
+// Both lists use MatchHost syntax: bare exact hostname, leading dot descendants
+// only; apex plus descendants requires both entries.
 type SafeDialOptions struct {
 	BlockedHosts    []string
 	AllowedHosts    []string
@@ -72,35 +73,23 @@ func SafeDialTransport(opts SafeDialOptions) *http.Transport {
 }
 
 type hostPolicy struct {
-	whitelist    bool
-	allowed      []string
-	blocked      []string
-	conflictDeny map[string]struct{}
+	whitelist bool
+	allowed   []string
+	blocked   []string
 }
 
 func normalizeHostPolicy(allowed, blocked []string) hostPolicy {
-	allowedNorm := normalizeHostList(allowed)
-	blockedNorm := normalizeHostList(blocked)
-	p := hostPolicy{
-		whitelist:    len(allowedNorm) > 0,
-		allowed:      allowedNorm,
-		blocked:      blockedNorm,
-		conflictDeny: make(map[string]struct{}),
+	return hostPolicy{
+		whitelist: len(allowed) > 0,
+		allowed:   normalizeHostList(allowed),
+		blocked:   normalizeHostList(blocked),
 	}
-	if p.whitelist {
-		for _, h := range p.allowed {
-			if hostInList(h, p.blocked) {
-				p.conflictDeny[h] = struct{}{}
-			}
-		}
-	}
-	return p
 }
 
 func normalizeHostList(hosts []string) []string {
 	out := make([]string, 0, len(hosts))
 	for _, h := range hosts {
-		h = strings.TrimSpace(strings.ToLower(h))
+		h = normalizeHostname(h)
 		if h != "" {
 			out = append(out, h)
 		}
@@ -109,17 +98,14 @@ func normalizeHostList(hosts []string) []string {
 }
 
 func hostAllowed(host string, policy hostPolicy) bool {
-	host = strings.TrimSpace(strings.ToLower(host))
-	if host == "" {
+	host = normalizeHostname(host)
+	if invalidPolicyHost(host) {
 		return false
 	}
-	if policy.whitelist {
-		if _, conflict := policy.conflictDeny[host]; conflict {
-			return false
-		}
-		return hostInList(host, policy.allowed)
+	if hostInList(host, policy.blocked) {
+		return false
 	}
-	return !hostInList(host, policy.blocked)
+	return !policy.whitelist || hostInList(host, policy.allowed)
 }
 
 func safeDialContext(

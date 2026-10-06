@@ -474,12 +474,12 @@ func TestWebScrape_UnspecifiedIP_Blocked(t *testing.T) {
 }
 
 func TestWebScrape_BlockedDomain_SubdomainBlocked(t *testing.T) {
-	// Subdomain of a blocked domain is also blocked (exact match or host ends with .blocked)
+	// Arrange: the leading-dot syntax blocks descendants explicitly.
 	_, err := validateScrapeURL(
 		context.Background(),
 		"http://api.evil.example.com/",
 		true,
-		[]string{"evil.example.com"},
+		[]string{"evil.example.com", ".evil.example.com"},
 	)
 	require.Error(t, err)
 	te, ok := toolsy.AsToolError(err)

@@ -67,7 +67,11 @@ body := string(data)
 
 **SafeDialOptions host policy:**
 - `AllowedHosts` non-empty → strict whitelist (only listed hosts; fail-closed on Allowed+Blocked overlap).
+- Matching deny entries always win over allows, including broad allow plus a narrower deny. Host rejection occurs before DNS or dialing. A configured nonempty allowlist containing only blank entries denies all hosts.
 - `AllowedHosts` empty → blacklist via `BlockedHosts` plus always `IsBlockedIP` at dial time.
+
+Both lists use the same syntax: `example.com` matches only that exact hostname; `.example.com` matches descendants only and excludes the apex. Use both entries for apex plus descendants. Matching ignores case, outer whitespace and a terminal DNS root dot. Domains with different ports share host policy; credential origins remain bound to scheme/hostname/effective port.
+Request hosts with empty labels, a leading dot or repeated terminal dots are rejected before DNS/dial. This normalization does not infer aliases or expand a bare entry into descendants.
 
 See `IsBlockedIP` in godoc for details.
 

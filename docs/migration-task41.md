@@ -38,3 +38,32 @@ continues to wrap the error in its unknown-outcome envelope.
 their own callback own its method/origin/header/body semantics. Nil disables
 redirects. Consumer custom clients continue to merge timeout only; they cannot
 override these adapter policies.
+
+## Host allow/deny patterns (R02 / D17)
+
+`MatchHost`, `HostBlocked`, `HostMatchesAllowedDomains`, `SafeDialOptions` and
+toolkit domain options now share one syntax:
+
+| Entries | Matches |
+|---|---|
+| `example.com` | Exact apex only |
+| `.example.com` | Descendants only, including nested subdomains |
+| `example.com` and `.example.com` | Apex plus all descendants |
+
+Previously bare entries also matched descendants. Update any allowlist that
+intended that behavior to include the leading-dot entry explicitly. **Update
+blacklists too:** replacing an old `"evil.com"` entry with
+`"evil.com", ".evil.com"` preserves the previous apex-plus-descendants denial.
+This applies to `web.WithBlockedDomains` and to shared HTTP library consumers.
+Leaving only the bare entry intentionally denies the exact apex alone.
+
+Case and surrounding whitespace are ignored. A terminal DNS root dot is
+normalized on both configured patterns and request hosts, so `EXAMPLE.com.` and
+`example.com` have identical host policy. A leading-dot pattern does not match
+the apex or a name such as `evil-example.com`. IP checks still apply at dialing.
+
+Every matching deny entry takes precedence, including broad allow plus narrow
+deny and identical suffix policies. This replaces the precomputed exact
+`conflictDeny` map. Denials happen before DNS lookup or dialing. A configured
+nonempty allowlist that normalizes to no usable entries remains deny-all; it
+does not silently switch to permissive blacklist mode.

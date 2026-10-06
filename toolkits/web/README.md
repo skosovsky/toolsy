@@ -1,6 +1,6 @@
 # Toolsy: Web Toolkit (web)
 
-**Description:** Lets the agent search the web (via SearchProvider) and scrape URLs to Markdown. Scraping strips script/style/noscript/iframe/nav/header/footer/aside and is SSRF-protected (private/loopback/unspecified 0.0.0.0/::/multicast blocked; blockedDomains include subdomains; redirect validation).
+**Description:** Lets the agent search the web (via SearchProvider) and scrape URLs to Markdown. Scraping strips script/style/noscript/iframe/nav/header/footer/aside and is SSRF-protected (private/loopback/unspecified 0.0.0.0/::/multicast blocked; explicit exact/suffix host deny entries; redirect validation).
 
 ## Installation
 
@@ -38,7 +38,7 @@ The default scraper uses `httptool.CheckRedirectRemote`: GET redirects must stay
 
 - **WithMaxSearchBytes(n):** Cap `web_search` wire JSON (default 256KB). Applies to default and formatter paths. Search provider count/item/source bounds are separate from this wire budget.
 - **WithMaxPageBytes(n):** Cap `web_scrape` wire JSON (default 2MB). HTML read and markdown conversion are fail-closed; oversized HTML or expanded markdown return `CodeValidationFailed` — raise `WithMaxPageBytes` for larger budgets. Oversized final JSON returns `CodeValidationFailed`; serialized JSON is never sliced.
-- **WithBlockedDomains(domains):** Blacklist of hostnames; exact match and subdomains are blocked (e.g. blocking `evil.com` blocks `api.evil.com`). Checked on initial URL and on redirects.
+- **WithBlockedDomains(domains):** Bare hostname is an exact deny; a leading dot denies descendants only. Use `[]string{"evil.com", ".evil.com"}` to deny both the apex and subdomains. Case, outer whitespace and the DNS root dot are normalized. Checked on initial URL, redirects and dialing with the same matching syntax.
 - **WithScraper(s):** Replace default HTML-to-Markdown scraper (e.g. for JS-rendered pages). Custom scrapers must enforce `maxBytes` fail-closed in `HTMLToMarkdown(ctx, html, maxBytes)` (error when markdown exceeds cap; no silent truncate). They should respect caller context and bound CPU; the default scraper checks cancellation before and after synchronous HTML conversion. Use `WrapMarkdownExceedsLimit` for custom scraper cap errors.
 - **WithAllowPrivateIPs(true):** For tests with httptest on 127.0.0.1 only.
 - **IoC:** `WithSearchFormatter`, `WithScrapeFormatter`, and `WithHostResultValidator`. Validator-only mode validates `SearchWireResult` / `ScrapeWireResult` wire envelopes (not raw slices/strings).

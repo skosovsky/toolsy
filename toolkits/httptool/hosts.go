@@ -7,32 +7,39 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-// MatchHost reports whether hostLower matches entry (exact, subdomain, or ".suffix" wildcard).
+// MatchHost compares a bare exact hostname or a leading-dot descendant suffix.
+// A suffix excludes its apex; use both entries for apex plus descendants. Case,
+// outer whitespace and one terminal DNS root dot are normalized on both sides.
 func MatchHost(hostLower, entry string) bool {
-	entry = strings.TrimSpace(strings.ToLower(entry))
-	if entry == "" {
+	entry = normalizeHostname(entry)
+	hostLower = normalizeHostname(hostLower)
+	if entry == "" || invalidPolicyHost(hostLower) || strings.HasSuffix(entry, ".") ||
+		strings.Contains(entry, "..") {
 		return false
-	}
-	hostLower = strings.TrimSpace(strings.ToLower(hostLower))
-	if hostLower == entry {
-		return true
 	}
 	if strings.HasPrefix(entry, ".") {
 		base := entry[1:]
-		return hostLower != base && strings.HasSuffix(hostLower, entry)
+		return base != "" && hostLower != base && strings.HasSuffix(hostLower, entry)
 	}
-	return len(hostLower) > len(entry) && strings.HasSuffix(hostLower, "."+entry)
+	return hostLower == entry
+}
+
+func normalizeHostname(host string) string {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if strings.HasSuffix(host, "..") {
+		return host // Leave invalid repeated root dots for rejection, making normalization idempotent.
+	}
+	return strings.TrimSuffix(host, ".")
+}
+
+func invalidPolicyHost(host string) bool {
+	return host == "" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") ||
+		strings.Contains(host, "..")
 }
 
 // HostBlocked reports whether hostLower is blocked by any entry in blocked (blacklist mode).
 func HostBlocked(hostLower string, blocked []string) bool {
-	hostLower = strings.TrimSpace(strings.ToLower(hostLower))
-	for _, b := range blocked {
-		if MatchHost(hostLower, b) {
-			return true
-		}
-	}
-	return false
+	return hostInList(hostLower, blocked)
 }
 
 // ValidateResolvedIPs rejects blocked IPs unless allowPrivate is true.
@@ -50,12 +57,7 @@ func ValidateResolvedIPs(addrs []net.IPAddr, allowPrivate bool) error {
 
 // HostMatchesAllowedDomains reports whether hostLower is allowed by allowedDomains (whitelist).
 func HostMatchesAllowedDomains(hostLower string, allowedDomains []string) bool {
-	for _, d := range allowedDomains {
-		if MatchHost(hostLower, d) {
-			return true
-		}
-	}
-	return false
+	return hostInList(hostLower, allowedDomains)
 }
 
 func hostInList(hostLower string, list []string) bool {

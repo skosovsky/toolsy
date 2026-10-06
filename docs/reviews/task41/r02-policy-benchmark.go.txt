@@ -1,0 +1,36 @@
+package httptool
+
+import (
+	"fmt"
+	"testing"
+)
+
+func BenchmarkTask41HostPolicy(b *testing.B) {
+	for _, size := range []int{1, 32, 256} {
+		allowed := make([]string, size)
+		blocked := make([]string, size)
+		for i := range size {
+			allowed[i] = fmt.Sprintf("host%d.allowed.example", i)
+			blocked[i] = fmt.Sprintf("host%d.blocked.example", i)
+		}
+		for _, scenario := range []struct {
+			name, host string
+			allowed    []string
+			want       bool
+		}{
+			{"exact-allow", allowed[size-1], allowed, true},
+			{"suffix-allow", "child.allowed.example", []string{".allowed.example"}, true},
+			{"denied", blocked[size-1], []string{".example"}, false},
+		} {
+			b.Run(fmt.Sprintf("%s/%d", scenario.name, size), func(b *testing.B) {
+				policy := normalizeHostPolicy(scenario.allowed, blocked)
+				b.ReportAllocs()
+				for b.Loop() {
+					if hostAllowed(scenario.host, policy) != scenario.want {
+						b.Fatal("wrong admission")
+					}
+				}
+			})
+		}
+	}
+}

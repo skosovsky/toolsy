@@ -71,7 +71,7 @@ func TestAllowedRedirectCredentialsAndMethod(t *testing.T) {
 			next.Header["authorization"] = []string{
 				"Bearer lower-case-secret",
 			}
-			policy := CheckRedirectAllowed([]string{"example.com"}, true)
+			policy := CheckRedirectAllowed([]string{"example.com", ".example.com"}, true)
 			// Act.
 			err := policy(next, []*http.Request{first})
 			// Assert.

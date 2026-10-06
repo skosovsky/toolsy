@@ -1,0 +1,68 @@
+--- FAIL: TestHostPolicyDenyPrecedence (0.00s)
+    --- FAIL: TestHostPolicyDenyPrecedence/identical-suffix (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostPolicyDenyPrecedence/identical-suffix
+    --- FAIL: TestHostPolicyDenyPrecedence/broad-allow-narrow-deny (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostPolicyDenyPrecedence/broad-allow-narrow-deny
+    --- FAIL: TestHostPolicyDenyPrecedence/exact-not-descendants (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostPolicyDenyPrecedence/exact-not-descendants
+    --- FAIL: TestHostPolicyDenyPrecedence/normalization (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostPolicyDenyPrecedence/normalization
+    --- FAIL: TestHostPolicyDenyPrecedence/blacklist-exact-sibling (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: true
+                                actual  : false
+                Test:           TestHostPolicyDenyPrecedence/blacklist-exact-sibling
+    --- FAIL: TestHostPolicyDenyPrecedence/blank-allow-is-deny (0.00s)
+        host_policy_regression_test.go:38:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:38
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostPolicyDenyPrecedence/blank-allow-is-deny
+--- FAIL: TestSafeTransportRejectsOverlapBeforeDNS (0.00s)
+    host_policy_regression_test.go:57:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:57
+                Error:          Target error should be in err chain:
+                                expected: "validation failed"
+                                in chain: "lookup api.example.invalid: no such host"
+                Test:           TestSafeTransportRejectsOverlapBeforeDNS
+--- FAIL: TestHostSyntaxSharedAcrossHelpers (0.00s)
+    --- FAIL: TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com (0.00s)
+        host_policy_regression_test.go:82:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:82
+                Error:          Not equal:
+                                expected: false
+                                actual  : true
+                Test:           TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com
+    --- FAIL: TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_ (0.00s)
+        host_policy_regression_test.go:82:
+                Error Trace:    /tmp/toolsy-task41/r01-original/toolkits/httptool/host_policy_regression_test.go:82
+                Error:          Not equal:
+                                expected: true
+                                actual  : false
+                Test:           TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_
+FAIL
+FAIL    github.com/skosovsky/toolsy/toolkits/httptool   0.455s
+FAIL

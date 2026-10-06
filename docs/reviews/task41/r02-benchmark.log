@@ -1,0 +1,15 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/toolkits/httptool
+cpu: Apple M1 Max
+BenchmarkTask41HostPolicy/exact-allow/1-10               5169716               310.4 ns/op             0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/suffix-allow/1-10              5705896               206.5 ns/op             0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/denied/1-10                    9852037               120.9 ns/op             0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/exact-allow/32-10               200739              5973 ns/op               0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/suffix-allow/32-10              410391              2946 ns/op               0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/denied/32-10                    411087              2930 ns/op               0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/exact-allow/256-10               25267             47640 ns/op               0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/suffix-allow/256-10              54243             22320 ns/op               0 B/op          0 allocs/op
+BenchmarkTask41HostPolicy/denied/256-10                    50457             23912 ns/op               0 B/op          0 allocs/op
+PASS
+ok      github.com/skosovsky/toolsy/toolkits/httptool   11.653s

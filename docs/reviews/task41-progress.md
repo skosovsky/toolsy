@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Rows 02–40 are pending; row 01 is accepted. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted; rows 03–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -96,4 +96,33 @@ four-module reviews rejected classification/lint findings, then accepted; the
 scope was expanded before starting R02. Final reviewers rejected remaining
 consumer classification/MCP guard issues at 90%; public assertions and fixes
 closed these, and both complete repeat reviews accepted at 100%. No unresolved
-detected defect. The amended commit is recorded in the next ledger update.
+detected defect. Commit: `4dec511` (`fix: redirect credentials`).
+
+### 02 — R02 / D17 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Runtime matching denies every blocked match before DNS/dial, including
+   identical exact/suffix entries and broad allow with narrow deny.
+2. Explicit shared syntax: bare hostname exact; leading dot descendants only;
+   apex plus descendants requires both entries. Whitelist and blacklist use
+   identical matching; case/outer whitespace/DNS root-dot normalization align.
+3. Positive sibling/apex controls and negative overlap fixtures; public transport
+   rejects before resolution, and configured nonempty allowlist never becomes
+   permissive because normalized entries are blank. P1 overlap regression fails
+   on original source.
+4. Affected consumer tests and R01 regression suite remain race-clean; targeted
+   lint and cumulative whitespace check pass. No SSRF/origin protection removed.
+5. Migration explicitly describes the security-relevant blacklist change;
+   current docs/options match syntax; conflict-map and duplicate matching paths
+   removed; both independent reviewers find no unresolved defect.
+
+Decision: exact/suffix syntax is the same for allow and deny lists. Use
+`["example.com", ".example.com"]` when both apex and descendants are intended,
+especially when migrating a previously implicit descendant blacklist.
+
+Evidence: [R02 acceptance](task41/r02-acceptance.md). Independent reviewers
+`r02_acceptance_a` and `r02_acceptance_b` each accepted all five criteria at
+100%, with no unresolved detected defects. Both repeated seven-module race
+suites and targeted lint; reviewer B independently measured zero DNS calls for
+denied admissions. Commit ID will be recorded in the next ledger update.
