@@ -10,10 +10,8 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
+	"github.com/skosovsky/toolsy/internal/format"
 )
-
-const truncationSuffix = textprocessor.ContractsTruncationSuffix
 
 func invokeRPC(
 	ctx context.Context,
@@ -37,6 +35,9 @@ func invokeRPC(
 	if err != nil {
 		return fmt.Errorf("grpc: marshal response: %w", err)
 	}
-	text := textprocessor.TruncateBytesToValidUTF8String(data, opts.maxResponseBytes(), truncationSuffix)
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: []byte(text), MimeType: toolsy.MimeTypeJSON})
+	data, err = format.ValidateWireJSON(data, opts.maxResponseBytes())
+	if err != nil {
+		return err
+	}
+	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: toolsy.MimeTypeJSON})
 }

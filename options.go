@@ -106,7 +106,9 @@ func WithRequirements(req ToolRequirements) ToolOption {
 	}
 }
 
-// WithOutputSchema sets the JSON Schema for tool results exposed to orchestrators.
+// WithOutputSchema sets the executable JSON Schema for successful JSON wire results.
+// Builders compile it at construction and validate before persistence and delivery.
+// It does not validate progress, controls, business errors, empty/noop or text/binary results.
 func WithOutputSchema(schema map[string]any) ToolOption {
 	return func(c *ToolConfig) {
 		if len(schema) == 0 {

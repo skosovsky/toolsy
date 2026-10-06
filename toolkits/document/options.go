@@ -43,7 +43,7 @@ func applyDefaults(o *options) {
 }
 
 // WithMaxBytes sets the wire JSON byte budget (default 2 MB). Local stat, remote download, and parsers
-// use contentByteCap(maxBytes) for fail-closed reads; wire suffix applies separately via format.CapWireJSON.
+// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n

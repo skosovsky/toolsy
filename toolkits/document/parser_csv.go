@@ -14,7 +14,7 @@ import (
 )
 
 // parseCSV reads CSV from r with a fail-closed byte budget (ReadLimitedBytes), then builds a Markdown table.
-// Wire truncation applies only on final JSON marshal via format.CapWireJSON.
+// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
 func parseCSV(ctx context.Context, r io.Reader, maxBytes int) (string, error) {
 	rows, err := readCSVRows(ctx, r, maxBytes)
 	if err != nil {

@@ -59,7 +59,7 @@ func applyDefaults(o *options) {
 
 // WithMaxPageBytes sets the final wire JSON byte budget for web_scrape (default 2MB).
 // Scrape fails closed when HTML exceeds the derived content cap; use WithMaxPageBytes to raise the budget.
-// Wire suffix applies only via format.CapWireJSON.
+// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
 func WithMaxPageBytes(n int) Option {
 	return func(o *options) {
 		o.maxPageBytes = n

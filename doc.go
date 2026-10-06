@@ -34,8 +34,10 @@
 //     see WithMaxCollectedChunks and ErrAsyncCollectedLimitExceeded.
 //
 // Use Extractor when you only need schema generation/validation. Use NewDynamicToolFromSpec or
-// NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Use historycodec for canonical
-// ToolCall/ToolResult wire format and textprocessor for standalone UTF-8 truncation.
+// NewProxyTool for runtime schemas (OpenAPI, MCP, etc.). Output schemas validate successful
+// JSON wire values before delivery/persistence. Use historycodec for raw transcripts with
+// explicit delivery metadata, ResultCodec for complete typed replay, and textprocessor
+// for standalone UTF-8 text truncation. JSON output must never be sliced as text.
 //
 // # Example
 //

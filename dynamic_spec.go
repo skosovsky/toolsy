@@ -70,6 +70,10 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	validateArgs := spec.ValidateArgs
 	handler := spec.Handler
 	manifest := buildToolManifest(spec.Name, spec.Description, schemaCopy, cfg.Manifest)
+	outputValidator, err := compileResultContract(&manifest)
+	if err != nil {
+		return nil, err
+	}
 
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		var v any
@@ -88,31 +92,36 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 				return vErr
 			}
 		}
-		return ExecutePrepared(ctx, env, manifest, input, decoded, func(_ ToolInput, out func(Chunk) error) error {
-			yieldWrapped := func(c Chunk) error {
-				prepared, err := prepareChunk(c)
-				if err != nil {
-					return err
+		return executePreparedResult(
+			ctx,
+			env,
+			manifest,
+			input,
+			decoded,
+			outputValidator,
+			func(_ ToolInput, out func(Chunk) error) error {
+				yieldWrapped := func(c Chunk) error {
+					if err := out(c); err != nil {
+						return wrapYieldError(err)
+					}
+					return nil
 				}
-				if err := out(prepared); err != nil {
-					return wrapYieldError(err)
+				if err := handler(ctx, env, decoded, yieldWrapped); err != nil {
+					if clientCorrectable(err) {
+						return err
+					}
+					if errors.Is(err, ErrStreamAborted) {
+						return err
+					}
+					if IsControlError(err) {
+						return err
+					}
+					return wrapHandlerError(err)
 				}
 				return nil
-			}
-			if err := handler(ctx, env, decoded, yieldWrapped); err != nil {
-				if clientCorrectable(err) {
-					return err
-				}
-				if errors.Is(err, ErrStreamAborted) {
-					return err
-				}
-				if IsControlError(err) {
-					return err
-				}
-				return wrapHandlerError(err)
-			}
-			return nil
-		}, yield)
+			},
+			yield,
+		)
 	}
 
 	return &tool{

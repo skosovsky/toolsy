@@ -179,7 +179,7 @@ func TestTool_ManifestParameters_ReturnsCopy(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestTool_ManifestParameters_ShallowCopyNested(t *testing.T) {
+func TestTool_ManifestParameters_DefensiveCopyNested(t *testing.T) {
 	type Args struct {
 		X int `json:"x"`
 	}
@@ -203,7 +203,7 @@ func TestTool_ManifestParameters_ShallowCopyNested(t *testing.T) {
 	obj2 := findSchemaObject(m2.Parameters)
 	require.NotNil(t, obj2)
 	props2 := obj2["properties"].(map[string]any)
-	assert.Equal(t, "mutated_nested", props2["x"], "nested maps are shared")
+	assert.NotEqual(t, "mutated_nested", props2["x"], "nested maps are isolated")
 }
 
 func BenchmarkExecute(b *testing.B) {
@@ -393,8 +393,8 @@ func TestMarshalToolResult_WireJSONResult(t *testing.T) {
 	truncated := json.RawMessage(`{"broken`)
 	res := wireJSONStub{raw: truncated}
 	data, err := marshalToolResult(res)
-	require.NoError(t, err)
-	require.Equal(t, string(truncated), string(data))
+	require.Error(t, err)
+	require.Nil(t, data)
 }
 
 type wireJSONStub struct {
@@ -421,7 +421,7 @@ func TestNewTool_JSONResultWirePassthrough(t *testing.T) {
 	require.NoError(t, err)
 
 	var wire []byte
-	require.NoError(t, tool.Execute(
+	require.Error(t, tool.Execute(
 		context.Background(),
 		NewRunEnv(nil),
 		ToolInput{ArgsJSON: []byte(`{"x":1}`)},
@@ -430,7 +430,7 @@ func TestNewTool_JSONResultWirePassthrough(t *testing.T) {
 			return nil
 		},
 	))
-	require.Equal(t, string(truncated), string(wire))
+	require.Empty(t, wire)
 }
 
 type jsonResultStub struct {

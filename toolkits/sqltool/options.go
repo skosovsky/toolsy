@@ -66,7 +66,7 @@ func WithMaxCellBytes(n int) Option {
 }
 
 // WithMaxSchemaBytes sets the final wire JSON byte budget for sql_inspect_schema (default 512 KB).
-// Schema builder output is not suffix-truncated; wire suffix applies via format.CapWireJSON only.
+// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
 func WithMaxSchemaBytes(n int) Option {
 	return func(o *options) {
 		o.maxSchemaBytes = n

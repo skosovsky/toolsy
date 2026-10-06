@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,12 +79,12 @@ func TestAsSearchTool_MaxResults(t *testing.T) {
 	require.Equal(t, "1. a\n2. b", result)
 }
 
-func TestAsSearchTool_MaxBytesTruncate(t *testing.T) {
+func TestAsSearchTool_MaxBytesRejectsOversized(t *testing.T) {
 	r := &mockRetriever{docs: docsFromStrings(strings.Repeat("x", 100))}
 	tool, err := AsSearchTool(r, WithMaxBytes(20))
 	require.NoError(t, err)
 	var wire []byte
-	_ = tool.Execute(
+	err = tool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
@@ -94,16 +93,16 @@ func TestAsSearchTool_MaxBytesTruncate(t *testing.T) {
 			return nil
 		},
 	)
-	require.LessOrEqual(t, len(wire), 20+len(textprocessor.TruncationSuffix)+2)
-	require.Contains(t, string(wire), "[Truncated]")
+	require.Error(t, err)
+	require.Empty(t, wire)
 }
 
-func TestAsSearchTool_MaxBytesUTF8Safe(t *testing.T) {
+func TestAsSearchTool_MaxBytesRejectsOversizedUTF8(t *testing.T) {
 	r := &mockRetriever{docs: docsFromStrings("привет мир")}
 	tool, err := AsSearchTool(r, WithMaxBytes(17))
 	require.NoError(t, err)
 	var wire []byte
-	_ = tool.Execute(
+	err = tool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
@@ -112,9 +111,8 @@ func TestAsSearchTool_MaxBytesUTF8Safe(t *testing.T) {
 			return nil
 		},
 	)
-	require.LessOrEqual(t, len(wire), 17+len(textprocessor.TruncationSuffix)+2)
-	require.Contains(t, string(wire), "[Truncated]")
-	require.True(t, utf8.Valid(wire), "expected valid UTF-8 wire, got %q", wire)
+	require.Error(t, err)
+	require.Empty(t, wire)
 }
 
 func TestAsSearchTool_RetrieverError(t *testing.T) {
@@ -337,8 +335,9 @@ func TestAsSearchTool_ShapeDocumentsJSON_SingleWireTruncSuffix(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
-	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
+	require.LessOrEqual(t, len(wire), 80)
+	require.True(t, json.Valid(wire))
+	require.NotContains(t, string(wire), "[Truncated]")
 	var payload SearchDocumentsWire
 	require.NoError(t, json.Unmarshal(wire, &payload))
 	if len(payload.Documents) > 0 {
@@ -375,7 +374,8 @@ func TestAsSearchTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, len(wire), 80)
+	require.True(t, json.Valid(wire))
 }
 
 func TestAsSearchTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
@@ -388,7 +388,7 @@ func TestAsSearchTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tool.Execute(
 			context.Background(),
@@ -400,7 +400,7 @@ func TestAsSearchTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 60+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestAsSearchTool_FormatterAndValidator(t *testing.T) {

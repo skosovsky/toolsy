@@ -1,10 +1,13 @@
 package toolsy
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/skosovsky/toolsy/internal/jsonschemax"
 )
 
 func validateChunk(c Chunk) error {
@@ -28,6 +31,11 @@ func validateChunk(c Chunk) error {
 	}
 	if len(c.Data) == 0 && c.MimeType != "" {
 		return NewInternalError(errors.New("toolsy: chunk mime type without data is invalid"))
+	}
+	if len(c.Data) > 0 && jsonMimeType(c.MimeType) {
+		if _, err := jsonschemax.Decode(c.Data); err != nil {
+			return NewInternalError(&ResultContractError{Kind: resultInvalidJSON, Cause: err})
+		}
 	}
 	return nil
 }
@@ -89,6 +97,14 @@ func prepareChunk(c Chunk) (Chunk, error) {
 		return Chunk{}, err
 	}
 	if c.Envelope != nil {
+		if !bytes.Equal(c.Envelope.Raw, c.Data) || c.Envelope.MimeType != c.MimeType {
+			return Chunk{}, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
+		}
+		if c.Event == EventResult &&
+			((c.IsError && (c.Envelope.Kind != ToolEnvelopeKindError || c.Envelope.Error == nil)) ||
+				(!c.IsError && (c.Envelope.Kind != ToolEnvelopeKindResult || c.Envelope.Error != nil))) {
+			return Chunk{}, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
+		}
 		c.Envelope = cloneToolEnvelope(c.Envelope)
 	} else if c.Event == EventResult {
 		envelope := c.ToolEnvelope()

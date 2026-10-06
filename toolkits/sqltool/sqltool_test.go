@@ -16,7 +16,6 @@ import (
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/internal/sqlutil"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func openSQLite(t *testing.T) *sql.DB {
@@ -658,7 +657,7 @@ func TestSQLInspect_WithMaxSchemaBytes_WithResultFormatter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[0].Execute(
 			context.Background(),
@@ -670,7 +669,7 @@ func TestSQLInspect_WithMaxSchemaBytes_WithResultFormatter(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestSQLExecute_WithMaxRows_WithResultFormatter(t *testing.T) {
@@ -705,7 +704,8 @@ func TestSQLExecute_WithMaxRows_WithResultFormatter(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), budget+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, len(wire), budget)
+	require.True(t, json.Valid(wire))
 }
 
 func TestInspectSchema_DefaultAndIoCWireSymmetry(t *testing.T) {
@@ -722,7 +722,7 @@ func TestInspectSchema_DefaultAndIoCWireSymmetry(t *testing.T) {
 	runInspect := func(tools []toolsy.Tool) []byte {
 		t.Helper()
 		var wire []byte
-		require.NoError(
+		require.Error(
 			t,
 			tools[0].Execute(
 				context.Background(),
@@ -749,10 +749,8 @@ func TestInspectSchema_DefaultAndIoCWireSymmetry(t *testing.T) {
 
 	defaultWire := runInspect(defaultTools)
 	iocWire := runInspect(iocTools)
-	require.LessOrEqual(t, len(defaultWire), capBytes+len(textprocessor.TruncationSuffix)+2)
-	require.LessOrEqual(t, len(iocWire), capBytes+len(textprocessor.TruncationSuffix)+2)
-	require.Equal(t, 1, strings.Count(string(defaultWire), "[Truncated]"))
-	require.Equal(t, 1, strings.Count(string(iocWire), "[Truncated]"))
+	require.Empty(t, defaultWire)
+	require.Empty(t, iocWire)
 }
 
 func TestSQLInspect_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
@@ -775,7 +773,7 @@ func TestSQLInspect_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[0].Execute(
 			context.Background(),
@@ -787,7 +785,7 @@ func TestSQLInspect_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestSQLExecute_TripleIoC_MaxRowsFormatterValidator(t *testing.T) {

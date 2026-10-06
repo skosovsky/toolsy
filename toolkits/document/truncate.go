@@ -6,7 +6,7 @@ import "github.com/skosovsky/toolsy/internal/format"
 const extractWireJSONOverhead = 16
 
 // contentByteCap returns the parser content limit derived from the wire byte budget.
-// Wire truncation (with textprocessor.TruncationSuffix) applies only on final JSON marshal.
+// Final JSON encoding rejects results that exceed the complete wire budget.
 func contentByteCap(maxWireBytes int) int {
 	return format.WireContentCap(maxWireBytes, extractWireJSONOverhead)
 }

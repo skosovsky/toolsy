@@ -119,6 +119,8 @@ See `examples/run_call/main.go`. Use low-level `Registry.Execute` only inside st
 
 ## API contracts
 
+Output schemas are executable contracts for successful JSON result bytes. Builders compile schemas before execution and validate before persistence/delivery and on replay. Text/binary, progress, controls, intentional empty/noop and business-error outputs have distinct semantics. Pre-encoded JSON must be valid; formatter wire limits reject oversized values without slicing JSON. See [result contract](docs/result-contract.md).
+
 - `Tool` interface: `Manifest() ToolManifest` and `Execute(ctx, env, input, yield)`.
 - `ToolCall` carries `Input toolsy.ToolInput` and optional `CallContext` for typed subject/scope.
 - `ToolInput` contains `CallID`, `ArgsJSON`, and optional `Attachments`.
@@ -488,9 +490,9 @@ if err != nil {
 err = sess.Execute(ctx, call, yield)
 ```
 
-## Canonical history codec and text utilities
+## Transcript codec and text utilities
 
-Use `github.com/skosovsky/toolsy/historycodec` for wire-format serialization of `ToolCall` and delivered `Chunk` results.
+Use `github.com/skosovsky/toolsy/historycodec` for strict version 2 raw transcripts with explicit delivery/audience and replay metadata. Typed values, effects, controls, runtime context and attachments fail explicitly; project an execution record deliberately before encoding. See [supported transcript contract](historycodec/README.md). For complete typed cache/journal persistence use `ResultCodec`, not the transcript codec. Version 1 is unsupported.
 Use `github.com/skosovsky/toolsy/textprocessor` for standalone UTF-8 truncation without a registry.
 Semantic chat truncation (BYOT) remains in `github.com/skosovsky/toolsy/history` — see [Semantic history truncation](#semantic-history-truncation-byot).
 

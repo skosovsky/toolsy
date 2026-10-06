@@ -857,7 +857,7 @@ func TestWebScrape_WithMaxPageBytes_WithResultFormatter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[1].Execute(
 			context.Background(),
@@ -869,7 +869,7 @@ func TestWebScrape_WithMaxPageBytes_WithResultFormatter(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 60+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
@@ -907,8 +907,9 @@ func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), maxWire+len(textprocessor.TruncationSuffix)+2)
-	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
+	require.LessOrEqual(t, len(wire), maxWire)
+	require.True(t, json.Valid(wire))
+	require.NotContains(t, string(wire), "[Truncated]")
 	if json.Valid(wire) {
 		var result ScrapeWireResult
 		require.NoError(t, json.Unmarshal(wire, &result))
@@ -995,7 +996,7 @@ func TestWebSearch_WithMaxSearchBytes_WireCap(t *testing.T) {
 	require.NoError(t, err)
 
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[0].Execute(
 			context.Background(),
@@ -1007,12 +1008,7 @@ func TestWebSearch_WithMaxSearchBytes_WireCap(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), maxWire+len(textprocessor.TruncationSuffix)+2)
-	if json.Valid(wire) {
-		var result SearchWireResult
-		require.NoError(t, json.Unmarshal(wire, &result))
-		require.NotContains(t, result.Results, textprocessor.TruncationSuffix)
-	}
+	require.Empty(t, wire)
 }
 
 func TestWebSearch_SemanticAndWireCapsIndependent(t *testing.T) {
@@ -1030,7 +1026,7 @@ func TestWebSearch_SemanticAndWireCapsIndependent(t *testing.T) {
 	require.NoError(t, err)
 
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[0].Execute(
 			context.Background(),
@@ -1042,8 +1038,7 @@ func TestWebSearch_SemanticAndWireCapsIndependent(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), maxWire+len(textprocessor.TruncationSuffix)+2)
-	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
+	require.Empty(t, wire)
 }
 
 func TestWebSearch_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
@@ -1063,7 +1058,7 @@ func TestWebSearch_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[0].Execute(
 			context.Background(),
@@ -1075,7 +1070,7 @@ func TestWebSearch_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestWebScrape_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
@@ -1102,7 +1097,7 @@ func TestWebScrape_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tools[1].Execute(
 			context.Background(),
@@ -1114,5 +1109,5 @@ func TestWebScrape_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }

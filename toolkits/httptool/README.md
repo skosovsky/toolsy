@@ -17,7 +17,7 @@ go get github.com/skosovsky/toolsy/toolkits/httptool
 | `http_get`  | Perform an HTTP GET request         | `{"url": "string"}`                                     |
 | `http_post` | Perform an HTTP POST with JSON body | `{"url": "string", "json_body": {"key": "value", ...}}` |
 
-Result: `{"status": 200, "body": "..."}`. `WithMaxResponseBody` caps the **body field** budget in probe mode (default 512KB); final wire JSON `{"status":N,"body":"..."}` may be slightly larger due to envelope overhead (~27 bytes). Responses larger than the body limit return **`CodeValidationFailed`** (fail-closed — no silent truncate). Probe tools do **not** use `format.CapWireJSON`; only the body read budget applies.
+Result: `{"status": 200, "body": "..."}`. `WithMaxResponseBody` caps the **body field** budget in probe mode (default 512KB); final wire JSON `{"status":N,"body":"..."}` may be slightly larger due to envelope overhead (~27 bytes). Responses larger than the body limit return **`CodeValidationFailed`** (fail-closed — no silent truncate). Probe tools do **not** use the final JSON wire limit; only the body read budget applies.
 
 ## Library mode (without tools)
 

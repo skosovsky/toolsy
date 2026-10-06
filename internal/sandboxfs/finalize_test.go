@@ -18,7 +18,7 @@ func TestFinalizeOrInterrupt_TimeoutOverOverflow(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
-	time.Sleep(2 * time.Millisecond)
+	<-ctx.Done()
 
 	stdout := NewCappedBuffer("stdout", 10)
 	_, _ = stdout.Write([]byte(strings.Repeat("x", 11)))

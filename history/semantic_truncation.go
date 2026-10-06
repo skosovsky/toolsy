@@ -8,6 +8,9 @@ import (
 )
 
 // TokenCounter counts token usage for a history snapshot.
+// Count must treat the input as read-only and must not retain its backing array
+// after returning: candidate storage may be reused between calls. Counts need
+// not be additive or monotonic across different snapshots.
 type TokenCounter[T any] interface {
 	Count(ctx context.Context, history []T) (int, error)
 }
@@ -59,8 +62,6 @@ type SemanticTruncationReport struct {
 // The function is pure at slice-structure level:
 //   - if no changes are needed, it may return the original history slice;
 //   - if changes are applied, it allocates a new backing array for the returned slice.
-//
-//nolint:funlen // Linear orchestration of validation, summary attempt, and mechanical fallback.
 func ApplySemanticTruncation[T any](
 	ctx context.Context,
 	history []T,
@@ -116,17 +117,6 @@ func ApplySemanticTruncation[T any](
 	}
 
 	safeBoundaries := computeSafeBoundaries(history, protectedEnd, inspector)
-	mechBoundary, mechTokensAfter, err := findMechanicalBoundary(
-		ctx,
-		history,
-		protectedPrefix,
-		safeBoundaries,
-		maxTokens,
-		counter,
-	)
-	if err != nil {
-		return nil, report, err
-	}
 
 	summaryBoundary := chooseSummaryBoundary(
 		safeBoundaries,
@@ -154,6 +144,15 @@ func ApplySemanticTruncation[T any](
 		if done {
 			return summaryOut, report, nil
 		}
+	}
+
+	// Only scan the original candidates if semantic compression did not produce
+	// an output. A successful summary needs no mechanical scan of the original.
+	mechBoundary, mechTokensAfter, err := findMechanicalBoundary(
+		ctx, history, protectedPrefix, safeBoundaries, maxTokens, counter, beforeTokens,
+	)
+	if err != nil {
+		return nil, report, err
 	}
 
 	// Fallback: boundary-safe mechanical truncation on original history.
@@ -219,6 +218,7 @@ func trySummaryTruncation[T any](
 		postSafe,
 		maxTokens,
 		counter,
+		summaryTokens,
 	)
 	if postErr != nil {
 		return nil, false, postErr
@@ -311,11 +311,26 @@ func findMechanicalBoundary[T any](
 	safeBoundaries []int,
 	maxTokens int,
 	counter TokenCounter[T],
+	fullTokens int,
 ) (int, int, error) {
+	// Token counts need not be additive or monotonic for a host tokenizer.
+	// Preserve exact first-fit semantics, but reuse one snapshot buffer instead
+	// of allocating a full candidate for every boundary.
+	candidate := make([]T, len(history))
+	copy(candidate, protectedPrefix)
 	for _, b := range safeBoundaries {
-		suffix := history[b:]
-		candidate := joinSegments(protectedPrefix, nil, suffix)
-		toks, countErr := counter.Count(ctx, candidate)
+		if b == len(protectedPrefix) {
+			if fullTokens <= maxTokens {
+				return b, fullTokens, nil
+			}
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return 0, 0, fmt.Errorf("toolsy/history: count tokens for mechanical candidate: %w", err)
+		}
+		length := len(protectedPrefix) + len(history) - b
+		copy(candidate[len(protectedPrefix):length], history[b:])
+		toks, countErr := counter.Count(ctx, candidate[:length])
 		if countErr != nil {
 			return 0, 0, fmt.Errorf("toolsy/history: count tokens for mechanical candidate: %w", countErr)
 		}

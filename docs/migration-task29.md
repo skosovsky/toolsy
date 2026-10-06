@@ -56,7 +56,7 @@ All text/JSON toolkits support host-controlled output shaping:
 
 Validator-only mode validates the default tool wire envelope (exported types: `web.SearchWireResult`, `web.ScrapeWireResult`, `rag.SearchMarkdownWire`, `rag.SearchDocumentsWire`, `timetool.CurrentResult`, `timetool.CalculateResult`, `sqltool.InspectResult`, `sqltool.ExecuteResult`, `document.ExtractWireResult`), not raw slices/strings. Use `github.com/skosovsky/toolsy/internal/format.ApplyWithEnvelope` when adding new toolkits.
 
-When a byte budget is configured, `ApplyWithEnvelope` caps **final wire JSON** via `format.CapWireJSON` (including after custom formatters).
+Current contract: when a byte budget is configured, `ApplyWithEnvelope` validates the complete serialized JSON size, including custom formatters. Oversized results return a typed limit error without emitting JSON.
 
 **RAG validator-only:** default `ShapeMarkdown` validates `SearchMarkdownWire` (`{"results": "..."}`). Use `WithResultShape(ShapeDocumentsJSON)` for `SearchDocumentsWire`.
 
@@ -98,7 +98,7 @@ Semantic suffixes (`ContractsTruncationSuffix`, `SQLRowsTruncationSuffix`, `Sear
 
 ### Wire byte budget (tool paths)
 
-`WithMax*Bytes` options on rag, web, document, sqltool inspect set the **final wire JSON** size. Transport reads are fail-closed; `format.CapWireJSON` may add `\n[Truncated]` once on the wire envelope. Semantic row/cell caps on execute remain separate from wire budget.
+`WithMax*Bytes` options on rag, web, document, sqltool inspect set the **final wire JSON** size. Transport reads and final encoded JSON size checks are fail-closed; serialized JSON is never sliced. Semantic row/cell caps on execute remain separate from wire budget.
 
 `httptool` probe tools return `CodeValidationFailed` when the response exceeds `maxResponseBody` (no silent body truncate). Library `web.ScrapePage` uses fail-closed HTML read; raise budget with `WithMaxPageBytes`.
 

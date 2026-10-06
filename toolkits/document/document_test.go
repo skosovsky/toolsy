@@ -633,7 +633,7 @@ func TestAsTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tool.Execute(
 			context.Background(),
@@ -645,7 +645,7 @@ func TestAsTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 50+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestAsTool_RemoteURL_WithFormatterAndValidator(t *testing.T) {
@@ -685,7 +685,8 @@ func TestAsTool_RemoteURL_WithFormatterAndValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 50+len(textprocessor.TruncationSuffix)+2)
+	require.LessOrEqual(t, len(wire), 50)
+	require.True(t, json.Valid(wire))
 }
 
 func TestExtractCSV_WireCapSingleTruncSuffix(t *testing.T) {
@@ -708,8 +709,9 @@ func TestExtractCSV_WireCapSingleTruncSuffix(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 250+len(textprocessor.TruncationSuffix)+2)
-	require.LessOrEqual(t, strings.Count(string(wire), "[Truncated]"), 1)
+	require.LessOrEqual(t, len(wire), 250)
+	require.True(t, json.Valid(wire))
+	require.NotContains(t, string(wire), "[Truncated]")
 	var payload ExtractWireResult
 	require.NoError(t, json.Unmarshal(wire, &payload))
 	require.NotContains(t, payload.Text, "[Truncated]")
@@ -735,7 +737,7 @@ func TestAsTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 	)
 	require.NoError(t, err)
 	var wire []byte
-	require.NoError(
+	require.Error(
 		t,
 		tool.Execute(
 			context.Background(),
@@ -747,7 +749,7 @@ func TestAsTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 80+len(textprocessor.TruncationSuffix)+2)
+	require.Empty(t, wire)
 }
 
 func TestAsTool_WithHostResultValidator_Reject(t *testing.T) {

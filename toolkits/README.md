@@ -31,18 +31,18 @@ timetool.AsTools(
 
 Supported in: `timetool` (`WithResultFormatter`, `WithCalculateResultFormatter`), `web` (`WithSearchFormatter`, `WithScrapeFormatter`), `rag`, `sqltool` (`WithExecuteResultFormatter`, `WithInspectResultFormatter`), `document`. `fstool` is tool-mode only (no library exports).
 
-When a byte budget option is set (`WithMaxBytes`, `WithMaxPageBytes`, `WithMaxSearchBytes`, `WithMaxSchemaBytes`, sqltool row/cell limits), it applies to **final wire JSON** (`github.com/skosovsky/toolsy/internal/format` — `MarshalWireCap` / `ApplyWithEnvelope` + `CapWireJSON`), including default tool paths without a formatter. **Exception:** `httptool` probe (`http_get` / `http_post`) caps only the **body field** via `ReadBodyLimited`, not `CapWireJSON` — see Probe tier below.
+Wire byte budgets apply to the complete serialized JSON via `internal/format.MarshalWireCap` or `ApplyWithEnvelope`. Oversized JSON returns `CodeValidationFailed` wrapping `format.WireLimitError`; no result is emitted. Text content limits may be applied before serialization. Probe HTTP tools limit the body field separately.
 
 ### Byte budget and suffix taxonomy
 
 | Tier           | Where                                                   | Suffix                                                                                    | Notes                                                                            |
 | -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Wire**       | `internal/format.CapWireJSON` on tool paths             | `\n[Truncated]` (`textprocessor.TruncationSuffix`)                                        | One user-visible suffix per tool response                                        |
+| **Wire** | `internal/format.ValidateWireJSON` | No suffix | Rejects oversized serialized JSON without modifying it |
 | **Semantic**   | sqltool rows/cells, web search hit list                 | `SQLRowsTruncationSuffix`, `SQLCellTruncationSuffix`, `SearchResultsTruncationSuffix`     | Domain limits (rows, cells, hits); independent of wire cap                       |
 | **DoS / read** | HTML scrape, httptool probe, document/fstool wire tools | fail-closed (`ReadLimitedBytes` / `ReadBodyLimited`); display tier uses `ReadAndTruncate` | Memory safety; probe tier uses body-field budget; envelope tools use content cap |
 | **Probe**      | `httptool.AsTools` DTO                                  | limit → validation error in tool mode                                                     | Status in JSON; separate from toolkit wire cap                                   |
 
-Content pre-cap: `document` parsers and `rag` JSON shape (`capDocumentsForWire`) fail-closed when results cannot fit the byte budget; wire marshal may still add `\n[Truncated]` via `internal/format.CapWireJSON`.
+Content pre-caps in `document` and RAG JSON shape may reduce input before serialization. The complete encoded result must still fit the wire budget; otherwise no success result is emitted.
 
 ### Default transport read budgets (toolkits)
 

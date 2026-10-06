@@ -328,3 +328,82 @@ func TestApplySemanticTruncation_ChangedOutputGetsNewBackingArray(t *testing.T) 
 	assert.NotSame(t, &history[0], &out[0], "changed output must use a new backing array")
 	assert.Equal(t, original, history, "input history must stay unchanged")
 }
+
+func TestApplySemanticTruncation_SuccessfulSummaryDoesNotScanOriginalSuffixes(t *testing.T) {
+	// Arrange: a long history whose semantic summary already fits.
+	history := []testMessage{msg("system", "regular", "sys", 2)}
+	for range 100 {
+		history = append(
+			history,
+			msg("assistant", "tool_call", "call", 4, "id"),
+			msg("tool", "tool_result", "result", 4, "id"),
+		)
+	}
+	original := cloneSlice(history)
+	counter := &benchmarkHistoryCounter{}
+	summarizer := testSummarizer{fn: func(_ context.Context, _ []testMessage) ([]testMessage, error) {
+		return []testMessage{msg("assistant", "summary", "summary", 2)}, nil
+	}}
+
+	// Act.
+	out, report, err := ApplySemanticTruncation(
+		context.Background(),
+		history,
+		12,
+		counter,
+		summarizer,
+		testInspector{},
+		WithMinRecentMessages[testMessage](2),
+	)
+
+	// Assert: only the original, protected prefix and final summary are counted.
+	require.NoError(t, err)
+	assert.Equal(t, 3, counter.calls)
+	assert.Equal(t, original, history)
+	assert.True(t, report.SummarizationApplied)
+	assert.False(t, report.MechanicalTruncationUsed)
+	require.Len(t, out, 4)
+	assert.Equal(t, "tool_call", out[2].Kind)
+	assert.Equal(t, "tool_result", out[3].Kind)
+}
+
+type nonMonotonicCounter struct{ lengths []int }
+
+func (c *nonMonotonicCounter) Count(_ context.Context, history []testMessage) (int, error) {
+	c.lengths = append(c.lengths, len(history))
+	switch len(history) {
+	case 6:
+		return 9, nil
+	case 5:
+		return 11, nil
+	case 4:
+		return 4, nil
+	default:
+		return len(history), nil
+	}
+}
+
+func TestApplySemanticTruncation_NonMonotonicCounterPreservesFirstFit(t *testing.T) {
+	// Arrange: removing a message can increase a host tokenizer's count.
+	history := []testMessage{
+		msg("user", "regular", "0", 1), msg("user", "regular", "1", 1),
+		msg("assistant", "tool_call", "call", 1, "id"), msg("tool", "tool_result", "result", 1, "id"),
+		msg("user", "regular", "4", 1), msg("assistant", "regular", "5", 1),
+	}
+	original := cloneSlice(history)
+	counter := &nonMonotonicCounter{}
+	summarizer := testSummarizer{fn: func(_ context.Context, _ []testMessage) ([]testMessage, error) {
+		return nil, errors.New("unavailable")
+	}}
+
+	// Act.
+	out, report, err := ApplySemanticTruncation(context.Background(), history, 5, counter, summarizer, testInspector{})
+
+	// Assert: first fitting safe boundary keeps the complete tool pair.
+	require.NoError(t, err)
+	assert.Equal(t, []int{6, 0, 5, 4}, counter.lengths)
+	assert.Equal(t, history[2:], out)
+	assert.Equal(t, original, history)
+	assert.True(t, report.MechanicalTruncationUsed)
+	assert.Equal(t, 4, report.TokensAfter)
+}

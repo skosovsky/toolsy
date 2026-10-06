@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 func TestApply_ValidatorOnly(t *testing.T) {
@@ -92,40 +91,71 @@ func TestWireContentCap(t *testing.T) {
 	require.Equal(t, 5, WireContentCap(20, 15))
 }
 
-func TestCapWireJSON_TruncatesOversizedWire(t *testing.T) {
-	raw := json.RawMessage(`{"payload":"` + strings.Repeat("x", 200) + `"}`)
-	capped := CapWireJSON(raw, 50, textprocessor.TruncationSuffix)
-	require.LessOrEqual(t, len(capped), 50+len(textprocessor.TruncationSuffix)+2)
-	require.Contains(t, string(capped), "[Truncated]")
+func TestValidateWireJSON_BoundsAndValidity(t *testing.T) {
+	for _, value := range []any{"Привет", "\"\n<>", map[string]any{"nested": []any{1, true, "text"}}, nil} {
+		// Arrange
+		raw, err := json.Marshal(value)
+		require.NoError(t, err)
+		for _, cap := range []int{0, 1, len(raw) - 1, len(raw), len(raw) + 1} {
+			// Act
+			got, err := ValidateWireJSON(raw, cap)
+			// Assert
+			if cap > 0 && len(raw) > cap {
+				require.Error(t, err)
+				require.Nil(t, got)
+				var limit *WireLimitError
+				require.ErrorAs(t, err, &limit)
+				require.ErrorIs(t, err, toolsy.ErrValidation)
+				require.Equal(t, len(raw), limit.Size)
+				require.Equal(t, cap, limit.Limit)
+			} else {
+				require.NoError(t, err)
+				require.True(t, json.Valid(got))
+				require.JSONEq(t, string(raw), string(got))
+				require.Len(t, got, len(raw))
+			}
+		}
+	}
+}
+
+func TestValidateWireJSON_Invalid(t *testing.T) {
+	// Arrange
+	raw := json.RawMessage(`{"bad":`)
+	// Act
+	got, err := ValidateWireJSON(raw, 0)
+	// Assert
+	require.Error(t, err)
+	require.Nil(t, got)
 }
 
 func TestApplyWithEnvelope_MaxWireBytes(t *testing.T) {
-	raw, err := ApplyWithEnvelope(
-		"hello",
-		func(s string) map[string]string { return map[string]string{"text": s} },
-		func(string) (any, error) {
-			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
-		},
-		nil,
-		80,
-	)
-	require.NoError(t, err)
-	require.LessOrEqual(t, len(raw), 80+len(textprocessor.TruncationSuffix)+2)
+	// Arrange
+	value := strings.Repeat("z", 500)
+	// Act
+	raw, err := ApplyWithEnvelope(value, func(s string) string { return s }, nil, nil, 80)
+	// Assert
+	require.Error(t, err)
+	require.Nil(t, raw)
+	var limit *WireLimitError
+	require.ErrorAs(t, err, &limit)
 }
 
-func TestMarshalWireCap_TruncatesWire(t *testing.T) {
-	raw, err := MarshalWireCap(map[string]string{"blob": strings.Repeat("a", 200)}, 40)
-	require.NoError(t, err)
-	require.LessOrEqual(t, len(raw), 40+len(textprocessor.TruncationSuffix)+2)
+func TestMarshalWireCap_RejectsOversizedWire(t *testing.T) {
+	// Arrange
+	value := map[string]string{"blob": strings.Repeat("a", 200)}
+	// Act
+	raw, err := MarshalWireCap(value, 40)
+	// Assert
+	require.Error(t, err)
+	require.Nil(t, raw)
 }
 
 func TestJSONResult_MarshalJSON_InvalidWire(t *testing.T) {
 	raw := json.RawMessage(`{"key":"value`)
 	jr := JSONResult{Raw: raw}
 	data, err := jr.MarshalJSON()
-	require.NoError(t, err)
-	require.Equal(t, string(raw), string(data))
-	require.False(t, json.Valid(data))
+	require.Error(t, err)
+	require.Nil(t, data)
 }
 
 func TestJSONResult_MarshalJSON_Nil(t *testing.T) {

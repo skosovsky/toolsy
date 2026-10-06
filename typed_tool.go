@@ -142,7 +142,7 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 	if err != nil {
 		return nil, err
 	}
-	if len(cfg.Manifest.OutputSchema) == 0 {
+	if len(cfg.Manifest.OutputSchema) == 0 && !hasCustomResultEncoding[TResult]() {
 		outSchema, genErr := generateOutputSchema[TResult](cfg.Schema)
 		if genErr != nil {
 			return nil, genErr
@@ -150,6 +150,10 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 		cfg.Manifest.OutputSchema = outSchema
 	}
 	manifest := buildToolManifest(spec.Name, spec.Description, ext.Schema(), cfg.Manifest)
+	outputValidator, err := compileResultContract(&manifest)
+	if err != nil {
+		return nil, err
+	}
 
 	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
 		bound, callCtx, err := prepareTypedToolCall[TSubject, TScope, TArgs](
@@ -165,13 +169,22 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 		if err != nil {
 			return err
 		}
-		return ExecutePrepared(ctx, env, manifest, input, bound.Value, func(_ ToolInput, out func(Chunk) error) error {
-			res, handlerErr := spec.Handler(ctx, callCtx, env, cloneValidatedArgs(bound))
-			if handlerErr != nil {
-				return wrapHandlerError(handlerErr)
-			}
-			return emitTypedToolResult(res, spec.ResultValidator, spec.EffectValidator, spec.Postcondition, out)
-		}, yield)
+		return executePreparedResult(
+			ctx,
+			env,
+			manifest,
+			input,
+			bound.Value,
+			outputValidator,
+			func(_ ToolInput, out func(Chunk) error) error {
+				res, handlerErr := spec.Handler(ctx, callCtx, env, cloneValidatedArgs(bound))
+				if handlerErr != nil {
+					return wrapHandlerError(handlerErr)
+				}
+				return emitTypedToolResult(res, spec.ResultValidator, spec.EffectValidator, spec.Postcondition, out)
+			},
+			yield,
+		)
 	}
 	return &tool{manifest: manifest, execute: execute}, nil
 }

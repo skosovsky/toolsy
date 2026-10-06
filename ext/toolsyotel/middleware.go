@@ -57,14 +57,14 @@ type softErrorState struct {
 	text string
 }
 
-func (s *softErrorState) recordFromChunk(c toolsy.Chunk) {
+func (s *softErrorState) recordFromChunk(c toolsy.Chunk, text string) {
 	if !c.IsError {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.flag = true
-	if text := toolsy.ErrorChunkSummaryText(c, nil); text != "" {
+	if text != "" {
 		s.text = text
 	}
 }
@@ -86,7 +86,6 @@ func (t *tracingTool) toolName() string {
 func (t *tracingTool) spanStartAttributes(
 	toolName string,
 	input toolsy.ToolInput,
-	maxPayload int,
 ) []attribute.KeyValue {
 	attrs := []attribute.KeyValue{
 		attribute.String("gen_ai.tool.name", toolName),
@@ -99,7 +98,7 @@ func (t *tracingTool) spanStartAttributes(
 	if !t.cfg.contentCapture {
 		return attrs
 	}
-	argsText := truncatePayload(string(input.ArgsJSON), maxPayload)
+	argsText := t.cfg.captured(ContentInput, string(input.ArgsJSON))
 	return append(attrs,
 		attribute.String("langfuse.observation.input", argsText),
 		attribute.String("gen_ai.tool.call.arguments", argsText),
@@ -110,15 +109,14 @@ func (t *tracingTool) finalizeExecuteSpan(
 	span trace.Span,
 	execErr error,
 	outAcc *payloadAccumulator,
-	maxPayload int,
 	soft *softErrorState,
 ) {
-	t.setOutputAttributes(span, execErr, outAcc, maxPayload)
+	t.setOutputAttributes(span, execErr, outAcc)
 	hasSoftError, softText := soft.snapshot()
-	applySpanStatusFromExec(span, execErr, hasSoftError, softText)
+	t.applySpanStatusFromExec(span, execErr, hasSoftError, softText)
 }
 
-func applySpanStatusFromExec(span trace.Span, execErr error, hasSoftError bool, softText string) {
+func (t *tracingTool) applySpanStatusFromExec(span trace.Span, execErr error, hasSoftError bool, softText string) {
 	switch {
 	case execErr == nil && hasSoftError:
 		span.SetAttributes(attribute.Bool("gen_ai.tool.soft_error", true))
@@ -135,8 +133,7 @@ func applySpanStatusFromExec(span trace.Span, execErr error, hasSoftError bool, 
 		span.SetAttributes(attribute.Bool("gen_ai.tool.stream_aborted", true))
 		span.AddEvent("tool.stream_aborted")
 	default:
-		span.RecordError(execErr)
-		span.SetStatus(codes.Error, execErr.Error())
+		t.cfg.recordFailure(span, execErr, ContentError, "tool execution failed")
 	}
 }
 
@@ -149,13 +146,17 @@ func (t *tracingTool) wrapYield(
 		if err := yield(c); err != nil {
 			return err
 		}
-		soft.recordFromChunk(c)
-		if outAcc != nil {
+		var text string
+		if t.cfg.contentCapture {
 			if c.IsError {
-				outAcc.append(toolsy.ErrorChunkSummaryText(c, nil))
+				text = t.cfg.captured(ContentError, toolsy.ErrorChunkSummaryText(c, nil))
 			} else {
-				outAcc.append(chunkPayloadText(c))
+				text = t.cfg.captured(ContentOutput, chunkPayloadText(c))
 			}
+		}
+		soft.recordFromChunk(c, text)
+		if outAcc != nil {
+			outAcc.append(text)
 		}
 		return nil
 	}
@@ -179,26 +180,26 @@ func (t *tracingTool) Execute(
 	ctx, span := t.tracer.Start(
 		ctx,
 		"tool.execute."+toolName,
-		trace.WithAttributes(t.spanStartAttributes(toolName, input, maxPayload)...),
+		trace.WithAttributes(t.spanStartAttributes(toolName, input)...),
 	)
-	defer span.End()
-
 	var execErr error
 	defer func() {
 		if p := recover(); p != nil {
-			panicErr := fmt.Errorf("panic: %v", p)
-			span.RecordError(panicErr)
-			span.SetStatus(codes.Error, panicErr.Error())
+			t.cfg.recordFailure(span, p, ContentPanic, "tool execution panicked")
+			// End before rethrowing: the OTel SDK End implementation observes
+			// active panics and otherwise records their raw values automatically.
+			span.End()
 			panic(p)
 		}
-		t.finalizeExecuteSpan(span, execErr, outAcc, maxPayload, &soft)
+		t.finalizeExecuteSpan(span, execErr, outAcc, &soft)
+		span.End()
 	}()
 
 	execErr = t.next.Execute(ctx, run, input, t.wrapYield(yield, &soft, outAcc))
 	return execErr
 }
 
-func (t *tracingTool) setOutputAttributes(span trace.Span, execErr error, outAcc *payloadAccumulator, maxPayload int) {
+func (t *tracingTool) setOutputAttributes(span trace.Span, execErr error, outAcc *payloadAccumulator) {
 	if !t.cfg.contentCapture {
 		return
 	}
@@ -206,7 +207,7 @@ func (t *tracingTool) setOutputAttributes(span trace.Span, execErr error, outAcc
 	case execErr != nil:
 		span.SetAttributes(attribute.String(
 			"langfuse.observation.output",
-			truncatePayload(execErr.Error(), maxPayload),
+			t.cfg.captured(ContentError, execErr.Error()),
 		))
 	case outAcc != nil:
 		output := outAcc.String()
@@ -218,3 +219,22 @@ func (t *tracingTool) setOutputAttributes(span trace.Span, execErr error, outAcc
 }
 
 var _ toolsy.Tool = (*tracingTool)(nil)
+
+// recordFailure deliberately avoids RecordError: it serializes arbitrary error
+// text into exception.message regardless of the capture policy.
+func (c config) recordFailure(span trace.Span, failure any, kind ContentKind, status string) {
+	attrs := []attribute.KeyValue{
+		attribute.String("exception.type", truncatePayload(fmt.Sprintf("%T", failure), c.effectiveMaxPayloadSize())),
+	}
+	if c.contentCapture {
+		var text string
+		if err, ok := failure.(error); ok {
+			text = err.Error()
+		} else {
+			text = fmt.Sprint(failure)
+		}
+		attrs = append(attrs, attribute.String("exception.message", c.captured(kind, text)))
+	}
+	span.AddEvent("exception", trace.WithAttributes(attrs...))
+	span.SetStatus(codes.Error, status)
+}

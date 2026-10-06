@@ -6,7 +6,7 @@ import "github.com/skosovsky/toolsy/internal/format"
 const scrapeWireJSONOverhead = 18
 
 // scrapeContentByteCap returns the HTML/markdown content limit derived from the wire byte budget.
-// Wire truncation (with textprocessor.TruncationSuffix) applies only on final JSON marshal (tool path).
+// Final JSON encoding rejects results that exceed the complete wire budget.
 func scrapeContentByteCap(maxWireBytes int) int {
 	return format.WireContentCap(maxWireBytes, scrapeWireJSONOverhead)
 }

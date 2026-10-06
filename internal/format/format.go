@@ -6,11 +6,10 @@ import (
 	"fmt"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 // WireContentCap returns the content byte budget derived from a wire JSON budget and fixed envelope overhead.
-// Use when transport reads must leave room for JSON field names and envelope bytes (before CapWireJSON).
+// Use when transport reads must leave room for JSON field names and envelope bytes (before ValidateWireJSON).
 func WireContentCap(maxWireBytes, envelopeOverhead int) int {
 	if maxWireBytes <= envelopeOverhead {
 		return maxWireBytes
@@ -28,7 +27,7 @@ func Apply[T any](
 }
 
 // ApplyWithEnvelope runs formatter on value (if set), otherwise envelope(value), then validator, then JSON marshal.
-// When maxWireBytes > 0, the marshaled wire JSON is UTF-8 truncated with textprocessor.TruncationSuffix.
+// A positive maxWireBytes rejects oversized JSON without modifying its representation.
 // Use when validator-only mode must validate the default tool wire shape, not the raw typed value.
 func ApplyWithEnvelope[T any, E any](
 	value T,
@@ -56,16 +55,16 @@ func ApplyWithEnvelope[T any, E any](
 	if err != nil {
 		return nil, toolsy.NewInternalError(fmt.Errorf("internal/format: marshal result: %w", err))
 	}
-	return CapWireJSON(data, maxWireBytes, textprocessor.TruncationSuffix), nil
+	return ValidateWireJSON(data, maxWireBytes)
 }
 
-// MarshalWireCap marshals v to JSON and caps the wire bytes to maxWireBytes.
+// MarshalWireCap marshals v and rejects JSON exceeding a positive wire byte budget.
 func MarshalWireCap(v any, maxWireBytes int) (json.RawMessage, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, toolsy.NewInternalError(fmt.Errorf("internal/format: marshal result: %w", err))
 	}
-	return CapWireJSON(data, maxWireBytes, textprocessor.TruncationSuffix), nil
+	return ValidateWireJSON(data, maxWireBytes)
 }
 
 // ToJSONResult marshals v with an optional wire byte budget into a JSONResult.
@@ -77,17 +76,35 @@ func ToJSONResult(v any, maxWireBytes int) (JSONResult, error) {
 	return JSONResult{Raw: raw}, nil
 }
 
-// CapWireJSON truncates marshaled wire JSON to maxBytes with a UTF-8 safe suffix.
-// When maxBytes <= 0 or len(raw) <= maxBytes, raw is returned unchanged.
-func CapWireJSON(raw json.RawMessage, maxBytes int, suffix string) json.RawMessage {
-	if maxBytes <= 0 || len(raw) <= maxBytes {
-		return raw
+// WireLimitError reports the exact encoded size and configured wire limit.
+// Callers can use [errors.As] through the returned ToolError to inspect these bounds.
+type WireLimitError struct {
+	Size  int
+	Limit int
+}
+
+func (e *WireLimitError) Error() string {
+	return fmt.Sprintf("JSON result exceeds wire byte limit: %d > %d", e.Size, e.Limit)
+}
+
+// Unwrap preserves the validation error category for oversized results.
+func (e *WireLimitError) Unwrap() error {
+	return toolsy.ErrValidation
+}
+
+// ValidateWireJSON rejects invalid or oversized JSON. A nonpositive cap is unlimited.
+// It never slices serialized JSON or manufactures a replacement result.
+func ValidateWireJSON(raw json.RawMessage, maxBytes int) (json.RawMessage, error) {
+	if !json.Valid(raw) {
+		return nil, toolsy.NewInternalError(errors.New("invalid JSON result"))
 	}
-	if suffix == "" {
-		suffix = textprocessor.TruncationSuffix
+	if maxBytes > 0 && len(raw) > maxBytes {
+		limitErr := &WireLimitError{Size: len(raw), Limit: maxBytes}
+		err := toolsy.NewValidationError(limitErr.Error())
+		err.Err = limitErr
+		return nil, err
 	}
-	capped := textprocessor.TruncateBytesToValidUTF8String(raw, maxBytes, suffix)
-	return json.RawMessage(capped)
+	return raw, nil
 }
 
 func validationError(err error) error {
@@ -108,10 +125,10 @@ func (j JSONResult) WireJSON() json.RawMessage {
 }
 
 // MarshalJSON implements [json.Marshaler].
-// Raw wire bytes are returned as-is (valid or truncated); nil Raw encodes as JSON null.
+// Invalid JSON is rejected; nil Raw encodes as JSON null.
 func (j JSONResult) MarshalJSON() ([]byte, error) {
 	if j.Raw == nil {
 		return []byte("null"), nil
 	}
-	return j.Raw, nil
+	return ValidateWireJSON(j.Raw, 0)
 }

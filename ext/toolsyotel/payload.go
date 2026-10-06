@@ -10,12 +10,15 @@ import (
 
 const payloadTruncatedSuffix = "... [truncated]"
 
-// truncatePayload limits s to at most limit bytes of content; when truncated, appends payloadTruncatedSuffix.
+// truncatePayload includes the marker within the byte limit and preserves UTF-8.
 func truncatePayload(s string, limit int) string {
 	if limit <= 0 || len(s) <= limit {
 		return s
 	}
-	prefix := utf8SafePrefix(s, limit)
+	if limit < len(payloadTruncatedSuffix) {
+		return utf8SafePrefix(s, limit)
+	}
+	prefix := utf8SafePrefix(s, limit-len(payloadTruncatedSuffix))
 	return prefix + payloadTruncatedSuffix
 }
 
@@ -78,7 +81,9 @@ func (a *payloadAccumulator) writeSuffixLocked() {
 		return
 	}
 	a.truncated = true
-	a.builder.WriteString(payloadTruncatedSuffix)
+	bounded := truncatePayload(a.builder.String()+payloadTruncatedSuffix, a.maxSize)
+	a.builder.Reset()
+	a.builder.WriteString(bounded)
 }
 
 func (a *payloadAccumulator) String() string {

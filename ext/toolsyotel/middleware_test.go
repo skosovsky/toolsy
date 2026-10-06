@@ -211,10 +211,7 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, soft.AsBool())
 
-	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
-	require.True(t, ok)
-	assert.Contains(t, softText.AsString(), "malformed error chunk")
-	assert.Contains(t, softText.AsString(), "budget exceeded")
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.soft_error_text"))
 }
 
 func TestWithTracing_SoftErrorChunkViaRegistry(t *testing.T) {
@@ -249,10 +246,7 @@ func TestWithTracing_SoftErrorChunkViaRegistry(t *testing.T) {
 	span := spans[0]
 	assert.Equal(t, codes.Error, span.Status().Code)
 
-	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
-	require.True(t, ok)
-	assert.Contains(t, softText.AsString(), "malformed error chunk")
-	assert.Contains(t, softText.AsString(), "budget exceeded")
+	assert.False(t, hasAttrKey(span, "gen_ai.tool.soft_error_text"))
 }
 
 func TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry(t *testing.T) {
@@ -477,17 +471,16 @@ func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
 
 	span := rec.Ended()[0]
 	limit := 10
-	suffixLen := len("... [truncated]")
 
 	input, ok := attrValue(span, "langfuse.observation.input")
 	require.True(t, ok)
-	assert.Contains(t, input.AsString(), "... [truncated]")
-	assert.LessOrEqual(t, len(input.AsString()), limit+suffixLen)
+	assert.NotEmpty(t, input.AsString())
+	assert.LessOrEqual(t, len(input.AsString()), limit)
 
 	output, ok := attrValue(span, "langfuse.observation.output")
 	require.True(t, ok)
-	assert.Contains(t, output.AsString(), "... [truncated]")
-	assert.LessOrEqual(t, len(output.AsString()), limit+suffixLen)
+	assert.NotEmpty(t, output.AsString())
+	assert.LessOrEqual(t, len(output.AsString()), limit)
 }
 
 func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
@@ -518,8 +511,8 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 	span := rec.Ended()[0]
 	output, ok := attrValue(span, "langfuse.observation.output")
 	require.True(t, ok)
-	assert.Contains(t, output.AsString(), "... [truncated]")
-	assert.LessOrEqual(t, len(output.AsString()), 10+len("... [truncated]"))
+	assert.NotEmpty(t, output.AsString())
+	assert.LessOrEqual(t, len(output.AsString()), 10)
 	assert.False(t, hasAttrKey(span, "gen_ai.tool.call.result"))
 }
 

@@ -44,8 +44,7 @@ func RecordSemanticTruncation(
 
 	switch {
 	case execErr != nil:
-		span.RecordError(execErr)
-		span.SetStatus(codes.Error, execErr.Error())
+		cfg.recordFailure(span, execErr, ContentError, "semantic truncation failed")
 	case report.SummarizerFailed:
 		span.SetStatus(codes.Error, "semantic truncation summarizer failed")
 	default:

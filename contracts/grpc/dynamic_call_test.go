@@ -1,18 +1,15 @@
 package grpc
 
 import (
-	"bytes"
 	"context"
 	"net"
 	"testing"
-	"unicode/utf8"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	health "google.golang.org/grpc/health"
 	grpc_health_v1 "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/test/bufconn"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -23,7 +20,7 @@ import (
 
 const testBufconnSize = 1024 * 1024
 
-func TestInvokeRPCTruncatesOversizedResponse(t *testing.T) {
+func TestInvokeRPCRejectsOversizedResponse(t *testing.T) {
 	listener := bufconn.Listen(testBufconnSize)
 	server := grpc.NewServer()
 	healthServer := health.NewServer()
@@ -69,26 +66,20 @@ func TestInvokeRPCTruncatesOversizedResponse(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil {
-		t.Fatalf("invokeRPC returned error: %v", err)
+	// Assert: oversized responses never yield a success chunk.
+	if err == nil {
+		t.Fatal("expected wire limit error")
 	}
-
-	full, err := protojson.Marshal(&grpc_health_v1.HealthCheckResponse{
-		Status: grpc_health_v1.HealthCheckResponse_SERVING,
-	})
-	if err != nil {
-		t.Fatalf("marshal response: %v", err)
+	te, ok := toolsy.AsToolError(err)
+	if !ok || te.Code != toolsy.CodeValidationFailed {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := append(append([]byte(nil), full[:5]...), []byte(truncationSuffix)...)
-	if !bytes.Equal(got.Data, expected) {
-		t.Fatalf("unexpected body: got %q want %q", got.Data, expected)
-	}
-	if got.Event != toolsy.EventResult {
-		t.Fatalf("unexpected event: %s", got.Event)
+	if got.Event != "" {
+		t.Fatalf("unexpected result: %+v", got)
 	}
 }
 
-func TestInvokeRPCTruncatesOversizedResponseUTF8Safely(t *testing.T) {
+func TestInvokeRPCRejectsOversizedResponseUTF8Safely(t *testing.T) {
 	conn, method := newDynamicBufconnMethod(t, "приветмир")
 	defer func() { _ = conn.Close() }()
 
@@ -104,16 +95,12 @@ func TestInvokeRPCTruncatesOversizedResponseUTF8Safely(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil {
-		t.Fatalf("invokeRPC returned error: %v", err)
+	// Assert: a tiny multibyte budget returns an error, never broken JSON.
+	if err == nil {
+		t.Fatal("expected wire limit error")
 	}
-
-	if !utf8.Valid(got.Data) {
-		t.Fatalf("response must remain valid UTF-8: %q", got.Data)
-	}
-	expected := []byte(`{"message":"п` + truncationSuffix)
-	if !bytes.Equal(got.Data, expected) {
-		t.Fatalf("unexpected body: got %q want %q", got.Data, expected)
+	if got.Event != "" {
+		t.Fatalf("unexpected result: %+v", got)
 	}
 }
 

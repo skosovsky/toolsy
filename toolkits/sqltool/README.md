@@ -26,7 +26,7 @@ go get github.com/skosovsky/toolsy/toolkits/sqltool
 
 - **MaxRows:** Use `WithMaxRows(n)` to cap returned rows (default 100).
 - **MaxCellBytes:** Use `WithMaxCellBytes(n)` to truncate long cell values and avoid context-window blowup (default 200).
-- **MaxSchemaBytes:** Use `WithMaxSchemaBytes(n)` to cap **inspect** wire JSON (default 512 KiB). Wire truncation uses `textprocessor.TruncationSuffix` once on final JSON via `format.CapWireJSON`.
+- **MaxSchemaBytes:** `WithMaxSchemaBytes(n)` limits complete **inspect** wire JSON (default 512 KiB). Oversized JSON returns `CodeValidationFailed` without a successful result.
 - **Execute caps:** `WithMaxRows` / `WithMaxCellBytes` are **semantic** limits on query result markdown (row/cell suffixes), not a wire byte budget. There is no `WithMaxExecuteBytes`; execute formatter output is not wire-capped unless the host formatter returns a smaller payload.
 - **AllowedTables:** Use `WithAllowedTables([]string{"t1","t2"})` to restrict schema inspection to specific tables.
 - **Dialects:** Supported drivers: `postgres`, `pgx`, `mysql`, `sqlite3`, `sqlite`.
