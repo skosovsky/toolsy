@@ -1,0 +1,46 @@
+package main
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "fmt"
+ "os"
+ "path/filepath"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/exectool"
+ "github.com/skosovsky/toolsy/toolkits/fstool"
+ "github.com/skosovsky/toolsy/adapters/sandbox/starlark"
+ "github.com/skosovsky/toolsy/adapters/sandbox/host"
+)
+func must(err error) { if err != nil { panic(err) } }
+func check(ok bool, msg string) { if !ok { panic(msg) }; fmt.Println("PASS",msg) }
+func call(t toolsy.Tool, args string) map[string]any {
+ var v map[string]any
+ must(t.Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(args)},func(c toolsy.Chunk) error { return json.Unmarshal(c.Data,&v) }))
+ return v
+}
+func main() {
+ p,e:=os.MkdirTemp("","d40-b-probe-"); must(e); defer os.RemoveAll(p)
+ root:=filepath.Join(p,"root"); must(os.Mkdir(root,0700))
+ outside:=filepath.Join(p,"outside"); must(os.WriteFile(outside,[]byte("abcdefgh"),0600)); must(os.Link(outside,filepath.Join(root,"alias")))
+ before,e:=os.Stat(outside); must(e)
+ tools,e:=fstool.AsTools(root); must(e)
+ check(call(tools[1],`{"path":"alias","length":3}`)["content"]=="abc","public hardlink reads outside inode")
+ call(tools[2],`{"path":"alias","content":"UVWXYZ"}`)
+ after,e:=os.Stat(outside); must(e); b,e:=os.ReadFile(outside); must(e)
+ check(os.SameFile(before,after)&&string(b)=="UVWXYZ","public write preserves inode and changes outside alias")
+ check(call(tools[1],`{"path":"alias","offset":3,"length":3}`)["content"]=="XYZ","ranges can combine distinct file versions")
+ delivery:=errors.New("delivery denied")
+ e=tools[2].Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"path":"alias","content":"effect"}`)},func(toolsy.Chunk)error{return delivery})
+ b,readErr:=os.ReadFile(outside); must(readErr)
+ check(errors.Is(e,delivery)&&string(b)=="effect","delivery error does not roll back write")
+ e=tools[1].Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"path":"../outside"}`)},func(toolsy.Chunk)error{return nil})
+ check(e!=nil,"public traversal rejected")
+ star,e:=starlark.New(starlark.Config{MaxExecutionSteps:50}); must(e)
+ sr,e:=star.Run(context.Background(),exectool.RunRequest{Language:"starlark",Code:`x = "x" * 4194304
+print(len(x))`}); must(e)
+ check(sr.ExitCode==0&&sr.Stdout=="4194304\n","50 interpreted steps permit 4MiB single allocation")
+ hs,e:=host.New(host.WithRuntime("sh",host.Runtime{Command:"/bin/sh",ScriptName:"main.sh"})); must(e)
+ hr,e:=hs.Run(context.Background(),exectool.RunRequest{Language:"sh",Code:"cat '"+outside+"'"}); must(e)
+ check(hr.ExitCode==0&&hr.Stdout=="effect","host guest reads file outside workspace")
+}

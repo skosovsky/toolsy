@@ -1,0 +1,5 @@
+toolkits/fstool/doc.go:1:1: text "os.Root" should be replaced with "[os.Root]" to link to stdlib type (godoclint)
+// Package fstool provides root-relative filesystem tools: list directory,
+^
+1 issues:
+* godoclint: 1

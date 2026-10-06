@@ -1,0 +1,14 @@
+=== RUN   TestPublicHardlinkAliasRetainsExistingInode
+--- PASS: TestPublicHardlinkAliasRetainsExistingInode (0.01s)
+=== RUN   TestPublicReadRangesDoNotPinSnapshot
+--- PASS: TestPublicReadRangesDoNotPinSnapshot (0.01s)
+=== RUN   TestPublicHardlinkAliasRetainsExistingInode
+--- PASS: TestPublicHardlinkAliasRetainsExistingInode (0.01s)
+=== RUN   TestPublicReadRangesDoNotPinSnapshot
+--- PASS: TestPublicReadRangesDoNotPinSnapshot (0.01s)
+=== RUN   TestPublicHardlinkAliasRetainsExistingInode
+--- PASS: TestPublicHardlinkAliasRetainsExistingInode (0.01s)
+=== RUN   TestPublicReadRangesDoNotPinSnapshot
+--- PASS: TestPublicReadRangesDoNotPinSnapshot (0.01s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/fstool	1.296s

@@ -1,0 +1,29 @@
+=== RUN   TestPublicHardlinkDeliveryFailureAndReadOnly
+    boundary_test.go:40: outside hardlink mutated in same inode despite result delivery failure; readonly registration permits alias read
+--- PASS: TestPublicHardlinkDeliveryFailureAndReadOnly (0.02s)
+=== RUN   TestPublicMixedVersionRangesAndSymlinkDenial
+    boundary_test.go:58: same pathname returns mixed versions across ranges; outside symlink still denied
+--- PASS: TestPublicMixedVersionRangesAndSymlinkDenial (0.01s)
+=== RUN   TestStarlarkSingleBuiltinAllocationAndHostOutsideRead
+    boundary_test.go:77: 100 Starlark steps allow a 1 MiB builtin allocation; trusted host reads outside request workspace
+--- PASS: TestStarlarkSingleBuiltinAllocationAndHostOutsideRead (0.02s)
+=== RUN   TestPublicHardlinkDeliveryFailureAndReadOnly
+    boundary_test.go:40: outside hardlink mutated in same inode despite result delivery failure; readonly registration permits alias read
+--- PASS: TestPublicHardlinkDeliveryFailureAndReadOnly (0.02s)
+=== RUN   TestPublicMixedVersionRangesAndSymlinkDenial
+    boundary_test.go:58: same pathname returns mixed versions across ranges; outside symlink still denied
+--- PASS: TestPublicMixedVersionRangesAndSymlinkDenial (0.01s)
+=== RUN   TestStarlarkSingleBuiltinAllocationAndHostOutsideRead
+    boundary_test.go:77: 100 Starlark steps allow a 1 MiB builtin allocation; trusted host reads outside request workspace
+--- PASS: TestStarlarkSingleBuiltinAllocationAndHostOutsideRead (0.02s)
+=== RUN   TestPublicHardlinkDeliveryFailureAndReadOnly
+    boundary_test.go:40: outside hardlink mutated in same inode despite result delivery failure; readonly registration permits alias read
+--- PASS: TestPublicHardlinkDeliveryFailureAndReadOnly (0.02s)
+=== RUN   TestPublicMixedVersionRangesAndSymlinkDenial
+    boundary_test.go:58: same pathname returns mixed versions across ranges; outside symlink still denied
+--- PASS: TestPublicMixedVersionRangesAndSymlinkDenial (0.01s)
+=== RUN   TestStarlarkSingleBuiltinAllocationAndHostOutsideRead
+    boundary_test.go:77: 100 Starlark steps allow a 1 MiB builtin allocation; trusted host reads outside request workspace
+--- PASS: TestStarlarkSingleBuiltinAllocationAndHostOutsideRead (0.03s)
+PASS
+ok  	d40acceptance	1.645s

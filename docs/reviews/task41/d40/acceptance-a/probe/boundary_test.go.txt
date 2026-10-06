@@ -1,0 +1,78 @@
+package d40acceptance
+
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "fmt"
+ "os"
+ "path/filepath"
+ "strings"
+ "testing"
+ "time"
+
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/toolkits/fstool"
+ "github.com/skosovsky/toolsy/adapters/sandbox/host"
+ "github.com/skosovsky/toolsy/adapters/sandbox/starlark"
+ "github.com/skosovsky/toolsy/exectool"
+)
+
+func TestPublicHardlinkDeliveryFailureAndReadOnly(t *testing.T) {
+ // Arrange.
+ parent:=t.TempDir(); base:=filepath.Join(parent,"root"); outside:=filepath.Join(parent,"outside")
+ if err:=os.Mkdir(base,0700);err!=nil {t.Fatal(err)}
+ if err:=os.WriteFile(outside,[]byte("old-long-content"),0600);err!=nil {t.Fatal(err)}
+ if err:=os.Link(outside,filepath.Join(base,"alias"));err!=nil {t.Fatal(err)}
+ before,err:=os.Stat(outside);if err!=nil {t.Fatal(err)}
+ tools,err:=fstool.AsTools(base);if err!=nil {t.Fatal(err)}
+ rejected:=errors.New("consumer rejected result")
+ // Act: approved filesystem write reaches inode before result delivery.
+ err=tools[2].Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"path":"alias","content":"new"}`)},func(toolsy.Chunk)error{return rejected})
+ // Assert.
+ if !errors.Is(err,rejected) {t.Fatalf("delivery error = %v",err)}
+ b,err:=os.ReadFile(outside);if err!=nil {t.Fatal(err)}; if string(b)!="new" {t.Fatalf("outside bytes=%q",b)}
+ after,err:=os.Stat(outside);if err!=nil {t.Fatal(err)};if !os.SameFile(before,after){t.Fatal("inode replaced")}
+ ro,err:=fstool.AsTools(base,fstool.WithReadOnly(true));if err!=nil {t.Fatal(err)};if len(ro)!=2 {t.Fatalf("read-only count=%d",len(ro))}
+ var result struct{Content string `json:"content"`}
+ err=ro[1].Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"path":"alias"}`)},func(c toolsy.Chunk)error{return json.Unmarshal(c.Data,&result)})
+ if err!=nil||result.Content!="new" {t.Fatalf("read-only alias content=%q err=%v",result.Content,err)}
+ t.Log("outside hardlink mutated in same inode despite result delivery failure; readonly registration permits alias read")
+}
+
+func TestPublicMixedVersionRangesAndSymlinkDenial(t *testing.T) {
+ // Arrange.
+ parent:=t.TempDir();base:=filepath.Join(parent,"root");if err:=os.Mkdir(base,0700);err!=nil {t.Fatal(err)}
+ p:=filepath.Join(base,"file");if err:=os.WriteFile(p,[]byte("abcdef"),0600);err!=nil{t.Fatal(err)}
+ outside:=filepath.Join(parent,"outside");if err:=os.WriteFile(outside,[]byte("secret"),0600);err!=nil{t.Fatal(err)}
+ if err:=os.Symlink(outside,filepath.Join(base,"escape"));err!=nil{t.Fatal(err)}
+ tools,err:=fstool.AsTools(base);if err!=nil{t.Fatal(err)}
+ read:=func(args string)(string,error){var r struct{Content string `json:"content"`};e:=tools[1].Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(args)},func(c toolsy.Chunk)error{return json.Unmarshal(c.Data,&r)});return r.Content,e}
+ // Act.
+ a,err:=read(`{"path":"file","length":3}`);if err!=nil{t.Fatal(err)}
+ if err:=os.WriteFile(p,[]byte("UVWXYZ"),0600);err!=nil{t.Fatal(err)}
+ b,err:=read(`{"path":"file","offset":3,"length":3}`);if err!=nil{t.Fatal(err)}
+ _,escapeErr:=read(`{"path":"escape"}`)
+ // Assert.
+ if a+b!="abcXYZ" {t.Fatalf("combined ranges=%q",a+b)};if escapeErr==nil{t.Fatal("outside symlink followed")}
+ t.Log("same pathname returns mixed versions across ranges; outside symlink still denied")
+}
+
+func TestStarlarkSingleBuiltinAllocationAndHostOutsideRead(t *testing.T) {
+ // Arrange: bounded 1 MiB allocation is harmless and exceeds abstract steps numerically.
+ sb,err:=starlark.New(starlark.Config{MaxExecutionSteps:100});if err!=nil{t.Fatal(err)}
+ ctx,cancel:=context.WithTimeout(context.Background(),5*time.Second);defer cancel()
+ // Act.
+ r,err:=sb.Run(ctx,exectool.RunRequest{Language:"starlark",Code:`x = "a" * 1048576
+print(len(x))`})
+ // Assert: a step budget is not an allocation quota.
+ if err!=nil||r.ExitCode!=0||r.Stdout!="1048576\n"{t.Fatalf("builtin allocation result=%+v err=%v",r,err)}
+ // Arrange.
+ outside:=filepath.Join(t.TempDir(),"outside");if err:=os.WriteFile(outside,[]byte("outside-workspace"),0600);err!=nil{t.Fatal(err)}
+ hs,err:=host.New(host.WithRuntime("sh",host.Runtime{Command:"/bin/sh",ScriptName:"main.sh"}));if err!=nil{t.Fatal(err)}
+ // Act.
+ r,err=hs.Run(ctx,exectool.RunRequest{Language:"sh",Code:fmt.Sprintf("/bin/cat '%s'",strings.ReplaceAll(outside,"'","'\\''"))})
+ // Assert.
+ if err!=nil||r.ExitCode!=0||r.Stdout!="outside-workspace"{t.Fatalf("host result=%+v err=%v",r,err)}
+ t.Log("100 Starlark steps allow a 1 MiB builtin allocation; trusted host reads outside request workspace")
+}

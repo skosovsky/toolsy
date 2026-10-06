@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted, signed commit pending; rows 37–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted, signed commit pending; rows 38–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1544,3 +1544,54 @@ state boundary/explicit host provider/offset/DST/order/negative/fractional contr
 and example checked. Independent initial harness/cache faults retained/corrected,
 no product or baseline-fail claim. Reports/raw logs/probes/snapshots under
  task41/d36-time/acceptance-a/b. Accepted for signed `docs: time semantics`.
+
+
+### 37 — D40 (accepted)
+
+Each independent reviewer scores five criteria at 20% each:
+1. Filesystem API and README state the actual path boundary, hardlink/mount/root
+   ownership limits and platform-specific special-file opening limits.
+2. Single-file in-place truncate/write is explicitly non-atomic and not durable;
+   no rollback or snapshot cursor promise. Host snapshot/atomic replacement
+   requirements are concrete, without adding a storage lifecycle framework.
+3. Starlark process memory/parsing/builtin limits and trusted host unrestricted
+   execution remain explicit and consistent with actual implementation.
+4. Sandbox matrix separates enforced configuration and unit fixtures from optional
+   live Docker and unverified E2B service behavior. Skips never count as live proof.
+5. Source inspection, filesystem public hardlink/inode and range probes, relevant
+   module race/lint checks and synchronized migration/evidence pass; both reviewers
+   accept 100% with no unresolved detected errors.
+
+Spec-first decision: retain current implementations. os.Root restricts pathname
+resolution, not aliasing through hardlinks or mounted filesystems. fs_write_file
+updates the existing inode through truncate/write; it is not atomic replacement,
+rollback or durability. Host requiring stable pagination must own a snapshot or
+versioned immutable tree; host requiring atomic/durable replacement must supply a
+separate authorized operation with temporary file, rename and filesystem-specific
+sync protocol. Keep step/output bounds without claiming Starlark memory isolation;
+trusted host execution is unrestricted. Unit client mocks establish adapter
+contracts, not deployed backend isolation. No live Docker/E2B certification added.
+
+D40 implementation/docs complete. Production SHA identity confirms16 execution
+source/options files unchanged across six modules from signed6907b80. Package
+fstool no longer advertises isolation; path/root/hardlink/mount and platform limits
+are explicit. In-place writes preserve inode, no atomic replacement/rollback/sync;
+host snapshot and atomic/durable replacement requirements documented. Sandbox
+matrix explicitly distinguishes optional live Docker from unit/client mocks and
+unverified E2B remote service. Parent public hardlink/inode/mixed-range fixtures
+pass race3 on current and exactbaseline intentionally; no arithmetic/algorithm
+regression or false baseline failure claim. Parent fstool2.242s, Starlark8.483s,
+host32.227s, Docker2.572s, E2B16.956s race3 pass with final pinnedlint0.
+Wazero race3 PASS241.989s and pinnedlint0; both final independent verdicts accepted100%. Initial godoclint
+stdlib-link finding corrected and retained. Docker live explicitly SKIP.
+
+
+Final D40 independent A and B accepted100%, five20/20 criteria each, no unresolved
+ detected defects. A six module race3/lint0 includes Wazero238.707s; B six module
+race3/lint0 includes Wazero233.835s. Independent public probes verify hardlink
+alias/inode mutation, changed ranges, write effect retained on delivery failure,
+Starlark builtin allocation despite step budget and host outside-workspace access.
+Both16-file production identity checks exact to6907b80. Docker explicitly SKIP;
+E2B live, privileged mounts, all-platform behavior and crash durability unverified.
+Reports/probes/logs archived task41/d40/acceptance-a/b excluding runtime caches.
+Accepted for separate signed `docs: isolation limits`.

@@ -1,0 +1,5 @@
+=== RUN   TestDockerLiveProfile
+    live_test.go:18: set TOOLSY_DOCKER_LIVE=1 with local daemon and default images
+--- SKIP: TestDockerLiveProfile (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/docker	1.264s

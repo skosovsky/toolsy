@@ -1,0 +1,7 @@
+PASS public hardlink reads outside inode
+PASS public write preserves inode and changes outside alias
+PASS ranges can combine distinct file versions
+PASS delivery error does not roll back write
+PASS public traversal rejected
+PASS 50 interpreted steps permit 4MiB single allocation
+PASS host guest reads file outside workspace

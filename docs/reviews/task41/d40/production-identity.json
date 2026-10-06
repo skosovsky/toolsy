@@ -1,0 +1,18 @@
+{
+  "toolkits/fstool/options.go": "7630d266883c12c143627314cbdf210cf6799034506a0674b02fffac031c4e9b",
+  "toolkits/fstool/open_unix.go": "142e90310149aca2b7438103f20f5b306e617ba96e6cb55e482f842e76f83a51",
+  "toolkits/fstool/fstool.go": "5591fc7283a3247e0612c4ad67ee66c36bfcc6871507ec26d95c787c3f9577b2",
+  "toolkits/fstool/security.go": "ff565483db428adc4058864648cc438a7d73ccd3cd0ecc6eee85f403400304da",
+  "toolkits/fstool/open_other.go": "30bfa9721ce295e52a25b802e54a09cd167b106f8fce068b52428516f5bbaf87",
+  "adapters/sandbox/starlark/starlark.go": "b6b2e95e7873988d90c3b876c252fae717bdcc52ee9fd5186e92c3f0700ffd68",
+  "adapters/sandbox/host/process_other.go": "dceecd0bb68808e4391d538ad02691e8506a3fbf4457591937665ec1a08e0bb9",
+  "adapters/sandbox/host/options.go": "0def9402bdda99eaf33eea7486522ace45c07cbebe92cc8d95b6d63678ede3b8",
+  "adapters/sandbox/host/process_unix.go": "c99a4627f5dbdf8facbed0b8c720c40cfe097e465e40568bd07da255a12c1dca",
+  "adapters/sandbox/host/host.go": "d79295913d86f95ba74891074a0b72e3ad284a5077bbab898066da4bb5967325",
+  "adapters/sandbox/docker/options.go": "20d3789fc28cf6ee5047dd0fdefdd79557f5a506273f30695e7bd0957c135a68",
+  "adapters/sandbox/docker/docker.go": "46689ec4fa953871bc1655763f3da20e644fbab19fea786e48df6fd3c8109466",
+  "adapters/sandbox/e2b/options.go": "9f9ccf070de43597e6648eb952734c8f73d3913672407419428725fe97f9f2e4",
+  "adapters/sandbox/e2b/e2b.go": "ec60e3a3848cb3b80cde2261d044fbcd23f5c24b58bd4a4c299163719f962c14",
+  "adapters/sandbox/wazero/options.go": "213037399fd0f5c141c30e55b48c5b88e18ef96b6f5fdadf2c57fd33b4a02cc6",
+  "adapters/sandbox/wazero/wazero.go": "db3f6fb23cb51897f1cb6d06ce1e5ce0c8c3b4b61eff50c80af8f50c392bc00e"
+}

@@ -985,3 +985,21 @@ rows; memory remains explicitly backed by StateStore. No automatic timezone key,
 state framework, durable local fixture guarantee or hard callback cancellation is
 introduced. Host provider lifetime, concurrent access and upstream bounds remain
 host responsibilities.
+
+
+## D40 — filesystem and sandbox evidence limits
+
+Filesystem package docs now describe root-relative path resolution rather than
+an isolated filesystem. Hardlink aliases and mounts remain host policy; the host
+must own the root and directory placement. `fs_write_file` truncates the existing
+inode and writes in place, with no atomic replacement, rollback, version check
+or durability guarantee. Stable ranges/pages require a host snapshot or immutable
+version; atomic/durable replacement requires a separate authorized host operation.
+No implementation/API expansion is introduced. See
+[filesystem requirements](../toolkits/fstool/README.md#filesystem-boundary-and-host-consistency).
+
+Starlark retains bounded interpreted steps/output, but parsing/built-ins and host
+memory are not isolated. Host execution retains host filesystem/network/process
+rights. The sandbox verification matrix now distinguishes optional live Docker
+fixtures from ordinary unit mocks and unverified E2B service behavior. A skipped
+live test is not proof of isolation. See [evidence scope](../adapters/sandbox/README.md#evidence-scope).

@@ -1,0 +1,185 @@
+diff --git a/adapters/sandbox/README.md b/adapters/sandbox/README.md
+index a9fd8ec..b358505 100644
+--- a/adapters/sandbox/README.md
++++ b/adapters/sandbox/README.md
+@@ -7,7 +7,7 @@ never grants authority to execute an external effect.
+ 
+ | Backend | Enforced boundary | Limits and host responsibilities | Verification |
+ | --- | --- | --- | --- |
+-| [Docker](docker/README.md) | Local Linux daemon; mandatory cgroup limits, unprivileged user, network disabled, read-only root and request workspace, dropped capabilities, seccomp | Finite memory, CPU/PID, tmpfs and per-stream output limits. Host provides daemon-visible workspace and disk capacity; live output collection is not a hard log-disk quota | Unit fixtures and live Docker runs for all three default images, isolation restrictions and output overflow |
++| [Docker](docker/README.md) | Local Linux daemon; mandatory cgroup limits, unprivileged user, network disabled, read-only root and request workspace, dropped capabilities, seccomp | Finite memory, CPU/PID, tmpfs and per-stream output limits. Host provides daemon-visible workspace and disk capacity; live output collection is not a hard log-disk quota | Unit/client mocks; optional `TestDockerLiveProfile` checks three default images, restrictions and output overflow only when explicitly enabled against a provisioned daemon |
+ | [Wazero](wazero/README.md) | WASI request filesystem confined through `os.Root`, read-only mount; cancellation enabled even with custom runtime config | Explicit linear-memory page cap. Caller supplies deadline. Compiler, tables and other host allocations have no process memory quota | Real WASI containment, memory growth and infinite-loop cancellation tests |
+ | [Starlark](starlark/README.md) | Request-only environment and in-memory files; no exposed host filesystem, network or module loader | Mandatory positive instruction-step budget and bounded output. Parsing and Go built-ins cannot be preempted; no hard memory isolation | Actual interpreter workloads for step budget and cancellation |
+ | [Host](host/README.md) | Trusted host execution | Empty environment by default; inheritance requires explicit option. Host rights, filesystem and network remain available; process-group cancellation has documented platform limits | Local process and cancellation tests |
+@@ -21,3 +21,23 @@ failure is observable and never proves that a resource was removed.
+ These profiles are distinct capabilities, not interchangeable isolation guarantees.
+ No agent scheduler, persistent sandbox manager or remote credential lifecycle is
+ provided by this directory.
++
++
++## Evidence scope
++
++The verification column lists available fixtures, not certification of every
++backend in the current run. Ordinary `go test` skips Docker live checks unless
++`TOOLSY_DOCKER_LIVE=1` is set; a PASS with that skip proves only unit/client
++contracts. Live results must identify the daemon/platform/images and actual
++executed checks. E2B has no live service verification in this repository; its
++mock port tests do not establish remote isolation, teardown or SDK compliance.
++Local host processes and real in-process interpreters exercise their documented
++local behavior, without extending it to hostile process containment or a hard
++Go process memory quota. See each backend README for the exact capabilities.
++
++Filesystem pathname containment also does not imply storage isolation: mounts,
++hardlink aliases and host directory mutation require host ownership policy.
++Request materialization and cleanup assume an exclusively owned workspace and
++parent. For general filesystem tools, read ranges and directory offsets are not
++snapshots and writes are non-atomic in-place updates; see the
++[filesystem host consistency requirements](../../toolkits/fstool/README.md#filesystem-boundary-and-host-consistency).
+diff --git a/docs/migration-task41.md b/docs/migration-task41.md
+index 51f9aa6..0fd924c 100644
+--- a/docs/migration-task41.md
++++ b/docs/migration-task41.md
+@@ -985,3 +985,21 @@ rows; memory remains explicitly backed by StateStore. No automatic timezone key,
+ state framework, durable local fixture guarantee or hard callback cancellation is
+ introduced. Host provider lifetime, concurrent access and upstream bounds remain
+ host responsibilities.
++
++
++## D40 — filesystem and sandbox evidence limits
++
++Filesystem package docs now describe root-relative path resolution rather than
++an isolated filesystem. Hardlink aliases and mounts remain host policy; the host
++must own the root and directory placement. `fs_write_file` truncates the existing
++inode and writes in place, with no atomic replacement, rollback, version check
++or durability guarantee. Stable ranges/pages require a host snapshot or immutable
++version; atomic/durable replacement requires a separate authorized host operation.
++No implementation/API expansion is introduced. See
++[filesystem requirements](../toolkits/fstool/README.md#filesystem-boundary-and-host-consistency).
++
++Starlark retains bounded interpreted steps/output, but parsing/built-ins and host
++memory are not isolated. Host execution retains host filesystem/network/process
++rights. The sandbox verification matrix now distinguishes optional live Docker
++fixtures from ordinary unit mocks and unverified E2B service behavior. A skipped
++live test is not proof of isolation. See [evidence scope](../adapters/sandbox/README.md#evidence-scope).
+diff --git a/docs/reviews/task41-progress.md b/docs/reviews/task41-progress.md
+index 0d400f6..6b12470 100644
+--- a/docs/reviews/task41-progress.md
++++ b/docs/reviews/task41-progress.md
+@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
+ 
+ ## Sequential checklist
+ 
+-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted, signed commit pending; rows 37–40 are pending. Associated D decisions are recorded in their row's
++Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; rows 37–40 are pending. Associated D decisions are recorded in their row's
+ evidence; a retained design needs specific justification and accurate contracts.
+ Unresolved D work cannot be silently deferred.
+ 
+@@ -1544,3 +1544,43 @@ state boundary/explicit host provider/offset/DST/order/negative/fractional contr
+ and example checked. Independent initial harness/cache faults retained/corrected,
+ no product or baseline-fail claim. Reports/raw logs/probes/snapshots under
+  task41/d36-time/acceptance-a/b. Accepted for signed `docs: time semantics`.
++
++
++### 37 — D40 (in progress)
++
++Each independent reviewer scores five criteria at 20% each:
++1. Filesystem API and README state the actual path boundary, hardlink/mount/root
++   ownership limits and platform-specific special-file opening limits.
++2. Single-file in-place truncate/write is explicitly non-atomic and not durable;
++   no rollback or snapshot cursor promise. Host snapshot/atomic replacement
++   requirements are concrete, without adding a storage lifecycle framework.
++3. Starlark process memory/parsing/builtin limits and trusted host unrestricted
++   execution remain explicit and consistent with actual implementation.
++4. Sandbox matrix separates enforced configuration and unit fixtures from optional
++   live Docker and unverified E2B service behavior. Skips never count as live proof.
++5. Source inspection, filesystem public hardlink/inode and range probes, relevant
++   module race/lint checks and synchronized migration/evidence pass; both reviewers
++   accept 100% with no unresolved detected errors.
++
++Spec-first decision: retain current implementations. os.Root restricts pathname
++resolution, not aliasing through hardlinks or mounted filesystems. fs_write_file
++updates the existing inode through truncate/write; it is not atomic replacement,
++rollback or durability. Host requiring stable pagination must own a snapshot or
++versioned immutable tree; host requiring atomic/durable replacement must supply a
++separate authorized operation with temporary file, rename and filesystem-specific
++sync protocol. Keep step/output bounds without claiming Starlark memory isolation;
++trusted host execution is unrestricted. Unit client mocks establish adapter
++contracts, not deployed backend isolation. No live Docker/E2B certification added.
++
++D40 implementation/docs complete. Production SHA identity confirms16 execution
++source/options files unchanged across six modules from signed6907b80. Package
++fstool no longer advertises isolation; path/root/hardlink/mount and platform limits
++are explicit. In-place writes preserve inode, no atomic replacement/rollback/sync;
++host snapshot and atomic/durable replacement requirements documented. Sandbox
++matrix explicitly distinguishes optional live Docker from unit/client mocks and
++unverified E2B remote service. Parent public hardlink/inode/mixed-range fixtures
++pass race3 on current and exactbaseline intentionally; no arithmetic/algorithm
++regression or false baseline failure claim. Parent fstool2.242s, Starlark8.483s,
++host32.227s, Docker2.572s, E2B16.956s race3 pass with final pinnedlint0.
++Wazero race3 PASS241.989s and pinnedlint0; both final independent verdicts pending. Initial godoclint
++stdlib-link finding corrected and retained. Docker live explicitly SKIP.
+diff --git a/toolkits/fstool/README.md b/toolkits/fstool/README.md
+index 339dbfa..038f328 100644
+--- a/toolkits/fstool/README.md
++++ b/toolkits/fstool/README.md
+@@ -1,6 +1,6 @@
+ # Filesystem toolkit
+ 
+-`AsTools(baseDir, opts...)` registers list/read and optionally write tools. The host selects an existing base directory; model paths are relative, and absolute paths and `..` segments are rejected. Each execution opens `os.Root` and uses its root-relative open/mkdir operations, including symlink containment at actual access. Outside symlinks cannot be followed, including when replaced concurrently. The host controls the base directory itself: do not allow another actor to replace the host root or move its directories outside it. This is not isolation from hard links, mount points, special files, or malicious host filesystem administration. Only regular files are read/written. Unix opens are nonblocking to reject FIFOs without waiting for a peer; on other platforms the host must exclude device paths (their open semantics are not bounded). Writes create parent directories and overwrite the exact approved content; no content truncation and no multi-file atomicity. Confirmation metadata is not an authorization grant.
++`AsTools(baseDir, opts...)` registers list/read and optionally write tools. The host selects an existing base directory; model paths are relative, and absolute paths and `..` segments are rejected. Each execution opens `os.Root` and uses its root-relative open/mkdir operations, including symlink containment at actual access. Outside symlinks cannot be followed, including when replaced concurrently. The host controls the base directory itself: do not allow another actor to replace the host root or move its directories outside it. This is not isolation from hard links, mount points, special files, or malicious host filesystem administration. Only regular files are read/written. Unix opens are nonblocking to reject FIFOs without waiting for a peer; on other platforms the host must exclude device paths (their open semantics are not bounded). Successful writes create parent directories and write the exact approved content without shortening it. Writes truncate and update the existing file in place; neither single-file replacement nor multi-file updates are atomic. Confirmation metadata is not an authorization grant.
+ 
+ ## Limits and continuation
+ 
+@@ -15,3 +15,36 @@ Nil options reject construction. Host ports and callbacks are borrowed; the host
+ owns their lifetime and synchronization. See the [shared constructor and ownership
+ contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+ and the distinction between configuration containers and mutable host ports.
++
++
++## Filesystem boundary and host consistency
++
++`os.Root` constrains path resolution; it is not a filesystem isolation boundary.
++A regular file hardlinked inside the root may refer to the same inode as a name
++outside it: reading exposes those bytes and writing changes both names. Mounts
++inside the root expose their mounted contents. The toolkit does not enumerate or
++reject hardlinks or mount points. The host must provision a tree without unwanted
++aliases/mounts and prevent untrusted changes to the root and directory placement.
++`WithReadOnly(true)` omits the write tool; it does not restrict other host actors.
++
++`fs_write_file` opens a regular file, truncates it to zero, then writes content.
++Concurrent readers can see an empty or partial file, and a failure after truncation
++can leave changed bytes or created parent directories. There is no rollback or
++compare-and-swap version check. The success status confirms the write calls, not
++crash durability: there is no file/directory sync and deferred close errors are
++not reported. A later delivery error also does not undo the write. Host recovery
++must inspect the actual state before authorizing a retry.
++
++If stable read ranges or directory pagination are required, use an immutable
++versioned tree or a host-owned snapshot kept stable for the whole sequence. A
++numeric offset is not a snapshot token. If atomic or crash-durable replacement is
++required, provide a separate host-authorized operation using a temporary regular
++file on the same filesystem, a checked write/close and atomic rename, plus the
++filesystem-specific file/directory sync protocol. Keep ownership and authorization
++checks at that host boundary; this toolkit does not implement a transaction or
++storage lifecycle manager.
++
++The public limitation fixtures in `isolation_contract_test.go` exercise hardlink
++aliasing, existing inode updates and mutation between read ranges on a disposable
++local tree. They demonstrate the documented boundary; they do not certify mount
++isolation, filesystem crash recovery or behavior on every operating system.
+diff --git a/toolkits/fstool/doc.go b/toolkits/fstool/doc.go
+index bb39558..67bbb41 100644
+--- a/toolkits/fstool/doc.go
++++ b/toolkits/fstool/doc.go
+@@ -1,4 +1,8 @@
+-// Package fstool provides a sandboxed filesystem toolkit for agents: list directory,
+-// read file, and optionally write file. All paths are validated against a base
+-// directory to prevent path traversal and symlink escape.
++// Package fstool provides root-relative filesystem tools: list directory,
++// read file, and optionally write file. [os.Root] constrains pathname resolution,
++// including symlink escape; it does not isolate hardlinks, mounts or host actors.
++// The host must control the root and its directory placement. Writes truncate
++// and update an existing inode in place, without atomic replacement or durability.
++// Read ranges and directory offsets are not snapshots. See README for IO and
++// platform limits and host requirements.
+ package fstool
