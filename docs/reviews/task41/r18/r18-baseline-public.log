@@ -1,0 +1,46 @@
+--- FAIL: TestR18PublicCanceledWaiterNeverCallsStore (1.24s)
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse (0.21s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse
+            	Messages:   	waiter ignored cancellation until provider release
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue (0.21s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue
+            	Messages:   	waiter ignored cancellation until provider release
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse (0.21s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse
+            	Messages:   	waiter ignored cancellation until provider release
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue (0.20s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue
+            	Messages:   	waiter ignored cancellation until provider release
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse (0.21s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse
+            	Messages:   	waiter ignored cancellation until provider release
+    --- FAIL: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue (0.21s)
+        cancellation_public_test.go:39: 
+            	Error Trace:	/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:86
+            	            				/private/tmp/toolsy-task41/r18-baseline/toolkits/memory/cancellation_public_test.go:39
+            	Error:      	Should be true
+            	Test:       	TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue
+            	Messages:   	waiter ignored cancellation until provider release
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/memory	1.807s

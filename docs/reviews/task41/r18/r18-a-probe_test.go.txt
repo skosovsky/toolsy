@@ -1,0 +1,17 @@
+package memory
+import("context";"errors";"testing";"github.com/skosovsky/toolsy";"github.com/stretchr/testify/require")
+type r18AStore struct{ loadCalls, saveCalls int; failure error }
+func(s *r18AStore)Load(context.Context,string)([]byte,error){s.loadCalls++; return nil,nil}
+func(s *r18AStore)Save(context.Context,string,[]byte)error{s.saveCalls++;return s.failure}
+func TestR18AAcquisitionAndSaveError(t *testing.T){
+ // Arrange.
+ p:=NewScratchpad(); s:=&r18AStore{failure:errors.New("save failure")}; run:=toolsy.NewRunEnv(nil,toolsy.WithStateStore(s)); ctx,cancel:=context.WithCancel(t.Context()); cancel()
+ // Act.
+ _,err:=p.pinHandler(ctx,run,pinArgs{Key:"k",Value:"v"})
+ // Assert.
+ require.ErrorIs(t,err,context.Canceled);require.Zero(t,s.loadCalls);require.Zero(t,s.saveCalls)
+ _,err=p.pinHandler(t.Context(),run,pinArgs{Key:"k",Value:"v"});require.ErrorIs(t,err,s.failure)
+ s.failure=nil; _,err=p.pinHandler(t.Context(),run,pinArgs{Key:"k",Value:"v"});require.NoError(t,err);require.Equal(t,2,s.saveCalls)
+ tools,err:=p.AsTools();require.NoError(t,err)
+ properties:=tools[1].Manifest().OutputSchema["properties"].(map[string]any);facts:=properties["facts"].(map[string]any);require.Equal(t,"object",facts["type"]);additional:=facts["additionalProperties"].(map[string]any);require.Equal(t,"string",additional["type"])
+}

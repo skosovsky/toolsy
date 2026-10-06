@@ -531,3 +531,24 @@ fallback or successful output. Cancellation is observed before/after synchronous
 conversion; this is not a hard CPU deadline. Raw body/item/source limits precede
 conversion; final JSON budget includes escaped output and representation. Host reader
 transport/allocation limits remain required. Send/approval payloads unchanged.
+
+
+## R18 / D31 — cancellable session scratchpad
+
+Scratchpad uses one context-aware admission gate per instance around complete
+Load/modify/Save. Canceled waiters return without waiting for the current store
+callback and without invoking storage. Context rechecked after admission and around
+load/before save. No per-session lock map or waiter goroutine is created. Calls
+through one instance remain serialized across all supplied sessions; no fairness
+promise. Use one instance as sole writer for each state key. Do not copy Scratchpad
+or synchronously reenter it from store callbacks. Multiple instances/processes need
+host coordination; Load/Save is not CAS.
+
+memory_read_all changes `facts` from ambiguous newline `key=value` text to a JSON
+object of exact keys and values, with `{}` for empty state. Consumers must decode
+this object; embedded newlines/equals/quotes remain data through JSON escaping.
+Stored object format, state key, pin/unpin args and status results remain unchanged.
+The final output bound applies to the full encoded object after escaping. Provider
+allocation limits and in-flight callback cancellation remain host responsibility;
+cancellation never promises rollback of an already-started Save. This is bounded
+session scratchpad, not long-term semantic memory.

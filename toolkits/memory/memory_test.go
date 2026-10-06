@@ -117,7 +117,7 @@ func TestScratchpad_PinRead(t *testing.T) {
 		ToolName: "memory_read_all",
 		Input:    toolsy.ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)},
 	})
-	require.Contains(t, read.Facts, "allergy=penicillin")
+	require.Equal(t, "penicillin", read.Facts["allergy"])
 }
 
 func TestScratchpad_PinUnpinRead(t *testing.T) {
@@ -137,7 +137,8 @@ func TestScratchpad_PinUnpinRead(t *testing.T) {
 		ToolName: "memory_read_all",
 		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{}`)},
 	})
-	require.Equal(t, "No facts stored.", read.Facts)
+	require.Empty(t, read.Facts)
+	require.NotNil(t, read.Facts)
 }
 
 func TestScratchpad_UnpinNotFound(t *testing.T) {
@@ -161,7 +162,8 @@ func TestScratchpad_ReadEmpty(t *testing.T) {
 		ToolName: "memory_read_all",
 		Input:    toolsy.ToolInput{CallID: "1", ArgsJSON: []byte(`{}`)},
 	})
-	require.Equal(t, "No facts stored.", read.Facts)
+	require.Empty(t, read.Facts)
+	require.NotNil(t, read.Facts)
 }
 
 func TestScratchpad_PinOverwrite(t *testing.T) {
@@ -181,7 +183,7 @@ func TestScratchpad_PinOverwrite(t *testing.T) {
 		ToolName: "memory_read_all",
 		Input:    toolsy.ToolInput{CallID: "3", ArgsJSON: []byte(`{}`)},
 	})
-	require.Contains(t, read.Facts, "x=new")
+	require.Equal(t, "new", read.Facts["x"])
 	require.NotContains(t, read.Facts, "old")
 }
 
@@ -227,8 +229,8 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 			Input:    toolsy.ToolInput{CallID: "4", ArgsJSON: []byte(`{}`)},
 		},
 	)
-	require.Contains(t, read.Facts, "a=updated")
-	require.Contains(t, read.Facts, "b=2")
+	require.Equal(t, "updated", read.Facts["a"])
+	require.Equal(t, "2", read.Facts["b"])
 }
 
 func TestScratchpad_MaxFacts(t *testing.T) {
@@ -311,7 +313,7 @@ func TestScratchpad_Concurrent(t *testing.T) {
 		Input:    toolsy.ToolInput{CallID: "read", ArgsJSON: []byte(`{}`)},
 	})
 	for i := range 10 {
-		require.Contains(t, read.Facts, fmt.Sprintf("k%d=v", i))
+		require.Equal(t, "v", read.Facts[fmt.Sprintf("k%d", i)])
 	}
 	raw, err := store.Load(context.Background(), factsStateKey)
 	require.NoError(t, err)

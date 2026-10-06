@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is in progress; rows 18–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is in progress; rows 19–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -632,3 +632,35 @@ OldAPIpublicbaselineFAIL fourplaintextidentitycases; currentcount5PASS2.335s.
 Evidence docs/reviews/task41/r17/. No live provider/MIME integration or hard CPU
 preemption claim; converter errors tested through explicit internal seam.
 Commit: fix: mail representation.
+
+### 18 — R18 / D31 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. All pin/read/unpin wait cancellation returns before held provider completes,
+   retaining deadline/cancel cause and performing no store callbacks for canceled
+   waiter; cancellation rechecked after acquisition before provider I/O.
+2. One instance still serializes complete Load/modify/Save across local callers,
+   preserves concurrent updates and releases admission on all error/cancel paths.
+   No waiter goroutines or per-session lock registry; callbacks remain host-owned.
+3. Read facts is an escaped JSON object with exact keys/values (newline/equals/XML),
+   empty object for no facts; stored state/action args unchanged, full bounded JSON
+   includes escaping/keys. Schema and tests reflect clear wire break.
+4. README/API/migration describe session scratchpad, one-instance coordination,
+   no distributed/CAS/reentrant callback guarantees, store deadline/allocation
+   responsibility and cancellation without rollback. Legacy presentation removed.
+5. AAA blocked-provider baseline/current cancellation probes for all three tools,
+   concurrency/error/bounds/cancellation regressions and affected race/lint pass;
+   both independent reviewers100%, no unresolved detected errors.
+
+Decision D31: structured facts JSON object; bounded session scratchpad only. Host
+owns long-term semantic memory and multi-instance/process atomic coordination.
+
+Row18 gate: A100%, B100% (five20%criteria each), no unresolved detected errors.
+A fullmemoryracecount3PASS3.413s/lint0, privateprobe count5PASS1.627s;
+B fullracecount3PASS2.554s/lint0, privateadversarialcount10PASS3.468s,
+schema count10PASS2.072s. Parent fullmemoryrace count5PASS2.626s/lint0.
+Baseline publicprobe FAIL allsix heldLoad waitcases as expected; currentpermanent
+publicprobe included in fullrace. Evidence docs/reviews/task41/r18/.
+Host owns callback cooperation, multi-process coordination and already-started
+Save outcome; no hard preemption/rollback/fairness claim.
+Commit: fix: scratchpad admission.

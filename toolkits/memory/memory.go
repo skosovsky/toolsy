@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
-	"sync"
 	"unicode/utf8"
 
 	"github.com/skosovsky/toolsy/internal/jsonschemax"
@@ -22,9 +19,10 @@ const (
 	statusIgnored  = "Ignored: key not found"
 )
 
-// Scratchpad configures memory tools behavior. Session state is stored in env.StateStore.
+// Scratchpad configures bounded session memory in env.StateStore.
+// Do not copy an instance or synchronously reenter it from StateStore callbacks.
 type Scratchpad struct {
-	mu     sync.Mutex // serializes calls through this instance, not other writers
+	gate   chan struct{} // serializes this instance only; no per-session lock registry
 	limits options
 }
 
@@ -35,7 +33,7 @@ func NewScratchpad(opts ...Option) *Scratchpad {
 		opt(&o)
 	}
 	o.applyDefaults()
-	return &Scratchpad{mu: sync.Mutex{}, limits: o}
+	return &Scratchpad{gate: make(chan struct{}, 1), limits: o}
 }
 
 // AsTools returns the three memory tools (pin, read all, unpin).
@@ -92,8 +90,10 @@ func (s *Scratchpad) pinHandler(ctx context.Context, run *toolsy.RunEnv, args pi
 	if err := s.checkOutput(statusResult{Status: statusPinned}); err != nil {
 		return statusResult{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if err := s.acquire(ctx); err != nil {
+		return statusResult{}, err
+	}
+	defer s.release()
 	facts, err := s.loadFacts(ctx, run)
 	if err != nil {
 		return statusResult{}, err
@@ -111,33 +111,19 @@ func (s *Scratchpad) pinHandler(ctx context.Context, run *toolsy.RunEnv, args pi
 }
 
 type readResult struct {
-	Facts string `json:"facts"`
+	Facts map[string]string `json:"facts"`
 }
 
 func (s *Scratchpad) readHandler(ctx context.Context, run *toolsy.RunEnv, _ struct{}) (readResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if err := s.acquire(ctx); err != nil {
+		return readResult{}, err
+	}
+	defer s.release()
 	facts, err := s.loadFacts(ctx, run)
 	if err != nil {
 		return readResult{}, err
 	}
-	if len(facts) == 0 {
-		result := readResult{Facts: "No facts stored."}
-		return result, s.checkOutput(result)
-	}
-	keys := make([]string, 0, len(facts))
-	for k := range facts {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	var b strings.Builder
-	for _, k := range keys {
-		b.WriteString(k)
-		b.WriteString("=")
-		b.WriteString(facts[k])
-		b.WriteString("\n")
-	}
-	result := readResult{Facts: strings.TrimSuffix(b.String(), "\n")}
+	result := readResult{Facts: facts}
 	return result, s.checkOutput(result)
 }
 
@@ -151,8 +137,10 @@ func (s *Scratchpad) unpinHandler(ctx context.Context, run *toolsy.RunEnv, args 
 			return statusResult{}, err
 		}
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	if err := s.acquire(ctx); err != nil {
+		return statusResult{}, err
+	}
+	defer s.release()
 	facts, err := s.loadFacts(ctx, run)
 	if err != nil {
 		return statusResult{}, err
@@ -168,10 +156,16 @@ func (s *Scratchpad) unpinHandler(ctx context.Context, run *toolsy.RunEnv, args 
 }
 
 func (s *Scratchpad) loadFacts(ctx context.Context, run *toolsy.RunEnv) (map[string]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if run == nil || run.StateStore == nil {
 		return nil, toolsy.NewValidationError("run.StateStore is required")
 	}
 	raw, err := run.StateStore.Load(ctx, factsStateKey)
+	if interrupt := ctx.Err(); interrupt != nil {
+		return nil, interrupt
+	}
 	if err != nil {
 		return nil, toolsy.NewInternalError(fmt.Errorf("toolkit/memory: load facts: %w", err))
 	}
@@ -208,6 +202,9 @@ func (s *Scratchpad) loadFacts(ctx context.Context, run *toolsy.RunEnv) (map[str
 }
 
 func (s *Scratchpad) saveFacts(ctx context.Context, run *toolsy.RunEnv, facts map[string]string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if run == nil || run.StateStore == nil {
 		return toolsy.NewValidationError("run.StateStore is required")
 	}
@@ -220,6 +217,9 @@ func (s *Scratchpad) saveFacts(ctx context.Context, run *toolsy.RunEnv, facts ma
 	}
 	if len(raw) > s.limits.maxStoreBytes {
 		return toolsy.NewValidationError("memory serialized state byte limit exceeded")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := run.StateStore.Save(ctx, factsStateKey, raw); err != nil {
 		return toolsy.NewInternalError(fmt.Errorf("toolkit/memory: save facts: %w", err))
@@ -251,3 +251,21 @@ func (s *Scratchpad) checkOutput(result any) error {
 	}
 	return nil
 }
+
+// acquire has no waiter goroutine and releases a raced admission before returning cancellation.
+func (s *Scratchpad) acquire(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case s.gate <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			s.release()
+			return err
+		}
+		return nil
+	}
+}
+func (s *Scratchpad) release() { <-s.gate }

@@ -1,0 +1,44 @@
+package memory
+import (
+ "context"
+ "errors"
+ "testing"
+ "github.com/skosovsky/toolsy"
+ "github.com/stretchr/testify/require"
+)
+type bStore struct { loads, saves int; saveErr error }
+func(s *bStore)Load(context.Context,string)([]byte,error){s.loads++;return []byte(`{"existing":"v"}`),nil}
+func(s *bStore)Save(context.Context,string,[]byte)error{s.saves++;return s.saveErr}
+func TestBPreCanceledAdmissionAndSaveFailureRelease(t *testing.T){
+ // Arrange.
+ p:=NewScratchpad();s:=&bStore{};env:=toolsy.NewRunEnv(nil,toolsy.WithStateStore(s));ctx,cancel:=context.WithCancel(t.Context());cancel()
+ // Act / Assert: every handler rejects an already-canceled context without I/O.
+ _,e:=p.pinHandler(ctx,env,pinArgs{Key:"k",Value:"v"});require.ErrorIs(t,e,context.Canceled)
+ _,e=p.readHandler(ctx,env,struct{}{});require.ErrorIs(t,e,context.Canceled)
+ _,e=p.unpinHandler(ctx,env,unpinArgs{Key:"existing"});require.ErrorIs(t,e,context.Canceled)
+ require.Zero(t,s.loads);require.Zero(t,s.saves)
+ // Arrange: Save fails after Load.
+ cause:=errors.New("save failed");s.saveErr=cause
+ // Act / Assert: Save cause survives and admission is available to subsequent Read.
+ _,e=p.pinHandler(t.Context(),env,pinArgs{Key:"k",Value:"v"});require.ErrorIs(t,e,cause)
+ got,e:=p.readHandler(t.Context(),env,struct{}{});require.NoError(t,e);require.Equal(t,"v",got.Facts["existing"])
+ require.Equal(t,2,s.loads);require.Equal(t,1,s.saves)
+}
+func TestBGateCanceledAvailableRaceNeverConsumesAdmission(t *testing.T){
+ // Arrange: an available gate with canceled contexts repeatedly races the select branches.
+ p:=NewScratchpad();ctx,cancel:=context.WithCancel(t.Context());cancel()
+ // Act.
+ for range 10000 {require.ErrorIs(t,p.acquire(ctx),context.Canceled)}
+ // Assert.
+ require.Empty(t,p.gate);require.NoError(t,p.acquire(t.Context()));p.release()
+}
+func TestBPublicSchemaMatchesStructuredFacts(t *testing.T){
+ // Arrange.
+ tools,e:=NewScratchpad().AsTools();require.NoError(t,e)
+ // Act.
+ props:=tools[1].Manifest().OutputSchema["properties"].(map[string]any)
+ facts:=props["facts"].(map[string]any)
+ // Assert: map schema with string values rather than prior scalar presentation.
+ require.Equal(t,map[string]any{"type":"string"},facts["additionalProperties"])
+ require.NotEqual(t,"string",facts["type"])
+}
