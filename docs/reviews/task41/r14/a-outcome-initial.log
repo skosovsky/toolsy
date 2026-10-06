@@ -1,0 +1,5 @@
+--- FAIL: TestR14UnsupportedOutcomeCause (0.00s)
+    r14_a_outcome_probe_test.go:16: outcome lost: VALIDATION_FAILED: unsupported language for this sandbox
+FAIL
+FAIL	github.com/skosovsky/toolsy/exectool	0.896s
+FAIL

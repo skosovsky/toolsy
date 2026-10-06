@@ -14,6 +14,6 @@ func WithCleanupError(primary error, backend, operation string, cleanupErr error
 		return primary
 	}
 	return errors.Join(primary, &exectool.CleanupError{
-		Backend: backend, Operation: operation, Cause: cleanupErr,
+		Backend: backend, Operation: operation, ResourceID: "", Cause: cleanupErr,
 	})
 }

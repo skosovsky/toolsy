@@ -47,3 +47,67 @@ func TestCleanupCauseDoesNotReplaceExecutionClassification(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanupFailureRetainsReturnedGuestOutcome(t *testing.T) {
+	// Arrange.
+	result := RunResult{Stdout: "completed", Stderr: "diagnostic", ExitCode: 7}
+	cleanup := &CleanupError{
+		Backend:    "fixture",
+		Operation:  "remove",
+		ResourceID: "opaque-42",
+		Cause:      errors.New("remove refused"),
+	}
+	tool, err := New(
+		&mockSandbox{
+			languages: []string{"test"},
+			runFn:     func(context.Context, RunRequest) (RunResult, error) { return result, cleanup },
+		},
+	)
+	require.NoError(t, err)
+	yields := 0
+	// Act.
+	err = tool.Execute(
+		t.Context(),
+		nil,
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"test","code":"effect"}`)},
+		func(toolsy.Chunk) error { yields++; return nil },
+	)
+	// Assert.
+	var outcome *RunOutcomeError
+	require.ErrorAs(t, err, &outcome)
+	require.Equal(t, result, outcome.Result)
+	var diagnostic *CleanupError
+	require.ErrorAs(t, err, &diagnostic)
+	require.Equal(t, "opaque-42", diagnostic.ResourceID)
+	require.ErrorIs(t, err, ErrSandboxCleanup)
+	require.Zero(t, yields)
+}
+
+func TestChangingSandboxLanguageRetainsOutcomeCause(t *testing.T) {
+	// Arrange: a trusted backend changes its language support after construction.
+	result := RunResult{Stdout: "known"}
+	tool, err := New(
+		&mockSandbox{
+			languages: []string{"test"},
+			runFn:     func(context.Context, RunRequest) (RunResult, error) { return result, ErrUnsupportedLanguage },
+		},
+	)
+	require.NoError(t, err)
+	yields := 0
+	// Act.
+	err = tool.Execute(
+		t.Context(),
+		nil,
+		toolsy.ToolInput{ArgsJSON: []byte(`{"language":"test","code":"effect"}`)},
+		func(toolsy.Chunk) error { yields++; return nil },
+	)
+	// Assert.
+	var outcome *RunOutcomeError
+	require.ErrorAs(t, err, &outcome)
+	require.Equal(t, result, outcome.Result)
+	require.ErrorIs(t, err, ErrUnsupportedLanguage)
+	classified, ok := toolsy.AsToolError(err)
+	require.True(t, ok)
+	require.Equal(t, toolsy.CodeValidationFailed, classified.Code)
+	require.Zero(t, yields)
+}

@@ -1,0 +1,14 @@
+=== RUN   TestR14MissingAbsoluteExecutableIsInfrastructureFailure
+--- PASS: TestR14MissingAbsoluteExecutableIsInfrastructureFailure (0.02s)
+=== RUN   TestR14RealExitCodesRemainGuestResults
+--- PASS: TestR14RealExitCodesRemainGuestResults (0.08s)
+=== RUN   TestR14MissingAbsoluteExecutableIsInfrastructureFailure
+--- PASS: TestR14MissingAbsoluteExecutableIsInfrastructureFailure (0.01s)
+=== RUN   TestR14RealExitCodesRemainGuestResults
+--- PASS: TestR14RealExitCodesRemainGuestResults (0.12s)
+=== RUN   TestR14MissingAbsoluteExecutableIsInfrastructureFailure
+--- PASS: TestR14MissingAbsoluteExecutableIsInfrastructureFailure (0.02s)
+=== RUN   TestR14RealExitCodesRemainGuestResults
+--- PASS: TestR14RealExitCodesRemainGuestResults (0.06s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	2.194s

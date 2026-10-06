@@ -1,0 +1,4 @@
+=== RUN   TestR14MissingAbsoluteExecutableIsInfrastructureFailure
+--- PASS: TestR14MissingAbsoluteExecutableIsInfrastructureFailure (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	0.430s

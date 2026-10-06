@@ -24,7 +24,9 @@ var (
 type CleanupError struct {
 	Backend   string
 	Operation string
-	Cause     error
+	// ResourceID is an optional backend-owned opaque locator for reconciliation.
+	ResourceID string
+	Cause      error
 }
 
 // Error describes the backend operation that failed during cleanup.
@@ -64,3 +66,14 @@ type Sandbox interface {
 	SupportedLanguages() []string
 	Run(ctx context.Context, req RunRequest) (RunResult, error)
 }
+
+// RunOutcomeError retains exactly the outcome returned alongside a sandbox error.
+// The result may be incomplete/zero for interrupted execution. It is not success,
+// and does not authorize retry. A cleanup-only error can retain a completed guest.
+type RunOutcomeError struct {
+	Result RunResult
+	Cause  error
+}
+
+func (e *RunOutcomeError) Error() string { return e.Cause.Error() }
+func (e *RunOutcomeError) Unwrap() error { return e.Cause }

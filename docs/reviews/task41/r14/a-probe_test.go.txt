@@ -1,0 +1,33 @@
+//go:build unix
+package host_test
+import (
+ "context"
+ "errors"
+ "os"
+ "path/filepath"
+ "strconv"
+ "syscall"
+ "testing"
+ "time"
+ host "github.com/skosovsky/toolsy/adapters/sandbox/host"
+ "github.com/skosovsky/toolsy/exectool"
+ "github.com/skosovsky/toolsy/textprocessor"
+)
+func TestR14PublicAdversarial(t *testing.T) {
+ for _, tc := range []struct{name, code string; exit int; overflow bool}{
+ {"signal", "printf exact; kill -TERM $$",-1,false},
+ {"literal_script_name", "printf exact; exit 7",7,false},
+ {"output_collection", "i=0; while [ $i -lt 30000 ]; do printf 0123456789; i=$((i+1)); done",0,true},
+ } {
+ t.Run(tc.name,func(t *testing.T){
+ root:=t.TempDir(); pidfile:=filepath.Join(t.TempDir(),"child")
+ t.Cleanup(func(){b,_:=os.ReadFile(pidfile);p,_:=strconv.Atoi(string(b));if p>0 {_=syscall.Kill(p,syscall.SIGKILL)}})
+ sb,err:=host.New(host.WithRuntime("sh",host.Runtime{Command:"/bin/sh",ScriptName:"main $literal';.sh"}),host.WithTempDirRoot(root));if err!=nil {t.Fatal(err)}
+ code:="/bin/sleep 30 &\nprintf '%s' \"$!\" > \"$PIDFILE\"\n"+tc.code
+ ctx,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel()
+ result,err:=sb.Run(ctx,exectool.RunRequest{Language:"sh",Code:code,Env:map[string]string{"PIDFILE":pidfile}})
+ if tc.overflow {if !errors.Is(err,textprocessor.ErrReadLimitExceeded)||!errors.Is(err,exectool.ErrSandboxFailure){t.Fatalf("overflow: %v",err)}} else {if err!=nil||result.ExitCode!=tc.exit||result.Stdout!="exact"{t.Fatalf("result %#v, err %v",result,err)}}
+ b,e:=os.ReadFile(pidfile);if e!=nil{t.Fatal(e)};p,e:=strconv.Atoi(string(b));if e!=nil{t.Fatal(e)};if !errors.Is(syscall.Kill(p,0),syscall.ESRCH){t.Fatal("child survived")};entries,e:=os.ReadDir(root);if e!=nil||len(entries)!=0 {t.Fatalf("workspace not removed: %v %v",entries,e)}
+ })
+ }
+}

@@ -1,0 +1,8 @@
+=== RUN   TestR14OutcomeRetainedForUnsupportedRun
+--- PASS: TestR14OutcomeRetainedForUnsupportedRun (0.00s)
+=== RUN   TestR14OutcomeRetainedForUnsupportedRun
+--- PASS: TestR14OutcomeRetainedForUnsupportedRun (0.00s)
+=== RUN   TestR14OutcomeRetainedForUnsupportedRun
+--- PASS: TestR14OutcomeRetainedForUnsupportedRun (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/exectool	1.586s

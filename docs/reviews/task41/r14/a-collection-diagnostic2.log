@@ -1,0 +1,15 @@
+=== RUN   TestR14CollectionErrorStopsGroup
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.06s)
+=== RUN   TestR14CollectionErrorStopsGroup
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.02s)
+=== RUN   TestR14CollectionErrorStopsGroup
+--- PASS: TestR14CollectionErrorStopsGroup (0.03s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/host	20.664s
+FAIL

@@ -1,0 +1,35 @@
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.02s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+--- FAIL: TestR14CollectionErrorStopsGroup (10.03s)
+    r14_a_collection_probe_test.go:24: execution=collection refused
+        exec: WaitDelay expired before I/O complete
+        read |0: file already closed cleanup=owned group still exists: context deadline exceeded
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/host	85.282s
+FAIL

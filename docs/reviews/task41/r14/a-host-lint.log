@@ -1,0 +1,5 @@
+adapters/sandbox/host/process_unix.go:32:21: os/exec.Command must not be called. use os/exec.CommandContext (noctx)
+	return exec.Command(command, args...)
+	                   ^
+1 issues:
+* noctx: 1

@@ -21,3 +21,11 @@ Backends create a fresh bounded cleanup context independent of caller cancellati
 `textprocessor.ReaderWithContext` checks context before each read. It cannot interrupt an already blocked generic `io.Reader`, owns no reader lifetime and launches no goroutines. Transport owners close owned bodies/processes or set I/O deadlines to unblock reads. Cancellation between reads is cooperative; mid-read termination requires a transport capability.
 
 This is a breaking change to internal helpers and cleanup visibility. No compatibility flag or permissive legacy path is retained.
+
+`CleanupError.ResourceID` optionally retains a backend-owned opaque reconciliation
+locator (the host backend uses its retained workspace path). `exectool` wraps sandbox
+errors with `RunOutcomeError`, retaining exactly the returned RunResult for host
+inspection through errors.As. It emits no success chunk on that path. Cleanup-only
+failures can carry a completed guest exit/output; interrupted/setup failures may
+carry zero or incomplete results. The typed error does not claim completeness or
+authorize retry. Primary cancellation/timeout/output-limit classification survives.

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -108,15 +107,24 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 	if err != nil {
 		return exectool.RunResult{}, fmt.Errorf("%w: create workspace: %w", exectool.ErrSandboxFailure, err)
 	}
+	mayRemoveWorkspace := true
 	defer func() {
+		if !mayRemoveWorkspace {
+			return
+		}
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		defer cancel()
-		runErr = sandboxfs.WithCleanupError(
-			runErr,
-			"host",
-			"remove workspace",
-			sandboxfs.RemoveWorkspace(cleanupCtx, workspace),
-		)
+		if cleanupErr := sandboxfs.RemoveWorkspace(cleanupCtx, workspace); cleanupErr != nil {
+			runErr = errors.Join(
+				runErr,
+				&exectool.CleanupError{
+					Backend:    "host",
+					Operation:  "remove workspace",
+					ResourceID: workspace,
+					Cause:      cleanupErr,
+				},
+			)
+		}
 	}()
 
 	canonicalFiles, err := sandboxfs.CanonicalizeFiles(req.Files, runtime.ScriptName)
@@ -133,8 +141,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 
 	args := append(append([]string(nil), runtime.Args...), runtime.ScriptName)
 	// #nosec G204 -- runtime commands are explicit host-sandbox configuration, not LLM-controlled input.
-	cmd := exec.CommandContext(ctx, runtime.Command, args...)
-	prepareCommand(cmd)
+	cmd := newRuntimeCommand(ctx, runtime.Command, args...)
 	cmd.Dir = workspace
 	env := make(map[string]string, len(s.environment)+len(req.Env))
 	maps.Copy(env, s.environment)
@@ -151,24 +158,25 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 	cmd.Stderr = stderr
 
 	start := time.Now()
-	err = cmd.Run()
+	exitCode, executionErr, cleanupErr := runRuntime(ctx, cmd)
 	duration := time.Since(start)
-
-	if err != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-			return sandboxfs.FinalizeOrInterrupt(
-				ctx, nil, stdout, stderr, exitErr.ExitCode(), duration, false,
-			)
-		}
-
-		return sandboxfs.FinalizeOrInterrupt(
-			ctx,
-			fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, err),
-			stdout, stderr, 0, duration, false,
+	if executionErr != nil {
+		executionErr = fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, executionErr)
+	}
+	result, runErr = sandboxfs.FinalizeOrInterrupt(ctx, executionErr, stdout, stderr, exitCode, duration, false)
+	if cleanupErr != nil {
+		mayRemoveWorkspace = false
+		runErr = errors.Join(
+			runErr,
+			&exectool.CleanupError{
+				Backend:    "host",
+				Operation:  "stop owned group",
+				ResourceID: workspace,
+				Cause:      cleanupErr,
+			},
 		)
 	}
-
-	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, stderr, 0, duration, false)
+	return result, runErr
 }
 
 func encodeEnv(env map[string]string) []string {

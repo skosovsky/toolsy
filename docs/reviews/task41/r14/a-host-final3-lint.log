@@ -1,0 +1,5 @@
+adapters/sandbox/host/collection_unix_test.go:17:5: error-naming: error var collectionWriterError should have name of the form errFoo (revive)
+var collectionWriterError = errors.New("collection refused")
+    ^
+1 issues:
+* revive: 1

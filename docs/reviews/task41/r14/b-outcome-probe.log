@@ -1,0 +1,6 @@
+=== RUN   TestR14OutcomeRetainedForUnsupportedRun
+    r14_b_probe_test.go:13: sandbox error dropped outcome: VALIDATION_FAILED: unsupported language for this sandbox
+--- FAIL: TestR14OutcomeRetainedForUnsupportedRun (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/exectool	0.674s
+FAIL

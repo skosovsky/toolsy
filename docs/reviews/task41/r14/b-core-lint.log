@@ -1,0 +1,5 @@
+internal/sandboxfs/cleanup.go:16:31: exectool.CleanupError is missing field ResourceID (exhaustruct_v5)
+	return errors.Join(primary, &exectool.CleanupError{
+	                             ^
+1 issues:
+* exhaustruct_v5: 1

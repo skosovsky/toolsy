@@ -1,0 +1,20 @@
+--- FAIL: TestR14PublicAdversarial (0.30s)
+    --- FAIL: TestR14PublicAdversarial/output_collection (0.25s)
+        r14_a_probe_test.go:30: workspace not removed: [d toolsy-host-3490085887/] <nil>
+--- FAIL: TestR14PublicAdversarial (0.33s)
+    --- FAIL: TestR14PublicAdversarial/output_collection (0.27s)
+        r14_a_probe_test.go:30: workspace not removed: [d toolsy-host-940078348/] <nil>
+--- FAIL: TestR14PublicAdversarial (0.25s)
+    --- FAIL: TestR14PublicAdversarial/output_collection (0.18s)
+        r14_a_probe_test.go:30: workspace not removed: [d toolsy-host-2520910687/] <nil>
+--- FAIL: TestR14CollectionErrorStopsGroup (0.04s)
+    r14_a_collection_probe_test.go:24: execution=collection refused cleanup=kill owned process group: operation not permitted
+--- FAIL: TestR14PublicAdversarial (0.34s)
+    --- FAIL: TestR14PublicAdversarial/output_collection (0.28s)
+        r14_a_probe_test.go:30: workspace not removed: [d toolsy-host-2391790858/] <nil>
+--- FAIL: TestR14PublicAdversarial (0.32s)
+    --- FAIL: TestR14PublicAdversarial/output_collection (0.27s)
+        r14_a_probe_test.go:30: workspace not removed: [d toolsy-host-426380905/] <nil>
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/host	2.524s
+FAIL

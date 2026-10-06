@@ -1,0 +1,18 @@
+package exectool_test
+import (
+ "context"
+ "errors"
+ "testing"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/exectool"
+)
+type r14DynamicSandbox struct{}
+func(r14DynamicSandbox) SupportedLanguages() []string {return []string{"test"}}
+func(r14DynamicSandbox) Run(context.Context,exectool.RunRequest)(exectool.RunResult,error){return exectool.RunResult{Stdout:"known"},exectool.ErrUnsupportedLanguage}
+func TestR14UnsupportedOutcomeCause(t *testing.T){
+ tool,err:=exectool.New(r14DynamicSandbox{});if err!=nil{t.Fatal(err)}
+ err=tool.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{"language":"test","code":"anything"}`)},func(toolsy.Chunk)error{t.Fatal("success");return nil})
+ var outcome *exectool.RunOutcomeError
+ if !errors.As(err,&outcome){t.Fatalf("outcome lost: %v",err)}
+ if outcome.Result.Stdout!="known"||!errors.Is(err,exectool.ErrUnsupportedLanguage){t.Fatalf("cause/outcome lost: %#v %v",outcome,err)}
+}

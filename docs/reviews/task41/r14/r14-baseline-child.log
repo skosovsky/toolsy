@@ -1,0 +1,25 @@
+--- FAIL: TestRunStopsDescendantsAfterGuestCompletion (10.12s)
+    --- FAIL: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse (5.03s)
+        r14_probe_test.go:38: 
+            	Error Trace:	/private/tmp/toolsy-task41/r14-baseline/adapters/sandbox/host/r14_probe_test.go:38
+            	Error:      	Received unexpected error:
+            	            	sandbox internal failure: execute: sandbox internal failure: execute runtime: exec: WaitDelay expired before I/O complete
+            	Test:       	TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse
+    --- FAIL: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue (0.04s)
+        r14_probe_test.go:45: 
+            	Error Trace:	/private/tmp/toolsy-task41/r14-baseline/adapters/sandbox/host/r14_probe_test.go:45
+            	Error:      	Expected error with "no such process" in chain but got nil.
+            	Test:       	TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue
+    --- FAIL: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse (5.03s)
+        r14_probe_test.go:45: 
+            	Error Trace:	/private/tmp/toolsy-task41/r14-baseline/adapters/sandbox/host/r14_probe_test.go:45
+            	Error:      	Expected error with "no such process" in chain but got nil.
+            	Test:       	TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse
+    --- FAIL: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue (0.02s)
+        r14_probe_test.go:45: 
+            	Error Trace:	/private/tmp/toolsy-task41/r14-baseline/adapters/sandbox/host/r14_probe_test.go:45
+            	Error:      	Expected error with "no such process" in chain but got nil.
+            	Test:       	TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/host	10.586s

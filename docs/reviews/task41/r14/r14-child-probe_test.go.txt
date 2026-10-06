@@ -1,0 +1,52 @@
+//go:build unix
+package host
+import("fmt";"os";"path/filepath";"strconv";"syscall";"testing";"github.com/stretchr/testify/require";"github.com/skosovsky/toolsy/exectool")
+func TestRunStopsDescendantsAfterGuestCompletion(t *testing.T) {
+	for _, exit := range []int{0, 7} {
+		for _, redirected := range []bool{false, true} {
+			t.Run(fmt.Sprintf("exit%d/redirected%t", exit, redirected), func(t *testing.T) {
+				// Arrange: child remains in the owned group, with either inherited or redirected pipes.
+				root := t.TempDir()
+				pidFile := filepath.Join(t.TempDir(), "child.pid")
+				t.Cleanup(func() {
+					data, _ := os.ReadFile(pidFile)
+					pid, _ := strconv.Atoi(string(data))
+					if pid > 0 {
+						_ = syscall.Kill(pid, syscall.SIGKILL)
+					}
+				})
+				sb, err := New(
+					WithRuntime("sh", Runtime{Command: "/bin/sh", ScriptName: "main.sh"}),
+					WithTempDirRoot(root),
+				)
+				require.NoError(t, err)
+				redirect := ""
+				if redirected {
+					redirect = " >/dev/null 2>&1"
+				}
+				code := fmt.Sprintf(
+					"/bin/sleep 30%s &\nchild=$!\nprintf '%%s' \"$child\" > \"$PIDFILE\"\nprintf guest\nexit %d\n",
+					redirect,
+					exit,
+				)
+				// Act.
+				result, runErr := sb.Run(
+					t.Context(),
+					exectool.RunRequest{Language: "sh", Code: code, Env: map[string]string{"PIDFILE": pidFile}},
+				)
+				// Assert.
+				require.NoError(t, runErr)
+				require.Equal(t, exit, result.ExitCode)
+				require.Equal(t, "guest", result.Stdout)
+				data, err := os.ReadFile(pidFile)
+				require.NoError(t, err)
+				pid, err := strconv.Atoi(string(data))
+				require.NoError(t, err)
+				require.ErrorIs(t, syscall.Kill(pid, 0), syscall.ESRCH)
+				entries, err := os.ReadDir(root)
+				require.NoError(t, err)
+				require.Empty(t, entries)
+			})
+		}
+	}
+}

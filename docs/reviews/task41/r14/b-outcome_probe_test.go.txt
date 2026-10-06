@@ -1,0 +1,14 @@
+package exectool
+import (
+ "context"
+ "errors"
+ "testing"
+ "github.com/skosovsky/toolsy"
+)
+func TestR14OutcomeRetainedForUnsupportedRun(t *testing.T) {
+ sb := &mockSandbox{languages:[]string{"test"},runFn:func(context.Context,RunRequest)(RunResult,error){return RunResult{Stdout:"known"},ErrUnsupportedLanguage}}
+ tool,err:=New(sb); if err!=nil {t.Fatal(err)}
+ err=tool.Execute(context.Background(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{"language":"test","code":"data"}`)},func(toolsy.Chunk)error{t.Fatal("unexpectedchunk");return nil})
+ var out *RunOutcomeError
+ if !errors.As(err,&out){t.Fatalf("sandbox error dropped outcome: %v",err)}
+}

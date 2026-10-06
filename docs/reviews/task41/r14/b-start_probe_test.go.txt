@@ -1,0 +1,24 @@
+package host_test
+
+import (
+ "context"
+ "errors"
+ "testing"
+ "github.com/skosovsky/toolsy/adapters/sandbox/host"
+ "github.com/skosovsky/toolsy/exectool"
+)
+func TestR14MissingAbsoluteExecutableIsInfrastructureFailure(t *testing.T) {
+ sb, err := host.New(host.WithRuntime("missing", host.Runtime{Command:"/this/path/does/not/exist/toolsy-r14", ScriptName:"main.txt"}))
+ if err != nil { t.Fatal(err) }
+ result, err := sb.Run(context.Background(), exectool.RunRequest{Language:"missing",Code:"data"})
+ if !errors.Is(err, exectool.ErrSandboxFailure) { t.Fatalf("missing executable became guest success: result=%+v err=%v",result,err) }
+}
+func TestR14RealExitCodesRemainGuestResults(t *testing.T) {
+ for _, code := range []string{"exit 126", "exit 127", "kill -TERM $$"} {
+  sb, err := host.New(host.WithRuntime("sh",host.Runtime{Command:"/bin/sh",ScriptName:"main.sh"}));if err!=nil{t.Fatal(err)}
+  result,err:=sb.Run(context.Background(),exectool.RunRequest{Language:"sh",Code:code})
+  if err!=nil{t.Fatalf("%s infrastructure instead of guest: %v",code,err)}
+  expected:=126;if code=="exit 127"{expected=127};if code=="kill -TERM $$"{expected=-1}
+  if result.ExitCode!=expected{t.Fatalf("%s code%d want%d",code,result.ExitCode,expected)}
+ }
+}

@@ -474,3 +474,16 @@ transport snapshots; a reentrant transaction would require a different port
 contract. Descriptor mapper callbacks retain their existing reentry behavior.
 Transport queue/count refusals expose `TransportLimitError` with
 `ErrTransportLimitExceeded`; frame failures preserve `ErrReadLimitExceeded`.
+
+## R14 / D28 — host descendants and failed cleanup outcomes
+
+Unix host execution now launches the runtime directly and uses a separate /bin/sh
+anchor with a private hold pipe. It stops owned group descendants before workspace removal
+on every completion path, signaling only while the group leader is unreaped. Guest start errors and exit statuses retain Go exec semantics. Escaped groups and
+non-Unix process-tree termination are not covered. Cleanup confirmation is bounded;
+failed confirmation retains the workspace and exposes CleanupError.ResourceID.
+
+exectool failed execution retains the sandbox-returned RunResult in RunOutcomeError
+reachable through errors.As; the cause and error classification remain inspectable.
+There is no successful result chunk on failure. A returned zero/partial result is
+not automatically complete, and cleanup failure must not trigger a blind retry.

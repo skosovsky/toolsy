@@ -104,7 +104,7 @@ func newExecHandler(
 
 		res, runErr := sandbox.Run(ctx, req)
 		if runErr != nil {
-			return mapExecError(runErr)
+			return mapExecError(&RunOutcomeError{Result: res, Cause: runErr})
 		}
 		out, marshalErr := json.Marshal(res)
 		if marshalErr != nil {
@@ -249,7 +249,7 @@ func mapExecError(err error) error {
 		return nil
 	}
 	if errors.Is(err, ErrUnsupportedLanguage) {
-		return toolsy.NewValidationError(err.Error())
+		return errors.Join(toolsy.NewValidationError(err.Error()), err)
 	}
 	if errors.Is(err, context.Canceled) {
 		return err

@@ -405,3 +405,15 @@ func helperCleanupFailure(code string) {
 		os.Exit(7)
 	}
 }
+
+func TestMissingAbsoluteExecutableIsInfrastructureFailure(t *testing.T) {
+	// Arrange.
+	sb, err := New(
+		WithRuntime("missing", Runtime{Command: filepath.Join(t.TempDir(), "missing"), ScriptName: "main.txt"}),
+	)
+	require.NoError(t, err)
+	// Act.
+	_, err = sb.Run(t.Context(), exectool.RunRequest{Language: "missing", Code: "data"})
+	// Assert.
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+}

@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted (commit pending); rows 14–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted (commit pending); rows 15–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -505,3 +505,42 @@ count5, lint0), acceptance B 100% (MCP race21.211s, independent probes count5,
 lint0); no unresolved detected defects. Parent full MCP race21.349s, focused
 count5 race3.237s, lint0. Evidence: docs/reviews/task41/r13/. Initial findings and
 verdicts are superseded by final accepted reviews. Commit: fix: mcp lifetimes.
+
+### 14 — R14 / D28 (accepted)
+
+Criteria for both independent reviewers (20% each):
+1. Owned Unix process-group descendants are stopped on guest exit0/nonzero,
+   cancellation and collection failure before workspace deletion; no PID/group
+   reuse signal after the owned leader is reaped. No isolation/escape claims.
+2. Cleanup/collection is bounded by existing cleanup timeout/WaitDelay, cancellation
+   takes precedence, primary guest exit/output is preserved on successful cleanup.
+   Failed cleanup is an inspectable secondary diagnostic with backend resource ID.
+3. exectool error paths retain the sandbox-returned outcome in a typed error cause,
+   without emitting success or enabling blind retry. Infrastructure/timeout/output
+   classification is preserved and contract describes incomplete results.
+4. AAA tests cover redirected and inherited child pipes, success/nonzero/cancel,
+   guarantee fixture cleanup and verify no surviving group child before removal.
+   A public baseline child-leak probe demonstrates before/after behavior.
+5. Affected tests/race/lint and platform compile checks pass; docs/migration accurately
+   scope Unix supervision and unsupported platform capabilities; both reviewers100%.
+
+Contract: Unix host uses an owned /bin/sh anchor as unreaped process-group
+leader; the guest launches directly through Go exec. Kill the owned group before
+reaping the anchor; an explicit cleanup budget bounds owned output pipe collection.
+Unix process-group membership escape is outside this non-isolated adapter contract.
+
+R14 review corrections: keep the anchor separate from direct guest exec (missing
+executables remain infrastructure failures; guest exit126/127/signal preserved).
+Preserve unsupported-language cause through validation mapping. Join all owned
+watchers/collectors before anchor reap; direct-process fallback on failed group
+signals retains cleanup diagnostics. Coordinate initial stops, then sweep after
+guest Wait while the anchor pins PGID, covering fork-vs-SIGKILL races. Transient
+EPERM is never removal confirmation; retain bounded observation to ESRCH. Add
+permanent rejecting-writer/fork fixture with cleanup of both possible children.
+
+Row14 final gate: A100% (hostrace13.445s, exectool1.991s, adversarialcount10
+4.209s, bothlint0, Linux/WindowscompilePASS); B100% (hostrace12.910s,
+collection/fork+overflowcount20race5.421s, publicstart1.851s, lint0,
+Linux/WindowscompilePASS). No unresolved detected defects. Parent finalhostrace
+11.622s, targetedcount10race4.235s, exectoolrace1.912s, host/rootlint0.
+Evidence: docs/reviews/task41/r14/. Commit: fix: host descendants.

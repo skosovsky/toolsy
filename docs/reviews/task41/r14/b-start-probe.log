@@ -1,0 +1,7 @@
+=== RUN   TestR14MissingAbsoluteExecutableIsInfrastructureFailure
+    r14_b_probe_test.go:14: missing executable became guest success: result={Stdout: Stderr:toolsy-supervisor: /this/path/does/not/exist/toolsy-r14: No such file or directory
+         ExitCode:127 Duration:12.257333ms} err=<nil>
+--- FAIL: TestR14MissingAbsoluteExecutableIsInfrastructureFailure (0.02s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/host	0.838s
+FAIL

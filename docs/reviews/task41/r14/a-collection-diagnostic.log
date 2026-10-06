@@ -1,0 +1,12 @@
+=== RUN   TestR14CollectionErrorStopsGroup
+--- PASS: TestR14CollectionErrorStopsGroup (0.02s)
+=== RUN   TestR14PublicAdversarial
+=== RUN   TestR14PublicAdversarial/signal
+=== RUN   TestR14PublicAdversarial/literal_script_name
+=== RUN   TestR14PublicAdversarial/output_collection
+--- PASS: TestR14PublicAdversarial (0.31s)
+    --- PASS: TestR14PublicAdversarial/signal (0.04s)
+    --- PASS: TestR14PublicAdversarial/literal_script_name (0.04s)
+    --- PASS: TestR14PublicAdversarial/output_collection (0.23s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	2.010s
