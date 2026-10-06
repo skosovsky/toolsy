@@ -1,0 +1,12 @@
+toolkits/memory/memory.go:35:16: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, fmt.Errorf("toolkit/memory: nil option")
+			            ^
+toolkits/memory/memory.go:40:15: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+		return nil, fmt.Errorf("toolkit/memory: limits must not be negative")
+		            ^
+toolkits/memory/options.go:8:1: exported: comment on exported type Option should be of the form "Option ..." (with optional leading article) (revive)
+// Nil options fail construction. Host ports/callbacks are borrowed; the host owns
+^
+3 issues:
+* perfsprint: 2
+* revive: 1

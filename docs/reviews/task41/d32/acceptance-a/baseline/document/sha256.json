@@ -1,0 +1,10 @@
+{
+  "toolkits/document/doc.go": "f184c1bcb79e128b69cf313c10cc2e9bd2633f394216ad36dddf352ebb6699b6",
+  "toolkits/document/document.go": "15289aba910a2c7fba23e9f630ced4c7ab056fbf00fee970b5c80ea6b055f9ae",
+  "toolkits/document/open_other.go": "f2c4b9298090c57967be7cb200c7f06eb7d1c91449b7a2cc974bc97c3ffe937f",
+  "toolkits/document/open_unix.go": "7a9d0538d6ad0ffaaf109051a4eef98c7fbb94456137383a27757663eb8270bc",
+  "toolkits/document/options.go": "6fc5a9dc242032d2495b77e3d5d3fe6deb00d854bf512380bfdfe1aac9fc40dc",
+  "toolkits/document/parser_csv.go": "c402fa2feb479ff96a11c8092214f418cdf7a4b6c283963e22c0e0df9857b113",
+  "toolkits/document/parser_docx.go": "9a445ab9eb599d1df101decca6046b201c10435ecba1ef698c24bb7d670ac3fe",
+  "toolkits/document/parser_pdf.go": "deb8bb405818d0d8b6c22ab9997a20afd20794d051a34abe8169c993601e5df0"
+}

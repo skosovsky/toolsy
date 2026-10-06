@@ -1,0 +1,9 @@
+=== RUN   TestBaselineReturnsInvalidObject
+    baseline_probe_test.go:7: baseline returned usable nonnil scratchpad for negative configuration
+--- FAIL: TestBaselineReturnsInvalidObject (0.00s)
+=== RUN   TestBaselineNilOption
+    baseline_probe_test.go:11: baseline nil Option panicked: runtime error: invalid memory address or nil pointer dereference
+--- FAIL: TestBaselineNilOption (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/memory	0.408s
+FAIL

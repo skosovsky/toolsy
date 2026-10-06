@@ -1,0 +1,13 @@
+toolkits/document/document.go:38:1: cognitive complexity 22 of func `AsToolWithCleanup` is high (> 20) (gocognit)
+func AsToolWithCleanup(opts ...Option) (toolsy.Tool, func(), error) {
+^
+toolkits/document/constructor_contract_test.go:23:3: unlambda: replace `func(n int) Option { return WithMaxBytes(n) }` with `WithMaxBytes` (gocritic)
+		func(n int) Option { return WithMaxBytes(n) },
+		^
+toolkits/document/document.go:42:21: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, nil, fmt.Errorf("toolkit/document: nil option")
+			                 ^
+3 issues:
+* gocognit: 1
+* gocritic: 1
+* perfsprint: 1

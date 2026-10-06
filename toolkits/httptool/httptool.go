@@ -41,7 +41,13 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 func AsToolsWithCleanup(opts ...Option) ([]toolsy.Tool, func(), error) {
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, nil, errors.New("toolkit/httptool: nil option")
+		}
 		opt(&o)
+	}
+	if o.maxRequestBody < 0 || o.maxResponseBody < 0 || o.maxWireBytes < 0 {
+		return nil, nil, errors.New("toolkit/httptool: limits must not be negative")
 	}
 	applyDefaults(&o)
 	if err := normalizeCredentialOrigins(&o); err != nil {

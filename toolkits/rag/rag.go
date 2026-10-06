@@ -30,7 +30,13 @@ func AsSearchTool(r DocumentRetriever, opts ...Option) (toolsy.Tool, error) {
 	}
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/rag: nil option")
+		}
 		opt(&o)
+	}
+	if o.maxBytes < 0 || o.maxResults < 0 || o.maxItemBytes < 0 || o.maxSourceBytes < 0 {
+		return nil, errors.New("toolkit/rag: limits must not be negative")
 	}
 	o.applyDefaults()
 

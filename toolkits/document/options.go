@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures AsTool (limits, remote fetch, tool name).
 type Option func(*options)
 
@@ -38,7 +41,7 @@ const (
 )
 
 func applyDefaults(o *options) {
-	if o.maxBytes <= 0 {
+	if o.maxBytes == 0 {
 		o.maxBytes = defaultMaxBytes
 	}
 	if o.toolName == "" {
@@ -172,4 +175,20 @@ func parserLimits(o *options) Limits {
 		l.ItemBytes = defaultItemBytes
 	}
 	return l
+}
+
+func configure(opts []Option) (options, error) {
+	var o options
+	for _, opt := range opts {
+		if opt == nil {
+			return options{}, errors.New("toolkit/document: nil option")
+		}
+		opt(&o)
+	}
+	if o.maxBytes < 0 || o.limits.SourceBytes < 0 || o.limits.ParsedBytes < 0 ||
+		o.limits.MaxItems < 0 || o.limits.ItemBytes < 0 {
+		return options{}, errors.New("toolkit/document: limits must not be negative")
+	}
+	applyDefaults(&o)
+	return o, nil
 }

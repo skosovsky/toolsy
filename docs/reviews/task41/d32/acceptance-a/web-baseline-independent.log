@@ -1,0 +1,104 @@
+--- FAIL: TestD32ConstructorOptions (0.01s)
+    --- FAIL: TestD32ConstructorOptions/nil (0.00s)
+        constructor_contract_test.go:32: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:32
+            	Error:      	func (assert.PanicTestFunc)(0x105293a20) should not panic
+            	            		Panic value:	runtime error: invalid memory address or nil pointer dereference
+            	            		Panic stack:	goroutine 9 [running]:
+            	            	runtime/debug.Stack()
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/debug/stack.go:26 +0x64
+            	            	github.com/stretchr/testify/assert.didPanic.func1()
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1287 +0x64
+            	            	panic({0x1056fc0c8?, 0x1057b9000?})
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120
+            	            	github.com/skosovsky/toolsy/toolkits/web.AsToolsWithCleanup({0x105759118, 0x5b5476563d10}, {0x5b54762775e0, 0x1, 0x1057d2a20?})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/web.go:59 +0xdc
+            	            	github.com/skosovsky/toolsy/toolkits/web.TestD32ConstructorOptions.func1({0x5b54762775e0, 0x1, 0x1})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:12 +0x5c
+            	            	github.com/skosovsky/toolsy/toolkits/web.TestD32ConstructorOptions.func2.1()
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:32 +0x38
+            	            	github.com/stretchr/testify/assert.didPanic(0x1057bcc40?)
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1292 +0x68
+            	            	github.com/stretchr/testify/assert.NotPanics({0x105759158, 0x5b5476517b08}, 0x5b5476213338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1369 +0x70
+            	            	github.com/stretchr/testify/require.NotPanics({0x10575aec8, 0x5b5476517b08}, 0x5b5476213338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/require/require.go:1683 +0xa4
+            	            	github.com/skosovsky/toolsy/toolkits/web.TestD32ConstructorOptions.func2(0x5b5476517b08)
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:32 +0x8c
+            	            	testing.tRunner(0x5b5476517b08, 0x5b5476555d90)
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4
+            	            	created by testing.(*T).Run in goroutine 8
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8
+            	Test:       	TestD32ConstructorOptions/nil
+    --- FAIL: TestD32ConstructorOptions/a (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/a
+    --- FAIL: TestD32ConstructorOptions/b (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/b
+    --- FAIL: TestD32ConstructorOptions/c (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/c
+    --- FAIL: TestD32ConstructorOptions/d (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/d
+    --- FAIL: TestD32ConstructorOptions/e (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/e
+    --- FAIL: TestD32ConstructorOptions/f (0.00s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/f
+    --- FAIL: TestD32ConstructorOptions/g (0.01s)
+        constructor_contract_test.go:40: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/constructor_contract_test.go:40
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/g
+--- FAIL: TestD32WebLibraryRejectsBeforeIO (0.00s)
+    option_snapshot_test.go:31: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/option_snapshot_test.go:31
+        	Error:      	func (assert.PanicTestFunc)(0x105293fa0) should not panic
+        	            		Panic value:	runtime error: invalid memory address or nil pointer dereference
+        	            		Panic stack:	goroutine 33 [running]:
+        	            	runtime/debug.Stack()
+        	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/debug/stack.go:26 +0x64
+        	            	github.com/stretchr/testify/assert.didPanic.func1()
+        	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1287 +0x64
+        	            	panic({0x1056fc0c8?, 0x1057b9000?})
+        	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120
+        	            	github.com/skosovsky/toolsy/toolkits/web.SearchStructured({0x10575cfd0, 0x5b5476608190}, {0x1057591d8, 0x5b54766a8350}, {0x1052e803f, 0x5}, {0x5b5476294d10, 0x1, 0x5b5476294cd8?})
+        	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/library.go:24 +0x118
+        	            	github.com/skosovsky/toolsy/toolkits/web.TestD32WebLibraryRejectsBeforeIO.func2()
+        	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/option_snapshot_test.go:32 +0x68
+        	            	github.com/stretchr/testify/assert.didPanic(0x1057bcc40?)
+        	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1292 +0x68
+        	            	github.com/stretchr/testify/assert.NotPanics({0x105759158, 0x5b54765c2008}, 0x5b5476653170, {0x0, 0x0, 0x0})
+        	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1369 +0x70
+        	            	github.com/stretchr/testify/require.NotPanics({0x10575aec8, 0x5b54765c2008}, 0x5b5476653170, {0x0, 0x0, 0x0})
+        	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/require/require.go:1683 +0xa4
+        	            	github.com/skosovsky/toolsy/toolkits/web.TestD32WebLibraryRejectsBeforeIO(0x5b54765c2008)
+        	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/option_snapshot_test.go:31 +0x244
+        	            	testing.tRunner(0x5b54765c2008, 0x10575e628)
+        	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4
+        	            	created by testing.(*T).Run in goroutine 1
+        	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8
+        	Test:       	TestD32WebLibraryRejectsBeforeIO
+--- FAIL: TestD32BlockedDomainsSnapshot (0.00s)
+    option_snapshot_test.go:60: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/option_snapshot_test.go:60
+        	Error:      	An error is expected but got nil.
+        	Test:       	TestD32BlockedDomainsSnapshot
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/web	0.523s
+FAIL

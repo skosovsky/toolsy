@@ -1,0 +1,23 @@
+toolkits/web/constructor_contract_test.go:23:3: unlambda: replace `func(n int) Option { return WithMaxSearchResults(n) }` with `WithMaxSearchResults` (gocritic)
+		func(n int) Option { return WithMaxSearchResults(n) },
+		^
+toolkits/web/constructor_contract_test.go:24:3: unlambda: replace `func(n int) Option { return WithMaxSearchItemBytes(n) }` with `WithMaxSearchItemBytes` (gocritic)
+		func(n int) Option { return WithMaxSearchItemBytes(n) },
+		^
+toolkits/web/constructor_contract_test.go:25:3: unlambda: replace `func(n int) Option { return WithMaxSearchSourceBytes(n) }` with `WithMaxSearchSourceBytes` (gocritic)
+		func(n int) Option { return WithMaxSearchSourceBytes(n) },
+		^
+toolkits/web/constructor_contract_test.go:26:3: unlambda: replace `func(n int) Option { return WithMaxPageBytes(n) }` with `WithMaxPageBytes` (gocritic)
+		func(n int) Option { return WithMaxPageBytes(n) },
+		^
+toolkits/web/constructor_contract_test.go:27:3: unlambda: replace `func(n int) Option { return WithMaxSearchBytes(n) }` with `WithMaxSearchBytes` (gocritic)
+		func(n int) Option { return WithMaxSearchBytes(n) },
+		^
+toolkits/web/constructor_contract_test.go:28:3: unlambda: replace `func(n int) Option { return WithMaxSourceBytes(n) }` with `WithMaxSourceBytes` (gocritic)
+		func(n int) Option { return WithMaxSourceBytes(n) },
+		^
+toolkits/web/constructor_contract_test.go:29:3: unlambda: replace `func(n int) Option { return WithMaxMarkdownBytes(n) }` with `WithMaxMarkdownBytes` (gocritic)
+		func(n int) Option { return WithMaxMarkdownBytes(n) },
+		^
+7 issues:
+* gocritic: 7

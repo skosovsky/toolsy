@@ -1,0 +1,6 @@
+# github.com/skosovsky/toolsy/toolkits/httptool [github.com/skosovsky/toolsy/toolkits/httptool.test]
+./httptool.go:50:15: not enough return values
+	have (nil, error)
+	want ([]toolsy.Tool, func(), error)
+FAIL	github.com/skosovsky/toolsy/toolkits/httptool [build failed]
+FAIL

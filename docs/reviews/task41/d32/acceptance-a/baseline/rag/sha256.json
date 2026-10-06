@@ -1,0 +1,8 @@
+{
+  "toolkits/rag/bounds.go": "7d8e612c09d36e6dc147a01670e1535e52d9f865f81fbf71cde04ac1a4a639cf",
+  "toolkits/rag/doc.go": "889698014a79fe3419ad3c5d7b512c2c9d4f16e3c6e3c77b1ff73b3d8e510cd6",
+  "toolkits/rag/document.go": "de2edb588c198994c024291215f57f024867186af50aa8d2d1eecfbe0107ca77",
+  "toolkits/rag/markdown.go": "cd7e995cb787f7efa2b7354a99dabefdd0e0703d739b4cdd3990c428ca9ac2b1",
+  "toolkits/rag/options.go": "7d0eb00df4ea9eaaef82a9a38ab93f1ebc6c8b9cc2313412719ea58fac32a442",
+  "toolkits/rag/rag.go": "9590e99daf920e0106f6f6935b00bc270c017110aa8b0d7515f4af9c746dd567"
+}

@@ -22,7 +22,7 @@ go get github.com/skosovsky/toolsy/toolkits/sqltool
 
 ## Limits and access contract
 
-All zero/negative options select finite defaults; positive values override them. Limits apply to actual database results, even when the query omits a LIMIT clause.
+Zero limits select finite defaults; negative limits reject construction; positive values override them. Limits apply to actual database results, even when the query omits a LIMIT clause.
 
 | Option | Default | Enforcement |
 | --- | --- | --- |
@@ -69,3 +69,9 @@ func main() {
 	}
 }
 ```
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

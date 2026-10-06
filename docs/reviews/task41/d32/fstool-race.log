@@ -1,0 +1,4 @@
+# github.com/skosovsky/toolsy/toolkits/fstool [github.com/skosovsky/toolsy/toolkits/fstool.test]
+./constructor_contract_test.go:24:31: cannot use WithMaxNameBytes (value of type func(n int) Option) as Option value in return statement
+FAIL	github.com/skosovsky/toolsy/toolkits/fstool [build failed]
+FAIL

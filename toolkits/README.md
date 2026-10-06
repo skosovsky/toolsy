@@ -65,3 +65,30 @@ permissions, scheduling, retries and external quotas. See
 [resiliency](../examples/resiliency/main.go) and
 [bound approval](human/bound_approval_test.go). No toolkit implements an agent
 loop, business authorization service, prompt repository or distributed database.
+
+
+## Constructor configuration and ownership
+
+Every toolkit constructor rejects a nil `Option` with an error, including cleanup
+wrappers and web library functions. Options apply in order; the last value wins.
+Negative limits reject construction. Zero selects the documented finite default,
+except human's explicit `WithMaxPayloadBytes(0)`, which remains an error because
+that API requires a positive control-payload budget. Invalid configuration returns
+nil constructed objects and nil cleanup functions, without calling host providers.
+`memory.NewScratchpad` now returns `(*Scratchpad, error)`; `AsTools` still checks
+whether a positive output budget can encode mandatory status responses.
+
+Security containers are snapshots at option creation and independent copies at
+each application: HTTP allowed hosts, credential origins and metadata headers,
+web blocked hosts, and SQL schema-inspection table filters. Mutations after the
+`With...` call do not affect the option or constructed tools. Do not mutate input
+containers concurrently while creating the snapshot. SQL table filters restrict
+schema inspection only; database privileges remain the query authority.
+
+Providers, databases, root handles, stores, custom scrapers, functions and state
+captured by closures are borrowed, not cloned. Keep them alive for executions and
+provide safe synchronization for concurrent calls, or serialize calls in the host.
+Snapshots do not make mutable provider internals thread-safe. Returned host data
+must remain stable for toolkit processing; ownership rules for specific data are
+in each module's contract. The HTTP pool's TLS configuration is cloned; referenced
+certificates, trust roots and callback state must remain immutable for its lifetime.

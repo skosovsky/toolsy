@@ -70,3 +70,9 @@ For plaintext, leave Representation zero or use mail.BodyPlainText. BodyMarkdown
 an output annotation, not an accepted reader input. Search and outgoing send payloads
 are unchanged. Source/item bounds include the declaration string; final JSON bounds
 include the representation annotation and converted output after JSON escaping.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

@@ -77,7 +77,7 @@ func main() {
 
 Extracted HTML and search snippets are untrusted data. Removing tags does not make their text safe instructions. Default scrape output carries `source_url` (the actual final response URL). `WithScrapeFormatter` receives the complete `ScrapeWireResult`, allowing host DTOs to retain provenance.
 
-Nonpositive budgets select finite defaults. Search accepts at most 50 results (`WithMaxSearchResults`), 16 KiB per encoded hit (`WithMaxSearchItemBytes`), and 256 KiB total encoded provider hits (`WithMaxSearchSourceBytes`), independently of the final wire budget. Overlimit provider results fail before formatters; no hits disappear silently and no cursor is invented because `SearchProvider` has no continuation capability. Providers own their internal allocations and network policy. Scraping separates HTML source (`WithMaxSourceBytes`, default final wire budget minus 18 bytes), extracted markdown (`WithMaxMarkdownBytes`, same default), and final JSON (`WithMaxPageBytes`). Actual custom scraper output is checked again by the toolkit. The default parser uses bounded input but does not promise a hard allocation or CPU quota; hostile parsing requiring such guarantees belongs in a host sandbox. Final JSON budgets include escaping and provenance.
+Zero budgets select finite defaults; negative budgets reject construction. Search accepts at most 50 results (`WithMaxSearchResults`), 16 KiB per encoded hit (`WithMaxSearchItemBytes`), and 256 KiB total encoded provider hits (`WithMaxSearchSourceBytes`), independently of the final wire budget. Overlimit provider results fail before formatters; no hits disappear silently and no cursor is invented because `SearchProvider` has no continuation capability. Providers own their internal allocations and network policy. Scraping separates HTML source (`WithMaxSourceBytes`, default final wire budget minus 18 bytes), extracted markdown (`WithMaxMarkdownBytes`, same default), and final JSON (`WithMaxPageBytes`). Actual custom scraper output is checked again by the toolkit. The default parser uses bounded input but does not promise a hard allocation or CPU quota; hostile parsing requiring such guarantees belongs in a host sandbox. Final JSON budgets include escaping and provenance.
 
 `WithHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})` applies
 explicit timeout/TLS settings to the scrape pool; custom Do/transport/proxy ports
@@ -86,3 +86,9 @@ Stop new calls before cleanup; active calls are unaffected. Ordinary `AsTools`
 retains bounded 90-second idle expiry. One-shot `ScrapePage` closes its owned idle
 pool before returning; repeated reusable calls belong in a tool set. TLSConfig is
 cloned; referenced roots, certificates and callback state must stay immutable.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

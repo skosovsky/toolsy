@@ -9,3 +9,9 @@ All limits are finite; zero selects the default, negative options reject constru
 `fs_read_file` takes `path`, optional byte `offset`, and optional byte `length` (zero uses the source limit). It returns `path`, `content`, `next_offset`, and `has_more`. File ranges are not snapshots; next offsets use returned byte counts and has_more reflects the size observed at open, so concurrent modification can change subsequent contents. Ranges must end on UTF-8 boundaries; invalid UTF-8 fails validation. Without an explicit length, files beyond the source limit fail validation; use an explicit bounded range to continue. `fs_list_dir` takes `path`, optional `offset` and `limit` (zero uses the entry limit), and returns `path`, `entries`, `next_offset`, and `has_more`. Offset is the actual filesystem enumeration position, not a sorted or snapshot cursor; changes between calls may reorder, duplicate, or omit entries. When the scan ceiling is reached, continuation fails explicitly. Select a smaller range/page if wire JSON does not fit. `fs_write_file` takes `path` and `content` and returns `status`.
 
 Read-only configuration (`WithReadOnly(true)`) omits the write tool. Tool names/descriptions can be overridden with the corresponding options. Root handles are closed after each execution; tools need no separate lifecycle API. Cancellation is checked between local IO operations; local file IO does not provide asynchronous interruption. Symlinks within the root are allowed; absolute symlinks are rejected by os.Root even if their target is inside the root.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

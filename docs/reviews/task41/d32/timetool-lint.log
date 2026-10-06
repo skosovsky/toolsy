@@ -1,0 +1,12 @@
+toolkits/timetool/constructor_contract_test.go:18:31: unlambda: replace `func(n int) Option { return WithMaxWireBytes(n) }` with `WithMaxWireBytes` (gocritic)
+	limits := []func(int) Option{func(n int) Option { return WithMaxWireBytes(n) }}
+	                             ^
+toolkits/timetool/timetool.go:58:16: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, fmt.Errorf("toolkit/timetool: nil option")
+			            ^
+toolkits/timetool/timetool.go:63:15: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+		return nil, fmt.Errorf("toolkit/timetool: limits must not be negative")
+		            ^
+3 issues:
+* gocritic: 1
+* perfsprint: 2

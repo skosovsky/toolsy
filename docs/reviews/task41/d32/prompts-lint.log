@@ -1,0 +1,22 @@
+toolkits/prompts/constructor_contract_test.go:19:3: unlambda: replace `func(n int) Option { return WithMaxBytes(n) }` with `WithMaxBytes` (gocritic)
+		func(n int) Option { return WithMaxBytes(n) },
+		^
+toolkits/prompts/constructor_contract_test.go:20:3: unlambda: replace `func(n int) Option { return WithMaxSourceBytes(n) }` with `WithMaxSourceBytes` (gocritic)
+		func(n int) Option { return WithMaxSourceBytes(n) },
+		^
+toolkits/prompts/constructor_contract_test.go:21:3: unlambda: replace `func(n int) Option { return WithMaxProvenanceBytes(n) }` with `WithMaxProvenanceBytes` (gocritic)
+		func(n int) Option { return WithMaxProvenanceBytes(n) },
+		^
+toolkits/prompts/constructor_contract_test.go:22:3: unlambda: replace `func(n int) Option { return WithMaxOutputBytes(n) }` with `WithMaxOutputBytes` (gocritic)
+		func(n int) Option { return WithMaxOutputBytes(n) },
+		^
+toolkits/prompts/prompts.go:41:16: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, fmt.Errorf("toolkit/prompts: nil option")
+			            ^
+toolkits/prompts/options.go:9:1: exported: comment on exported type Option should be of the form "Option ..." (with optional leading article) (revive)
+// Nil options fail construction. Host ports/callbacks are borrowed; the host owns
+^
+6 issues:
+* gocritic: 4
+* perfsprint: 1
+* revive: 1

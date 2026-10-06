@@ -1,0 +1,13 @@
+package memory
+import "testing"
+func TestAcceptanceABaselineNil(t *testing.T){
+ // Arrange/Act: old-signature constructor invocation.
+ defer func(){if r:=recover();r!=nil {t.Errorf("nil option panics: %v",r)}}()
+ NewScratchpad(nil)
+}
+func TestAcceptanceABaselineNegative(t *testing.T){
+ // Arrange/Act.
+ pad:=NewScratchpad(WithMaxFacts(-1))
+ // Assert: baseline exposes an invalid usable instance before AsTools.
+ if pad!=nil {t.Error("negative constructor configuration returns usable object")}
+}

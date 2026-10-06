@@ -1,0 +1,9 @@
+package httptool
+import("testing";"sync")
+func TestAcceptanceAConcurrentOptions(t *testing.T){
+// Arrange: capture policy before mutating its source.
+domains:=[]string{"api.example.com"}; origins:=[]string{"https://api.example.com"}; headers:=map[string]string{"X-Test":"safe"}; opts:=[]Option{WithAllowedDomains(domains),WithCredentialOrigins(origins),WithHeaders(headers)}; mutate:=func(){domains[0]="attacker.invalid"; origins[0]="https://attacker.invalid"; headers["X-Test"]="changed"}; check:=func(){var o options; for _,opt:=range opts{opt(&o)}; if o.allowedDomains[0]!="api.example.com" || o.credentialOrigins[0]!="https://api.example.com" || o.headers["X-Test"]!="safe" {t.Error("snapshot changed")}; o.allowedDomains[0]="own";o.credentialOrigins[0]="own";o.headers["X-Test"]="own"}
+// Act: source mutation and independent option materialization overlap.
+var wg sync.WaitGroup;wg.Add(33);go func(){defer wg.Done();for range 1000{mutate()}}();for range 32{go func(){defer wg.Done();for range 1000{check()}}()};wg.Wait()
+// Assert: checks inside each worker verify policy and independent writable containers.
+}

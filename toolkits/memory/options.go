@@ -5,8 +5,9 @@ const (
 	defaultMaxOutputBytes = 1024 * 1024
 )
 
-// Option configures a Scratchpad. Zero restores a finite default; negative limits
-// are configuration errors reported by AsTools.
+// Option rejects nil at construction. Host ports/callbacks are borrowed; the host owns
+// their lifetime and synchronization. It configures a Scratchpad. Zero restores a finite default; negative limits
+// are configuration errors reported by NewScratchpad.
 type Option func(*options)
 
 type options struct {

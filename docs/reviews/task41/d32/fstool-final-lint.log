@@ -1,0 +1,5 @@
+toolkits/fstool/fstool.go:61:1: cognitive complexity 21 of func `AsTools` is high (> 20) (gocognit)
+func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
+^
+1 issues:
+* gocognit: 1

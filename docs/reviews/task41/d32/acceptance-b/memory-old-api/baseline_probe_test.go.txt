@@ -1,0 +1,14 @@
+package memory
+import "testing"
+func TestBaselineReturnsInvalidObject(t *testing.T){
+// Arrange and Act: old API materializes invalid configuration.
+pad:=NewScratchpad(WithMaxFacts(-1))
+// Assert: expected early rejection is unavailable in old API.
+if pad!=nil {t.Fatal("baseline returned usable nonnil scratchpad for negative configuration")}
+}
+func TestBaselineNilOption(t *testing.T){
+// Arrange.
+defer func(){if p:=recover();p!=nil{t.Errorf("baseline nil Option panicked: %v",p)}}()
+// Act.
+_ = NewScratchpad(nil)
+}

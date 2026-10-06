@@ -1,0 +1,35 @@
+--- FAIL: TestD32ConstructorOptions (0.00s)
+    --- FAIL: TestD32ConstructorOptions/nil (0.00s)
+        constructor_contract_test.go:25: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/prompts/constructor_contract_test.go:25
+            	Error:      	func (assert.PanicTestFunc)(0x1004fcdb0) should not panic
+            	            		Panic value:	runtime error: invalid memory address or nil pointer dereference
+            	            		Panic stack:	goroutine 7 [running]:
+            	            	runtime/debug.Stack()
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/debug/stack.go:26 +0x64
+            	            	github.com/stretchr/testify/assert.didPanic.func1()
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1287 +0x64
+            	            	panic({0x1007f4008?, 0x10088af30?})
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120
+            	            	github.com/skosovsky/toolsy/toolkits/prompts.AsTool({0x100830c18, 0x649b7627b960}, {0x649b76022de0, 0x1, 0x649b76022d88?})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/prompts/prompts.go:40 +0xa0
+            	            	github.com/skosovsky/toolsy/toolkits/prompts.TestD32ConstructorOptions.func1({0x649b76022de0, 0x1, 0x1})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/prompts/constructor_contract_test.go:12 +0x5c
+            	            	github.com/skosovsky/toolsy/toolkits/prompts.TestD32ConstructorOptions.func6.1()
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/prompts/constructor_contract_test.go:25 +0x38
+            	            	github.com/stretchr/testify/assert.didPanic(0x10088d780?)
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1292 +0x68
+            	            	github.com/stretchr/testify/assert.NotPanics({0x12df55e20, 0x649b762b18c8}, 0x649b75fcd338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1369 +0x70
+            	            	github.com/stretchr/testify/require.NotPanics({0x100831d28, 0x649b762b18c8}, 0x649b75fcd338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/require/require.go:1683 +0xa4
+            	            	github.com/skosovsky/toolsy/toolkits/prompts.TestD32ConstructorOptions.func6(0x649b762b18c8)
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/prompts/constructor_contract_test.go:25 +0x8c
+            	            	testing.tRunner(0x649b762b18c8, 0x649b762efbc0)
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4
+            	            	created by testing.(*T).Run in goroutine 6
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8
+            	Test:       	TestD32ConstructorOptions/nil
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/prompts	0.458s
+FAIL

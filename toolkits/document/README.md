@@ -37,3 +37,9 @@ counts against ParsedBytes before append. XML parsing is synchronous with contex
 checks at bounded token intervals and text/separator checkpoints; finite input does
 not promise a hard CPU deadline or bounded decoder intermediates. Use host isolation
 when hostile parsing requires stronger guarantees.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

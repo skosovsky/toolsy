@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"unicode/utf8"
@@ -59,6 +58,10 @@ type statusResult struct {
 // AsTools returns filesystem tools (list_dir, read_file, and optionally write_file) bound to baseDir.
 // baseDir must exist and be a directory. Options customize limits and tool names.
 func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
+	o, configErr := configure(opts)
+	if configErr != nil {
+		return nil, configErr
+	}
 	info, err := os.Stat(baseDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -70,17 +73,6 @@ func AsTools(baseDir string, opts ...Option) ([]toolsy.Tool, error) {
 		return nil, errors.New("toolkit/fstool: base dir is not a directory")
 	}
 
-	var o options
-	for _, opt := range opts {
-		opt(&o)
-	}
-	applyDefaults(&o)
-	if o.maxBytes < 0 || o.maxSourceBytes < 0 || int64(o.maxSourceBytes) == math.MaxInt64 || o.maxEntries < 0 ||
-		o.maxScanEntries < 0 ||
-		o.maxNameBytes < 0 ||
-		o.maxEntries >= o.maxScanEntries {
-		return nil, errors.New("toolkit/fstool: invalid limits")
-	}
 	baseDir, err = filepath.Abs(baseDir)
 	if err != nil {
 		return nil, err

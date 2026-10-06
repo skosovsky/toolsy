@@ -20,7 +20,7 @@ func (s *gateStore) Load(ctx context.Context, _ string) ([]byte, error) { return
 func (s *gateStore) Save(context.Context, string, []byte) error         { s.saves++; return nil }
 func TestScratchpadCancellationAfterLoadPreventsSave(t *testing.T) {
 	// Arrange: host returns data but cancels during its callback.
-	pad := NewScratchpad()
+	pad := mustScratchpad(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	store := &gateStore{load: func(context.Context) ([]byte, error) { cancel(); return []byte(`{"k":"v"}`), nil }}
@@ -37,7 +37,7 @@ func TestScratchpadCancellationAfterLoadPreventsSave(t *testing.T) {
 }
 func TestScratchpadGateReleasesAfterProviderErrors(t *testing.T) {
 	// Arrange.
-	pad := NewScratchpad()
+	pad := mustScratchpad(t)
 	cause := errors.New("load failed")
 	store := &gateStore{load: func(context.Context) ([]byte, error) { return nil, cause }}
 	run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
@@ -61,7 +61,7 @@ func TestScratchpadStructuredEscapingAndWireBoundary(t *testing.T) {
 	expected, err := json.Marshal(readResult{Facts: facts})
 	require.NoError(t, err)
 	for _, n := range []int{len(expected), len(expected) - 1} {
-		pad := NewScratchpad(WithMaxOutputBytes(n))
+		pad := mustScratchpad(t, WithMaxOutputBytes(n))
 		// Act.
 		got, err := pad.readHandler(t.Context(), run, struct{}{})
 		// Assert.

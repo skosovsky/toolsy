@@ -1,0 +1,6 @@
+package sqltool
+import("sync";"testing")
+func TestAcceptanceBConcurrentSnapshots(t *testing.T){
+// Arrange, Act, Assert: concurrent materialization owns independent configuration.
+source:=[]string{"safe"};opt:=WithAllowedTables(source);source[0]="evil";var wg sync.WaitGroup;for range 128{wg.Add(1);go func(){defer wg.Done();var o options;opt(&o);got:=filterTablesByAllowlist([]string{"safe","evil"},o.allowedTables);if len(got)!=1||got[0]!="safe"{t.Error("snapshot changed")};o.allowedTables[0]="worker"}()};wg.Wait()
+}

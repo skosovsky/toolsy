@@ -54,7 +54,7 @@ Both tools use one host location resolver. `WithLocationProvider` overrides `Wit
 
 Hour duration multiplication is checked before conversion to `time.Duration`; calendar input is bounded and calendar/intermediate/final results must stay within RFC3339 years 0000–9999. Overflow returns a validation error instead of wraparound. `base_date` is limited to 64 bytes. There is no collection, source reader, or continuation interface.
 
-`WithMaxWireBytes(n)` bounds both default and host-formatted complete JSON after escaping. Default: 64 KiB; zero/negative select the finite default. Overlimit output is rejected with no truncation, including multibyte and escaped strings. Host formatters remain responsible for their own computation/allocation bounds and business DTOs; the wire limit does not bound arbitrary callback allocations. Host validators run before marshaling. The tools are read-only and confer no authority for subsequent actions.
+`WithMaxWireBytes(n)` bounds both default and host-formatted complete JSON after escaping. Default: 64 KiB; zero selects the finite default; negative values reject construction. Overlimit output is rejected with no truncation, including multibyte and escaped strings. Host formatters remain responsible for their own computation/allocation bounds and business DTOs; the wire limit does not bound arbitrary callback allocations. Host validators run before marshaling. The tools are read-only and confer no authority for subsequent actions.
 
 ## Quick start
 
@@ -78,3 +78,9 @@ func main() {
 	}
 }
 ```
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

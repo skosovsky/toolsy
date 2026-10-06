@@ -93,3 +93,9 @@ Binding for an unrelated action.
 The executable [ExampleAsTools](example_test.go) shows the new data-only intent.
 Run `go test -run ExampleAsTools` in this module. Review and clarification have
 unchanged callback failure/cancellation behavior and do not issue a grant.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

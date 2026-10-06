@@ -70,7 +70,7 @@ func executeAndDecode[T any](t *testing.T, reg *toolsy.Registry, state toolsy.St
 }
 
 func TestScratchpad_ReadToolManifestReadOnly(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	tools, err := s.AsTools()
 	require.NoError(t, err)
 	var readTool toolsy.Tool
@@ -86,7 +86,7 @@ func TestScratchpad_ReadToolManifestReadOnly(t *testing.T) {
 }
 
 func TestScratchpad_RequiresRequirementsPolicy(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	tools, err := s.AsTools()
 	require.NoError(t, err)
 	reg, err := toolsy.NewRegistryBuilder().Add(tools...).Build()
@@ -105,7 +105,7 @@ func TestScratchpad_RequiresRequirementsPolicy(t *testing.T) {
 }
 
 func TestScratchpad_PinRead(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -121,7 +121,7 @@ func TestScratchpad_PinRead(t *testing.T) {
 }
 
 func TestScratchpad_PinUnpinRead(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -142,7 +142,7 @@ func TestScratchpad_PinUnpinRead(t *testing.T) {
 }
 
 func TestScratchpad_UnpinNotFound(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -154,7 +154,7 @@ func TestScratchpad_UnpinNotFound(t *testing.T) {
 }
 
 func TestScratchpad_ReadEmpty(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -167,7 +167,7 @@ func TestScratchpad_ReadEmpty(t *testing.T) {
 }
 
 func TestScratchpad_PinOverwrite(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -188,7 +188,7 @@ func TestScratchpad_PinOverwrite(t *testing.T) {
 }
 
 func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
-	s := NewScratchpad(WithMaxFacts(2))
+	s := mustScratchpad(t, WithMaxFacts(2))
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -234,7 +234,7 @@ func TestScratchpad_MaxFactsAllowsOverwrite(t *testing.T) {
 }
 
 func TestScratchpad_MaxFacts(t *testing.T) {
-	s := NewScratchpad(WithMaxFacts(2))
+	s := mustScratchpad(t, WithMaxFacts(2))
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 
@@ -270,7 +270,7 @@ func TestScratchpad_MaxFacts(t *testing.T) {
 }
 
 func TestScratchpad_RequiresStateStore(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 
 	err := reg.Execute(context.Background(), toolsy.ToolCall{
@@ -286,7 +286,7 @@ func TestScratchpad_RequiresStateStore(t *testing.T) {
 }
 
 func TestScratchpad_Concurrent(t *testing.T) {
-	s := NewScratchpad()
+	s := mustScratchpad(t)
 	reg := mustBuildMemoryRegistry(t, s)
 	store := newMemStateStore()
 

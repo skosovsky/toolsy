@@ -1,0 +1,33 @@
+toolkits/sqltool/constructor_contract_test.go:20:3: unlambda: replace `func(n int) Option { return WithMaxColumns(n) }` with `WithMaxColumns` (gocritic)
+		func(n int) Option { return WithMaxColumns(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:21:3: unlambda: replace `func(n int) Option { return WithMaxCells(n) }` with `WithMaxCells` (gocritic)
+		func(n int) Option { return WithMaxCells(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:22:3: unlambda: replace `func(n int) Option { return WithMaxTables(n) }` with `WithMaxTables` (gocritic)
+		func(n int) Option { return WithMaxTables(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:23:3: unlambda: replace `func(n int) Option { return WithMaxSourceBytes(n) }` with `WithMaxSourceBytes` (gocritic)
+		func(n int) Option { return WithMaxSourceBytes(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:24:3: unlambda: replace `func(n int) Option { return WithMaxExecuteBytes(n) }` with `WithMaxExecuteBytes` (gocritic)
+		func(n int) Option { return WithMaxExecuteBytes(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:25:3: unlambda: replace `func(n int) Option { return WithMaxRows(n) }` with `WithMaxRows` (gocritic)
+		func(n int) Option { return WithMaxRows(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:26:3: unlambda: replace `func(n int) Option { return WithMaxCellBytes(n) }` with `WithMaxCellBytes` (gocritic)
+		func(n int) Option { return WithMaxCellBytes(n) },
+		^
+toolkits/sqltool/constructor_contract_test.go:27:3: unlambda: replace `func(n int) Option { return WithMaxSchemaBytes(n) }` with `WithMaxSchemaBytes` (gocritic)
+		func(n int) Option { return WithMaxSchemaBytes(n) },
+		^
+toolkits/sqltool/sqltool.go:52:16: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, fmt.Errorf("toolkit/sqltool: nil option")
+			            ^
+toolkits/sqltool/sqltool.go:60:15: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+		return nil, fmt.Errorf("toolkit/sqltool: limits must not be negative")
+		            ^
+10 issues:
+* gocritic: 8
+* perfsprint: 2

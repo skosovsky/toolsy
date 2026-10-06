@@ -1,6 +1,7 @@
 package mail
 
-// Option configures AsTools (read-only mode, body limit, tool names).
+// Option rejects nil at construction. Host ports/callbacks are borrowed; the host owns
+// their lifetime and synchronization. It configures AsTools (read-only mode, body limit, tool names).
 type Option func(*options)
 
 type options struct {

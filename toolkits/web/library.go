@@ -19,11 +19,10 @@ func SearchStructured(
 	if provider == nil {
 		return nil, toolsy.NewValidationError("search provider is required")
 	}
-	var o options
-	for _, opt := range opts {
-		opt(&o)
+	o, configErr := configure(opts)
+	if configErr != nil {
+		return nil, configErr
 	}
-	applyDefaults(&o)
 	return searchStructured(ctx, provider, query, &o)
 }
 
@@ -71,11 +70,10 @@ func searchStructured(ctx context.Context, provider SearchProvider, query string
 // Extraction overflow retains ErrMarkdownExceedsLimit; no tool JSON wire envelope is produced.
 // Conversion is synchronous with cooperative cancellation checkpoints, not hard CPU preemption.
 func ScrapePage(ctx context.Context, rawURL string, opts ...Option) (string, error) {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
+	o, configErr := configure(opts)
+	if configErr != nil {
+		return "", configErr
 	}
-	applyDefaults(&o)
 	client, err := newScrapeHTTPClient(&o)
 	if err != nil {
 		return "", err

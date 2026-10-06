@@ -2,6 +2,8 @@ package sqltool
 
 import "slices"
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures AsTools (row/cell limits, allowed tables, tool names).
 type Option func(*options)
 
@@ -37,28 +39,28 @@ const (
 )
 
 func applyDefaults(o *options) {
-	if o.maxColumns <= 0 {
+	if o.maxColumns == 0 {
 		o.maxColumns = 128
 	}
-	if o.maxCells <= 0 {
+	if o.maxCells == 0 {
 		o.maxCells = 10000
 	}
-	if o.maxTables <= 0 {
+	if o.maxTables == 0 {
 		o.maxTables = 100
 	}
-	if o.maxSourceBytes <= 0 {
+	if o.maxSourceBytes == 0 {
 		o.maxSourceBytes = defaultMaxSourceBytes
 	}
-	if o.maxExecuteBytes <= 0 {
+	if o.maxExecuteBytes == 0 {
 		o.maxExecuteBytes = defaultMaxExecuteBytes
 	}
-	if o.maxRows <= 0 {
+	if o.maxRows == 0 {
 		o.maxRows = defaultMaxRows
 	}
-	if o.maxCellBytes <= 0 {
+	if o.maxCellBytes == 0 {
 		o.maxCellBytes = defaultMaxCellBytes
 	}
-	if o.maxSchemaBytes <= 0 {
+	if o.maxSchemaBytes == 0 {
 		o.maxSchemaBytes = defaultMaxSchemaBytes
 	}
 	if o.inspectName == "" {
@@ -99,6 +101,7 @@ func WithMaxSchemaBytes(n int) Option {
 
 // WithAllowedTables restricts schema inspection to these table names. Empty means no filter.
 func WithAllowedTables(tables []string) Option {
+	tables = slices.Clone(tables)
 	return func(o *options) {
 		o.allowedTables = slices.Clone(tables)
 	}
@@ -167,5 +170,5 @@ func WithMaxTables(n int) Option { return func(o *options) { o.maxTables = n } }
 func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
 
 // WithMaxExecuteBytes limits final execute JSON, including custom formatter output (default 512 KiB).
-// All nonpositive limits use finite defaults.
+// Zero limits use finite defaults; negative limits reject construction.
 func WithMaxExecuteBytes(n int) Option { return func(o *options) { o.maxExecuteBytes = n } }

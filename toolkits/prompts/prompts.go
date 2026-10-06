@@ -37,6 +37,9 @@ func AsTool(p Provider, opts ...Option) (toolsy.Tool, error) {
 	}
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/prompts: nil option")
+		}
 		opt(&o)
 	}
 	o.applyDefaults()

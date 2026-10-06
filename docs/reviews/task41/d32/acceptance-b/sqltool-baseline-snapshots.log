@@ -1,0 +1,19 @@
+--- FAIL: TestD32SchemaFilterSnapshot (0.00s)
+    option_snapshot_test.go:19: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/sqltool/option_snapshot_test.go:19
+        	Error:      	Not equal: 
+        	            	expected: []string{"public"}
+        	            	actual  : []string{"private"}
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1,3 +1,3 @@
+        	            	 ([]string) (len=1) {
+        	            	- (string) (len=6) "public"
+        	            	+ (string) (len=7) "private"
+        	            	 }
+        	Test:       	TestD32SchemaFilterSnapshot
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/sqltool	0.244s
+FAIL

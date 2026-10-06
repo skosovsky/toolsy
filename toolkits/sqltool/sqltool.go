@@ -48,7 +48,16 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 	}
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/sqltool: nil option")
+		}
 		opt(&o)
+	}
+	if o.maxColumns < 0 || o.maxCells < 0 || o.maxTables < 0 || o.maxSourceBytes < 0 || o.maxExecuteBytes < 0 ||
+		o.maxRows < 0 ||
+		o.maxCellBytes < 0 ||
+		o.maxSchemaBytes < 0 {
+		return nil, errors.New("toolkit/sqltool: limits must not be negative")
 	}
 	applyDefaults(&o)
 

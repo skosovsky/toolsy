@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures AsTools (client, allowed domains, headers, limits, names).
 type Option func(*options)
 
@@ -37,13 +39,13 @@ const (
 )
 
 func applyDefaults(o *options) {
-	if o.maxRequestBody <= 0 {
+	if o.maxRequestBody == 0 {
 		o.maxRequestBody = defaultMaxResponseBody
 	}
-	if o.maxResponseBody <= 0 {
+	if o.maxResponseBody == 0 {
 		o.maxResponseBody = defaultMaxResponseBody
 	}
-	if o.maxWireBytes <= 0 {
+	if o.maxWireBytes == 0 {
 		o.maxWireBytes = defaultMaxWireBytes
 	}
 	if o.getName == "" {
@@ -68,6 +70,7 @@ func WithHTTPSettings(settings ClientSettings) Option {
 // WithAllowedDomains sets the whitelist of allowed hostnames. Required for requests to succeed.
 // Use exact match (e.g. "api.example.com") or prefix with "." for subdomains (e.g. ".example.com" allows api.example.com).
 func WithAllowedDomains(domains []string) Option {
+	domains = slices.Clone(domains)
 	return func(o *options) {
 		o.allowedDomains = slices.Clone(domains)
 	}
@@ -76,6 +79,7 @@ func WithAllowedDomains(domains []string) Option {
 // WithHeaders sets non-secret metadata headers. Authentication headers are rejected;
 // use WithCredentialOrigins and the run credentials provider for authentication.
 func WithHeaders(h map[string]string) Option {
+	h = maps.Clone(h)
 	return func(o *options) {
 		o.headers = maps.Clone(h)
 	}
@@ -135,13 +139,14 @@ func WithAllowPrivateIPs(allow bool) Option {
 	}
 }
 
-// WithMaxWireBytes bounds the complete encoded JSON result. Nonpositive uses 4 MiB.
+// WithMaxWireBytes bounds the complete encoded JSON result. Zero uses 4 MiB.
 func WithMaxWireBytes(n int) Option { return func(o *options) { o.maxWireBytes = n } }
 
 // WithCredentialOrigins explicitly authorizes run credentials for exact scheme/host/port origins.
 // Unlisted origins receive no credentials even when their domain is allowed.
 func WithCredentialOrigins(origins []string) Option {
-	return func(o *options) { o.credentialOrigins = append([]string(nil), origins...) }
+	origins = slices.Clone(origins)
+	return func(o *options) { o.credentialOrigins = slices.Clone(origins) }
 }
 
 func origin(u *url.URL) string {
@@ -172,5 +177,5 @@ func normalizeCredentialOrigins(o *options) error {
 }
 
 // WithMaxRequestBody rejects oversize POST input before dispatch without modifying it.
-// Nonpositive uses 512 KiB.
+// Zero uses 512 KiB.
 func WithMaxRequestBody(n int) Option { return func(o *options) { o.maxRequestBody = n } }

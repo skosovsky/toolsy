@@ -1,0 +1,9 @@
+package web
+import("testing";"sync")
+func TestAcceptanceAConcurrentOptions(t *testing.T){
+// Arrange: capture policy before mutating its source.
+domains:=[]string{"blocked.example"};opt:=WithBlockedDomains(domains);mutate:=func(){domains[0]="changed.invalid"};check:=func(){var o options;opt(&o);if o.blockedDomains[0]!="blocked.example"{t.Error("snapshot changed")};o.blockedDomains[0]="own"}
+// Act: source mutation and independent option materialization overlap.
+var wg sync.WaitGroup;wg.Add(33);go func(){defer wg.Done();for range 1000{mutate()}}();for range 32{go func(){defer wg.Done();for range 1000{check()}}()};wg.Wait()
+// Assert: checks inside each worker verify policy and independent writable containers.
+}

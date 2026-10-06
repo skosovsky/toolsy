@@ -1,0 +1,12 @@
+package fstool
+import("testing";"errors";"os")
+func TestAcceptanceAInvalidBeforeRootIO(t *testing.T){
+ // Arrange.
+ missing:=t.TempDir()+"/missing"
+ for _,opt:=range []Option{nil,WithMaxBytes(-1),WithMaxEntries(-1)}{
+ // Act.
+ tools,err:=AsTools(missing,opt)
+ // Assert.
+ if err==nil || tools!=nil || errors.Is(err,os.ErrNotExist){t.Fatalf("configuration not checked before root IO: %v",err)}
+ }
+}

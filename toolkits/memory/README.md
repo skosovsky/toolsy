@@ -21,7 +21,7 @@ go get github.com/skosovsky/toolsy/toolkits/memory
 ## Configuration and security
 
 - Host owns persistence, lifetime and session isolation through `RunEnv.StateStore`.
-- Defaults: 128 facts, 256 UTF-8 bytes per key, 4096 per value, 512 KiB stored JSON, 1 MiB final JSON response. `WithMaxFacts`, `WithMaxKeyBytes`, `WithMaxValueBytes`, `WithMaxStoreBytes`, `WithMaxOutputBytes` override them. Zero restores the default; negative values fail `AsTools` construction. There is no unlimited mode.
+- Defaults: 128 facts, 256 UTF-8 bytes per key, 4096 per value, 512 KiB stored JSON, 1 MiB final JSON response. `WithMaxFacts`, `WithMaxKeyBytes`, `WithMaxValueBytes`, `WithMaxStoreBytes`, `WithMaxOutputBytes` override them. Zero restores the default; negative values fail `NewScratchpad` construction. There is no unlimited mode.
 - Pin validates the complete proposed state before Save; facts are never truncated or evicted. Invalid or over-budget existing state fails closed before mutation. Read returns all facts or a limit error; this backend has no pagination contract.
 - Use one Scratchpad instance as the sole writer for each session state key. Its context-aware admission gate serializes complete Load/modify/Save calls through that instance across all sessions. Canceled waiters return without waiting for the current callback or invoking storage. Multiple instances, processes or other writers require host coordination; `StateStore.Load/Save` is not CAS and this toolkit promises no distributed atomicity.
 - Do not copy a Scratchpad or synchronously reenter it from store callbacks. There is no fairness promise or per-session lock registry. In-flight store callbacks must honor context themselves; cancellation is not rollback of an already-started Save.
@@ -41,7 +41,10 @@ import (
 func main() {
 	builder := toolsy.NewRegistryBuilder()
 
-	sessionMemory := memory.NewScratchpad(memory.WithMaxFacts(100))
+	sessionMemory, err := memory.NewScratchpad(memory.WithMaxFacts(100))
+	if err != nil {
+		panic(err)
+	}
 	tools, err := sessionMemory.AsTools()
 	if err != nil {
 		panic(err)
@@ -54,3 +57,9 @@ func main() {
 	// Without StateStore, memory tools return a validation error.
 }
 ```
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

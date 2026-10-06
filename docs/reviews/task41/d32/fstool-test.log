@@ -1,0 +1,4 @@
+# github.com/skosovsky/toolsy/toolkits/fstool [github.com/skosovsky/toolsy/toolkits/fstool.test]
+./constructor_contract_test.go:18: undefined: WithMaxnameBytes
+FAIL	github.com/skosovsky/toolsy/toolkits/fstool [build failed]
+FAIL

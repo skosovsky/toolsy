@@ -1,0 +1,8 @@
+{
+  "toolkits/fstool/doc.go": "f90748cf7fd0bdd9230d763b80018d4cc7a4ef6f9bba54a9565af1c962aeba5c",
+  "toolkits/fstool/fstool.go": "ede3d4c24719f268345f5b2b3cdcc5f72c488abe9a9f50af9ade52acbb9c7429",
+  "toolkits/fstool/open_other.go": "30bfa9721ce295e52a25b802e54a09cd167b106f8fce068b52428516f5bbaf87",
+  "toolkits/fstool/open_unix.go": "142e90310149aca2b7438103f20f5b306e617ba96e6cb55e482f842e76f83a51",
+  "toolkits/fstool/options.go": "27b2d11dca88309e82319eb8690240d90b18f1a08961a0bea0d6fb31196f1810",
+  "toolkits/fstool/security.go": "ff565483db428adc4058864648cc438a7d73ccd3cd0ecc6eee85f403400304da"
+}

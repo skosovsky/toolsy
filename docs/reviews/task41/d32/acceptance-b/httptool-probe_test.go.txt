@@ -1,0 +1,9 @@
+package httptool
+import("sync";"testing")
+func TestAcceptanceBConcurrentSnapshots(t *testing.T){
+// Arrange, Act, Assert: concurrent materialization owns independent configuration.
+domains:=[]string{"api.example.com"}; origins:=[]string{"https://api.example.com"}; headers:=map[string]string{"X-Test":"safe"}; opts:=[]Option{WithAllowedDomains(domains),WithCredentialOrigins(origins),WithHeaders(headers)}
+ domains[0]="evil.example";origins[0]="https://evil.example";headers["X-Test"]="evil"
+ var wg sync.WaitGroup
+ for range 128 { wg.Add(1);go func(){defer wg.Done(); var o options;for _,opt:=range opts {opt(&o)}; if !HostMatchesAllowedDomains("api.example.com",o.allowedDomains)||HostMatchesAllowedDomains("evil.example",o.allowedDomains)||o.headers["X-Test"]!="safe" {t.Error("snapshot changed")};if err:=normalizeCredentialOrigins(&o);err!=nil||o.credentialOrigins[0]!="https://api.example.com:443"{t.Error("origin changed")};o.allowedDomains[0]="worker.invalid";o.credentialOrigins[0]="worker.invalid";o.headers["X-Test"]="worker" }() };wg.Wait()
+}

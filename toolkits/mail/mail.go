@@ -87,6 +87,9 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 	}
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/mail: nil option")
+		}
 		opt(&o)
 	}
 	if o.maxBodyBytes < 0 || o.maxSourceBytes < 0 || o.maxItemBytes < 0 || o.maxSearchResults < 0 ||

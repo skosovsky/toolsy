@@ -44,7 +44,9 @@ func TestR18PublicCanceledWaiterNeverCallsStore(t *testing.T) {
 func r18CanceledWaitCase(t *testing.T, index int, args string, manual bool) {
 	t.Helper()
 	// Arrange: active read owns admission while host Load cooperatively blocks.
-	tools, err := memory.NewScratchpad().AsTools()
+	pad, err := memory.NewScratchpad()
+	require.NoError(t, err)
+	tools, err := pad.AsTools()
 	require.NoError(t, err)
 	store := &r18BlockedStore{entered: make(chan struct{}), release: make(chan struct{})}
 	env := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))

@@ -1,0 +1,10 @@
+package document
+import("testing";"math")
+func TestAcceptanceBIntegerBoundaries(t *testing.T){
+// Arrange.
+construct:=func(opts ...Option)(bool,error){v,c,e:=AsToolWithCleanup(opts...);if c!=nil{c()};return v!=nil,e}
+for _,factory:=range []func(int)Option{WithMaxBytes,func(n int)Option{return WithLimits(Limits{SourceBytes:n})},func(n int)Option{return WithLimits(Limits{ParsedBytes:n})},func(n int)Option{return WithLimits(Limits{MaxItems:n})},func(n int)Option{return WithLimits(Limits{ItemBytes:n})}}{
+// Act and Assert.
+for _,n:=range []int{math.MinInt,-1024,-1}{v,e:=construct(factory(n));if e==nil||v{t.Fatalf("negative %d accepted: %v",n,e)};v,e=construct(factory(n),factory(0));if e!=nil||!v{t.Fatalf("zero did not replace negative: %v",e)}}
+ for _,opts:=range [][]Option{{nil,factory(0)},{factory(0),nil},{factory(0),nil,factory(0)}}{v,e:=construct(opts...);if e==nil||v{t.Fatal("nil Option accepted")}}
+}}

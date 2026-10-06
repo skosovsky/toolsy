@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted, signed commit pending; rows 34–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted, signed commit pending; rows 35–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1361,3 +1361,72 @@ nilfallback loss, and reran identical benchmark1611→1597alloc (~2.6KiB lower).
 Predicate-cancel defect fixed/rechecked; core predispatch customcause limitation
 explicitly documented. Reports and original probe failures retained under
  task41/d30-d36-rag/acceptance-a/b. Accepted for signed `refactor: retrieval boundary`.
+
+
+### 34 — D32 (accepted)
+
+Criteria for each independent reviewer, 20% each:
+1. All eleven toolkit option constructors reject nil options with errors, never
+   panic; delegating cleanup wrappers and web library entrypoints follow the same
+   contract. Invalid configuration returns no usable object/cleanup and performs
+   no provider/callback/network work.
+2. Every negative limit rejects construction instead of selecting defaults;
+   zero retains documented finite defaults, except human's existing explicit
+   zero rejection. Last supplied option wins; memory NewScratchpad returns
+   (*Scratchpad, error), with all callers migrated and no legacy alternate path.
+3. HTTP allowed domains/credential origins/headers, web blocked domains and SQL
+   inspected table lists are captured at option creation and copied independently
+   for each application. Source mutation/reused options cannot alter policies.
+4. Host ports/callbacks remain borrowed with explicit lifetime/synchronization and
+   returned-data ownership responsibilities; no universal deep cloning or config
+   framework. Existing required-port and optional-port semantics remain accurate.
+5. AAA negative/nil/default/order/snapshot regressions, baseline behavioral failures,
+   all affected module test/race/pinned lint pass, API/README/migration synchronized;
+   both independent reviewers reach 100%, no unresolved detected errors.
+
+Spec-first: nil Option is a configuration error in every toolkit constructor.
+Apply non-nil options in order, validate final limits before defaults can hide a
+negative value and before allocating HTTP pools or invoking host ports. Zero means
+finite default for existing defaultable budgets; human's WithMaxPayloadBytes(0)
+continues to reject, as already documented. Construction returns nil outputs on
+error. NewScratchpad now reports invalid options at construction, rather than
+creating an invalid object for a later AsTools failure; positive output budgets
+which cannot encode mandatory tool statuses still fail AsTools as before.
+Security containers are copied twice: at With... invocation and when reused options
+materialize separate toolkit configurations. Snapshots protect against later
+source/config mutation, not concurrent mutation during snapshot creation itself.
+Other host providers, stores, roots, databases, callbacks and callback-captured
+state are borrowed; host owns lifetime and safe concurrent use. No implicit deep
+copy of host graphs or mutable port implementation. TLS config contract remains
+R07: owned pool clones configuration but referenced certificates/root/callback
+state must remain immutable for its lifetime. Required typed-nil port handling
+retains existing per-port contracts; this row unifies nil Option handling.
+
+
+D32 implementation complete: nil Option errors across eleven modules and web library
+entrypoints, negative limits no longer become defaults; memory constructor error
+API and callers migrated. Existing human explicit-zero rejection retained. Security
+containers snapshot on option creation and independent application. Host borrowing,
+TLS reference limits and SQL inspection-only filter documented. Eleven full module
+race suites count3 pass, pinned module lint zero after fstool helper correction.
+Baseline nil/negative/container mutation failures reproduced, raw initial harness
+failures retained and distinguished from behavioral proof. Evidence task41/d32;
+independent acceptance pending.
+
+
+Acceptance correction: fstool validates options before os.Stat(baseDir), so invalid
+options fail without filesystem inspection as well as before host callbacks/pools.
+The previous valid-root prerequisite had caused filesystem I/O before config failure.
+Both independent reviewers must inspect the corrected candidate and rerun fstool.
+
+
+Final D32 independent A and B each accepted 100%, five 20/20 criteria, no unresolved
+ detected errors. Both full eleven-module race count3 and pinned module lint pass.
+A latest fstool race3 1.947s/lint0; B latest fstool race3 2.785s/lint0. A 32 concurrent
+option consumers/source1000 mutations; B 128 concurrent materializations plus
+MinInt/-1024/-1/nil-position/zero-override probes across all eleven modules pass
+race3. Both independently verify exact baseline and actual nil/negative/security
+mutation behavior, including separately compilable old memory API. Found fstool
+validation-before-root-inspection issue fixed, retained regression and both rechecks
+pass. All reports/probes/raw logs and distinguished initial harness failures under
+ task41/d32/acceptance-a/b. Accepted for separate signed `fix: toolkit options`.

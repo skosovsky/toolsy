@@ -26,14 +26,21 @@ type Scratchpad struct {
 	limits options
 }
 
-// NewScratchpad creates a new scratchpad with optional configuration.
-func NewScratchpad(opts ...Option) *Scratchpad {
+// NewScratchpad creates a new scratchpad, rejecting nil options and negative limits.
+// Zero limits select finite defaults; positive output budgets are also checked by AsTools.
+func NewScratchpad(opts ...Option) (*Scratchpad, error) {
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/memory: nil option")
+		}
 		opt(&o)
 	}
+	if o.maxFacts < 0 || o.maxKeyBytes < 0 || o.maxValueBytes < 0 || o.maxStoreBytes < 0 || o.maxOutputBytes < 0 {
+		return nil, errors.New("toolkit/memory: limits must not be negative")
+	}
 	o.applyDefaults()
-	return &Scratchpad{gate: make(chan struct{}, 1), limits: o}
+	return &Scratchpad{gate: make(chan struct{}, 1), limits: o}, nil
 }
 
 // AsTools returns the three memory tools (pin, read all, unpin).

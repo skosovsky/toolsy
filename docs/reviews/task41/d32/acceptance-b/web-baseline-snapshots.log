@@ -1,0 +1,8 @@
+--- FAIL: TestD32BlockedDomainsSnapshot (0.00s)
+    option_snapshot_test.go:60: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/web/option_snapshot_test.go:60
+        	Error:      	An error is expected but got nil.
+        	Test:       	TestD32BlockedDomainsSnapshot
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/web	0.402s
+FAIL

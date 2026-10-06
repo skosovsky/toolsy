@@ -1,0 +1,9 @@
+toolkits/human/constructor_contract_test.go:18:31: unlambda: replace `func(n int) Option { return WithMaxPayloadBytes(n) }` with `WithMaxPayloadBytes` (gocritic)
+	limits := []func(int) Option{func(n int) Option { return WithMaxPayloadBytes(n) }}
+	                             ^
+toolkits/human/options.go:3:1: exported: comment on exported type Option should be of the form "Option ..." (with optional leading article) (revive)
+// Nil options fail construction. Host ports/callbacks are borrowed; the host owns
+^
+2 issues:
+* gocritic: 1
+* revive: 1

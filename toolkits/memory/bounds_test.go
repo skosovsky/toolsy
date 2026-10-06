@@ -13,14 +13,25 @@ import (
 
 func TestScratchpadConfiguration(t *testing.T) {
 	// Arrange.
-	for _, opt := range []Option{WithMaxFacts(-1), WithMaxKeyBytes(-1), WithMaxValueBytes(-1), WithMaxStoreBytes(-1), WithMaxOutputBytes(-1), WithMaxOutputBytes(1)} {
+	for _, opt := range []Option{nil, WithMaxFacts(-1), WithMaxKeyBytes(-1), WithMaxValueBytes(-1), WithMaxStoreBytes(-1), WithMaxOutputBytes(-1)} {
 		// Act.
-		_, err := NewScratchpad(opt).AsTools()
+		pad, err := NewScratchpad(opt)
 		// Assert.
 		require.Error(t, err)
+		require.Nil(t, pad)
 	}
-	_, err := NewScratchpad(WithMaxFacts(0), WithMaxValueBytes(0)).AsTools()
+	pad := mustScratchpad(t, WithMaxFacts(0), WithMaxValueBytes(0))
+	_, err := pad.AsTools()
 	require.NoError(t, err)
+	_, err = mustScratchpad(t, WithMaxOutputBytes(1)).AsTools()
+	require.Error(t, err)
+}
+
+func mustScratchpad(t *testing.T, opts ...Option) *Scratchpad {
+	t.Helper()
+	pad, err := NewScratchpad(opts...)
+	require.NoError(t, err)
+	return pad
 }
 
 func TestScratchpadRejectedPinDoesNotMutateStore(t *testing.T) {
@@ -36,7 +47,7 @@ func TestScratchpadRejectedPinDoesNotMutateStore(t *testing.T) {
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			// Arrange.
-			pad := NewScratchpad(fixture.opt)
+			pad := mustScratchpad(t, fixture.opt)
 			store := newMemStateStore()
 			run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
 			// Act.
@@ -53,7 +64,7 @@ func TestScratchpadRejectedPinDoesNotMutateStore(t *testing.T) {
 func TestScratchpadExistingStateFailsClosed(t *testing.T) {
 	for _, raw := range []string{`null`, `{"a":null}`, `{"a":"first","a":"second"}`, `{"toolongkey":"v"}`, `{"a":"too long"}`, `{"a":"v","b":"v"}`, strings.Repeat(" ", 101), string([]byte{'{', '"', 'a', '"', ':', '"', 255, '"', '}'})} {
 		// Arrange.
-		pad := NewScratchpad(WithMaxFacts(1), WithMaxKeyBytes(2), WithMaxValueBytes(2), WithMaxStoreBytes(100))
+		pad := mustScratchpad(t, WithMaxFacts(1), WithMaxKeyBytes(2), WithMaxValueBytes(2), WithMaxStoreBytes(100))
 		store := newMemStateStore()
 		require.NoError(t, store.Save(context.Background(), factsStateKey, []byte(raw)))
 		run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
@@ -73,7 +84,7 @@ func TestScratchpadExistingStateFailsClosed(t *testing.T) {
 
 func TestScratchpadWireBytesAfterEscaping(t *testing.T) {
 	// Arrange.
-	pad := NewScratchpad(WithMaxOutputBytes(64))
+	pad := mustScratchpad(t, WithMaxOutputBytes(64))
 	store := newMemStateStore()
 	run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
 	value := strings.Repeat("<", 20)
@@ -92,7 +103,7 @@ func TestScratchpadWireBytesAfterEscaping(t *testing.T) {
 
 func TestMutationWirePreflight(t *testing.T) {
 	// Arrange.
-	pad := NewScratchpad(WithMaxOutputBytes(1))
+	pad := mustScratchpad(t, WithMaxOutputBytes(1))
 	store := newMemStateStore()
 	require.NoError(t, store.Save(context.Background(), factsStateKey, []byte(`{"a":"v"}`)))
 	run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
@@ -111,7 +122,7 @@ func TestMutationWirePreflight(t *testing.T) {
 
 func TestFiniteDefaults(t *testing.T) {
 	// Arrange.
-	pad := NewScratchpad()
+	pad := mustScratchpad(t)
 	store := newMemStateStore()
 	run := toolsy.NewRunEnv(nil, toolsy.WithStateStore(store))
 	facts := make(map[string]string)

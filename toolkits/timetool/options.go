@@ -10,6 +10,8 @@ import (
 // LocationProvider resolves timezone dynamically from request context (e.g. user session).
 type LocationProvider func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error)
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures AsTools (location for local time, tool names and descriptions).
 type Option func(*options)
 
@@ -36,7 +38,7 @@ const (
 )
 
 func applyDefaults(o *options) {
-	if o.maxWireBytes <= 0 {
+	if o.maxWireBytes == 0 {
 		o.maxWireBytes = defaultMaxWireBytes
 	}
 	if o.location == nil {
@@ -123,5 +125,5 @@ func WithCalculateDescription(desc string) Option {
 	}
 }
 
-// WithMaxWireBytes bounds default and host-formatted JSON. Nonpositive uses 64 KiB.
+// WithMaxWireBytes bounds default and host-formatted JSON. Zero uses 64 KiB.
 func WithMaxWireBytes(n int) Option { return func(o *options) { o.maxWireBytes = n } }

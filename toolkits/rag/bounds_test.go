@@ -22,7 +22,7 @@ func TestRetrievalBoundsRejectProviderBeforeFormatter(t *testing.T) {
 		{"item multibyte", []Document{{Content: strings.Repeat("界", 40)}}, WithMaxItemBytes(100)},
 		{"metadata", []Document{{Metadata: map[string]string{"x": strings.Repeat("x", 200)}}}, WithMaxItemBytes(100)},
 		{"source", []Document{{Content: "first"}, {Content: "second"}}, WithMaxSourceBytes(30)},
-		{"count", make([]Document, 11), WithMaxResults(-1)},
+		{"count", make([]Document, 11), WithMaxResults(0)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false

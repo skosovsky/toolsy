@@ -1,0 +1,25 @@
+toolkits/mail/constructor_contract_test.go:19:3: unlambda: replace `func(n int) Option { return WithMaxBodyBytes(n) }` with `WithMaxBodyBytes` (gocritic)
+		func(n int) Option { return WithMaxBodyBytes(n) },
+		^
+toolkits/mail/constructor_contract_test.go:20:3: unlambda: replace `func(n int) Option { return WithMaxSourceBytes(n) }` with `WithMaxSourceBytes` (gocritic)
+		func(n int) Option { return WithMaxSourceBytes(n) },
+		^
+toolkits/mail/constructor_contract_test.go:21:3: unlambda: replace `func(n int) Option { return WithMaxItemBytes(n) }` with `WithMaxItemBytes` (gocritic)
+		func(n int) Option { return WithMaxItemBytes(n) },
+		^
+toolkits/mail/constructor_contract_test.go:22:3: unlambda: replace `func(n int) Option { return WithMaxSearchResults(n) }` with `WithMaxSearchResults` (gocritic)
+		func(n int) Option { return WithMaxSearchResults(n) },
+		^
+toolkits/mail/constructor_contract_test.go:23:3: unlambda: replace `func(n int) Option { return WithMaxWireBytes(n) }` with `WithMaxWireBytes` (gocritic)
+		func(n int) Option { return WithMaxWireBytes(n) },
+		^
+toolkits/mail/mail.go:91:16: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, fmt.Errorf("toolkit/mail: nil option")
+			            ^
+toolkits/mail/options.go:3:1: exported: comment on exported type Option should be of the form "Option ..." (with optional leading article) (revive)
+// Nil options fail construction. Host ports/callbacks are borrowed; the host owns
+^
+7 issues:
+* gocritic: 5
+* perfsprint: 1
+* revive: 1

@@ -1,6 +1,12 @@
 package fstool
 
-// Option configures AsTools (read-only mode, limits, tool names and descriptions).
+import (
+	"errors"
+	"math"
+)
+
+// Option rejects nil at construction. Host ports/callbacks are borrowed; the host owns
+// their lifetime and synchronization. It configures AsTools (read-only mode, limits, tool names and descriptions).
 type Option func(*options)
 
 type options struct {
@@ -131,3 +137,21 @@ func WithMaxScanEntries(n int) Option { return func(o *options) { o.maxScanEntri
 
 // WithMaxNameBytes bounds each directory entry name (default 255).
 func WithMaxNameBytes(n int) Option { return func(o *options) { o.maxNameBytes = n } }
+
+func configure(opts []Option) (options, error) {
+	var o options
+	for _, opt := range opts {
+		if opt == nil {
+			return options{}, errors.New("toolkit/fstool: nil option")
+		}
+		opt(&o)
+	}
+	applyDefaults(&o)
+	if o.maxBytes < 0 || o.maxSourceBytes < 0 || int64(o.maxSourceBytes) == math.MaxInt64 || o.maxEntries < 0 ||
+		o.maxScanEntries < 0 ||
+		o.maxNameBytes < 0 ||
+		o.maxEntries >= o.maxScanEntries {
+		return options{}, errors.New("toolkit/fstool: invalid limits")
+	}
+	return o, nil
+}

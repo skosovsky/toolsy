@@ -1,12 +1,15 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures AsTools (page limit, HTTP client, scraper, SSRF options, tool names).
 type Option func(*options)
 
@@ -38,25 +41,25 @@ type options struct {
 const defaultMaxPageBytes = 2 * 1024 * 1024
 
 func applyDefaults(o *options) {
-	if o.maxSearchResults <= 0 {
+	if o.maxSearchResults == 0 {
 		o.maxSearchResults = 50
 	}
-	if o.maxSearchItemBytes <= 0 {
+	if o.maxSearchItemBytes == 0 {
 		o.maxSearchItemBytes = defaultMaxSearchItemBytes
 	}
-	if o.maxSearchSourceBytes <= 0 {
+	if o.maxSearchSourceBytes == 0 {
 		o.maxSearchSourceBytes = defaultMaxSearchBytes
 	}
-	if o.maxPageBytes <= 0 {
+	if o.maxPageBytes == 0 {
 		o.maxPageBytes = defaultMaxPageBytes
 	}
-	if o.maxSearchBytes <= 0 {
+	if o.maxSearchBytes == 0 {
 		o.maxSearchBytes = defaultMaxSearchBytes
 	}
-	if o.maxSourceBytes <= 0 {
+	if o.maxSourceBytes == 0 {
 		o.maxSourceBytes = scrapeContentByteCap(o.maxPageBytes)
 	}
-	if o.maxMarkdownBytes <= 0 {
+	if o.maxMarkdownBytes == 0 {
 		o.maxMarkdownBytes = scrapeContentByteCap(o.maxPageBytes)
 	}
 	if o.scraper == nil {
@@ -118,6 +121,7 @@ func WithAllowPrivateIPs(allow bool) Option {
 // WithBlockedDomains sets exact hostname or leading-dot descendant deny entries.
 // Use both "example.com" and ".example.com" to block the apex and descendants.
 func WithBlockedDomains(domains []string) Option {
+	domains = slices.Clone(domains)
 	return func(o *options) {
 		o.blockedDomains = slices.Clone(domains)
 	}
@@ -182,9 +186,26 @@ func WithMaxSearchItemBytes(n int) Option { return func(o *options) { o.maxSearc
 func WithMaxSearchSourceBytes(n int) Option { return func(o *options) { o.maxSearchSourceBytes = n } }
 
 // WithMaxSourceBytes limits HTML input independently of wire output.
-// Nonpositive values derive a finite default from the wire budget.
+// Zero values derive a finite default from the wire budget.
 func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
 
 // WithMaxMarkdownBytes limits extracted content independently of wire output.
-// Nonpositive values derive a finite default from the wire budget.
+// Zero values derive a finite default from the wire budget.
 func WithMaxMarkdownBytes(n int) Option { return func(o *options) { o.maxMarkdownBytes = n } }
+
+// configure validates before any HTTP pool allocation or provider invocation.
+func configure(opts []Option) (options, error) {
+	var o options
+	for _, opt := range opts {
+		if opt == nil {
+			return options{}, errors.New("toolkit/web: nil option")
+		}
+		opt(&o)
+	}
+	if o.maxSearchResults < 0 || o.maxSearchItemBytes < 0 || o.maxSearchSourceBytes < 0 ||
+		o.maxPageBytes < 0 || o.maxSearchBytes < 0 || o.maxSourceBytes < 0 || o.maxMarkdownBytes < 0 {
+		return options{}, errors.New("toolkit/web: limits must not be negative")
+	}
+	applyDefaults(&o)
+	return o, nil
+}

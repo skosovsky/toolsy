@@ -54,11 +54,10 @@ func AsToolsWithCleanup(provider SearchProvider, opts ...Option) ([]toolsy.Tool,
 	if provider == nil {
 		return nil, nil, errors.New("toolkit/web: SearchProvider is required")
 	}
-	var o options
-	for _, opt := range opts {
-		opt(&o)
+	o, configErr := configure(opts)
+	if configErr != nil {
+		return nil, nil, configErr
 	}
-	applyDefaults(&o)
 	client, clientErr := newScrapeHTTPClient(&o)
 	if clientErr != nil {
 		return nil, nil, clientErr

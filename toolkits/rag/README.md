@@ -36,7 +36,7 @@ md := rag.FormatDocumentsMarkdown(docs)
 
 ## Configuration
 
-- **WithMaxBytes / WithMaxResults** — the byte budget applies to final wire JSON, including custom formatters. An oversized final representation returns `CodeValidationFailed`. Serialized JSON is never sliced. Nonpositive limits select finite defaults (10 results). The pipeline checks provider item/source bounds, applies `WithScopeFilter`, rechecks item/source bounds, then checks the filtered result count and final output bytes.
+- **WithMaxBytes / WithMaxResults** — the byte budget applies to final wire JSON, including custom formatters. An oversized final representation returns `CodeValidationFailed`. Serialized JSON is never sliced. Zero limits select finite defaults (10 results); negative limits reject construction. The pipeline checks provider item/source bounds, applies `WithScopeFilter`, rechecks item/source bounds, then checks the filtered result count and final output bytes.
 - **WithResultShape** — `ShapeMarkdown` (default) or `ShapeDocumentsJSON`.
 - **WithScopeFilter** — RBAC hook to filter documents per request context.
 - **WithResultFormatter / WithHostResultValidator** — host DTO and validation before JSON marshal. When both are set, the validator receives **formatter output**, not the default envelope. Validator-only with default `ShapeMarkdown` validates `SearchMarkdownWire` (`{"results": "..."}`). Use `WithResultShape(ShapeDocumentsJSON)` for `SearchDocumentsWire`.
@@ -55,7 +55,7 @@ representation is checked inclusively. See [task41 migration](../../docs/migrati
 
 The host maps its DTOs into retrieval units; `Document.ID` identifies an optional chunk, independent of `SourceURI`. The host chooses retrieval-unit identity and whether to deduplicate. Markdown includes source and ID even when content is present; unknown sources are labelled unavailable. `ID` is the host-selected public retrieval-unit identifier; it may encode all public document/chunk/page identifiers needed for citation. `Metadata` is opaque host data: Markdown does not interpret or publish its keys, including names such as `chunk_id`, `document_id`, or `page`. The host must map identifiers intended for publication into `ID` and `SourceURI` before retrieval units reach the formatter. `ShapeDocumentsJSON` includes the full supplied metadata; omit private metadata in the adapter or use a host formatter for a public DTO. Retrieval is data, never trusted instructions.
 
-All nonpositive budgets select finite defaults: 10 results, 64 KiB per JSON-encoded unit, 512 KiB total provider JSON and 512 KiB final wire JSON. `WithMaxItemBytes` and `WithMaxSourceBytes` configure the independent provider bounds. Provider bounds are enforced before host filters and formatters; count is enforced after filtering. Exceeding any limit returns a validation error without dropping units or slicing JSON. The retriever has no cursor capability, so no continuation token is fabricated. Host providers own retrieval allocations, cancellation and access control; the toolkit bounds accepted results, not provider internals. Custom output DTOs must preserve provenance themselves.
+Negative budgets reject construction; zero budgets select finite defaults: 10 results, 64 KiB per JSON-encoded unit, 512 KiB total provider JSON and 512 KiB final wire JSON. `WithMaxItemBytes` and `WithMaxSourceBytes` configure the independent provider bounds. Provider bounds are enforced before host filters and formatters; count is enforced after filtering. Exceeding any limit returns a validation error without dropping units or slicing JSON. The retriever has no cursor capability, so no continuation token is fabricated. Host providers own retrieval allocations, cancellation and access control; the toolkit bounds accepted results, not provider internals. Custom output DTOs must preserve provenance themselves.
 
 ## Host DTO adapter and public identifiers
 
@@ -124,3 +124,9 @@ suppressing their invocation. Oversized output rejects the whole result with the
 inspectable wire-limit cause; no document, ID or JSON bytes are sliced or omitted.
 All accepted inputs/results are bounded, but provider and callback allocations,
 CPU, access control and stable provenance remain host responsibilities.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

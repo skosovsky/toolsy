@@ -1,0 +1,5 @@
+toolkits/fstool/doc.go:1: : # github.com/skosovsky/toolsy/toolkits/fstool [github.com/skosovsky/toolsy/toolkits/fstool.test]
+./constructor_contract_test.go:24:31: cannot use WithMaxNameBytes (value of type func(n int) Option) as Option value in return statement (typecheck)
+// Package fstool provides a sandboxed filesystem toolkit for agents: list directory,
+1 issues:
+* typecheck: 1

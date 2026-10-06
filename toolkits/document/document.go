@@ -36,15 +36,10 @@ func AsTool(opts ...Option) (toolsy.Tool, error) {
 // AsToolWithCleanup returns the tools and an owned idle-pool closer. Stop new calls
 // before disposal; the closer leaves active calls unaffected and is not terminal Close.
 func AsToolWithCleanup(opts ...Option) (toolsy.Tool, func(), error) {
-	var o options
-	for _, opt := range opts {
-		opt(&o)
+	o, configErr := configure(opts)
+	if configErr != nil {
+		return nil, nil, configErr
 	}
-	if o.maxBytes < 0 || o.limits.SourceBytes < 0 || o.limits.ParsedBytes < 0 || o.limits.MaxItems < 0 ||
-		o.limits.ItemBytes < 0 {
-		return nil, nil, errors.New("toolkit/document: limits must not be negative")
-	}
-	applyDefaults(&o)
 	client, clientErr := newDocumentHTTPClient(&o)
 	if clientErr != nil {
 		return nil, nil, clientErr

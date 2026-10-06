@@ -24,7 +24,7 @@ Result: `{"status": 200, "body": "..."}`. Tool response bodies must contain vali
 - `WithMaxResponseBody`: source body read budget, default 512 KiB.
 - `WithMaxRequestBody`: POST JSON input byte budget, default 512 KiB; reject before dispatch and preserve approved bytes.
 - `WithMaxWireBytes`: encoded status/body JSON budget (excluding outer host envelopes), default 4 MiB, checked after JSON escaping. Body and wire limits are independent; escaping can make a body within its read budget exceed the wire budget.
-- Nonpositive values select these finite defaults. URLs are limited to 8192 bytes.
+- Zero values select these finite defaults; negative limits reject construction. URLs are limited to 8192 bytes.
 - Pre-dispatch request bounds and GET response bounds retain validation errors. POST response-read/wire bounds instead return CodeInternal ResultContractError with the original limit cause, preventing argument repair or blind retry. No successful result is emitted. A POST may already have occurred when its response exceeds a result limit; response bounds are not an operation rollback guarantee. Compose host operation profiles for durable approval/idempotency.
 - The safe tool client has a 30-second default timeout; a positive `ClientSettings.Timeout` overrides it and context cancellation still applies. The host selects allowed destinations and private-IP exceptions.
 - No generic pagination is promised. A host can expose API-specific query/cursor parameters in the URL; stable continuation depends on that API. Status/body are returned without synthesizing a token.
@@ -151,3 +151,9 @@ is preserved for valid UTF-8 regardless of Content-Type or success/error status.
 A failed POST result does not mean its remote side effect was undone. Hosts own
 reconciliation/idempotency; cancellation also never promises rollback. The exported
 ReadBodyLimited/stream readers remain byte-oriented for binary host adapters.
+
+
+Nil options reject construction. Host ports and callbacks are borrowed; the host
+owns their lifetime and synchronization. See the [shared constructor and ownership
+contract](../README.md#constructor-configuration-and-ownership) for option snapshots
+and the distinction between configuration containers and mutable host ports.

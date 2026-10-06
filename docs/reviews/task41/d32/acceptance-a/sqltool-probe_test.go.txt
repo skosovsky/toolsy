@@ -1,0 +1,9 @@
+package sqltool
+import("testing";"sync")
+func TestAcceptanceAConcurrentOptions(t *testing.T){
+// Arrange: capture policy before mutating its source.
+tables:=[]string{"public"};opt:=WithAllowedTables(tables);mutate:=func(){tables[0]="private"};check:=func(){var o options;opt(&o);if o.allowedTables[0]!="public"{t.Error("snapshot changed")};o.allowedTables[0]="own"}
+// Act: source mutation and independent option materialization overlap.
+var wg sync.WaitGroup;wg.Add(33);go func(){defer wg.Done();for range 1000{mutate()}}();for range 32{go func(){defer wg.Done();for range 1000{check()}}()};wg.Wait()
+// Assert: checks inside each worker verify policy and independent writable containers.
+}

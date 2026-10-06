@@ -1,0 +1,56 @@
+--- FAIL: TestD32ConstructorOptions (0.00s)
+    --- FAIL: TestD32ConstructorOptions/nil (0.00s)
+        constructor_contract_test.go:25: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:25
+            	Error:      	func (assert.PanicTestFunc)(0x100562f70) should not panic
+            	            		Panic value:	runtime error: invalid memory address or nil pointer dereference
+            	            		Panic stack:	goroutine 9 [running]:
+            	            	runtime/debug.Stack()
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/debug/stack.go:26 +0x64
+            	            	github.com/stretchr/testify/assert.didPanic.func1()
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1287 +0x64
+            	            	panic({0x100864a48?, 0x1008faf30?})
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/runtime/panic.go:859 +0x120
+            	            	github.com/skosovsky/toolsy/toolkits/rag.AsSearchTool({0x1008a1920, 0x65524c131680}, {0x65524be4f5e0, 0x1, 0x65524be4f588?})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/rag.go:33 +0x98
+            	            	github.com/skosovsky/toolsy/toolkits/rag.TestD32ConstructorOptions.func1({0x65524be4f5e0, 0x1, 0x1})
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:12 +0x5c
+            	            	github.com/skosovsky/toolsy/toolkits/rag.TestD32ConstructorOptions.func2.1()
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:25 +0x38
+            	            	github.com/stretchr/testify/assert.didPanic(0x1008fd2f0?)
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1292 +0x68
+            	            	github.com/stretchr/testify/assert.NotPanics({0x1008a1940, 0x65524c0e38c8}, 0x65524bdf9338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/assert/assertions.go:1369 +0x70
+            	            	github.com/stretchr/testify/require.NotPanics({0x1008a2a70, 0x65524c0e38c8}, 0x65524bdf9338, {0x0, 0x0, 0x0})
+            	            		/Users/skosovsky/go/pkg/mod/github.com/stretchr/testify@v1.12.1/require/require.go:1683 +0xa4
+            	            	github.com/skosovsky/toolsy/toolkits/rag.TestD32ConstructorOptions.func2(0x65524c0e38c8)
+            	            		/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:25 +0x8c
+            	            	testing.tRunner(0x65524c0e38c8, 0x65524c123ca0)
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2193 +0xc4
+            	            	created by testing.(*T).Run in goroutine 8
+            	            		/opt/homebrew/Cellar/go/1.27.1/libexec/src/testing/testing.go:2258 +0x3b8
+            	Test:       	TestD32ConstructorOptions/nil
+    --- FAIL: TestD32ConstructorOptions/a (0.00s)
+        constructor_contract_test.go:33: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:33
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/a
+    --- FAIL: TestD32ConstructorOptions/b (0.00s)
+        constructor_contract_test.go:33: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:33
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/b
+    --- FAIL: TestD32ConstructorOptions/c (0.00s)
+        constructor_contract_test.go:33: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:33
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/c
+    --- FAIL: TestD32ConstructorOptions/d (0.00s)
+        constructor_contract_test.go:33: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/constructor_contract_test.go:33
+            	Error:      	An error is expected but got nil.
+            	Test:       	TestD32ConstructorOptions/d
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/rag	0.213s
+ok  	github.com/skosovsky/toolsy/toolkits/rag/examples/host	0.218s [no tests to run]
+FAIL

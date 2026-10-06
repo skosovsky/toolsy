@@ -6,7 +6,8 @@ const (
 	defaultMaxOutputBytes = 1024 * 1024
 )
 
-// Option configures the prompts tool.
+// Option rejects nil at construction. Host ports/callbacks are borrowed; the host owns
+// their lifetime and synchronization. It configures the prompts tool.
 type Option func(*options)
 
 type options struct {

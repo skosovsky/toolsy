@@ -1,0 +1,11 @@
+--- FAIL: TestRetrievalBoundsRejectProviderBeforeFormatter (0.00s)
+    --- FAIL: TestRetrievalBoundsRejectProviderBeforeFormatter/count (0.00s)
+        bounds_test.go:34: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/bounds_test.go:34
+            	Error:      	Received unexpected error:
+            	            	toolkit/rag: limits must not be negative
+            	Test:       	TestRetrievalBoundsRejectProviderBeforeFormatter/count
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/rag	0.865s
+ok  	github.com/skosovsky/toolsy/toolkits/rag/examples/host	0.409s
+FAIL

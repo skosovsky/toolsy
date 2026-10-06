@@ -21,6 +21,8 @@ const (
 // ScopeFilter removes documents the current user may not access (RBAC hook).
 type ScopeFilter func(ctx context.Context, docs []Document) []Document
 
+// Option rejects nil at construction. Negative limits reject; zero selects finite defaults.
+// Host ports and callbacks are borrowed; the host owns their lifetime and synchronization.
 // Option configures the search tool.
 type Option func(*options)
 
@@ -58,7 +60,7 @@ func WithMaxBytes(n int) Option {
 	}
 }
 
-// WithMaxResults sets the maximum number of results to include (nonpositive = default 10).
+// WithMaxResults sets the maximum number of results to include (zero = default 10; negative rejects construction).
 func WithMaxResults(n int) Option {
 	return func(o *options) {
 		o.maxResults = n
@@ -94,10 +96,10 @@ func WithHostResultValidator(v func(any) error) Option {
 }
 
 func (o *options) applyDefaults() {
-	if o.maxItemBytes <= 0 {
+	if o.maxItemBytes == 0 {
 		o.maxItemBytes = defaultMaxItemBytes
 	}
-	if o.maxSourceBytes <= 0 {
+	if o.maxSourceBytes == 0 {
 		o.maxSourceBytes = defaultMaxBytes
 	}
 	if o.name == "" {
@@ -106,10 +108,10 @@ func (o *options) applyDefaults() {
 	if o.description == "" {
 		o.description = "Search the knowledge base for relevant information"
 	}
-	if o.maxBytes <= 0 {
+	if o.maxBytes == 0 {
 		o.maxBytes = defaultMaxBytes
 	}
-	if o.maxResults <= 0 {
+	if o.maxResults == 0 {
 		o.maxResults = defaultMaxResults
 	}
 }

@@ -1,0 +1,11 @@
+package fstool
+import("testing";"strings")
+func TestAcceptanceBFastValidation(t *testing.T){
+// Arrange.
+missing:=t.TempDir()+"/missing"
+for _,opt:=range []Option{nil,WithMaxBytes(-1),WithMaxSourceBytes(-1)}{
+// Act.
+tools,err:=AsTools(missing,opt)
+// Assert: the missing root must not mask the configuration error.
+if tools!=nil||err==nil||strings.Contains(err.Error(),"base dir"){t.Fatalf("configuration did not fail first: %v",err)}
+}}

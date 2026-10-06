@@ -1,0 +1,22 @@
+toolkits/httptool/constructor_contract_test.go:23:3: unlambda: replace `func(n int) Option { return WithMaxRequestBody(n) }` with `WithMaxRequestBody` (gocritic)
+		func(n int) Option { return WithMaxRequestBody(n) },
+		^
+toolkits/httptool/constructor_contract_test.go:24:3: unlambda: replace `func(n int) Option { return WithMaxResponseBody(n) }` with `WithMaxResponseBody` (gocritic)
+		func(n int) Option { return WithMaxResponseBody(n) },
+		^
+toolkits/httptool/constructor_contract_test.go:25:3: unlambda: replace `func(n int) Option { return WithMaxWireBytes(n) }` with `WithMaxWireBytes` (gocritic)
+		func(n int) Option { return WithMaxWireBytes(n) },
+		^
+toolkits/httptool/httptool.go:45:21: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+			return nil, nil, fmt.Errorf("toolkit/httptool: nil option")
+			                 ^
+toolkits/httptool/httptool.go:50:20: error-format: fmt.Errorf can be replaced with errors.New (perfsprint)
+		return nil, nil, fmt.Errorf("toolkit/httptool: limits must not be negative")
+		                 ^
+toolkits/httptool/option_snapshot_test.go:37:1: unnecessary trailing newline (whitespace)
+}
+^
+6 issues:
+* gocritic: 3
+* perfsprint: 2
+* whitespace: 1

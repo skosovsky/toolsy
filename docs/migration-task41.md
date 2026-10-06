@@ -907,3 +907,30 @@ predispatch check before this handler: the standard interrupt is retained, but
 custom cause is not promised there, and no retriever runs. Uncooperative callbacks
 cannot be preempted. Provider/internal callback resource costs remain outside accepted-input
 and exported-wire bounds. Read the [RAG contract](../toolkits/rag/README.md).
+
+
+## D32 — toolkit constructor validation and ownership
+
+All eleven toolkit modules reject nil `Option` arguments with errors. This includes
+`AsToolsWithCleanup`/`AsToolWithCleanup` and web `SearchStructured`/`ScrapePage`.
+Negative limits now reject construction rather than silently selecting defaults.
+Zero still selects finite defaults where previously documented; human retains its
+explicit zero-payload-limit rejection. Options apply in order, with final values
+validated; later valid values can replace earlier negative values.
+
+`memory.NewScratchpad(opts...)` now returns `(*Scratchpad, error)`. Handle that error
+before calling `AsTools`; negative limits no longer produce an invalid instance.
+`AsTools` continues to reject positive budgets too small for mandatory status JSON.
+
+HTTP host allowlists, credential origins and metadata headers, web blocked-domain
+lists, and SQL inspected-table lists snapshot inputs at option creation and copy
+again for each application. Mutating original containers after `With...` returns or
+reusing one option cannot change existing policy. Concurrent mutation during the
+snapshot itself is unsupported. SQL inspected-table filters confer no SQL authority.
+
+Host providers, databases, roots, stores, custom scrapers, callback functions and
+captured state remain borrowed. Hosts own lifetime, context cooperation and safe
+concurrent use; there is no deep-cloning or synchronization promise for arbitrary
+host state. Keep returned data stable while toolkit callbacks and encoding consume
+it. TLS pool configuration is cloned with the existing R07 limitation: referenced
+certificates/root/callback state remains immutable for the configuration lifetime.

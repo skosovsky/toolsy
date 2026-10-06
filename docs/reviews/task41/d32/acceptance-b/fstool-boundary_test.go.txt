@@ -1,0 +1,10 @@
+package fstool
+import("testing";"math")
+func TestAcceptanceBIntegerBoundaries(t *testing.T){
+// Arrange.
+construct:=func(opts ...Option)(bool,error){v,e:=AsTools(t.TempDir(),opts...);return v!=nil,e}
+for _,factory:=range []func(int)Option{WithMaxBytes,WithMaxSourceBytes,WithMaxEntries,WithMaxScanEntries,WithMaxNameBytes}{
+// Act and Assert.
+for _,n:=range []int{math.MinInt,-1024,-1}{v,e:=construct(factory(n));if e==nil||v{t.Fatalf("negative %d accepted: %v",n,e)};v,e=construct(factory(n),factory(0));if e!=nil||!v{t.Fatalf("zero did not replace negative: %v",e)}}
+ for _,opts:=range [][]Option{{nil,factory(0)},{factory(0),nil},{factory(0),nil,factory(0)}}{v,e:=construct(opts...);if e==nil||v{t.Fatal("nil Option accepted")}}
+}}

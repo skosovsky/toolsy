@@ -2,6 +2,7 @@ package timetool
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"time"
@@ -54,7 +55,13 @@ func ComputeCurrent(loc *time.Location) (CurrentResult, error) {
 func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	var o options
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/timetool: nil option")
+		}
 		opt(&o)
+	}
+	if o.maxWireBytes < 0 {
+		return nil, errors.New("toolkit/timetool: limits must not be negative")
 	}
 	applyDefaults(&o)
 

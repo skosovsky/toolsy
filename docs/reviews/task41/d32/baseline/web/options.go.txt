@@ -1,0 +1,190 @@
+package web
+
+import (
+	"net/http"
+	"slices"
+
+	"github.com/skosovsky/toolsy/toolkits/httptool"
+)
+
+// Option configures AsTools (page limit, HTTP client, scraper, SSRF options, tool names).
+type Option func(*options)
+
+const defaultMaxSearchBytes = 256 * 1024
+const defaultMaxSearchItemBytes = 16 * 1024
+
+type options struct {
+	maxPageBytes         int
+	maxSearchBytes       int
+	maxSearchResults     int
+	maxSearchItemBytes   int
+	maxSearchSourceBytes int
+	maxSourceBytes       int
+	maxMarkdownBytes     int
+	httpClient           *http.Client
+	httpSettings         httptool.ClientSettings
+	scraper              Scraper
+	allowPrivateIPs      bool
+	blockedDomains       []string
+	searchName           string
+	searchDesc           string
+	scrapeName           string
+	scrapeDesc           string
+	searchFormatter      func([]SearchResult) (any, error)
+	scrapeFormatter      func(ScrapeWireResult) (any, error)
+	hostResultValidator  func(any) error
+}
+
+const defaultMaxPageBytes = 2 * 1024 * 1024
+
+func applyDefaults(o *options) {
+	if o.maxSearchResults <= 0 {
+		o.maxSearchResults = 50
+	}
+	if o.maxSearchItemBytes <= 0 {
+		o.maxSearchItemBytes = defaultMaxSearchItemBytes
+	}
+	if o.maxSearchSourceBytes <= 0 {
+		o.maxSearchSourceBytes = defaultMaxSearchBytes
+	}
+	if o.maxPageBytes <= 0 {
+		o.maxPageBytes = defaultMaxPageBytes
+	}
+	if o.maxSearchBytes <= 0 {
+		o.maxSearchBytes = defaultMaxSearchBytes
+	}
+	if o.maxSourceBytes <= 0 {
+		o.maxSourceBytes = scrapeContentByteCap(o.maxPageBytes)
+	}
+	if o.maxMarkdownBytes <= 0 {
+		o.maxMarkdownBytes = scrapeContentByteCap(o.maxPageBytes)
+	}
+	if o.scraper == nil {
+		o.scraper = newHTMLScraper()
+	}
+	if o.searchName == "" {
+		o.searchName = "web_search"
+	}
+	if o.searchDesc == "" {
+		o.searchDesc = "Run a search query and return links with snippets"
+	}
+	if o.scrapeName == "" {
+		o.scrapeName = "web_scrape"
+	}
+	if o.scrapeDesc == "" {
+		o.scrapeDesc = "Fetch a URL and extract main content as Markdown"
+	}
+}
+
+// WithMaxPageBytes sets the final wire JSON byte budget for web_scrape (default 2MB).
+// Source and extraction defaults derive from this budget; explicit WithMaxSourceBytes and
+// WithMaxMarkdownBytes override their respective independent caps. Library mode has no final JSON cap.
+// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
+func WithMaxPageBytes(n int) Option {
+	return func(o *options) {
+		o.maxPageBytes = n
+	}
+}
+
+// WithMaxSearchBytes sets the maximum wire JSON size for web_search (default 256KB).
+func WithMaxSearchBytes(n int) Option {
+	return func(o *options) {
+		o.maxSearchBytes = n
+	}
+}
+
+// WithHTTPSettings applies explicit timeout/TLS settings to the owned safe pool.
+func WithHTTPSettings(settings httptool.ClientSettings) Option {
+	return func(o *options) { o.httpSettings = settings }
+}
+
+// WithScraper sets a custom scraper (e.g. for JS-rendered pages). Default uses html-to-markdown.
+// Custom implementations must enforce maxBytes fail-closed in HTMLToMarkdown (return an error when
+// markdown output exceeds maxBytes; no silent truncate). They should respect caller context and bound
+// CPU; the default htmlScraper checks context before and after synchronous conversion.
+func WithScraper(s Scraper) Option {
+	return func(o *options) {
+		o.scraper = s
+	}
+}
+
+// WithAllowPrivateIPs allows scraping private/loopback IPs (for tests only).
+func WithAllowPrivateIPs(allow bool) Option {
+	return func(o *options) {
+		o.allowPrivateIPs = allow
+	}
+}
+
+// WithBlockedDomains sets exact hostname or leading-dot descendant deny entries.
+// Use both "example.com" and ".example.com" to block the apex and descendants.
+func WithBlockedDomains(domains []string) Option {
+	return func(o *options) {
+		o.blockedDomains = slices.Clone(domains)
+	}
+}
+
+// WithSearchName sets the name of the web_search tool.
+func WithSearchName(name string) Option {
+	return func(o *options) {
+		o.searchName = name
+	}
+}
+
+// WithSearchDescription sets the description of the web_search tool.
+func WithSearchDescription(desc string) Option {
+	return func(o *options) {
+		o.searchDesc = desc
+	}
+}
+
+// WithScrapeName sets the name of the web_scrape tool.
+func WithScrapeName(name string) Option {
+	return func(o *options) {
+		o.scrapeName = name
+	}
+}
+
+// WithScrapeDescription sets the description of the web_scrape tool.
+func WithScrapeDescription(desc string) Option {
+	return func(o *options) {
+		o.scrapeDesc = desc
+	}
+}
+
+// WithSearchFormatter overrides JSON output for web_search (host DTO via any).
+func WithSearchFormatter(f func([]SearchResult) (any, error)) Option {
+	return func(o *options) {
+		o.searchFormatter = f
+	}
+}
+
+// WithScrapeFormatter maps extracted content and its source URL to a host DTO.
+func WithScrapeFormatter(f func(ScrapeWireResult) (any, error)) Option {
+	return func(o *options) {
+		o.scrapeFormatter = f
+	}
+}
+
+// WithHostResultValidator validates formatted tool output before JSON marshal.
+func WithHostResultValidator(v func(any) error) Option {
+	return func(o *options) {
+		o.hostResultValidator = v
+	}
+}
+
+// WithMaxSearchResults limits accepted hits; no pagination is implied.
+func WithMaxSearchResults(n int) Option { return func(o *options) { o.maxSearchResults = n } }
+
+// WithMaxSearchItemBytes limits each JSON encoded hit.
+func WithMaxSearchItemBytes(n int) Option { return func(o *options) { o.maxSearchItemBytes = n } }
+
+// WithMaxSearchSourceBytes limits total JSON encoded hits before formatting.
+func WithMaxSearchSourceBytes(n int) Option { return func(o *options) { o.maxSearchSourceBytes = n } }
+
+// WithMaxSourceBytes limits HTML input independently of wire output.
+// Nonpositive values derive a finite default from the wire budget.
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
+
+// WithMaxMarkdownBytes limits extracted content independently of wire output.
+// Nonpositive values derive a finite default from the wire budget.
+func WithMaxMarkdownBytes(n int) Option { return func(o *options) { o.maxMarkdownBytes = n } }

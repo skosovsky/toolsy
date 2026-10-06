@@ -1,0 +1,6 @@
+package web
+import("sync";"testing")
+func TestAcceptanceBConcurrentSnapshots(t *testing.T){
+// Arrange, Act, Assert: concurrent materialization owns independent configuration.
+source:=[]string{"127.0.0.1"};opt:=WithBlockedDomains(source);source[0]="evil";var wg sync.WaitGroup;for range 128{wg.Add(1);go func(){defer wg.Done();var o options;opt(&o);if len(o.blockedDomains)!=1||o.blockedDomains[0]!="127.0.0.1"{t.Error("snapshot changed")};o.blockedDomains[0]="worker"}()};wg.Wait()
+}

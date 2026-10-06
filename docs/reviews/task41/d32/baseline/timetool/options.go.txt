@@ -1,0 +1,127 @@
+package timetool
+
+import (
+	"context"
+	"time"
+
+	"github.com/skosovsky/toolsy"
+)
+
+// LocationProvider resolves timezone dynamically from request context (e.g. user session).
+type LocationProvider func(ctx context.Context, env *toolsy.RunEnv) (*time.Location, error)
+
+// Option configures AsTools (location for local time, tool names and descriptions).
+type Option func(*options)
+
+type options struct {
+	maxWireBytes        int
+	location            *time.Location
+	locationProvider    LocationProvider
+	resultFormatter     func(CurrentResult) (any, error)
+	calculateFormatter  func(CalculateResult) (any, error)
+	hostResultValidator func(any) error
+	currentName         string
+	currentDesc         string
+	calculateName       string
+	calculateDesc       string
+}
+
+const (
+	defaultMaxWireBytes  = 64 * 1024
+	maxBaseDateBytes     = 64
+	defaultCurrentName   = "time_current"
+	defaultCurrentDesc   = "Get current time in UTC and local timezone with weekday"
+	defaultCalculateName = "time_calculate"
+	defaultCalculateDesc = "Add days or hours to a date (DST-safe); returns result in RFC3339"
+)
+
+func applyDefaults(o *options) {
+	if o.maxWireBytes <= 0 {
+		o.maxWireBytes = defaultMaxWireBytes
+	}
+	if o.location == nil {
+		o.location = time.Local
+		if o.location == nil {
+			o.location = time.UTC
+		}
+	}
+	if o.currentName == "" {
+		o.currentName = defaultCurrentName
+	}
+	if o.currentDesc == "" {
+		o.currentDesc = defaultCurrentDesc
+	}
+	if o.calculateName == "" {
+		o.calculateName = defaultCalculateName
+	}
+	if o.calculateDesc == "" {
+		o.calculateDesc = defaultCalculateDesc
+	}
+}
+
+// WithLocation sets the timezone for "local" in time_current (default: system local, fallback UTC).
+// Overridden by [WithLocationProvider] when set.
+func WithLocation(loc *time.Location) Option {
+	return func(o *options) {
+		o.location = loc
+	}
+}
+
+// WithLocationProvider sets a dynamic timezone resolver with priority over [WithLocation].
+func WithLocationProvider(p LocationProvider) Option {
+	return func(o *options) {
+		o.locationProvider = p
+	}
+}
+
+// WithResultFormatter overrides the JSON shape returned by time_current (host DTO via any).
+func WithResultFormatter(f func(CurrentResult) (any, error)) Option {
+	return func(o *options) {
+		o.resultFormatter = f
+	}
+}
+
+// WithCalculateResultFormatter overrides the JSON shape returned by time_calculate.
+func WithCalculateResultFormatter(f func(CalculateResult) (any, error)) Option {
+	return func(o *options) {
+		o.calculateFormatter = f
+	}
+}
+
+// WithHostResultValidator validates formatted output before JSON marshal (PII/injection checks).
+func WithHostResultValidator(v func(any) error) Option {
+	return func(o *options) {
+		o.hostResultValidator = v
+	}
+}
+
+// WithCurrentName sets the name of the time_current tool.
+func WithCurrentName(name string) Option {
+	return func(o *options) {
+		o.currentName = name
+	}
+}
+
+// WithCurrentDescription sets the description of the time_current tool.
+func WithCurrentDescription(desc string) Option {
+	return func(o *options) {
+		o.currentDesc = desc
+	}
+}
+
+// WithCalculateName sets the name of the time_calculate tool.
+func WithCalculateName(name string) Option {
+	return func(o *options) {
+		o.calculateName = name
+	}
+}
+
+// WithCalculateDescription sets the description of the time_calculate tool.
+func WithCalculateDescription(desc string) Option {
+	return func(o *options) {
+		o.calculateDesc = desc
+	}
+}
+
+// WithMaxWireBytes bounds default and host-formatted JSON. Nonpositive uses 64 KiB.
+func WithMaxWireBytes(n int) Option { return func(o *options) { o.maxWireBytes = n } }

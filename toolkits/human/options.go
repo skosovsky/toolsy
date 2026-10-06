@@ -1,6 +1,7 @@
 package human
 
-// Option configures conversational intent tools, not approval authority.
+// Option rejects nil at construction. Host ports/callbacks are borrowed; the host owns
+// their lifetime and synchronization. It configures conversational intent tools, not approval authority.
 type Option func(*options)
 
 type options struct {
