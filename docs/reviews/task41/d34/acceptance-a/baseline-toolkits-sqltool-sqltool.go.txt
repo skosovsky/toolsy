@@ -329,7 +329,7 @@ func scanColumnRow(rows *sql.Rows, driverLower string) (string, string, string, 
 
 func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (ExecuteResult, error) {
 	query = strings.TrimSpace(query)
-	if err := sqlutil.ValidateSelectLexicalSubset(query); err != nil {
+	if err := sqlutil.ValidateReadOnlyQuery(query); err != nil {
 		return ExecuteResult{}, err
 	}
 

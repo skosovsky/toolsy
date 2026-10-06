@@ -1,0 +1,128 @@
+=== RUN   TestIndependentD34Lexical
+=== RUN   TestIndependentD34Lexical/SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_1;
+=== RUN   TestIndependentD34Lexical/SELECT_';DROP'
+=== RUN   TestIndependentD34Lexical/SELECT_"DELETE;"
+=== RUN   TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT'
+=== RUN   TestIndependentD34Lexical/SELECT_"A""DROP;"
+=== RUN   TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/
+=== RUN   TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_host_effect()
+=== RUN   TestIndependentD34Lexical/SELECT_1_INTO_target
+=== RUN   TestIndependentD34Lexical/WITH_anything
+=== RUN   TestIndependentD34Lexical/SELECT_'unterminated;DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_/*_unterminated;DROP
+=== RUN   TestIndependentD34Lexical/SELECT_$$DELETE$$
+=== RUN   TestIndependentD34Lexical/SELECT_`DELETE`
+=== RUN   TestIndependentD34Lexical/SELECT_[DROP]
+=== RUN   TestIndependentD34Lexical/SELECT_1_#_DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/
+--- PASS: TestIndependentD34Lexical (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1; (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_';DROP' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"DELETE;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"A""DROP;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_host_effect() (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_INTO_target (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_anything (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'unterminated;DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_/*_unterminated;DROP (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_$$DELETE$$ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_`DELETE` (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_[DROP] (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_#_DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/ (0.00s)
+=== RUN   TestIndependentD34Lexical
+=== RUN   TestIndependentD34Lexical/SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_1;
+=== RUN   TestIndependentD34Lexical/SELECT_';DROP'
+=== RUN   TestIndependentD34Lexical/SELECT_"DELETE;"
+=== RUN   TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT'
+=== RUN   TestIndependentD34Lexical/SELECT_"A""DROP;"
+=== RUN   TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/
+=== RUN   TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_host_effect()
+=== RUN   TestIndependentD34Lexical/SELECT_1_INTO_target
+=== RUN   TestIndependentD34Lexical/WITH_anything
+=== RUN   TestIndependentD34Lexical/SELECT_'unterminated;DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_/*_unterminated;DROP
+=== RUN   TestIndependentD34Lexical/SELECT_$$DELETE$$
+=== RUN   TestIndependentD34Lexical/SELECT_`DELETE`
+=== RUN   TestIndependentD34Lexical/SELECT_[DROP]
+=== RUN   TestIndependentD34Lexical/SELECT_1_#_DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/
+--- PASS: TestIndependentD34Lexical (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1; (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_';DROP' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"DELETE;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"A""DROP;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_host_effect() (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_INTO_target (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_anything (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'unterminated;DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_/*_unterminated;DROP (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_$$DELETE$$ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_`DELETE` (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_[DROP] (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_#_DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/ (0.00s)
+=== RUN   TestIndependentD34Lexical
+=== RUN   TestIndependentD34Lexical/SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_1;
+=== RUN   TestIndependentD34Lexical/SELECT_';DROP'
+=== RUN   TestIndependentD34Lexical/SELECT_"DELETE;"
+=== RUN   TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT'
+=== RUN   TestIndependentD34Lexical/SELECT_"A""DROP;"
+=== RUN   TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/
+=== RUN   TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1
+=== RUN   TestIndependentD34Lexical/SELECT_host_effect()
+=== RUN   TestIndependentD34Lexical/SELECT_1_INTO_target
+=== RUN   TestIndependentD34Lexical/WITH_anything
+=== RUN   TestIndependentD34Lexical/SELECT_'unterminated;DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_/*_unterminated;DROP
+=== RUN   TestIndependentD34Lexical/SELECT_$$DELETE$$
+=== RUN   TestIndependentD34Lexical/SELECT_`DELETE`
+=== RUN   TestIndependentD34Lexical/SELECT_[DROP]
+=== RUN   TestIndependentD34Lexical/SELECT_1_#_DELETE
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/
+=== RUN   TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/
+--- PASS: TestIndependentD34Lexical (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1; (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_';DROP' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"DELETE;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'O''Reilly;INSERT' (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_"A""DROP;" (0.00s)
+    --- PASS: TestIndependentD34Lexical/--_DELETE;_SELECT_updated_at_FROM_x (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_INSERT;_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_q_AS_(DELETE_FROM_x)_SELECT_1 (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_host_effect() (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_INTO_target (0.00s)
+    --- PASS: TestIndependentD34Lexical/WITH_anything (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_'unterminated;DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_/*_unterminated;DROP (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_$$DELETE$$ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_`DELETE` (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_[DROP] (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_#_DELETE (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*!_DELETE_FROM_x_*/ (0.00s)
+    --- PASS: TestIndependentD34Lexical/SELECT_1_/*_outer_/*_inner_*/_DROP_*/ (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/sqlutil	1.424s

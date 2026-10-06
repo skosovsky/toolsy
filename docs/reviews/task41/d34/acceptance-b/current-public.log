@@ -1,0 +1,53 @@
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy	1.448s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	1.357s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.311s [no tests to run]
+?   	github.com/skosovsky/toolsy/cmd/toolsy-release	[no test files]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	1.338s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.318s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/exectool	1.356s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/historycodec	1.278s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/internal/format	1.270s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.248s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	1.410s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.231s [no tests to run]
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	1.236s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/testutil	1.229s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/textprocessor	1.170s [no tests to run]

@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted, signed commit pending; rows 35–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted, signed commit pending; rows 36–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1430,3 +1430,59 @@ mutation behavior, including separately compilable old memory API. Found fstool
 validation-before-root-inspection issue fixed, retained regression and both rechecks
 pass. All reports/probes/raw logs and distinguished initial harness failures under
  task41/d32/acceptance-a/b. Accepted for separate signed `fix: toolkit options`.
+
+
+### 35 — D34 (accepted)
+
+Criteria for each independent reviewer, 20% each:
+1. Rename misleading ValidateReadOnlyQuery/readonly lexer terminology to
+   ValidateSelectLexicalSubset; all callers/tests migrate, no stale compatibility
+   alias or SQL parser/security engine. Existing accepted/rejected subset retained.
+2. Contract accurately describes token/quote/comment/semicolon handling, blocked
+   keywords, incomplete grammar and dialect-specific unsupported syntax; nil error
+   is neither valid SQL nor read-only/side-effect proof.
+3. Host-owned database privileges, callable functions/procedures, connection and
+   inspection-only table filters are the authority boundary. Tool read-only metadata
+   remains an admission hint under that host contract, not a query security proof.
+4. AAA regression/limitation fixtures prove accepted subset, rejected common writes
+   and actual SQLite host-side SELECT function effects despite query_only; runnable
+   host SQL example uses constrained DB and finite toolkit budgets honestly.
+5. Affected root/SQL module tests/race/pinned lint pass; API/module README/migration
+   synchronized, both independent 100%, no unresolved detected errors. Baseline
+   limitation demonstration may pass old implementation; no false regression claim.
+
+Spec-first: ValidateSelectLexicalSubset names only a small lexical usability filter.
+Retain algorithm and acceptance domain: first scanned outside-quote/comment token
+SELECT/WITH, reject semicolons outside these regions and a fixed forbidden token
+set. Double quote/doubled single quote, -- and first-closing /*...*/ only. It does
+not parse full SQL or prove validity/read-only behavior, terminate malformed
+quotes/comments, understand dialect dollar/backtick/bracket/backslash/#/executable
+comment forms, bind identifiers/functions, or enforce database authorization.
+Failure messages must describe the lexical rejection rather than certify reads.
+Keep public sql_execute_read name/metadata; document its host enforcement premise.
+Host owns connection role/DB access and callable routine authority; inspect table
+filter is not query ACL. Add runnable local SQLite host example and actual SELECT
+function side-effect fixture to make limitations executable; no live postgres/mysql
+claim or new SQL security engine. No lexer semantic expansion in this design row.
+
+
+D34 implementation complete: ValidateSelectLexicalSubset and matching file/helper,
+all callers/fixtures migrated, unchanged lexical algorithm with honest rejection
+messages; SQL validity/read-only/function/dialect authority explicitly host-owned.
+Runnable mode=ro SQLite example and query_only+host-function effect fixture pass.
+Exact baseline/current public effect probe both pass race3, intentionally proving
+existing limitation rather than claiming prevention/regression failure. Root full
+race3/lint0; SQL full race3 3.137s/host1.591s/lint0. Evidence task41/d34; independent
+acceptance pending.
+
+
+Final D34 independent A and B accepted 100%, five 20/20 each, no unresolved detected
+product errors. Root/SQL tests/race and pinned lint pass within explicit affected
+scope; parent full root race3 retained. A independently verifies exact snapshots,
+normalized lexer and adversarial subset/SQLite authority baseline/current probes.
+B 10,024-query parity race3 and public DB/host effects under all five dialect aliases
+pass; actual corrected baseline probe executes three runs. Initial harness faults
+retained and excluded, no no-tests/compile-only behavioral claim. Parent baseline
+old identifier+old rejection reason identity proof visibly runs beside host effect
+probe. Reports/probes/raw logs under task41/d34/acceptance-a/b. Accepted for separate
+signed `refactor: sql subset`.

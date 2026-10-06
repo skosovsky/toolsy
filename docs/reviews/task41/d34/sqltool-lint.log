@@ -1,0 +1,8 @@
+toolkits/sqltool/examples/host/main.go:32:5: shadow: declaration of "err" shadows declaration at line 26 (govet)
+	if err := seed(ctx, databaseURL.String()); err != nil {
+	   ^
+toolkits/sqltool/examples/host/main.go:77:8: shadow: declaration of "err" shadows declaration at line 72 (govet)
+	if _, err := db.ExecContext(ctx, "CREATE TABLE public_rows (id INTEGER, label TEXT)"); err != nil {
+	      ^
+2 issues:
+* govet: 2

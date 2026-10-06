@@ -5,16 +5,14 @@
 // remain host responsibilities. Successful display truncation is explicit; no
 // pagination token is supplied for arbitrary queries.
 //
-// The read-only validator uses a small lexical subset rather than a full SQL parser.
-// It supports:
-//   - single-quoted literals with doubled quote escaping ('O”Reilly');
-//   - double-quoted identifiers with doubled quote escaping ("A""B");
-//   - line comments started by --;
-//   - block comments delimited by /* and */;
-//   - ASCII unquoted identifiers [A-Z0-9_];
-//   - rejection of ; outside literals/comments.
-//
-// Nested block comments are intentionally unsupported. Unicode identifiers must be
-// double-quoted; unquoted non-ASCII text is ignored by the scanner and left to the
-// database engine to reject when invalid.
+// ValidateSelectLexicalSubset is an internal lexical usability filter, not a SQL parser.
+// The first scanned token must be SELECT or WITH; a fixed set of statement keywords
+// and semicolons outside literals/comments reject. It scans ASCII identifier tokens
+// after uppercasing, skips single/double quotes with doubled-quote escapes, -- line
+// comments and /*...*/ blocks ending at the first closer. Nested comments and dialect
+// backticks, brackets, dollar quotes, backslash escapes, # comments and executable
+// comments have no corresponding dialect-aware interpretation. Unrecognized text and
+// unterminated quotes/comments are left to the database; SQL grammar is not validated.
+// SELECT functions and SELECT INTO illustrate why acceptance cannot prove read-only
+// behavior. Hosts must restrict database writes and callable routine side effects.
 package sqltool

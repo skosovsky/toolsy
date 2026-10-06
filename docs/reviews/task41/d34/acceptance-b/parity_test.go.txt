@@ -1,0 +1,19 @@
+package sqlutil
+import("testing";"math/rand/v2")
+func TestAcceptanceBParity(t *testing.T){
+ // Arrange: independent edge corpus and deterministic pseudo-random token compositions.
+ cases:=[]string{"","-- hi", "SELECT", "WITH anything", "SELECT host_effect()", "SELECT 1 INTO t", "SELECT 'unterminated", "SELECT /*unterminated", "SELECT [unterminated", "SELECT `DROP`", "SELECT [DROP]", "SELECT $$DELETE$$", "SELECT 'it''s; DROP'", "SELECT \"DELETE;\"", "SELECT 1;", "SELECT 1 /* nest /* */ DELETE */", "SELECT 1 /*! DELETE */", "SELECT 1 # DELETE", "SELECT 1--x\nDELETE", "(SELECT 1)", "@SELECT 1", "SELECT updated_at", "select 1", "WITH x AS (DELETE FROM t) SELECT 1"}
+ parts:=[]string{"SELECT", "WITH", "DROP", "DELETE", "1", ";", "'", "\"", "--", "\n", "/*", "*/", "`", "[", "]", "$", "_", "é", " ", "abc"}
+ r:=rand.New(rand.NewPCG(34,35)); for range 10000 {s:="";for range r.IntN(20){s+=parts[r.IntN(len(parts))]};cases=append(cases,s)}
+ for _,q:=range cases{
+ // Act.
+ got:=ValidateSelectLexicalSubset(q); old:=baselineBValidateReadOnlyQuery(q)
+ // Assert.
+ if (got==nil)!=(old==nil){t.Fatalf("parity mismatch %q: %v vs %v",q,got,old)}
+ }
+ accepted:=[]string{"SELECT host_effect()", "SELECT 1 INTO t", "WITH anything", "SELECT 'unterminated", "SELECT /*unterminated", "SELECT 1 /*! DELETE */", "SELECT updated_at"}
+ rejected:=[]string{"DELETE FROM t", "SELECT 1;", "SELECT [DROP]", "SELECT `DROP`", "SELECT $$DELETE$$", "SELECT 1 # DELETE", "WITH x AS (DELETE FROM t) SELECT 1"}
+ for _,q:=range accepted {if e:=ValidateSelectLexicalSubset(q);e!=nil{t.Fatalf("expected lexical acceptance %q: %v",q,e)}}
+ for _,q:=range rejected {if e:=ValidateSelectLexicalSubset(q);e==nil{t.Fatalf("expected lexical rejection %q",q)}}
+ t.Logf("%d parity queries; documented accepted/rejected boundaries verified",len(cases))
+}

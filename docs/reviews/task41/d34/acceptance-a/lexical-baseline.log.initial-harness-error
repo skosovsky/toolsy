@@ -1,0 +1,4 @@
+# github.com/skosovsky/toolsy/internal/sqlutil
+internal/sqlutil/independent_d34_test.go:5:74: missing ',' in composite literal
+FAIL	github.com/skosovsky/toolsy/internal/sqlutil [setup failed]
+FAIL

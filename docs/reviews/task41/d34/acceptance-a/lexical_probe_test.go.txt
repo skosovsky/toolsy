@@ -1,0 +1,18 @@
+package sqlutil
+import "testing"
+func TestIndependentD34Lexical(t *testing.T) {
+ cases:=[]struct{q string; accepted bool}{
+ {"SELECT 1",true},{"SELECT 1;",false},{"SELECT ';DROP'",true},{`SELECT "DELETE;"`,true},{"SELECT 'O''Reilly;INSERT'",true},{`SELECT "A""DROP;"`,true},
+ {"-- DELETE;\nSELECT updated_at FROM x",true},{"SELECT 1 /* INSERT; */",true},{"WITH q AS (DELETE FROM x) SELECT 1",false},
+ {"SELECT host_effect()",true},{"SELECT 1 INTO target",true},{"WITH anything",true},{"SELECT 'unterminated;DELETE",true},{"SELECT /* unterminated;DROP",true},
+ {"SELECT $$DELETE$$",false},{"SELECT `DELETE`",false},{"SELECT [DROP]",false},{"SELECT 1 # DELETE",false},{"SELECT 1 /*! DELETE FROM x */",true},{"SELECT 1 /* outer /* inner */ DROP */",false},
+ }
+ for _,c:=range cases { t.Run(c.q,func(t *testing.T){
+ // Arrange: expected lexical acceptance is independent of SQL validity.
+ q:=c.q
+ // Act.
+ err:=ValidateSelectLexicalSubset(q)
+ // Assert.
+ if (err==nil)!=c.accepted {t.Fatalf("accepted=%v err=%v",c.accepted,err)}
+ }) }
+}

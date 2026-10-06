@@ -1,0 +1,38 @@
+package main
+
+import (
+ "fmt"
+ "go/scanner"
+ "go/token"
+ "os"
+ "reflect"
+)
+
+func tokens(path string) []string {
+ source, err := os.ReadFile(path)
+ if err != nil { panic(err) }
+ files := token.NewFileSet()
+ var lexer scanner.Scanner
+ lexer.Init(files.AddFile(path, -1, len(source)), source, func(_ token.Position, msg string) { panic(msg) }, 0)
+ normalizations := map[string]string{
+  "ValidateReadOnlyQuery": "ValidateSelectLexicalSubset",
+  "forbiddenReadOnlyKeywords": "blockedStatementKeywords",
+  `"only SELECT and WITH (CTE) queries are allowed"`: `"first scanned token must be SELECT or WITH"`,
+  `"only read-only SELECT queries are allowed"`: `"SQL lexical subset rejects a blocked statement keyword"`,
+  `"multiple statements are not allowed"`: `"SQL lexical subset rejects semicolons outside literals/comments"`,
+ }
+ var result []string
+ for {
+  _, kind, lit := lexer.Scan()
+  if kind == token.EOF { break }
+  if normalized, ok := normalizations[lit]; ok { lit = normalized }
+  result = append(result, kind.String()+":"+lit)
+ }
+ return result
+}
+
+func main() {
+ before, after := tokens(os.Args[1]), tokens(os.Args[2])
+ if !reflect.DeepEqual(before, after) { panic("lexer token stream changed beyond two identifiers and three rejection messages") }
+ fmt.Printf("PASS: %d Go tokens equal after documented identifier/message normalization; comments excluded\n", len(before))
+}

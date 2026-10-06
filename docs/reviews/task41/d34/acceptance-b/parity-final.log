@@ -1,0 +1,11 @@
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.05s)
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.05s)
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.05s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/sqlutil	1.629s

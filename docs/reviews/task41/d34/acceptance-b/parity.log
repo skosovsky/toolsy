@@ -1,0 +1,13 @@
+github.com/skosovsky/toolsy/internal/baselinelex: /opt/homebrew/Cellar/go/1.27.1/libexec/pkg/tool/darwin_arm64/vet: chdir /Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/internal/baselinelex: no such file or directory
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.07s)
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.05s)
+=== RUN   TestAcceptanceBParity
+    acceptance_b_test.go:18: 10024 parity queries; documented accepted/rejected boundaries verified
+--- PASS: TestAcceptanceBParity (0.09s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/sqlutil	1.658s
+FAIL

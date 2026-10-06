@@ -1,0 +1,25 @@
+ok  	github.com/skosovsky/toolsy	7.038s
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	7.099s
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.563s
+?   	github.com/skosovsky/toolsy/cmd/toolsy-release	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	2.043s
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.463s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	1.947s
+ok  	github.com/skosovsky/toolsy/historycodec	1.471s
+ok  	github.com/skosovsky/toolsy/internal/format	1.448s
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.440s
+ok  	github.com/skosovsky/toolsy/internal/release	113.374s
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.839s
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	91.954s
+ok  	github.com/skosovsky/toolsy/testutil	1.434s
+ok  	github.com/skosovsky/toolsy/textprocessor	1.955s

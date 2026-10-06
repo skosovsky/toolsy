@@ -1,0 +1,14 @@
+Exact algorithm identity after approved name/error-string replacements and API comment removal: PASS
+Current snapshot hash matches: toolkits/sqltool/README.md
+Current snapshot hash matches: toolkits/sqltool/doc.go
+Current snapshot hash matches: toolkits/sqltool/sqltool.go
+Current snapshot hash matches: toolkits/sqltool/sqltool_test.go
+Current snapshot hash matches: internal/sqlutil/select_subset.go
+Current snapshot hash matches: toolkits/sqltool/examples/host/main.go
+Current snapshot hash matches: toolkits/sqltool/examples/host/main_test.go
+Current snapshot hash matches: toolkits/sqltool/lexical_contract_test.go
+Baseline exact byte snapshot matches 9b7ac3f: toolkits/sqltool/sqltool.go
+Baseline exact byte snapshot matches 9b7ac3f: toolkits/sqltool/options.go
+Baseline exact byte snapshot matches 9b7ac3f: toolkits/sqltool/doc.go
+Baseline exact byte snapshot matches 9b7ac3f: toolkits/sqltool/dialect.go
+Baseline exact byte snapshot matches 9b7ac3f: internal/sqlutil/readonly.go

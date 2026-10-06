@@ -1,0 +1,26 @@
+package sqltool_test
+import("testing";"context";"database/sql";"database/sql/driver";"encoding/json";"errors";"sync/atomic";"strings";"modernc.org/sqlite";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/sqltool")
+type acceptanceBConnector struct {d *sqlite.Driver}
+func(c acceptanceBConnector)Connect(ctx context.Context)(driver.Conn,error){if e:=ctx.Err();e!=nil{return nil,e};return c.d.Open(":memory:")}
+func(c acceptanceBConnector)Driver()driver.Driver{return c.d}
+func TestAcceptanceBPublicHostAuthority(t *testing.T){
+ // Arrange: private driver, one query-only connection, observable host counter, table outside inspection allow list.
+ var count atomic.Int64;d:=&sqlite.Driver{}
+ if e:=d.RegisterScalarFunction("acceptance_b_effect",0,func(*sqlite.FunctionContext,[]driver.Value)(driver.Value,error){return count.Add(1),nil});e!=nil{t.Fatal(e)}
+ db:=sql.OpenDB(acceptanceBConnector{d});defer db.Close();db.SetMaxOpenConns(1)
+ for _,q:=range []string{"CREATE TABLE hidden (n INTEGER)","INSERT INTO hidden VALUES (123)","PRAGMA query_only=ON"}{if _,e:=db.ExecContext(t.Context(),q);e!=nil{t.Fatal(e)}}
+ _,e:=db.ExecContext(t.Context(),"INSERT INTO hidden VALUES (456)");var se *sqlite.Error;if !errors.As(e,&se)||se.Code()&255!=8{t.Fatalf("expected code8 write denial: %v",e)}
+ for _,alias:=range []string{"sqlite","sqlite3","mysql","postgres","pgx"}{
+  tools,e:=sqltool.AsTools(db,alias,sqltool.WithAllowedTables([]string{"visible"}));if e!=nil{t.Fatal(e)}
+  if tools[1].Manifest().Name!="sql_execute_read"{t.Fatal("public name changed")}
+  // Act: schema alias and AllowedTables do not authorize SQL execution; function effect occurs on host.
+  var chunks []byte;raw,_:=json.Marshal(map[string]string{"query":"SELECT acceptance_b_effect() AS effect, n FROM hidden"})
+  e=tools[1].Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:raw},func(c toolsy.Chunk)error{chunks=append(chunks,c.Data...);return nil})
+  // Assert.
+  if e!=nil||!strings.Contains(string(chunks),"123"){t.Fatalf("%s failed: %v %s",alias,e,chunks)}
+  t.Logf("alias %s: query succeeded on SQLite, hidden table read and host effect observed",alias)
+ }
+ if count.Load()!=5{t.Fatalf("expected 5 real host effects, got %d",count.Load())}
+ tools,e:=sqltool.AsTools(db,"sqlite");if e!=nil{t.Fatal(e)}
+ for _,q:=range []string{"WITH anything","SELECT 'unterminated","SELECT 1 INTO new_table"}{raw,_:=json.Marshal(map[string]string{"query":q}); e=tools[1].Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:raw},func(toolsy.Chunk)error{return nil});if e==nil{t.Fatalf("SQLite unexpectedly accepted malformed/unsupported %q",q)};if errors.Is(e,toolsy.ErrValidation){t.Fatalf("%q rejected by lexer instead of database: %v",q,e)};t.Logf("accepted lexically then rejected by SQLite: %q: %v",q,e)}
+}

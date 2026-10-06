@@ -41,34 +41,42 @@ All limit errors return validation errors and no successful partial payload. Sou
 
 Supported dialects: `postgres`, `pgx`, `mysql`, `sqlite3`, `sqlite`. Output injection: `WithExecuteResultFormatter`, `WithInspectResultFormatter`, `WithHostResultValidator`. Custom formatters run on bounded DTOs and final JSON has the same wire limits; the host remains responsible for allocations inside its callback.
 
-## Quick start
+## Lexical subset and dialect limits
 
-```go
-package main
+Internally `ValidateSelectLexicalSubset` requires the first scanned token to be
+`SELECT` or `WITH`. Outside single/double quotes and comments it rejects every `;`
+(including a single trailing terminator) and these whole tokens: `INSERT`, `UPDATE`,
+`DELETE`, `MERGE`, `DROP`, `CREATE`, `ALTER`, `TRUNCATE`, `REPLACE`, `EXEC`, `EXECUTE`,
+`CALL`, `GRANT`, `REVOKE`. Keyword-like substrings are not blocked (`updated_at`).
+It skips doubled single-quoted literals, doubled double-quoted identifiers, `--`
+line comments and `/*...*/` blocks ending at their first closer. Tokens are ASCII
+identifier characters scanned after uppercasing; this is not a SQL grammar.
 
-import (
-	"database/sql"
+The supported driver names select **schema inspection queries**, not dialect-aware
+lexers. PostgreSQL dollar quotes/nested comments, MySQL backticks/backslash escapes/
+`#` or executable comments, and SQLite bracket/backtick identifiers have no matching
+dialect interpretation here. Such syntax may be rejected or accidentally accepted;
+there is no dialect compatibility or safety certification. Unknown text and
+unterminated literals/comments are left to the database to accept or reject.
 
-	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/toolkits/sqltool"
-)
+Acceptance says neither that SQL is valid nor that it has no effects. For example,
+`SELECT host_function()` and `SELECT ... INTO new_table` pass this token filter;
+functions and SELECT INTO can have effects under database-specific semantics.
+Restrict the database role, callable routines/extensions, filesystem/network access
+and connection capabilities in the host. SQLite read-only/query-only connections
+reject database writes but do not prevent effects inside host-registered functions.
+`sql_execute_read` and its read-only metadata describe the host's intended restricted
+connection, rather than a result proved by scanning the query.
 
-func main() {
-	db, err := sql.Open("postgres", "postgres://readonly:...@localhost/db?sslmode=disable")
-	if err != nil {
-		panic(err)
-	}
-	builder := toolsy.NewRegistryBuilder()
+## Runnable host example
 
-	tools, err := sqltool.AsTools(db, "postgres", sqltool.WithMaxRows(50))
-	if err != nil {
-		panic(err)
-	}
-	for _, tool := range tools {
-		builder.Add(tool)
-	}
-}
-```
+Run `go run ./examples/host` from this module. The [local SQLite example](examples/host/main.go)
+creates a disposable fixture, closes its setup connection, opens the fixture with
+`mode=ro`, builds tools with finite budgets and executes a SELECT. A direct INSERT
+on the same connection is rejected by the database. The example registers no host
+SQL functions, removes its fixture on exit and requires no external service. It
+verifies SQLite only; production PostgreSQL/MySQL roles and routine permissions
+remain host configuration. `WithAllowedTables` restricts schema inspection only.
 
 
 Nil options reject construction. Host ports and callbacks are borrowed; the host

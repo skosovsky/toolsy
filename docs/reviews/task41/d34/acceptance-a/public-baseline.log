@@ -1,0 +1,8 @@
+=== RUN   TestIndependentD34PublicEffects
+--- PASS: TestIndependentD34PublicEffects (0.01s)
+=== RUN   TestIndependentD34PublicEffects
+--- PASS: TestIndependentD34PublicEffects (0.00s)
+=== RUN   TestIndependentD34PublicEffects
+--- PASS: TestIndependentD34PublicEffects (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.566s

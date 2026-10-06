@@ -1,0 +1,10 @@
+{
+  "algorithm_normalized_exact": true,
+  "baseline": "9b7ac3fda391f6330e80c512078924a38ef0c3b6",
+  "verified_sha256": {
+    "toolkits/sqltool/sqltool.go": "ada44cb541eb5967aea660bd0c47630f295659eb9d5407aec6460cbec07bb135",
+    "toolkits/sqltool/options.go": "b28bc112eb26a48b6e1525ce0ac9a6ecdde9b97161623ebbdc0d0d3a63180cf1",
+    "toolkits/sqltool/doc.go": "f1c792598ce397fc4f4497fbd052bc2367747aa2872f22d694caf8ef3ba6e063",
+    "toolkits/sqltool/dialect.go": "6e176f915eac4fa6949a3924b5b0553a4012910e122b6423f955122f9d1322e8"
+  }
+}

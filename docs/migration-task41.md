@@ -934,3 +934,28 @@ concurrent use; there is no deep-cloning or synchronization promise for arbitrar
 host state. Keep returned data stable while toolkit callbacks and encoding consume
 it. TLS pool configuration is cloned with the existing R07 limitation: referenced
 certificates/root/callback state remains immutable for the configuration lifetime.
+
+
+## D34 — name the SQL lexical filter honestly
+
+Internal `sqlutil.ValidateReadOnlyQuery` is replaced by
+`sqlutil.ValidateSelectLexicalSubset`; all toolkit callers/tests use the new name,
+with no compatibility alias. SQL tool names remain stable. Validation messages
+now describe rejected tokens/semicolons rather than a read-only guarantee.
+
+The acceptance algorithm remains the same: first scanned token SELECT/WITH;
+selected forbidden statement tokens and every unquoted/uncommented semicolon
+reject. It is not a full parser, syntax validator, permission check or absence-of-
+side-effects proof. Doubled quote escapes, -- comments and first-closing block
+comments are the lexical subset; nested blocks, dollar/backtick/bracket quoting,
+backslash/#/executable-comment dialect forms are not interpreted correctly.
+Malformed/unrecognized syntax may reach the database and accepted SELECT functions
+or SELECT INTO can have effects. Supported dialect names select schema inspection
+queries, not SQL grammar validation.
+
+Host database role/connection privileges and callable routine/extension authority
+remain the enforcement boundary. SQLite query_only/mode=ro blocks database writes,
+but not effects in host SQL functions. `WithAllowedTables` remains inspection-only,
+and read-only tool metadata describes the host's configured connection intention.
+The runnable local `toolkits/sqltool/examples/host` verifies its actual SQLite
+read-only connection and finite budget integration, with no postgres/mysql claim.

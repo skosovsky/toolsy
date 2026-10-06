@@ -1,0 +1,32 @@
+=== RUN   TestAcceptanceBPublicHostAuthority
+    acceptance_b_public_test.go:21: alias sqlite: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias sqlite3: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias mysql: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias postgres: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias pgx: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "WITH anything": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 'unterminated": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 1 INTO new_table": INTERNAL: internal error
+--- PASS: TestAcceptanceBPublicHostAuthority (0.04s)
+=== RUN   TestAcceptanceBPublicHostAuthority
+    acceptance_b_public_test.go:21: alias sqlite: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias sqlite3: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias mysql: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias postgres: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias pgx: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "WITH anything": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 'unterminated": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 1 INTO new_table": INTERNAL: internal error
+--- PASS: TestAcceptanceBPublicHostAuthority (0.02s)
+=== RUN   TestAcceptanceBPublicHostAuthority
+    acceptance_b_public_test.go:21: alias sqlite: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias sqlite3: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias mysql: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias postgres: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:21: alias pgx: query succeeded on SQLite, hidden table read and host effect observed
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "WITH anything": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 'unterminated": INTERNAL: internal error
+    acceptance_b_public_test.go:25: accepted lexically then rejected by SQLite: "SELECT 1 INTO new_table": INTERNAL: internal error
+--- PASS: TestAcceptanceBPublicHostAuthority (0.02s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.679s

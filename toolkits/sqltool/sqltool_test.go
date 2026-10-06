@@ -210,7 +210,7 @@ func TestExecuteRead_StackedStatementsBlocked(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "multiple statements")
+	require.Contains(t, te.Reason, "semicolons")
 }
 
 func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
@@ -231,7 +231,7 @@ func TestExecuteRead_WritableKeywordBlocked(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, "read-only")
+	require.Contains(t, te.Reason, "blocked statement keyword")
 }
 
 // TestExecuteRead_KeywordInStringAllowed ensures SELECT 'INSERT' is allowed (scanner skips string literals).
@@ -359,7 +359,7 @@ func TestExecuteRead_MaxCellBytes(t *testing.T) {
 	require.NotContains(t, result.Result, "abcdefghijklmnop")
 }
 
-func TestValidateReadOnlyQuery_LexicalSubset(t *testing.T) {
+func TestValidateSelectLexicalSubset_LexicalSubset(t *testing.T) {
 	tests := []struct {
 		name    string
 		query   string
@@ -396,18 +396,18 @@ func TestValidateReadOnlyQuery_LexicalSubset(t *testing.T) {
 		{
 			name:    "multiple statements blocked",
 			query:   "SELECT 1; DELETE FROM t",
-			wantErr: "multiple statements",
+			wantErr: "semicolons",
 		},
 		{
 			name:    "comment only query rejected",
 			query:   "/* only comment */",
-			wantErr: "only SELECT and WITH",
+			wantErr: "first scanned token",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := sqlutil.ValidateReadOnlyQuery(tt.query)
+			err := sqlutil.ValidateSelectLexicalSubset(tt.query)
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				te, ok := toolsy.AsToolError(err)

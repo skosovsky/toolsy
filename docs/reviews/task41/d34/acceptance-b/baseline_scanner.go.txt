@@ -1,0 +1,173 @@
+package sqlutil
+
+import (
+	"slices"
+	"strings"
+
+	"github.com/skosovsky/toolsy"
+)
+
+const (
+	baselineBscanStateNormal = iota
+	baselineBscanStateSingleQuote
+	baselineBscanStateDoubleQuote
+	baselineBscanStateLineComment
+	baselineBscanStateBlockComment
+)
+
+// baselineBValidateReadOnlyQuery rejects multi-statement and mutating SQL using a small lexical subset.
+// It supports doubled single-quote literals, doubled double-quoted identifiers, line comments,
+// block comments, ASCII unquoted identifiers, and intentionally does not support nested block comments.
+func baselineBValidateReadOnlyQuery(query string) error {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return baselineBvalidationToolError("query is required")
+	}
+	upper := strings.ToUpper(query)
+	firstToken, tokens, err := baselineBsqlTokensOutsideStringsAndComments(upper)
+	if err != nil {
+		return err
+	}
+	if firstToken != "SELECT" && firstToken != "WITH" {
+		return baselineBvalidationToolError("only SELECT and WITH (CTE) queries are allowed")
+	}
+	forbidden := baselineBforbiddenReadOnlyKeywords()
+	for _, tok := range tokens {
+		if slices.Contains(forbidden, tok) {
+			return baselineBvalidationToolError("only read-only SELECT queries are allowed")
+		}
+	}
+	return nil
+}
+
+func baselineBvalidationToolError(reason string) *toolsy.ToolError {
+	return toolsy.NewValidationError(reason)
+}
+
+func baselineBforbiddenReadOnlyKeywords() []string {
+	return []string{
+		"INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "CREATE", "ALTER", "TRUNCATE", "REPLACE",
+		"EXEC", "EXECUTE", "CALL", "GRANT", "REVOKE",
+	}
+}
+
+func baselineBsqlTokensOutsideStringsAndComments(upper string) (string, []string, error) {
+	s := &baselineBupperSQLScan{
+		upper:  upper,
+		i:      0,
+		state:  baselineBscanStateNormal,
+		tok:    strings.Builder{},
+		tokens: nil,
+	}
+	return s.run()
+}
+
+type baselineBupperSQLScan struct {
+	upper  string
+	i      int
+	state  int
+	tok    strings.Builder
+	tokens []string
+}
+
+func (s *baselineBupperSQLScan) run() (string, []string, error) {
+	for s.i < len(s.upper) {
+		switch s.state {
+		case baselineBscanStateNormal:
+			if err := s.stepNormal(); err != nil {
+				return "", nil, err
+			}
+		case baselineBscanStateSingleQuote:
+			s.stepSingleQuote()
+		case baselineBscanStateDoubleQuote:
+			s.stepDoubleQuote()
+		case baselineBscanStateLineComment:
+			s.stepLineComment()
+		case baselineBscanStateBlockComment:
+			s.stepBlockComment()
+		}
+	}
+	if len(s.tokens) == 0 {
+		return "", s.tokens, baselineBvalidationToolError("only SELECT and WITH (CTE) queries are allowed")
+	}
+	return s.tokens[0], s.tokens, nil
+}
+
+func (s *baselineBupperSQLScan) stepNormal() error {
+	c := s.upper[s.i]
+	switch {
+	case c == '\'':
+		s.state = baselineBscanStateSingleQuote
+		s.i++
+	case c == '"':
+		s.state = baselineBscanStateDoubleQuote
+		s.i++
+	case c == '-' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '-':
+		s.state = baselineBscanStateLineComment
+		s.i += 2
+	case c == '/' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '*':
+		s.state = baselineBscanStateBlockComment
+		s.i += 2
+	case c == ';':
+		return baselineBvalidationToolError("multiple statements are not allowed")
+	case (c >= 'A' && c <= 'Z') || c == '_':
+		s.i += s.appendIdentifierToken()
+	default:
+		s.i++
+	}
+	return nil
+}
+
+func (s *baselineBupperSQLScan) appendIdentifierToken() int {
+	s.tok.Reset()
+	j := s.i
+	for j < len(s.upper) {
+		c := s.upper[j]
+		if (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+			s.tok.WriteByte(c)
+			j++
+			continue
+		}
+		break
+	}
+	s.tokens = append(s.tokens, s.tok.String())
+	return j - s.i
+}
+
+func (s *baselineBupperSQLScan) stepSingleQuote() {
+	if s.upper[s.i] == '\'' {
+		if s.i+1 < len(s.upper) && s.upper[s.i+1] == '\'' {
+			s.i += 2
+			return
+		}
+		s.state = baselineBscanStateNormal
+	}
+	s.i++
+}
+
+func (s *baselineBupperSQLScan) stepDoubleQuote() {
+	if s.upper[s.i] == '"' {
+		if s.i+1 < len(s.upper) && s.upper[s.i+1] == '"' {
+			s.i += 2
+			return
+		}
+		s.state = baselineBscanStateNormal
+	}
+	s.i++
+}
+
+func (s *baselineBupperSQLScan) stepLineComment() {
+	if s.upper[s.i] == '\n' {
+		s.state = baselineBscanStateNormal
+	}
+	s.i++
+}
+
+func (s *baselineBupperSQLScan) stepBlockComment() {
+	if s.upper[s.i] == '*' && s.i+1 < len(s.upper) && s.upper[s.i+1] == '/' {
+		s.state = baselineBscanStateNormal
+		s.i += 2
+		return
+	}
+	s.i++
+}

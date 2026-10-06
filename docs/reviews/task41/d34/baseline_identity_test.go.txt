@@ -1,0 +1,12 @@
+package sqltool_test
+import (
+ "testing"
+ "github.com/stretchr/testify/require"
+ "github.com/skosovsky/toolsy/internal/sqlutil"
+)
+func TestBaselineLexerIdentity(t *testing.T) {
+ // This old identifier and rejection message do not compile/match current code.
+ require.NoError(t, sqlutil.ValidateReadOnlyQuery("SELECT 1"))
+ err := sqlutil.ValidateReadOnlyQuery("SELECT 1;")
+ require.ErrorContains(t, err, "multiple statements are not allowed")
+}

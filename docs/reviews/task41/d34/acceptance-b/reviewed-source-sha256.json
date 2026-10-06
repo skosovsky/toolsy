@@ -1,0 +1,11 @@
+{
+  "internal/sqlutil/select_subset.go": "4b3ba78ab355b7fe1d434d1e6ab1004f3fd36f1a63a85cfd7639d53db09a5d12",
+  "toolkits/sqltool/sqltool.go": "3d4c567a8c1897899d6126b96d7d6dfa4559c640079402d579ee562d5a78a36a",
+  "toolkits/sqltool/sqltool_test.go": "ffb763b6c3c6f92859e2407e62e4e58bfea79aa648b80860db616be9d1c24a0a",
+  "toolkits/sqltool/doc.go": "b48d4accadbe71fd041b8caf539a2263a1815b97a51e0f3e307aae5468555b71",
+  "toolkits/sqltool/README.md": "ddcd72a9e3f27054d36dff79c71000a0a111f9ce838f7d33c73f4f11fd016974",
+  "toolkits/sqltool/lexical_contract_test.go": "85f331909d5106f5c7601970054bf98b5c006212fb938100337205be41b642ac",
+  "toolkits/sqltool/examples/host/main.go": "b04571d3a20f5b6f5e5dccf42621eb6608998db254b8e4433ee745e5492f6a07",
+  "toolkits/sqltool/examples/host/main_test.go": "785bbfc000ec136b8753afa428b6b43636363983f15d67323626e7c93a490a26",
+  "docs/migration-task41.md": "a44fd7460dcf7c79369bef10b6125aa17404dbe485e848d5006e05f4e45608ac"
+}

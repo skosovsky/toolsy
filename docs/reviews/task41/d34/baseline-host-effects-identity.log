@@ -1,0 +1,14 @@
+=== RUN   TestBaselineLexerIdentity
+--- PASS: TestBaselineLexerIdentity (0.00s)
+=== RUN   TestSelectHostFunctionEffectsRemainHostAuthority
+--- PASS: TestSelectHostFunctionEffectsRemainHostAuthority (0.01s)
+=== RUN   TestBaselineLexerIdentity
+--- PASS: TestBaselineLexerIdentity (0.00s)
+=== RUN   TestSelectHostFunctionEffectsRemainHostAuthority
+--- PASS: TestSelectHostFunctionEffectsRemainHostAuthority (0.00s)
+=== RUN   TestBaselineLexerIdentity
+--- PASS: TestBaselineLexerIdentity (0.00s)
+=== RUN   TestSelectHostFunctionEffectsRemainHostAuthority
+--- PASS: TestSelectHostFunctionEffectsRemainHostAuthority (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.551s
