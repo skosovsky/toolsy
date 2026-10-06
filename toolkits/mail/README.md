@@ -18,7 +18,7 @@ go get github.com/skosovsky/toolsy/toolkits/mail
 | `mail_search_inbox` | Search inbox by query       | `{"query": "string", "limit": int}`                         |
 | `mail_read_message` | Read a single message by ID | `{"message_id": "string"}`                                  |
 
-Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. Body in `mail_read_message` is converted to Markdown only when it looks like HTML (tag-like patterns); plain text with `<` (e.g. "x < 5") is left as-is. HTML conversion checks cancellation before and after conversion; the converter itself is synchronous. `message_id` is trimmed; whitespace-only is rejected with `CodeValidationFailed` ([`ToolError`](../../errors.go)).
+Tools are generated only when the corresponding interface is provided: nil sender skips mail_send; nil reader skips both search and read. At least one must be non-nil. MessageBody.Representation defaults to plaintext (zero or BodyPlainText): every body byte is retained, including whitespace, email addresses, placeholders and XML. Only BodyHTML converts to Markdown. The read JSON adds `representation` (`text/plain` or `text/markdown`) beside the existing body with metadata prefix. No content sniffing or original-HTML fallback. Unsupported declarations, invalid UTF-8 and conversion failures return INTERNAL ResultContractError with an inspectable cause and no successful output; ErrBodyRepresentation / BodyRepresentationError and ErrBodyEncoding identify declaration/encoding errors. Cancellation is checked before and after synchronous conversion; the converter itself has no hard CPU deadline. MIME parsing and charset decoding belong to the host adapter. `message_id` is trimmed; whitespace-only is rejected with `CodeValidationFailed` ([`ToolError`](../../errors.go)).
 
 ## Configuration & Security
 
@@ -63,3 +63,10 @@ func main() {
 	}
 }
 ```
+
+
+For an HTML reader, return `mail.MessageBody{Body: decodedHTML, Representation: mail.BodyHTML}`.
+For plaintext, leave Representation zero or use mail.BodyPlainText. BodyMarkdown is
+an output annotation, not an accepted reader input. Search and outgoing send payloads
+are unchanged. Source/item bounds include the declaration string; final JSON bounds
+include the representation annotation and converted output after JSON escaping.

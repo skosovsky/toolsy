@@ -1,0 +1,8 @@
+--- FAIL: TestR17PublicPlaintextIdentity (0.01s)
+    r17_public_probe_test.go:24: plaintext changed: want="Contact <support@example.com> for details." got="Contact for details."
+    r17_public_probe_test.go:24: plaintext changed: want="Use <branch>" got="Use"
+    r17_public_probe_test.go:24: plaintext changed: want="<root><value>1</value></root>" got="1"
+    r17_public_probe_test.go:24: plaintext changed: want="  keep whitespace\r\n" got="keep whitespace"
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/mail	0.571s

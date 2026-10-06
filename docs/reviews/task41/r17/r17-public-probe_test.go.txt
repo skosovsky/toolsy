@@ -1,0 +1,26 @@
+package mail_test
+
+import (
+ "context"
+ "encoding/json"
+ "strings"
+ "testing"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/toolkits/mail"
+)
+type r17Reader struct { body string }
+func (r r17Reader) Search(context.Context,string,int)([]mail.MessageSummary,error){return nil,nil}
+func (r r17Reader) Read(context.Context,string)(mail.MessageBody,error){return mail.MessageBody{Body:r.body},nil}
+func TestR17PublicPlaintextIdentity(t *testing.T){
+ for _, body := range []string{"Contact <support@example.com> for details.","Use <branch>","<root><value>1</value></root>","  keep whitespace\r\n"}{
+  // Arrange: old public reader API, no representation specified.
+  tools,err:=mail.AsTools(nil,r17Reader{body});if err!=nil{t.Fatal(err)}
+  got:=""
+  // Act.
+  err=tools[1].Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{"message_id":"id"}`)},func(c toolsy.Chunk)error{
+   var result struct{Body string `json:"body"`};if e:=json.Unmarshal(c.Data,&result);e!=nil{return e};got=result.Body;return nil})
+  // Assert: plaintext after metadata separator equals provider text exactly.
+  if err!=nil{t.Fatal(err)}
+  _,suffix,ok:=strings.Cut(got,"\n\n");if !ok||suffix!=body{t.Errorf("plaintext changed: want=%q got=%q",body,suffix)}
+ }
+}

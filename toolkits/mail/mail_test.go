@@ -292,7 +292,7 @@ func TestMailSend_HandlerError_Wrapped(t *testing.T) {
 func TestMailRead_HTMLBody_NormalizedToMarkdown(t *testing.T) {
 	reader := &mockReader{read: MessageBody{
 		ID: "1", From: "a@b.com", Subject: "Subj", Date: "2026-03-11",
-		Body: "<p>Hello <strong>world</strong></p>",
+		Body: "<p>Hello <strong>world</strong></p>", Representation: BodyHTML,
 	}}
 	tools, err := AsTools(nil, reader)
 	require.NoError(t, err)
@@ -320,6 +320,7 @@ func TestNormalizeBody_ContextCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	html := "<p>" + strings.Repeat("x", 200) + "</p>"
-	got := normalizeBody(ctx, html)
-	require.Equal(t, html, got)
+	got, _, err := normalizeBody(ctx, html, BodyHTML)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, got)
 }

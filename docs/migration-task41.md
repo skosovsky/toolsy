@@ -513,3 +513,21 @@ limit errors also become result-phase CodeInternal with their original causes;
 pre-dispatch request and GET read/wire bounds retain their validation categories.
 These failures never emit success or authorize repair/retry of an already dispatched
 POST. Caller cancellation keeps its precedence and does not imply effect rollback.
+
+
+## R17 / D33 — explicit mail body representation
+
+MessageBody now has Representation BodyRepresentation. Zero and BodyPlainText
+mean UTF-8 plaintext, retained byte-for-byte, including leading/trailing whitespace,
+angle-bracket addresses, placeholders and XML. Set BodyHTML for declared HTML;
+it alone converts to Markdown. MIME parsing/charset decoding belongs to host reader
+adapters; the toolkit neither guesses nor transcodes. Unsupported declarations and
+invalid UTF-8 fail explicitly.
+
+mail_read_message JSON adds representation (`text/plain` or `text/markdown`)
+beside body (which retains the existing message metadata prefix). HTML conversion
+failure is INTERNAL ResultContractError preserving its cause, with no original HTML
+fallback or successful output. Cancellation is observed before/after synchronous
+conversion; this is not a hard CPU deadline. Raw body/item/source limits precede
+conversion; final JSON budget includes escaped output and representation. Host reader
+transport/allocation limits remain required. Send/approval payloads unchanged.

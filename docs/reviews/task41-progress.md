@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is in progress; rows 17–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is in progress; rows 18–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -602,3 +602,33 @@ rootracePASS (cached except generator18.865s). Public baseline GET/POST invalid
 UTF8FAIL as expected/currentcount5PASS2.144s. Evidence docs/reviews/task41/r16/.
 LocalHTTP only; cancellation checkpoints are not rollback, no live API/performance
 claims. Commit: fix: http encoding.
+
+### 17 — R17 / D33 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. MessageBody declares BodyRepresentation: zero/plaintext preserves every body
+   byte (including whitespace, email angle brackets, placeholders and XML). Only
+   explicit HTML converts to Markdown; no content sniffing or legacy fallback.
+2. Read JSON exposes resulting representation truthfully. Unsupported declarations,
+   invalid UTF-8 and conversion failures are inspectable result-contract errors
+   with causes and no success/argument-repair chunk. Cancellation remains interrupt.
+3. Actual raw fields/body caps precede conversion; final encoded JSON cap includes
+   representation and escaping. Exact/over raw/wire and conversion expansion tested;
+   synchronous converter cancellation checkpoints are documented honestly.
+4. API/README/migration assign MIME parsing to host adapter, replace orchestrator
+   terminology, show explicit HTML migration, keep send args/approval unchanged.
+5. AAA public baseline/current plaintext proof, declared HTML/error/bounds/context
+   regressions and affected race/lint pass; both independent reviewers100%.
+
+Decision D33: finite explicit plaintext/HTML representations on reader port, output
+plaintext/Markdown annotation; conversion errors never silently return originalHTML.
+No provider SDK or MIME parser added; sender action contract unchanged.
+
+Row17 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Initial stale package-documentation terminology fixed and both reviews repeated.
+A finalmailracePASS2.137s; retained freshmailracePASS2.019s/lint0; B mailracecount2PASS1.617s/privateadversarial
+count3PASS2.046s/lint0; parent mailfullrace+publicprobe count3PASS2.532s/lint0.
+OldAPIpublicbaselineFAIL fourplaintextidentitycases; currentcount5PASS2.335s.
+Evidence docs/reviews/task41/r17/. No live provider/MIME integration or hard CPU
+preemption claim; converter errors tested through explicit internal seam.
+Commit: fix: mail representation.

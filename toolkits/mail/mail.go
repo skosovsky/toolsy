@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/skosovsky/toolsy"
-
-	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
 
 // OutgoingMessage is passed to MailSender.Send.
@@ -19,7 +17,7 @@ type OutgoingMessage struct {
 	Body    string
 }
 
-// MailSender is implemented by the orchestrator (SMTP, SendGrid, Resend, etc.).
+// MailSender is implemented by the host adapter (SMTP, SendGrid, Resend, etc.).
 //
 //nolint:revive // name matches toolskit spec
 type MailSender interface {
@@ -34,16 +32,18 @@ type MessageSummary struct {
 	Date    string
 }
 
-// MessageBody is the full message content.
+// MessageBody is the full decoded UTF-8 message content.
+// Representation defaults to plaintext; the host adapter owns MIME parsing/charset decoding.
 type MessageBody struct {
-	ID      string
-	From    string
-	Subject string
-	Body    string
-	Date    string
+	Representation BodyRepresentation
+	ID             string
+	From           string
+	Subject        string
+	Body           string
+	Date           string
 }
 
-// MailReader is implemented by the orchestrator (IMAP, Gmail API, etc.).
+// MailReader is implemented by the host adapter (IMAP, Gmail API, etc.).
 //
 //nolint:revive // name matches toolskit spec
 type MailReader interface {
@@ -75,7 +75,8 @@ type readArgs struct {
 }
 
 type readResult struct {
-	Body string `json:"body"`
+	Body           string             `json:"body"`
+	Representation BodyRepresentation `json:"representation"`
 }
 
 // AsTools returns mail_send (if sender != nil and not readOnly), mail_search_inbox and mail_read_message (if reader != nil).
@@ -208,21 +209,34 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, o options) (r
 	if messageID == "" {
 		return readResult{}, toolsy.NewValidationError("message_id is required")
 	}
-	msg, err := reader.Read(ctx, messageID)
-	if err != nil {
-		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: read: %w", err))
+	msg, readErr := reader.Read(ctx, messageID)
+	if readErr != nil {
+		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: read: %w", readErr))
 	}
 	remaining := o.maxSourceBytes
 	if len(msg.Body) > o.maxBodyBytes {
 		return readResult{}, limitError("provider body bytes")
 	}
-	if err := checkFields(o.maxItemBytes, &remaining, msg.ID, msg.From, msg.Subject, msg.Body, msg.Date); err != nil {
-		return readResult{}, err
+	fieldErr := checkFields(
+		o.maxItemBytes,
+		&remaining,
+		msg.ID,
+		msg.From,
+		msg.Subject,
+		msg.Body,
+		msg.Date,
+		string(msg.Representation),
+	)
+	if fieldErr != nil {
+		return readResult{}, fieldErr
 	}
 	if err := ctx.Err(); err != nil {
 		return readResult{}, err
 	}
-	body := normalizeBody(ctx, msg.Body)
+	body, representation, err := normalizeBody(ctx, msg.Body, msg.Representation)
+	if err != nil {
+		return readResult{}, err
+	}
 	if err := ctx.Err(); err != nil {
 		return readResult{}, err
 	}
@@ -241,7 +255,7 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, o options) (r
 	b.WriteString(msg.Date)
 	b.WriteString("\n\n")
 	b.WriteString(body)
-	result := readResult{Body: b.String()}
+	result := readResult{Body: b.String(), Representation: representation}
 	if err := checkWire(result, o.maxWireBytes); err != nil {
 		return readResult{}, err
 	}
@@ -252,48 +266,6 @@ func escapeCell(s string) string {
 	s = strings.ReplaceAll(s, "|", "\\|")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
-}
-
-// looksLikeHTML returns true if body contains what appears to be an HTML tag (e.g. <p>, </div>),
-// so plain text with angle brackets (e.g. "x < 5" or XML snippets) is not converted.
-func looksLikeHTML(body string) bool {
-	for i := range len(body) {
-		if body[i] != '<' {
-			continue
-		}
-		j := i + 1
-		for j < len(body) && (body[j] == ' ' || body[j] == '/') {
-			j++
-		}
-		if j < len(body) && (body[j] >= 'a' && body[j] <= 'z' || body[j] >= 'A' && body[j] <= 'Z') {
-			return true
-		}
-	}
-	return false
-}
-
-// normalizeBody converts HTML body to readable Markdown/text so the agent does not see raw tags.
-// Only runs conversion when body looks like HTML (contains tag-like patterns); plain text with < is left as-is.
-// HTML conversion is best-effort cancellable via ctx.
-func normalizeBody(ctx context.Context, body string) string {
-	body = strings.TrimSpace(body)
-	if body == "" {
-		return ""
-	}
-	if !looksLikeHTML(body) {
-		return body
-	}
-	if err := ctx.Err(); err != nil {
-		return body
-	}
-	md, err := htmltomarkdown.ConvertString(body)
-	if err != nil {
-		return body
-	}
-	if err := ctx.Err(); err != nil {
-		return body
-	}
-	return strings.TrimSpace(md)
 }
 
 func limitError(bound string) error {
