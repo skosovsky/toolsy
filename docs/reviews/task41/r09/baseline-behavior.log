@@ -1,0 +1,21 @@
+=== RUN   TestR09LateCodecBehaviorProbe
+=== RUN   TestR09LateCodecBehaviorProbe/optional
+    state_lifecycle_probe_test.go:21: late registration=<nil>; restore=TOOLS_CONTRACT_MISSING: session binding state schema digest mismatch
+    state_lifecycle_probe_test.go:22: 
+        	Error Trace:	/private/tmp/toolsy-task41/r09-baseline/state_lifecycle_probe_test.go:22
+        	Error:      	An error is expected but got nil.
+        	Test:       	TestR09LateCodecBehaviorProbe/optional
+        	Messages:   	session schema must reject late registration
+=== RUN   TestR09LateCodecBehaviorProbe/required
+    state_lifecycle_probe_test.go:21: late registration=<nil>; restore=TOOLS_CONTRACT_MISSING: session binding state schema digest mismatch
+    state_lifecycle_probe_test.go:22: 
+        	Error Trace:	/private/tmp/toolsy-task41/r09-baseline/state_lifecycle_probe_test.go:22
+        	Error:      	An error is expected but got nil.
+        	Test:       	TestR09LateCodecBehaviorProbe/required
+        	Messages:   	session schema must reject late registration
+--- FAIL: TestR09LateCodecBehaviorProbe (0.00s)
+    --- FAIL: TestR09LateCodecBehaviorProbe/optional (0.00s)
+    --- FAIL: TestR09LateCodecBehaviorProbe/required (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.771s
+FAIL

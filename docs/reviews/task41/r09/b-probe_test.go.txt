@@ -1,0 +1,109 @@
+package r09probe
+
+import (
+ "encoding/json"
+ "errors"
+ "fmt"
+ "sync"
+ "testing"
+
+ toolsy "github.com/skosovsky/toolsy"
+)
+
+func TestPublicConcurrentFreezeAndRestore(t *testing.T) {
+ for iteration := 0; iteration < 50; iteration++ {
+  // Arrange.
+  codecs := toolsy.NewStateCodecRegistry()
+  start := make(chan struct{})
+  admitted := make(chan string, 100)
+  failures := make(chan error, 100)
+  var workers sync.WaitGroup
+  for worker := 0; worker < 10; worker++ {
+   workers.Add(1)
+   go func(worker int) {
+    defer workers.Done()
+    <-start
+    for i := 0; i < 10; i++ {
+     key := fmt.Sprintf("%d-%d", worker, i)
+     err := toolsy.RegisterJSONCodec[int](codecs, key, toolsy.WithStateSlotRequired())
+     if err == nil { admitted <- key } else if !errors.Is(err, toolsy.ErrStateCodecRegistryFrozen) { failures <- err }
+    }
+   }(worker)
+  }
+  // Act.
+  close(start)
+  session, err := toolsy.NewSession(nil, toolsy.WithStateCodecRegistry(codecs), toolsy.WithStrictStateCodecs(true))
+  if err != nil { t.Fatal(err) }
+  workers.Wait()
+  close(admitted); close(failures)
+  for err := range failures { t.Fatal(err) }
+  for key := range admitted { toolsy.SetSessionState(session, key, 9) }
+  checkpoint, err := session.ExportCheckpoint()
+  if err != nil { t.Fatal(err) }
+  encoded, err := json.Marshal(checkpoint)
+  if err != nil { t.Fatal(err) }
+  var persisted toolsy.SessionCheckpoint
+  if err := json.Unmarshal(encoded, &persisted); err != nil { t.Fatal(err) }
+  restored, err := toolsy.NewSessionFromCheckpoint(nil, persisted, toolsy.WithStateCodecRegistry(codecs), toolsy.WithStrictStateCodecs(true))
+  // Assert.
+  if err != nil { t.Fatal(err) }
+  if restored.Binding().StateSchemaDigest != session.Binding().StateSchemaDigest { t.Fatal("schema drift") }
+  if err := codecs.RegisterFromPrototype("late", 0, toolsy.WithStateSlotRequired()); !errors.Is(err, toolsy.ErrStateCodecRegistryFrozen) { t.Fatalf("late: %v", err) }
+ }
+}
+
+type reentryCodec struct { session **toolsy.Session; registry *toolsy.StateCodecRegistry; fail *bool }
+func(c reentryCodec) Encode(value int)([]byte,error) {
+ c.registry.Freeze()
+ if err := toolsy.RegisterJSONCodec[int](c.registry,"late"); !errors.Is(err,toolsy.ErrStateCodecRegistryFrozen) { return nil,fmt.Errorf("late register: %v",err) }
+ toolsy.SetSessionState(*c.session,"callback", 2)
+ return json.Marshal(value)
+}
+func(c reentryCodec) Decode(raw []byte)(int,error) {
+ toolsy.SetSessionState(*c.session,"callback",3)
+ if *c.fail { return 0,errors.New("host decode failed") }
+ var value int
+ err := json.Unmarshal(raw,&value)
+ return value,err
+}
+func TestPublicCallbackReentryAndFailureOwnership(t *testing.T) {
+ // Arrange.
+ codecs := toolsy.NewStateCodecRegistry()
+ var session *toolsy.Session
+ fail := false
+ if err := toolsy.RegisterStateCodec[int](codecs,"value",reentryCodec{&session,codecs,&fail},toolsy.WithStateSlotRequired()); err != nil { t.Fatal(err) }
+ var err error
+ session,err = toolsy.NewSession(nil,toolsy.WithStateCodecRegistry(codecs))
+ if err != nil { t.Fatal(err) }
+ toolsy.SetSessionState(session,"value",7)
+ // Act.
+ snap,err := session.ExportSnapshot()
+ if err != nil { t.Fatal(err) }
+ fail = true
+ err = session.ImportSnapshot(snap)
+ // Assert.
+ if err == nil { t.Fatal("decode must fail") }
+ value,ok := toolsy.GetSessionState[int](session,"value")
+ if !ok || value != 7 { t.Fatal("library partially replaced map") }
+ callback,ok := toolsy.GetSessionState[int](session,"callback")
+ if !ok || callback != 3 { t.Fatal("host callback writes unexpectedly rolled back") }
+}
+
+func TestPublicFreshSchemaRejectsOldCheckpoint(t *testing.T) {
+ // Arrange.
+ old := toolsy.NewStateCodecRegistry()
+ if err:=toolsy.RegisterJSONCodec[int](old,"value"); err!=nil { t.Fatal(err) }
+ session,err:=toolsy.NewSession(nil,toolsy.WithStateCodecRegistry(old))
+ if err!=nil { t.Fatal(err) }
+ toolsy.SetSessionState(session,"value",7)
+ checkpoint,err:=session.ExportCheckpoint()
+ if err!=nil { t.Fatal(err) }
+ fresh:=toolsy.NewStateCodecRegistry()
+ if err:=toolsy.RegisterJSONCodec[int](fresh,"value"); err!=nil { t.Fatal(err) }
+ if err:=toolsy.RegisterJSONCodec[int](fresh,"new"); err!=nil { t.Fatal(err) }
+ // Act.
+ restored,err:=toolsy.NewSessionFromCheckpoint(nil,checkpoint,toolsy.WithStateCodecRegistry(fresh))
+ // Assert.
+ if err==nil || restored!=nil { t.Fatal("changed schema accepted old checkpoint") }
+ if err:=toolsy.RegisterJSONCodec[int](fresh,"another"); !errors.Is(err,toolsy.ErrStateCodecRegistryFrozen) { t.Fatalf("failed restore must finalize builder: %v",err) }
+}

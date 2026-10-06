@@ -260,6 +260,40 @@ uses that snapshot's binding for its outer metadata, so the two cannot diverge.
 Map replacement on ImportSnapshot remains atomic; decode callbacks run before
 replacement without locks. Snapshot export does not deep-copy host values; their
 referenced data must remain immutable while encoding, or host-synchronized by the
-codec. Registries and codec registrations must remain stable after session setup.
+codec. Registry configuration must remain stable after setup; codec registrations
+are finalized automatically by NewSession as described below.
 The exported state map is a captured set of slots, not a transaction across
 external mutable objects or concurrent handler effects.
+
+## State codec lifecycle and checkpoint scope (R09, D07, D08)
+
+Register every state slot before constructing the first session. `NewSession`
+validates the run policy and registry binding, then freezes the supplied shared
+`StateCodecRegistry` before computing its state schema digest. Registration and
+freeze linearize under the builder lock: a concurrent registration either becomes
+part of that fixed schema or returns `ErrStateCodecRegistryFrozen`. All registrar
+paths enforce this rule, including required slots and prototype codecs. Explicit
+`Freeze()` is nil-safe and idempotent; schema changes require a new builder.
+Invalid policy/registry constructor validation leaves an unfrozen builder mutable.
+`NewSessionFromCheckpoint` finalizes the builder before checkpoint compatibility
+and hydration checks, even if those later checks fail.
+
+Required slots must be present when exporting and importing. Missing or untyped
+nil required values fail export. A registered non-nullable slot encoding JSON
+null also fails export; nullable slots may roundtrip typed nil through their codec.
+The library fixes slot metadata, not arbitrary host callback behavior. Custom
+codecs must roundtrip their values, use stable schema IDs, and support concurrent
+calls; referenced callback state remains host-owned.
+
+`SessionCheckpoint` is a state-plus-binding checkpoint. It does not save RunPolicy,
+maxSteps, consumed call count, dependencies, StateStore contents, external effects,
+or a workflow continuation. Restoring supplies current host authority/configuration
+and starts fresh in-memory counters. Hosts must enforce durable budgets and restore
+workflow position themselves before dispatch.
+
+Set/Get synchronize map slots and preserve BYOT references. Pointers, maps, and
+slices remain aliased; the host must synchronize mutation or keep values immutable
+during access/encoding. Codec/MarshalJSON callbacks run outside state/configuration
+locks and may reenter the session. Import replaces the map only after successful
+hydration; callback writes and external side effects are not rolled back when
+hydration fails. This is not a deep-copy or transactional callback contract.

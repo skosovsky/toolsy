@@ -1,0 +1,26 @@
+package toolsy
+import (
+ "testing"
+ "github.com/stretchr/testify/require"
+)
+func TestR09LateCodecBehaviorProbe(t *testing.T) {
+ for _, required := range []bool{false,true} {
+  t.Run(map[bool]string{false:"optional",true:"required"}[required],func(t *testing.T){
+   // Arrange.
+   codecs:=NewStateCodecRegistry()
+   require.NoError(t,RegisterJSONCodec[int](codecs,"value"))
+   session,err:=NewSession(nil,WithStateCodecRegistry(codecs)); require.NoError(t,err)
+   SetSessionState(session,"value",7)
+   var opts []StateSlotOption
+   if required { opts=append(opts,WithStateSlotRequired()) }
+   // Act.
+   lateErr:=RegisterJSONCodec[int](codecs,"late",opts...)
+   checkpoint,err:=session.ExportCheckpoint(); require.NoError(t,err)
+   _,restoreErr:=NewSessionFromCheckpoint(nil,checkpoint,WithStateCodecRegistry(codecs))
+   // Assert.
+   t.Logf("late registration=%v; restore=%v",lateErr,restoreErr)
+   require.Error(t,lateErr,"session schema must reject late registration")
+   require.NoError(t,restoreErr,"successful export must remain bound to its unchanged codec schema")
+  })
+ }
+}

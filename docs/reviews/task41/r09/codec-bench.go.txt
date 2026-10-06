@@ -1,0 +1,10 @@
+package toolsy
+import("strconv";"testing")
+func BenchmarkR09CodecSnapshot(b *testing.B) {
+ codecs:=NewStateCodecRegistry()
+ for i:=range 32 { if err:=RegisterJSONCodec[int](codecs,strconv.Itoa(i),WithStateSlotRequired());err!=nil {b.Fatal(err)} }
+ session,err:=NewSession(nil,WithStateCodecRegistry(codecs));if err!=nil {b.Fatal(err)}
+ for i:=range 32 {SetSessionState(session,strconv.Itoa(i),i)}
+ b.ReportAllocs(); b.ResetTimer()
+ for b.Loop(){if _,err:=session.ExportSnapshot();err!=nil {b.Fatal(err)}}
+}

@@ -1,0 +1,10 @@
+=== RUN   TestR09LateCodecBehaviorProbe
+=== RUN   TestR09LateCodecBehaviorProbe/optional
+    state_lifecycle_probe_test.go:21: late registration=toolsy: state codec registry is frozen; restore=<nil>
+=== RUN   TestR09LateCodecBehaviorProbe/required
+    state_lifecycle_probe_test.go:21: late registration=toolsy: state codec registry is frozen; restore=<nil>
+--- PASS: TestR09LateCodecBehaviorProbe (0.00s)
+    --- PASS: TestR09LateCodecBehaviorProbe/optional (0.00s)
+    --- PASS: TestR09LateCodecBehaviorProbe/required (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	2.012s

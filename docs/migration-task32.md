@@ -51,7 +51,7 @@ err = view.RebindSession(sess)
 
 The binding validates root policy digest, view identity, manifest digest, visible tool set, and state schema digest. Do not keep separate `session registry` or `view id` fields in host state just to decide whether a session is still attached to the right capability boundary.
 
-Snapshots exported by `ExportSnapshot` are stamped with the session binding. Importing that snapshot into a session bound to another registry/view/schema fails before state hydration. Use `ExportCheckpoint`/`NewSessionFromCheckpoint` when persisting resumable sessions.
+Snapshots exported by `ExportSnapshot` are stamped with the session binding. Importing that snapshot into a session bound to another registry/view/schema fails before state hydration. `ExportCheckpoint`/`NewSessionFromCheckpoint` persist and restore state plus binding; they exclude RunPolicy, call limits/counts, dependencies, and workflow continuation. Restore applies current host options and fresh counters. The host restores durable authority and budgets separately.
 
 Root registry policies must provide a stable ID through `WithPolicy` or `WithRequirementsPolicy`:
 
@@ -74,7 +74,11 @@ restored, err := reg.RestoreView(snapshot, policy, "search-policy")
 
 ## Snapshot import null policy
 
-Registered state slots are non-null by default on import.
+Registered state slots are non-null by default on export and import. Required
+slots must be present at both boundaries. Register all slots before `NewSession`,
+which freezes the shared registry after constructor validation. Late registration
+returns `ErrStateCodecRegistryFrozen`; a new schema needs a new registry. See
+[task41 migration](migration-task41.md) for callback ownership and lifecycle.
 
 ```go
 codecs := toolsy.NewStateCodecRegistry()

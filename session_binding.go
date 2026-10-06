@@ -29,7 +29,9 @@ type SessionBinding struct {
 	StateSchemaDigest string               `json:"state_schema_digest,omitempty"`
 }
 
-// SessionCheckpoint carries both typed state and the execution binding needed to resume it.
+// SessionCheckpoint is a state+binding checkpoint, not a full workflow continuation.
+// It excludes RunPolicy, step limits/counts, dependencies and external effects.
+// Hosts restore current authority and durable budgets explicitly.
 type SessionCheckpoint struct {
 	Binding  SessionBinding  `json:"binding"`
 	Snapshot SessionSnapshot `json:"snapshot"`
@@ -85,7 +87,10 @@ func (s *Session) Rebind(reg *Registry) error {
 	}
 }
 
-// NewSessionFromCheckpoint creates a session and imports a checkpoint after binding validation.
+// NewSessionFromCheckpoint creates a session and imports a state+binding checkpoint.
+// The supplied options define current authority/budget; previous RunPolicy and
+// execution counts are not restored. Codec registration is finalized by NewSession
+// even if subsequent checkpoint validation/hydration fails.
 func NewSessionFromCheckpoint(reg *Registry, checkpoint SessionCheckpoint, opts ...SessionOption) (*Session, error) {
 	sess, err := NewSession(reg, opts...)
 	if err != nil {

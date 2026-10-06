@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkR09CodecSnapshot-10    	   21556	     16542 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkR09CodecSnapshot-10    	   16666	     15656 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkR09CodecSnapshot-10    	   12979	     17708 ns/op	    6744 B/op	     108 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	1.332s

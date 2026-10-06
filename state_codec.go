@@ -18,7 +18,7 @@ type StateCodec[T any] interface {
 	Decode([]byte) (T, error)
 }
 
-// StateSlotPolicy controls import semantics for a registered state slot.
+// StateSlotPolicy controls export and import semantics for a registered state slot.
 type StateSlotPolicy struct {
 	Required bool
 	Nullable bool
@@ -32,7 +32,7 @@ type stateSlotOptions struct {
 // StateSlotOption configures a registered state slot.
 type StateSlotOption func(*stateSlotOptions)
 
-// WithStateSlotRequired marks a state slot as required during snapshot import.
+// WithStateSlotRequired marks a state slot as required during snapshot export and import.
 func WithStateSlotRequired() StateSlotOption {
 	return func(o *stateSlotOptions) {
 		o.policy.Required = true
@@ -111,17 +111,35 @@ func (e typedStateCodecEntry[T]) schemaFingerprint() string {
 	)
 }
 
-// StateCodecRegistry maps session state keys to codecs.
+// ErrStateCodecRegistryFrozen reports registration attempted after schema finalization.
+var ErrStateCodecRegistryFrozen = errors.New("toolsy: state codec registry is frozen")
+
+// StateCodecRegistry builds session state codecs. NewSession freezes it after
+// constructor validation; every session sharing it then uses one stable schema.
+// Codec implementations remain host-owned and must be safe for concurrent calls.
 type StateCodecRegistry struct {
 	mu     sync.RWMutex
 	codecs map[string]stateCodecEntry
+	frozen bool
 }
 
 // NewStateCodecRegistry creates an empty codec registry.
 func NewStateCodecRegistry() *StateCodecRegistry {
-	return &StateCodecRegistry{ //nolint:exhaustruct_v5 // mu zero value
+	return &StateCodecRegistry{ //nolint:exhaustruct_v5 // mu zero value; builder starts mutable
 		codecs: make(map[string]stateCodecEntry),
 	}
+}
+
+// Freeze finalizes this builder's schema. It is safe to repeat and to race with
+// registration: an entry either completes before freeze or registration fails.
+// To change a schema, build a new registry. Nil is the absence of registered codecs.
+func (r *StateCodecRegistry) Freeze() {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.frozen = true
+	r.mu.Unlock()
 }
 
 // RegisterStateCodec associates key with codec for type T.
@@ -135,15 +153,19 @@ func RegisterStateCodec[T any](r *StateCodecRegistry, key string, codec StateCod
 	if codec == nil {
 		return errors.New("toolsy: state codec must not be nil")
 	}
+	policy := stateSlotPolicy(opts)
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.frozen {
+		return ErrStateCodecRegistryFrozen
+	}
 	if r.codecs == nil {
 		r.codecs = make(map[string]stateCodecEntry)
 	}
 	if _, exists := r.codecs[key]; exists {
 		return fmt.Errorf("toolsy: state codec key %q already registered", key)
 	}
-	r.codecs[key] = typedStateCodecEntry[T]{codec: codec, policy: stateSlotPolicy(opts)}
+	r.codecs[key] = typedStateCodecEntry[T]{codec: codec, policy: policy}
 	return nil
 }
 
@@ -173,6 +195,9 @@ func (r *StateCodecRegistry) RegisterFromPrototype(key string, prototype any, op
 func (r *StateCodecRegistry) registerReflectCodec(key string, typ reflect.Type, policy StateSlotPolicy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.frozen {
+		return ErrStateCodecRegistryFrozen
+	}
 	if r.codecs == nil {
 		r.codecs = make(map[string]stateCodecEntry)
 	}

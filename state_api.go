@@ -7,7 +7,9 @@ import (
 	"maps"
 )
 
-// GetSessionState returns in-memory session state for key when present and non-nil.
+// GetSessionState returns an in-memory value when present and non-nil.
+// The map is synchronized; referenced pointers/maps/slices remain host-owned and
+// aliased. The caller must synchronize or keep those values immutable.
 func GetSessionState[T any](s *Session, key string) (T, bool) {
 	var zero T
 	if s == nil || key == "" {
@@ -18,7 +20,8 @@ func GetSessionState[T any](s *Session, key string) (T, bool) {
 	return resolveTyped[T](s.state, key)
 }
 
-// SetSessionState stores in-memory session state for key.
+// SetSessionState stores a value in the synchronized state map. It does not deep
+// copy pointers/maps/slices; referenced value synchronization belongs to the host.
 func SetSessionState[T any](s *Session, key string, val T) {
 	if s == nil || key == "" {
 		return
@@ -56,7 +59,8 @@ func (s *Session) ExportSnapshot() (SessionSnapshot, error) {
 }
 
 // ImportSnapshot atomically replaces in-memory session state from snap.
-// On error the previous state is unchanged.
+// On hydration error the library does not replace the state map. Host callback
+// side effects, including explicit state writes during decode, are not rolled back.
 func (s *Session) ImportSnapshot(snap SessionSnapshot) error {
 	if s == nil {
 		return NewValidationError("session is nil")
@@ -92,6 +96,9 @@ func (s *Session) encodeStatePayload() ([]byte, error) {
 	state := maps.Clone(s.state)
 	s.stateMu.RUnlock()
 	if len(state) == 0 {
+		if err := s.validateRequiredStateSlots(nil); err != nil {
+			return nil, err
+		}
 		return []byte("{}"), nil
 	}
 	wire := make(map[string]json.RawMessage, len(state))
@@ -111,17 +118,20 @@ func (s *Session) encodeStatePayload() ([]byte, error) {
 		}
 		wire[k] = raw
 	}
+	present := func(key string) bool {
+		_, exists := wire[key]
+		return exists
+	}
+	if err := s.validateRequiredStateSlotsPresent(present); err != nil {
+		return nil, err
+	}
 	return json.Marshal(wire)
 }
 
 func (s *Session) encodeStateValue(key string, v any) (json.RawMessage, error) {
 	if reg := s.opts.codecRegistry; reg != nil {
 		if entry, ok := reg.lookup(key); ok {
-			b, err := entry.encodeValue(v)
-			if err != nil {
-				return nil, err
-			}
-			return json.RawMessage(b), nil
+			return encodeRegisteredStateValue(key, v, entry)
 		}
 	}
 	if s.opts.strictStateCodecs {
@@ -134,6 +144,20 @@ func (s *Session) encodeStateValue(key string, v any) (json.RawMessage, error) {
 	return json.RawMessage(b), nil
 }
 
+func encodeRegisteredStateValue(key string, value any, entry stateCodecEntry) (json.RawMessage, error) {
+	raw, err := entry.encodeValue(value)
+	if err != nil {
+		return nil, err
+	}
+	if isStateClearRaw(raw) && !entry.statePolicy().Nullable {
+		return nil, NewSnapshotHydrationError(
+			fmt.Sprintf("state key %q is null", key),
+			fmt.Errorf("toolsy: state key %q is null but slot is non-nullable", key),
+		)
+	}
+	return json.RawMessage(raw), nil
+}
+
 func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 	var wire map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &wire); err != nil {
@@ -143,7 +167,7 @@ func (s *Session) decodeStatePayload(payload []byte) (map[string]any, error) {
 		)
 	}
 	if wire == nil {
-		return make(map[string]any), nil
+		return make(map[string]any), s.validateRequiredStateSlots(nil)
 	}
 	newMap := make(map[string]any, len(wire))
 	for k, raw := range wire {
@@ -231,6 +255,10 @@ func decodeRegisteredStateClear(key string, raw json.RawMessage, entry stateCode
 }
 
 func (s *Session) validateRequiredStateSlots(state map[string]any) error {
+	return s.validateRequiredStateSlotsPresent(func(key string) bool { _, present := state[key]; return present })
+}
+
+func (s *Session) validateRequiredStateSlotsPresent(present func(string) bool) error {
 	if s.opts.codecRegistry == nil {
 		return nil
 	}
@@ -238,7 +266,7 @@ func (s *Session) validateRequiredStateSlots(state map[string]any) error {
 		if !policy.Required {
 			continue
 		}
-		if _, ok := state[key]; !ok {
+		if !present(key) {
 			return NewSnapshotHydrationError(
 				fmt.Sprintf("required state key %q is missing", key),
 				fmt.Errorf("toolsy: required state key %q is missing", key),

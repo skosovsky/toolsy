@@ -59,7 +59,9 @@ type Session struct {
 	state         map[string]any
 }
 
-// NewSession creates a new session bound to reg.
+// NewSession creates a session bound to reg and freezes its codec registry after
+// run-policy/registry validation. Register every codec before creating a session;
+// use a new codec registry to define a different schema.
 func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	var cfg sessionOptions
 	for _, opt := range opts {
@@ -68,10 +70,15 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err := ValidateRunPolicy(cfg.policy); err != nil {
 		return nil, err
 	}
-	binding, err := newSessionBinding(reg, cfg)
+	// Validate the registry before finalizing the caller's codec builder.
+	bindingOptions := cfg
+	bindingOptions.codecRegistry = nil
+	binding, err := newSessionBinding(reg, bindingOptions)
 	if err != nil {
 		return nil, err
 	}
+	cfg.codecRegistry.Freeze()
+	binding.StateSchemaDigest = stateSchemaDigest(cfg.codecRegistry)
 	session := &Session{ //nolint:exhaustruct_v5 // Configuration/state locks have zero values; maps and pointer initialized below
 		track:  newSessionTrack(cfg),
 		policy: cfg.policy,

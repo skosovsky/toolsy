@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted awaiting commit; rows 09–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted, awaiting its commit; rows 10–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -313,5 +313,41 @@ Evidence: [R08 acceptance](task41/r08-acceptance.md). Independent reviewers
 detected defects. Original races/wrong-registry/callback-lock failures reproduce
 on d1102f6. Root race/lint and independent concurrency/reentry/nil/failing-decode
 probes pass. Public benchmarks record unchanged Execute allocation count and
-extra map-clone allocation cost for snapshot export. Commit: pending final
-accepted commit.
+extra map-clone allocation cost for snapshot export. Commit: `df733dd` (`fix: session binding`).
+
+### 09 — R09 / D07 / D08 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Explicit codec registry freeze/build lifecycle: NewSession freezes codecs
+   after ordinary constructor validation; registration after freeze fails with
+   inspectable ErrStateCodecRegistryFrozen. All registrar paths enforce it.
+2. Codec entries/digest stay one stable schema lifetime; successful state+binding
+   checkpoint restores with the same frozen registry, including required slots.
+   Missing required state is rejected during export, before a useless checkpoint
+   can be returned; host codec round-trip behavior remains a host responsibility.
+3. Late optional/required registration and concurrent registration/construction
+   have deterministic admission outcomes; constructor validation failure does not
+   prematurely freeze the caller builder; schema changes need a new registry.
+4. D07 names state+binding checkpoint accurately: RunPolicy/maxSteps/consumed
+   count/dependencies/continuation are not persisted, host restores current
+   authority/durable budget. D08 documents BYOT alias synchronization and codec
+   callback reentry outside locks; no universal deep copy or callback rollback.
+5. AAA lifecycle/concurrency/restoration/callback probes pass with race/lint;
+   baseline reproduces accepted late registration/unrestorable checkpoint; docs
+   and migration match; both independent reviewers accept 100%, no unresolved bugs.
+
+Decision: freeze the supplied codec builder for its shared schema lifetime at
+NewSession construction, after registry/run-policy validation. Freeze is also an
+explicit public method; registration remains mutable beforehand. Capture one
+stable digest after freezing; codec implementation state remains a host contract.
+
+Evidence: [R09 acceptance](task41/r09-acceptance.md). Independent reviewers
+`r09_acceptance_a` and `r09_acceptance_b` accepted all five criteria at 100%,
+with no unresolved detected defects. Parent tests/race passed all 24 modules;
+root lint has zero issues. The previous-commit behavioral probe fails and the
+same probe passes on the fix. Registered 32-slot snapshot export adds approximately
+2.8KiB and four allocations for required-slot checks; no-codec snapshot and
+Execute allocation counts are unchanged. Short timing samples are not a
+statistical guarantee. Checkpoint authority/budgets and callback/value ownership
+remain explicit host responsibilities. Commit hash is recorded in the next row.

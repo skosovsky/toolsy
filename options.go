@@ -210,7 +210,9 @@ type sessionOptions struct {
 	strictStateCodecs bool
 }
 
-// WithStateCodecRegistry configures typed encode/decode for [Session.ExportSnapshot] and [Session.ImportSnapshot].
+// WithStateCodecRegistry supplies a codec builder for snapshot encode/decode.
+// NewSession finalizes registration by freezing this shared registry after
+// constructor validation. Configure all slots before creating any session.
 func WithStateCodecRegistry(r *StateCodecRegistry) SessionOption {
 	return func(o *sessionOptions) {
 		o.codecRegistry = r

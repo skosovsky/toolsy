@@ -302,8 +302,15 @@ registry, while later calls observe the new configuration. Checkpoints export on
 binding for both outer metadata and inner snapshot. Codecs and `MarshalJSON`
 callbacks run without state/configuration locks; state-map slots are copied before
 encoding, while referenced host values must remain immutable during encoding.
-Registry configuration and state codec registrations must remain stable after
-session setup. See [task41 migration](docs/migration-task41.md).
+Registry configuration must remain stable after setup. `NewSession` freezes its
+`StateCodecRegistry`: register every slot before constructing the first session.
+Later registration returns `ErrStateCodecRegistryFrozen`. Codec callbacks and
+referenced pointers/maps/slices remain host-owned; callers must synchronize their
+access. See [task41 migration](docs/migration-task41.md).
+
+`SessionCheckpoint` persists state plus binding. It excludes `RunPolicy`, call
+limits/counts, dependencies, and workflow continuation. Restore supplies current
+host authority and fresh session counters; durable budgets belong to the host.
 `*RunEnv` is shared via `ToolCall.Env` for DI and handler access:
 
 - `StateStore` — persisted key/value state (optional)
@@ -369,6 +376,13 @@ See [docs/migration-task31.md](docs/migration-task31.md), [docs/migration-task28
 ### StateCodecRegistry
 
 Register typed codecs for checkpoint roundtrips:
+
+The first `NewSession` finalizes the shared registry after constructor validation.
+Explicit `codecs.Freeze()` is also available and idempotent. Build a new registry
+for schema changes. Required slots must be present at export and import; registered
+non-nullable slots cannot encode JSON null. Custom codecs must honor their
+roundtrip/schema contract and be safe for concurrent calls. Library map replacement
+is atomic on import; host callback effects are not rolled back on decode failure.
 
 ```go
 codecs := toolsy.NewStateCodecRegistry()

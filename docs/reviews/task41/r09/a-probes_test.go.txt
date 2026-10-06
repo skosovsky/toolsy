@@ -1,0 +1,25 @@
+package toolsy
+import("errors";"fmt";"sync";"testing";"time")
+type acceptanceACodec struct{ encode func(); decode func() error }
+func(c acceptanceACodec)Encode(v int)([]byte,error){if c.encode!=nil {c.encode()};return []byte(fmt.Sprint(v)),nil}
+func(c acceptanceACodec)Decode([]byte)(int,error){if c.decode!=nil{return 7,c.decode()};return 7,nil}
+func TestAcceptanceAConcurrentFreeze(t *testing.T){
+ for round:=0;round<30;round++ {
+  r:=NewStateCodecRegistry();start:=make(chan struct{});out:=make(chan struct{key string;err error},200);var wg sync.WaitGroup
+  for worker:=0;worker<10;worker++ {wg.Add(1);go func(worker int){defer wg.Done();<-start;for n:=0;n<20;n++ {key:=fmt.Sprintf("%d/%d",worker,n);err:=RegisterJSONCodec[int](r,key,WithStateSlotRequired());out<-struct{key string;err error}{key,err}}}(worker)}
+  close(start);s,err:=NewSession(nil,WithStateCodecRegistry(r),WithStrictStateCodecs(true));if err!=nil{t.Fatal(err)};wg.Wait();close(out)
+  for result:=range out {if result.err==nil{SetSessionState(s,result.key,7)}else if !errors.Is(result.err,ErrStateCodecRegistryFrozen){t.Fatal(result.err)}}
+  cp,err:=s.ExportCheckpoint();if err!=nil{t.Fatal(err)};restored,err:=NewSessionFromCheckpoint(nil,cp,WithStateCodecRegistry(r),WithStrictStateCodecs(true));if err!=nil{t.Fatal(err)}
+  if restored.Binding().StateSchemaDigest!=cp.Binding.StateSchemaDigest{t.Fatal("schema drift")};if err:=r.RegisterFromPrototype("late",0);!errors.Is(err,ErrStateCodecRegistryFrozen){t.Fatal(err)}
+ }
+}
+func TestAcceptanceAErrorPathsAndReentry(t *testing.T){
+ r:=NewStateCodecRegistry();var s *Session;decodeFailure:=errors.New("host decode failed");encCalls:=0
+ err:=RegisterStateCodec[int](r,"value",acceptanceACodec{encode:func(){encCalls++;r.Freeze();if err:=RegisterJSONCodec[int](r,"late");!errors.Is(err,ErrStateCodecRegistryFrozen){t.Error(err)};SetSessionState(s,"written",11);if err:=s.Rebind(nil);err!=nil{t.Error(err)}},decode:func()error{SetSessionState(s,"callback",99);r.Freeze();return decodeFailure}});if err!=nil{t.Fatal(err)}
+ s,err=NewSession(nil,WithStateCodecRegistry(r));if err!=nil{t.Fatal(err)};SetSessionState(s,"value",7)
+ finished:=make(chan error,1);go func(){cp,err:=s.ExportCheckpoint();if err!=nil{finished<-err;return};finished<-s.ImportSnapshot(cp.Snapshot)}()
+ select{case err:=<-finished:if !errors.Is(err,decodeFailure){t.Fatal(err)};case <-time.After(2*time.Second):t.Fatal("callback deadlock")}
+ if encCalls!=1{t.Fatal(encCalls)};if v,_:=GetSessionState[int](s,"value");v!=7{t.Fatal("failed import replaced state")};if v,_:=GetSessionState[int](s,"callback");v!=99{t.Fatal("callback effects rolled back")}
+ failedBuilder:=NewStateCodecRegistry();_,err=NewSessionFromCheckpoint(nil,SessionCheckpoint{},WithStateCodecRegistry(failedBuilder));if err==nil{t.Fatal("invalid checkpoint accepted")};if err=RegisterJSONCodec[int](failedBuilder,"late");!errors.Is(err,ErrStateCodecRegistryFrozen){t.Fatal("failed restore not finalized",err)}
+ required:=NewStateCodecRegistry();if err=RegisterJSONCodec[int](required,"must",WithStateSlotRequired());err!=nil{t.Fatal(err)};rs,err:=NewSession(nil,WithStateCodecRegistry(required));if err!=nil{t.Fatal(err)};snap:=SessionSnapshot{version:1,payload:[]byte("null"),binding:rs.Binding()};if err=rs.ImportSnapshot(snap);err==nil{t.Fatal("null payload bypassed required slot")}
+}
