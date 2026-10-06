@@ -1,0 +1,26 @@
+package toolsyotel
+
+import (
+ "context"
+ "strings"
+ "testing"
+
+ "github.com/stretchr/testify/require"
+
+ "github.com/skosovsky/toolsy"
+)
+
+func TestD25DefaultHasNoVendorAttributes(t *testing.T) {
+ for _,capture:=range []bool{false,true} {
+ // Arrange: default mapping must not depend on a selected telemetry backend.
+ tp,rec:=newSpanRecorder()
+ tool:=&stubTool{manifest:toolsy.ToolManifest{Name:"portable"}}
+ wrapped:=WithTracing(WithTracerProvider(tp),WithContentCapture(capture))(tool)
+ // Act.
+ require.NoError(t,wrapped.Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{CallID:"call",ArgsJSON:[]byte(`{}`)},func(toolsy.Chunk)error{return nil}))
+ // Assert: content opt-in does not implicitly opt into a vendor mapping.
+ require.Len(t,rec.Ended(),1)
+ for _,attr:=range rec.Ended()[0].Attributes() {require.False(t,strings.HasPrefix(string(attr.Key),"langfuse."),"unexpected vendor attr %s",attr.Key)}
+ require.NoError(t,tp.Shutdown(context.Background()))
+ }
+}

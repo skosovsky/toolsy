@@ -90,19 +90,22 @@ func (t *tracingTool) spanStartAttributes(
 	attrs := []attribute.KeyValue{
 		attribute.String("gen_ai.tool.name", toolName),
 		attribute.String("gen_ai.operation.name", "execute_tool"),
-		attribute.String("langfuse.observation.type", "tool"),
+	}
+	if t.cfg.langfuseCompatibility {
+		attrs = append(attrs, attribute.String("langfuse.observation.type", "tool"))
 	}
 	if input.CallID != "" {
-		attrs = append(attrs, attribute.String("gen_ai.tool.call_id", input.CallID))
+		attrs = append(attrs, attribute.String("gen_ai.tool.call.id", input.CallID))
 	}
 	if !t.cfg.contentCapture {
 		return attrs
 	}
 	argsText := t.cfg.captured(ContentInput, string(input.ArgsJSON))
-	return append(attrs,
-		attribute.String("langfuse.observation.input", argsText),
-		attribute.String("gen_ai.tool.call.arguments", argsText),
-	)
+	attrs = append(attrs, attribute.String("gen_ai.tool.call.arguments", argsText))
+	if t.cfg.langfuseCompatibility {
+		attrs = append(attrs, attribute.String("langfuse.observation.input", argsText))
+	}
+	return attrs
 }
 
 func (t *tracingTool) finalizeExecuteSpan(
@@ -111,26 +114,26 @@ func (t *tracingTool) finalizeExecuteSpan(
 	outAcc *payloadAccumulator,
 	soft *softErrorState,
 ) {
-	t.setOutputAttributes(span, execErr, outAcc)
 	hasSoftError, softText := soft.snapshot()
+	t.setOutputAttributes(span, execErr, outAcc, hasSoftError)
 	t.applySpanStatusFromExec(span, execErr, hasSoftError, softText)
 }
 
 func (t *tracingTool) applySpanStatusFromExec(span trace.Span, execErr error, hasSoftError bool, softText string) {
 	switch {
 	case execErr == nil && hasSoftError:
-		span.SetAttributes(attribute.Bool("gen_ai.tool.soft_error", true))
+		span.SetAttributes(attribute.Bool("toolsy.tool.soft_error", true))
 		if softText != "" {
-			span.SetAttributes(attribute.String("gen_ai.tool.soft_error_text", softText))
+			span.SetAttributes(attribute.String("toolsy.tool.soft_error_text", softText))
 		}
 		span.AddEvent("tool.soft_error")
 		span.SetStatus(codes.Error, "tool returned soft error chunk")
 	case execErr == nil:
 	case toolsy.IsControlError(execErr):
-		span.SetAttributes(attribute.Bool("gen_ai.tool.control_signal", true))
+		span.SetAttributes(attribute.Bool("toolsy.tool.control_signal", true))
 		span.AddEvent("tool.control")
 	case errors.Is(execErr, toolsy.ErrStreamAborted):
-		span.SetAttributes(attribute.Bool("gen_ai.tool.stream_aborted", true))
+		span.SetAttributes(attribute.Bool("toolsy.tool.stream_aborted", true))
 		span.AddEvent("tool.stream_aborted")
 	default:
 		t.cfg.recordFailure(span, execErr, ContentError, "tool execution failed")
@@ -199,23 +202,31 @@ func (t *tracingTool) Execute(
 	return execErr
 }
 
-func (t *tracingTool) setOutputAttributes(span trace.Span, execErr error, outAcc *payloadAccumulator) {
+func (t *tracingTool) setOutputAttributes(
+	span trace.Span,
+	execErr error,
+	outAcc *payloadAccumulator,
+	hasSoftError bool,
+) {
 	if !t.cfg.contentCapture {
 		return
 	}
-	switch {
-	case execErr != nil:
-		span.SetAttributes(attribute.String(
-			"langfuse.observation.output",
-			t.cfg.captured(ContentError, execErr.Error()),
-		))
-	case outAcc != nil:
-		output := outAcc.String()
-		span.SetAttributes(
-			attribute.String("langfuse.observation.output", output),
-			attribute.String("gen_ai.tool.call.result", output),
-		)
+	var output string
+	var attrs []attribute.KeyValue
+	if execErr != nil {
+		output = t.cfg.captured(ContentError, execErr.Error())
+		attrs = append(attrs, attribute.String("toolsy.tool.error", output))
+	} else if outAcc != nil {
+		output = outAcc.String()
+		attrs = append(attrs, attribute.String("toolsy.tool.output", output))
+		if !hasSoftError {
+			attrs = append(attrs, attribute.String("gen_ai.tool.call.result", output))
+		}
 	}
+	if t.cfg.langfuseCompatibility {
+		attrs = append(attrs, attribute.String("langfuse.observation.output", output))
+	}
+	span.SetAttributes(attrs...)
 }
 
 var _ toolsy.Tool = (*tracingTool)(nil)

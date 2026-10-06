@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted (commit pending); rows 31–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted, signed commit pending; rows 32–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1191,3 +1191,62 @@ original cause through errors.Is/errors.As. Concurrent12-client calls, actual5s
 cooperative credential deadline, expired observer context, parent values and combined
 callback+parent interruption verified. Reports/probes retained in task41/d24.
 Accepted for separate signed commit `feat: cancellation diagnostics`.
+
+### 31 — D25 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Default mapping is vendor-neutral: gen_ai tool/operation/call.id metadata plus
+   toolsy-owned status/output/error extensions; no Langfuse attributes by default.
+   Explicit Langfuse compatibility flag adds legacy vendor mapping without SDK dependency.
+2. Content remains default-off across inputs/chunks/errors/panics/statuses/events,
+   including vendor opt-in without capture. One bounded/redacted content policy
+   supplies matching vendor/portable fields; vendor flag cannot enable capture.
+3. Only successfully delivered chunks captured; output/soft/hard/control/abort/
+   panic classification truthful, gen_ai call.result only successful execution,
+   original return/panic semantics and bounded UTF8/truncation remain.
+4. AAA defaults/vendor/capture matrix, baseline vendor-leak behavior probe, error/
+   softerror and split-secret fixtures, race/lint and relevant hotpath benchmarks.
+5. Docs/migration names/caps and opt-in agree; split-secret limitation prominent,
+   whole-content bounded sanitization remains host contract, no global/stateful
+   sanitizer/scheduler or dependency. Two independent reviewers100%, no unresolved
+   detected errors; no live exporter/vendor conformance asserted.
+
+Spec-first: retain standardized tool/operation attributes, replace legacy call_id
+with gen_ai.tool.call.id; framework-specific markers use toolsy.tool.*. Optional
+WithLangfuseCompatibility(bool) defaultsfalse and adds type/input/output attrs only
+as permitted by existing content capture. General captured output is toolsy.tool.output;
+error/control/abort text is toolsy.tool.error. gen_ai.tool.call.result is omitted on
+soft error chunks or execution error. Captured values are redacted bounded display
+strings, not executable JSON. Redactor is per delivered chunk; a secret split across
+chunks can be recombined after separate redaction. No implicit full-content buffer
+or universal detector: host must disable capture, sanitize complete bounded content
+externally or redact whole sensitive chunks with its own classifier.
+
+Primary references checked for mapping names/result semantics and vendor prefixes:
+https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/
+https://langfuse.com/integrations/native/opentelemetry
+GenAI conventions remain evolving; this adapter documents its explicit subset,
+not full future convention/exporter conformance.
+
+D25 implementation complete: default vendor-neutral mapping, canonical call.id,
+explicit Langfuse compatibility, toolsy-owned extension flags/output/error,
+success-only result. Capture remains independent/default-off; vendor values mirror
+bounded redacted portable values. Prominent split-secret/host sanitation boundary.
+Affected fullmodule race count3PASS1.564s/pinnedlint0; local no-op-provider benchmark
+count3PASS (metadata9allocs, capture15allocs, capture+vendor17allocs); baseline
+vendor attribute probe failed behaviorally before edits. Evidence in task41/d25.
+Two independent acceptance pending.
+
+Initial D25 acceptance A found short invalid-UTF8 redactor output bypassed
+normalization. Fixed truncatePayload to replace invalid sequences with U+FFFD
+before applying the inclusive byte cap; vendor/result/error/panic fixtures cover
+it and documents state replacement budgeting. Corrected fullmodule race count3
+PASS1.936s/pinnedlint0, benchmark count3PASS (same allocations, variable localtime).
+Both independent final reacceptances pending; initial90%/notaccepted report retained.
+
+Final independent A and B both100%, each five20/20 criteria, no unresolved detected
+errors. A exact former UTF8FAIL nowPASS and48 tinybudget/raw/redactor probesPASS;
+B control/abort/rejected/concurrent/reentrant/cap matrix and invalidbytes probesPASS.
+Both fullmodule racecount3, pinnedlint0, benchmarkPASS. Reports/probes/rawlogs in
+ task41/d25/acceptance-a and acceptance-b; original90% rejection retained and
+superseded by final100%. Accepted for separate signed commit `refactor: telemetry mapping`.

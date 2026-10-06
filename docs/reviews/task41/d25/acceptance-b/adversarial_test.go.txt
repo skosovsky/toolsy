@@ -1,0 +1,95 @@
+package toolsyotel
+
+import (
+ "context"
+ "errors"
+ "fmt"
+ "strings"
+ "sync"
+ "sync/atomic"
+ "testing"
+ "unicode/utf8"
+
+ "github.com/skosovsky/toolsy"
+ "github.com/stretchr/testify/require"
+ "go.opentelemetry.io/otel/codes"
+)
+
+func TestAcceptanceBControlAbortDeliveryMatrix(t *testing.T) {
+ for _, terminal := range []error{toolsy.ErrPause, toolsy.ErrYield, toolsy.ErrHalt, toolsy.ErrHostEvent, toolsy.ErrStreamAborted, errors.New("consumer_SECRET")} {
+  for _, vendor := range []bool{false,true} { for _, capture := range []bool{false,true} {
+   t.Run(fmt.Sprintf("%v/vendor=%v/capture=%v",terminal,vendor,capture),func(t *testing.T) {
+    // Arrange: reject a soft error after accepting one ordinary chunk.
+    tp,rec:=newSpanRecorder(); defer tp.Shutdown(context.Background())
+    var redactions atomic.Int32
+    rejected:=fmt.Errorf("SECRET: %w",terminal)
+    tool:=&stubTool{manifest:toolsy.ToolManifest{Name:"delivery"},execute:func(_ context.Context,_ *toolsy.RunEnv,_ toolsy.ToolInput,y func(toolsy.Chunk)error)error{
+     if err:=y(toolsy.Chunk{Data:[]byte("accepted"),MimeType:toolsy.MimeTypeText});err!=nil{return err}
+     return y(toolsy.Chunk{IsError:true,Data:[]byte("REJECTED_SECRET"),MimeType:toolsy.MimeTypeText})
+    }}
+    wrapped:=WithTracing(WithTracerProvider(tp),WithLangfuseCompatibility(vendor),WithContentCapture(capture),WithMaxPayloadSize(11),WithContentRedactor(func(_ ContentKind,s string)string{redactions.Add(1);return strings.ReplaceAll(s,"SECRET","SAFE")}))(tool)
+    // Act.
+    err:=wrapped.Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte("INPUT_SECRET")},func(c toolsy.Chunk)error{if c.IsError{return rejected};return nil})
+    // Assert: preserve exact error and failure class, reject content and success result.
+    require.Same(t,rejected,err);require.Len(t,rec.Ended(),1);span:=rec.Ended()[0]
+    require.False(t,hasAttrKey(span,"gen_ai.tool.call.result"));require.False(t,hasAttrKey(span,"toolsy.tool.soft_error"));require.NotContains(t,spanContent(span),"REJECTED")
+    require.NotContains(t,spanContent(span),"SECRET");require.Equal(t,vendor,hasAttrKey(span,"langfuse.observation.type"))
+    require.Equal(t,capture,hasAttrKey(span,"toolsy.tool.error"));require.Equal(t,vendor&&capture,hasAttrKey(span,"langfuse.observation.output"))
+    if !capture { require.Zero(t,redactions.Load());require.False(t,hasAttrKey(span,"exception.message")) } else { require.Positive(t,redactions.Load()); if vendor { a,_:=attrValue(span,"toolsy.tool.error");b,_:=attrValue(span,"langfuse.observation.output");require.Equal(t,a,b) };for _,a:=range span.Attributes(){if strings.Contains(string(a.Key),"error")||strings.Contains(string(a.Key),"arguments")||strings.Contains(string(a.Key),"output"){require.LessOrEqual(t,len(a.Value.AsString()),11)}} }
+    if toolsy.IsControlError(terminal) { require.Equal(t,codes.Unset,span.Status().Code);require.True(t,hasAttrKey(span,"toolsy.tool.control_signal"));require.False(t,hasEvent(span,"exception")) } else if errors.Is(terminal,toolsy.ErrStreamAborted) { require.Equal(t,codes.Unset,span.Status().Code);require.True(t,hasAttrKey(span,"toolsy.tool.stream_aborted"));require.False(t,hasEvent(span,"exception")) } else { require.Equal(t,codes.Error,span.Status().Code);require.True(t,hasEvent(span,"exception")) }
+   })
+  }}
+ }
+}
+
+func TestAcceptanceBConcurrentReentrantPolicy(t *testing.T) {
+ // Arrange: a shared adapter; redaction re-enters it exactly once without recursion.
+ tp,rec:=newSpanRecorder();defer tp.Shutdown(context.Background())
+ var wrapped toolsy.Tool;var entered atomic.Bool;var failures atomic.Int32;var redactions atomic.Int32
+ tool:=&stubTool{manifest:toolsy.ToolManifest{Name:"reentrant"},execute:func(_ context.Context,_ *toolsy.RunEnv,_ toolsy.ToolInput,y func(toolsy.Chunk)error)error{
+  var wg sync.WaitGroup
+  for range 8 {wg.Add(1);go func(){defer wg.Done();if y(toolsy.Chunk{Data:[]byte("界🙂SECRET"),MimeType:toolsy.MimeTypeText})!=nil{failures.Add(1)}}()};wg.Wait();return nil
+ }}
+ wrapped=WithTracing(WithTracerProvider(tp),WithLangfuseCompatibility(true),WithContentCapture(true),WithMaxPayloadSize(7),WithContentRedactor(func(k ContentKind,s string)string{
+  redactions.Add(1);if k==ContentInput && entered.CompareAndSwap(false,true){if wrapped.Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte("nested")},func(toolsy.Chunk)error{return nil})!=nil{failures.Add(1)}};return strings.ReplaceAll(s,"SECRET","SAFE")
+ }))(tool)
+ // Act: simultaneous executions plus concurrent yields plus policy re-entry.
+ var wg sync.WaitGroup
+ for range 16 {wg.Add(1);go func(){defer wg.Done();if wrapped.Execute(context.Background(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte("界🙂SECRET")},func(toolsy.Chunk)error{return nil})!=nil{failures.Add(1)}}()};wg.Wait()
+ // Assert: independent bounded spans, no deadlock or data race, same vendor values.
+ require.Zero(t,failures.Load());require.Len(t,rec.Ended(),17);require.Equal(t,int32(153),redactions.Load())
+ for _,span:=range rec.Ended(){require.NotContains(t,spanContent(span),"SECRET");a,_:=attrValue(span,"toolsy.tool.output");b,_:=attrValue(span,"langfuse.observation.output");c,_:=attrValue(span,"gen_ai.tool.call.result");require.Equal(t,a,b);require.Equal(t,a,c);require.LessOrEqual(t,len(a.AsString()),7);require.True(t,utf8.ValidString(a.AsString()));require.Equal(t,codes.Unset,span.Status().Code)}
+}
+
+func TestAcceptanceBUTF8CapsVendorParity(t *testing.T) {
+ for _,limit:=range []int{1,2,3,4,7,13,14,15,16,31} { for _,path:=range []string{"result","soft","hard","panic"} {
+  t.Run(fmt.Sprintf("limit=%d/%s",limit,path),func(t *testing.T){
+   // Arrange.
+   tp,rec:=newSpanRecorder();defer tp.Shutdown(context.Background());raw:=strings.Repeat("界🙂",100)+"SECRET"
+   opts:=[]Option{WithTracerProvider(tp),WithLangfuseCompatibility(true),WithContentCapture(true),WithMaxPayloadSize(limit),WithContentRedactor(func(_ ContentKind,s string)string{return strings.ReplaceAll(s,"SECRET","SAFE")})}
+   // Act.
+   executeContentPolicyPath(t,path,raw,contentPolicyTool(path,raw),opts)
+   // Assert.
+   require.Len(t,rec.Ended(),1);require.NotContains(t,spanContent(rec.Ended()[0]),"SECRET");assertCapturedByteCap(t,rec.Ended()[0],limit)
+   if path!="panic" {key:="toolsy.tool.output";if path=="hard"{key="toolsy.tool.error"};a,_:=attrValue(rec.Ended()[0],key);b,_:=attrValue(rec.Ended()[0],"langfuse.observation.output");require.Equal(t,a,b)}
+  })
+ }}
+}
+
+func TestAcceptanceBInvalidUTF8RawAndRedactor(t *testing.T) {
+ for _,limit:=range []int{1,2,3,4,7,16} { for _,vendor:=range []bool{false,true} { for _,invalidRedactor:=range []bool{false,true} {for _,path:=range []string{"result","soft","hard","panic"} {
+  t.Run(fmt.Sprintf("limit=%d/vendor=%v/redactor=%v/%s",limit,vendor,invalidRedactor,path),func(t *testing.T){
+   // Arrange: invalid input/error/panic source or invalid redactor return, below and above cap.
+   tp,rec:=newSpanRecorder();defer tp.Shutdown(context.Background());raw:=string([]byte{'x',0xff,0xfe,'y'})
+   opts:=[]Option{WithTracerProvider(tp),WithLangfuseCompatibility(vendor),WithContentCapture(true),WithMaxPayloadSize(limit)}
+   if invalidRedactor {raw="valid";opts=append(opts,WithContentRedactor(func(ContentKind,string)string{return string([]byte{0xff})}))}
+   // Act.
+   executeContentPolicyPath(t,path,raw,contentPolicyTool(path,raw),opts)
+   // Assert: all captured attributes and diagnostic event values valid and within exact cap.
+   require.Len(t,rec.Ended(),1);span:=rec.Ended()[0];assertCapturedByteCap(t,span,limit)
+   for _,a:=range span.Attributes(){if strings.Contains(string(a.Key),"error"){require.LessOrEqual(t,len(a.Value.AsString()),limit);require.True(t,utf8.ValidString(a.Value.AsString()))}}
+   require.Equal(t,vendor,hasAttrKey(span,"langfuse.observation.type"));require.Equal(t,path=="result",hasAttrKey(span,"gen_ai.tool.call.result"))
+   if path!="panic"&&vendor{key:="toolsy.tool.output";if path=="hard"{key="toolsy.tool.error"};a,_:=attrValue(span,key);b,_:=attrValue(span,"langfuse.observation.output");require.Equal(t,a,b)}
+  })
+ }}}}
+}

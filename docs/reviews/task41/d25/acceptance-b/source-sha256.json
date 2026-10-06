@@ -1,0 +1,13 @@
+{
+  "ext/toolsyotel/options.go": "03dba46b77ef6220250f0c9711d5556225d07484ae9395c5ddaacd06aaab2ba9",
+  "ext/toolsyotel/middleware_test.go": "47133775e28ab306da1681bb7aa69c985c86f872126c7afe0366e0e1a719c590",
+  "ext/toolsyotel/payload_test.go": "02910801b063b28b809cee4b7651d400e1a450ccee4c903c2afa5a84e60f5e44",
+  "ext/toolsyotel/vendor_mapping_test.go": "fe8776bc0323d2275a7ef7c0fac4e6f15b6cbec04f92856bffba7d219c30e15e",
+  "ext/toolsyotel/middleware_benchmark_test.go": "9aa57877dd508b0866688e955e1ecb2bdc609d9edd6a91f6aa34395ac1ff6f5f",
+  "ext/toolsyotel/payload.go": "e032add20a7fc2b99a9bbc8446ea86fd3539617997076c7c6ec6746b6f377c9d",
+  "ext/toolsyotel/middleware.go": "71291de6dee18622adb5d3060ba526359df0163375bae8ddcca249d6a1a27feb",
+  "ext/toolsyotel/content_policy_test.go": "74f1bf6b740a0139b6b24b5d3b717af4590751dc90b4c4faba607ceaff0d612f",
+  "ext/toolsyotel/README.md": "9a067f7c4418d0a783617879f15f54b5a34d2cd78fcf2b69b6a85cbee88562d1",
+  "docs/migration-task41.md": "c07a14587d95d160faeddfe88ae26f16614ba00c7eadc9a3715d8264e5f79d3c",
+  ".cursor/tasks/task41-toolsy-review-remediation.md": "81a040cc86e0006a0690d4d6b4d3ea07e05c918826008afc44cfd4f7f07a37b7"
+}

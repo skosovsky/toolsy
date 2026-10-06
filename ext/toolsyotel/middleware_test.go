@@ -93,7 +93,7 @@ func TestWithTracing_SetsSpanNameAndAttributes(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "weather", toolName.AsString())
 
-	callID, ok := attrValue(span, "gen_ai.tool.call_id")
+	callID, ok := attrValue(span, "gen_ai.tool.call.id")
 	require.True(t, ok)
 	assert.Equal(t, "call-1", callID.AsString())
 }
@@ -143,7 +143,7 @@ func TestWithTracing_ControlPauseIsNeutral(t *testing.T) {
 	assert.Equal(t, codes.Unset, span.Status().Code)
 	assert.True(t, hasEvent(span, "tool.control"))
 
-	control, ok := attrValue(span, "gen_ai.tool.control_signal")
+	control, ok := attrValue(span, "toolsy.tool.control_signal")
 	require.True(t, ok)
 	assert.True(t, control.AsBool())
 }
@@ -171,7 +171,7 @@ func TestWithTracing_StreamAbortedIsNeutral(t *testing.T) {
 	assert.Equal(t, codes.Unset, span.Status().Code)
 	assert.True(t, hasEvent(span, "tool.stream_aborted"))
 
-	aborted, ok := attrValue(span, "gen_ai.tool.stream_aborted")
+	aborted, ok := attrValue(span, "toolsy.tool.stream_aborted")
 	require.True(t, ok)
 	assert.True(t, aborted.AsBool())
 }
@@ -207,11 +207,11 @@ func TestWithTracing_SoftErrorChunkMarksSpan(t *testing.T) {
 	assert.Equal(t, codes.Error, span.Status().Code)
 	assert.True(t, hasEvent(span, "tool.soft_error"))
 
-	soft, ok := attrValue(span, "gen_ai.tool.soft_error")
+	soft, ok := attrValue(span, "toolsy.tool.soft_error")
 	require.True(t, ok)
 	assert.True(t, soft.AsBool())
 
-	assert.False(t, hasAttrKey(span, "gen_ai.tool.soft_error_text"))
+	assert.False(t, hasAttrKey(span, "toolsy.tool.soft_error_text"))
 }
 
 func TestWithTracing_SoftErrorChunkViaRegistry(t *testing.T) {
@@ -246,7 +246,7 @@ func TestWithTracing_SoftErrorChunkViaRegistry(t *testing.T) {
 	span := spans[0]
 	assert.Equal(t, codes.Error, span.Status().Code)
 
-	assert.False(t, hasAttrKey(span, "gen_ai.tool.soft_error_text"))
+	assert.False(t, hasAttrKey(span, "toolsy.tool.soft_error_text"))
 }
 
 func TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry(t *testing.T) {
@@ -269,6 +269,7 @@ func TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry(t *testing.T) 
 		Use(WithTracing(
 			WithTracerProvider(tp),
 			WithContentCapture(true),
+			WithLangfuseCompatibility(true),
 		)).
 		Build()
 	require.NoError(t, err)
@@ -285,7 +286,7 @@ func TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry(t *testing.T) 
 	assert.Contains(t, output.AsString(), "malformed error chunk")
 	assert.Contains(t, output.AsString(), "budget exceeded")
 
-	softText, ok := attrValue(span, "gen_ai.tool.soft_error_text")
+	softText, ok := attrValue(span, "toolsy.tool.soft_error_text")
 	require.True(t, ok)
 	assert.Equal(t, output.AsString(), softText.AsString())
 }
@@ -334,6 +335,7 @@ func TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk(t *testing.T)
 	wrapped := WithTracing(
 		WithTracerProvider(tp),
 		WithContentCapture(true),
+		WithLangfuseCompatibility(true),
 	)(tool)
 
 	require.NoError(t, wrapped.Execute(
@@ -396,9 +398,7 @@ func TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "execute_tool", op.AsString())
 
-	obsType, ok := attrValue(span, "langfuse.observation.type")
-	require.True(t, ok)
-	assert.Equal(t, "tool", obsType.AsString())
+	assert.False(t, hasAttrKey(span, "langfuse.observation.type"))
 }
 
 func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
@@ -418,6 +418,7 @@ func TestMiddleware_ContentCapture_Enabled(t *testing.T) {
 	wrapped := WithTracing(
 		WithTracerProvider(tp),
 		WithContentCapture(true),
+		WithLangfuseCompatibility(true),
 	)(tool)
 
 	require.NoError(t, wrapped.Execute(
@@ -459,6 +460,7 @@ func TestMiddleware_ContentCapture_Truncation(t *testing.T) {
 	wrapped := WithTracing(
 		WithTracerProvider(tp),
 		WithContentCapture(true),
+		WithLangfuseCompatibility(true),
 		WithMaxPayloadSize(10),
 	)(tool)
 
@@ -497,6 +499,7 @@ func TestMiddleware_ContentCapture_ErrorOutput(t *testing.T) {
 	wrapped := WithTracing(
 		WithTracerProvider(tp),
 		WithContentCapture(true),
+		WithLangfuseCompatibility(true),
 		WithMaxPayloadSize(10),
 	)(tool)
 

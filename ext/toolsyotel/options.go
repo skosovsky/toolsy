@@ -5,10 +5,11 @@ import "go.opentelemetry.io/otel/trace"
 const defaultMaxPayloadSize = 4096
 
 type config struct {
-	tracerProvider trace.TracerProvider
-	contentCapture bool
-	maxPayloadSize int
-	redactor       ContentRedactor
+	tracerProvider        trace.TracerProvider
+	contentCapture        bool
+	langfuseCompatibility bool
+	maxPayloadSize        int
+	redactor              ContentRedactor
 }
 
 // Option configures tracing middleware behavior.
@@ -16,10 +17,11 @@ type Option func(*config)
 
 func defaultConfig() config {
 	return config{
-		tracerProvider: nil,
-		contentCapture: false,
-		maxPayloadSize: defaultMaxPayloadSize,
-		redactor:       nil,
+		tracerProvider:        nil,
+		contentCapture:        false,
+		langfuseCompatibility: false,
+		maxPayloadSize:        defaultMaxPayloadSize,
+		redactor:              nil,
 	}
 }
 
@@ -90,4 +92,10 @@ func (c config) captured(kind ContentKind, content string) (out string) {
 		content = c.redactor(kind, content)
 	}
 	return truncatePayload(content, c.effectiveMaxPayloadSize())
+}
+
+// WithLangfuseCompatibility adds explicit vendor observation attributes. Disabled
+// by default; it never enables content capture or bypasses redaction/byte limits.
+func WithLangfuseCompatibility(enabled bool) Option {
+	return func(c *config) { c.langfuseCompatibility = enabled }
 }

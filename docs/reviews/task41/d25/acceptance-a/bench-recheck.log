@@ -1,0 +1,10 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/ext/toolsyotel
+cpu: Apple M1 Max
+BenchmarkTracingMapping/vendor=false/capture=false-10         	  222735	       486.5 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=true-10          	   77151	      1709 ns/op	    5736 B/op	      15 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=false-10          	  349056	       349.7 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=true-10           	   67764	      1752 ns/op	    6504 B/op	      17 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	1.061s

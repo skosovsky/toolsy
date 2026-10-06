@@ -822,3 +822,30 @@ without implicitly cancelling the remote action. Direct `CancelTask` returns err
 directly and does not invoke this observer. HTTP acknowledgement remains distinct
 from stopped remote execution; unknown outcomes still require host reconciliation.
 See the [remote adapter interruption contract](../agents/README.md).
+
+## D25 — vendor-neutral telemetry and explicit Langfuse mapping
+
+`ext/toolsyotel.WithTracing` no longer emits `langfuse.*` attributes by default.
+Add `WithLangfuseCompatibility(true)` for the vendor type/input/output mapping;
+this flag does **not** enable content capture. Arguments, delivered chunks, errors,
+panics and exception messages remain capture-off unless separately opted in with
+`WithContentCapture(true)`. No new SDK/exporter dependency is required.
+
+Update queries from `gen_ai.tool.call_id` to `gen_ai.tool.call.id`. Framework flags
+`gen_ai.tool.soft_error`, `gen_ai.tool.soft_error_text`, `gen_ai.tool.control_signal`
+and `gen_ai.tool.stream_aborted` now use `toolsy.tool.*` with the same suffix.
+Captured successful/soft output uses `toolsy.tool.output`; Execute errors use
+`toolsy.tool.error`. `gen_ai.tool.call.result` exists only after Execute returns nil
+without a soft error. On panic no output/result is finalized. Original returned
+errors and panic values are preserved.
+
+**Chunk redaction cannot match a secret split across chunks.** Concatenation can
+reconstruct it even when each fragment passed a whole-secret matcher. Hosts must
+disable capture, omit entire sensitive chunks, or sanitize complete content under
+a separate bounded host contract. Capture limits (default 4096 bytes per field,
+including markers, valid UTF-8; invalid byte sequences become U+FFFD before the
+cap) bound exported display strings, not raw chunk
+preparation/redactor cost and not secret exposure. Portable and opted-in vendor
+fields mirror the same redacted/capped values. See the
+[adapter contract and examples](../ext/toolsyotel/README.md); exporter conformance
+and host authentication/classification remain external responsibilities.

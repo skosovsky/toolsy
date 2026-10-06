@@ -1,0 +1,9 @@
+--- FAIL: TestD25DefaultHasNoVendorAttributes (0.00s)
+    vendor_mapping_test.go:23: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/ext/toolsyotel/vendor_mapping_test.go:23
+        	Error:      	Should be false
+        	Test:       	TestD25DefaultHasNoVendorAttributes
+        	Messages:   	unexpected vendor attr langfuse.observation.type
+FAIL
+FAIL	github.com/skosovsky/toolsy/ext/toolsyotel	0.508s
+FAIL

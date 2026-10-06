@@ -1,0 +1,18 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/ext/toolsyotel
+cpu: Apple M1 Max
+BenchmarkTracingMapping/vendor=false/capture=false-10         	 3129511	       426.4 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=false-10         	 2616346	       443.4 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=false-10         	 3453987	       333.5 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=true-10          	  837230	      1472 ns/op	    5736 B/op	      15 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=true-10          	  895282	      1432 ns/op	    5736 B/op	      15 allocs/op
+BenchmarkTracingMapping/vendor=false/capture=true-10          	  921762	      1400 ns/op	    5736 B/op	      15 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=false-10          	 3770108	       319.0 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=false-10          	 3826111	       317.6 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=false-10          	 3318572	       337.6 ns/op	     592 B/op	       9 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=true-10           	  707422	      1726 ns/op	    6504 B/op	      17 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=true-10           	  717914	      1784 ns/op	    6504 B/op	      17 allocs/op
+BenchmarkTracingMapping/vendor=true/capture=true-10           	  705610	      1699 ns/op	    6504 B/op	      17 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	14.883s

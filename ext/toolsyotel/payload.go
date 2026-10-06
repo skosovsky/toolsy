@@ -12,6 +12,9 @@ const payloadTruncatedSuffix = "... [truncated]"
 
 // truncatePayload includes the marker within the byte limit and preserves UTF-8.
 func truncatePayload(s string, limit int) string {
+	// Raw arguments/errors and host redactor results may contain invalid bytes.
+	// Normalize before measuring so replacement runes also obey the field cap.
+	s = strings.ToValidUTF8(s, "\uFFFD")
 	if limit <= 0 || len(s) <= limit {
 		return s
 	}

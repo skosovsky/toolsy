@@ -1,0 +1,79 @@
+package toolsyotel
+import (
+ "context"
+ "errors"
+ "fmt"
+ "strings"
+ "testing"
+ "unicode/utf8"
+ "github.com/skosovsky/toolsy"
+ "github.com/stretchr/testify/require"
+ "go.opentelemetry.io/otel/codes"
+)
+func TestAcceptanceAAdversarialMatrix(t *testing.T) {
+ for _,path:=range []string{"result","soft","hard","control","abort","panic","rejected"} {
+ for _,vendor:=range []bool{false,true} {
+ for _,capture:=range []bool{false,true} {
+ t.Run(fmt.Sprintf("%s/vendor=%t/capture=%t",path,vendor,capture),func(t *testing.T){
+ // Arrange.
+ tp,rec:=newSpanRecorder(); t.Cleanup(func(){_ = tp.Shutdown(context.Background())})
+ raw:=strings.Repeat("界",40)+"SECRET"; sentinel:=errors.New(raw)
+ if path=="control" { sentinel=fmt.Errorf("%w: %s",toolsy.ErrPause,raw) }; if path=="abort" {sentinel=fmt.Errorf("%w: %s",toolsy.ErrStreamAborted,raw)}
+ calls:=0
+ tool:=&stubTool{manifest:toolsy.ToolManifest{Name:"acceptance"},execute:func(_ context.Context,_ *toolsy.RunEnv,_ toolsy.ToolInput,y func(toolsy.Chunk)error)error{
+ switch path {
+ case "hard","control","abort":return sentinel
+ case "panic":panic(raw)
+ case "rejected":_ = y(toolsy.Chunk{Data:[]byte(raw),MimeType:toolsy.MimeTypeText,IsError:true});return nil
+ default:return y(toolsy.Chunk{Data:[]byte(raw),MimeType:toolsy.MimeTypeText,IsError:path=="soft"})
+ }
+ }}
+ wrapped:=WithTracing(WithTracerProvider(tp),WithContentCapture(capture),WithLangfuseCompatibility(vendor),WithMaxPayloadSize(7),WithContentRedactor(func(_ ContentKind,s string)string{calls++;return strings.ReplaceAll(s,raw,"安全SAFE")}))(tool)
+ // Act.
+ var err error; var recovered any
+ func(){defer func(){recovered=recover()}();err=wrapped.Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(raw),CallID:"canonical"},func(toolsy.Chunk)error{if path=="rejected" {return sentinel};return nil})}()
+ // Assert.
+ require.Len(t,rec.Ended(),1); span:=rec.Ended()[0]
+ require.NotContains(t,spanContent(span),"SECRET")
+ if !capture { require.Zero(t,calls) }
+ if path=="hard"||path=="control"||path=="abort" {require.Same(t,sentinel,err)} else if path=="panic" {require.Equal(t,raw,recovered)} else {require.NoError(t,err)}
+ require.Equal(t,capture&&(path=="result"||path=="rejected"),hasAttrKey(span,"gen_ai.tool.call.result"))
+ require.Equal(t,path=="soft"||path=="hard"||path=="panic",span.Status().Code==codes.Error)
+ require.Equal(t,path=="control",hasAttrKey(span,"toolsy.tool.control_signal"));require.Equal(t,path=="abort",hasAttrKey(span,"toolsy.tool.stream_aborted"));require.Equal(t,path=="soft",hasAttrKey(span,"toolsy.tool.soft_error"))
+ require.True(t,hasAttrKey(span,"gen_ai.tool.call.id")); require.False(t,hasAttrKey(span,"gen_ai.tool.call_id"))
+ for _,a:=range span.Attributes(){k:=string(a.Key);if strings.HasPrefix(k,"langfuse."){require.True(t,vendor)};if strings.Contains(k,"arguments")||strings.Contains(k,"result")||strings.Contains(k,"output")||strings.Contains(k,"input")||k=="toolsy.tool.error"||strings.Contains(k,"text"){require.LessOrEqual(t,len(a.Value.AsString()),7);require.True(t,utf8.ValidString(a.Value.AsString()))}}
+ for _,e:=range span.Events(){for _,a:=range e.Attributes{require.LessOrEqual(t,len(a.Value.AsString()),7); require.True(t,utf8.ValidString(a.Value.AsString()))}}
+ if vendor&&capture&&path!="panic"{k:="toolsy.tool.output";if path=="hard"||path=="control"||path=="abort"{k="toolsy.tool.error"};a,_:=attrValue(span,k);b,_:=attrValue(span,"langfuse.observation.output");require.Equal(t,a,b)}
+ if path=="rejected"&&capture {a,_:=attrValue(span,"toolsy.tool.output");require.Empty(t,a.AsString());require.Equal(t,1,calls)}
+ })
+ }}}
+}
+func TestAcceptanceAInvalidUTF8RedactorOutput(t *testing.T) {
+ // Arrange: host redactor may return arbitrary Go strings; policy promises valid UTF8.
+ tp,rec:=newSpanRecorder();t.Cleanup(func(){_ = tp.Shutdown(context.Background())})
+ tool:=contentPolicyTool("hard","safe")
+ wrapped:=WithTracing(WithTracerProvider(tp),WithContentCapture(true),WithLangfuseCompatibility(true),WithMaxPayloadSize(7),WithContentRedactor(func(ContentKind,string)string{return string([]byte{0xff})}))(tool)
+ // Act.
+ _ = wrapped.Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte("safe")},func(toolsy.Chunk)error{return nil})
+ // Assert.
+ for _,a:=range rec.Ended()[0].Attributes(){require.True(t,utf8.ValidString(a.Value.AsString()),"invalid UTF8 %s",a.Key)}
+}
+
+func TestAcceptanceAUTF8TinyBudgets(t *testing.T) {
+ for _,cap:=range []int{1,2,3} {for _,redact:=range []bool{false,true} {for _,vendor:=range []bool{false,true} {for _,path:=range []string{"result","soft","hard","panic"} {
+ t.Run(fmt.Sprintf("cap%d/redact%t/vendor%t/%s",cap,redact,vendor,path),func(t *testing.T){
+ // Arrange: raw input/errors and redactor output can each contain invalid bytes.
+ raw:=string([]byte{0xff});tp,rec:=newSpanRecorder();t.Cleanup(func(){_ = tp.Shutdown(context.Background())})
+ opts:=[]Option{WithTracerProvider(tp),WithContentCapture(true),WithLangfuseCompatibility(vendor),WithMaxPayloadSize(cap)}
+ if redact {opts=append(opts,WithContentRedactor(func(ContentKind,string)string{return raw}))}
+ // Act.
+ executeContentPolicyPath(t,path,raw,contentPolicyTool(path,raw),opts)
+ // Assert: replacement rune needs three bytes; smaller budgets omit it, never split it.
+ require.Len(t,rec.Ended(),1);span:=rec.Ended()[0]
+ expected:="";if cap==3 {expected="\uFFFD"};args,ok:=attrValue(span,"gen_ai.tool.call.arguments");require.True(t,ok);require.Equal(t,expected,args.AsString())
+ for _,a:=range span.Attributes(){k:=string(a.Key);if strings.Contains(k,"arguments")||strings.Contains(k,"result")||strings.Contains(k,"output")||strings.Contains(k,"input")||k=="toolsy.tool.error"||strings.Contains(k,"text"){require.LessOrEqual(t,len(a.Value.AsString()),cap);require.True(t,utf8.ValidString(a.Value.AsString()))}}
+ for _,e:=range span.Events(){for _,a:=range e.Attributes{require.LessOrEqual(t,len(a.Value.AsString()),cap);require.True(t,utf8.ValidString(a.Value.AsString()))}}
+ if path=="hard" {v,ok:=attrValue(span,"toolsy.tool.error");require.True(t,ok);require.Equal(t,expected,v.AsString())}
+ })
+ }}}}
+}

@@ -147,6 +147,7 @@ func assertCapturedByteCap(t *testing.T, span sdktrace.ReadOnlySpan, limit int) 
 	check := func(key, value string) {
 		if strings.Contains(key, "input") || strings.Contains(key, "output") || strings.Contains(key, "arguments") ||
 			strings.Contains(key, "result") ||
+			strings.Contains(key, "error") ||
 			strings.Contains(key, "text") ||
 			strings.HasPrefix(key, "exception.") {
 			require.LessOrEqual(t, len(value), limit)

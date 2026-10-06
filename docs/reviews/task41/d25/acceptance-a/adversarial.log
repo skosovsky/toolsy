@@ -1,0 +1,68 @@
+=== RUN   TestAcceptanceAAdversarialMatrix
+=== RUN   TestAcceptanceAAdversarialMatrix/result/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/result/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/result/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/result/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/soft/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/soft/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/soft/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/soft/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/hard/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/hard/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/hard/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/hard/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/control/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/control/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/control/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/control/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/abort/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/abort/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/abort/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/abort/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/panic/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/panic/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/panic/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/panic/vendor=true/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/rejected/vendor=false/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/rejected/vendor=false/capture=true
+=== RUN   TestAcceptanceAAdversarialMatrix/rejected/vendor=true/capture=false
+=== RUN   TestAcceptanceAAdversarialMatrix/rejected/vendor=true/capture=true
+--- PASS: TestAcceptanceAAdversarialMatrix (0.05s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/result/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/result/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/result/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/result/vendor=true/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/soft/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/soft/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/soft/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/soft/vendor=true/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/hard/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/hard/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/hard/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/hard/vendor=true/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/control/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/control/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/control/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/control/vendor=true/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/abort/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/abort/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/abort/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/abort/vendor=true/capture=true (0.03s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/panic/vendor=false/capture=false (0.01s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/panic/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/panic/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/panic/vendor=true/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/rejected/vendor=false/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/rejected/vendor=false/capture=true (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/rejected/vendor=true/capture=false (0.00s)
+    --- PASS: TestAcceptanceAAdversarialMatrix/rejected/vendor=true/capture=true (0.00s)
+=== RUN   TestAcceptanceAInvalidUTF8RedactorOutput
+    acceptance_a_overlay_test.go:59: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/ext/toolsyotel/acceptance_a_overlay_test.go:59
+        	Error:      	Should be true
+        	Test:       	TestAcceptanceAInvalidUTF8RedactorOutput
+        	Messages:   	invalid UTF8 gen_ai.tool.call.arguments
+--- FAIL: TestAcceptanceAInvalidUTF8RedactorOutput (0.00s)
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/ext/toolsyotel	1.638s
