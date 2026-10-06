@@ -1,0 +1,12 @@
+package toolsy
+import("context";"testing")
+func BenchmarkR11PayloadFreeResult(b *testing.B){
+ for _,mode:=range []string{"empty","noop"}{b.Run(mode,func(b *testing.B){
+  result:=NewEmptyToolResult[string,string]();if mode=="noop"{result=NewNoopToolResult[string,string]()}
+  result.Audience=AudienceInternal;result.DeliveryClass=DeliveryClassText;result.EnvelopeMetadata=map[string]any{"private":true,"label":"internal"}
+  tool,err:=NewTypedTool(TypedToolSpec[NoSubject,NoScope,struct{},string,string]{Name:"empty",Description:"empty",Handler:func(context.Context,TypedCallContext[NoSubject,NoScope],*RunEnv,ValidatedArgs[struct{}])(ToolResult[string,string],error){return result,nil}});if err!=nil{b.Fatal(err)}
+  input:=ToolInput{ArgsJSON:[]byte(`{}`)};yield:=func(Chunk)error{return nil}
+  b.ReportAllocs();b.ResetTimer()
+  for b.Loop(){if err:=tool.Execute(b.Context(),nil,input,yield);err!=nil{b.Fatal(err)}}
+ })}
+}

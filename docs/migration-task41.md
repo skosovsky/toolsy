@@ -333,3 +333,61 @@ its own admission. At most maxCalls attempts can pass this gate under concurrenc
 This counter does not measure handler effects or successful results and does not
 model LLM/agent iterations. Checkpoints do not persist it; the host enforces durable
 budgets and supplies current policy/limits when restoring.
+
+## Empty delivery and result algebra (R11, D16)
+
+Empty results now always build their declared success envelope. Audience, delivery
+class and metadata survive direct execution, registry delivery, RunCall and result
+replay. Typed Value, effects and controls remain present; Data and MIME are absent.
+No fake JSON zero value is created.
+
+| Declaration | Typed/wire payload | Effects | Controls |
+|---|---|---|---|
+| Ordinary Value | Value plus JSON encoding | Allowed | Allowed |
+| Nonempty Raw | Value retained; Raw overrides wire only | Allowed | Allowed |
+| Empty | Value retained; wire absent | Allowed | Allowed |
+| Noop | Value retained; wire absent | Forbidden | Allowed |
+
+Empty and Noop are mutually exclusive. Either with nonempty Raw is invalid; Noop
+with Effects is invalid. RawMimeType without nonempty Raw is invalid. Raw defaults
+to application/octet-stream; an empty Raw slice alone is not a wire override.
+Use Empty for a result without a payload. Delivery class defaults to structured
+and audience to model when unspecified, including results without wire bytes.
+
+Clear break: NewNoopToolResult no longer serializes a zero TResult
+into wire bytes; its typed Value remains available. DecodeOutcomeAs returns
+an available typed Value; when absent, neither status has wire bytes to decode.
+ResultValidator is skipped for Empty/Noop; EffectValidator and
+Postcondition still run for valid declarations. Generic result chunks and replay
+validation reject contradictory flag/wire/effect combinations too. An error
+result cannot declare Empty/Noop success status. Invalid
+result algebra is an INTERNAL ResultContractError with Kind result_algebra and
+cause; the handler may already have caused effects, so this never permits blind
+redispatch. Noop is a host declaration, not proof of absence of external effects.
+
+Existing persisted results with Empty/Noop plus old wire bytes are incompatible.
+Typed values without wire bytes remain supported, including MCP protocol DTOs.
+Version host cache partitions/codecs or migrate records deliberately. Do not
+evict durable completed-operation/idempotency records to force a new dispatch;
+use trusted host migration/reconciliation while retaining the operation boundary.
+
+Generated nested json.RawMessage output now maps to an unrestricted JSON schema
+(true), accepting object/array/string/number/boolean/null instead of object only.
+Arguments retain their documented object default. Explicit host SchemaRegistry
+mappings override defaults at both boundaries; defaults are applied to a local
+schema-map copy and never mutate the shared registry. WithOutputSchema overrides
+automatic output inference. Top-level json.RawMessage/JSON marshaler/WireJSONResult
+wire shapes remain uninferred: set WithOutputSchema when shape constraints matter.
+Arbitrary custom nested marshaler shapes also need an explicit schema; reflection
+cannot infer them from storage types. Only JSON wire bytes are schema-validated;
+typed Value stays BYOT and may intentionally differ from Raw representation.
+
+Reflective snapshot cloning copies supported exported struct fields and
+pointer/map/slice/array values, preserving cycles and repeated references within
+one cloned value. Opaque private fields, functions/channels and pointer-map-key
+identity remain host-owned. Overlapping subslices with different lengths and
+separately cloned components do not promise a shared alias graph, backing-array
+capacity or universal identity preservation. Delivery is not a universal deep
+copy of every host object: keep borrowed typed values/opaque data immutable while
+they are consumed, and use a complete trusted ResultCodec for persistence. No
+JSON roundtrip is introduced to simulate cloning arbitrary BYOT types.

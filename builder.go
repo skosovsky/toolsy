@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/jsonschema-go/jsonschema"
+
 	"github.com/skosovsky/toolsy/internal/jsonschemax"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
@@ -118,7 +120,7 @@ func marshalToolResult(res any) ([]byte, error) {
 }
 
 func generateOutputSchema[R any](cfg SchemaConfig) (map[string]any, error) {
-	schemaMap, _, err := generateSchema[R](cfg)
+	schemaMap, _, err := generateSchemaWithRawDefault[R](cfg, &jsonschema.Schema{})
 	return schemaMap, err
 }
 

@@ -45,8 +45,8 @@ func DecodeOutcomeAs[T any](o ToolOutcome) (*T, error) {
 		}
 		return nil, NewSchemaError(fmt.Sprintf("typed outcome result is not requested type %T", *new(T)))
 	}
-	if o.EmptyResult {
-		return nil, NewSchemaError("cannot decode empty successful outcome")
+	if o.EmptyResult || o.Noop {
+		return nil, NewSchemaError("cannot decode successful outcome without a value")
 	}
 	chunk := Chunk{
 		Event:    EventResult,

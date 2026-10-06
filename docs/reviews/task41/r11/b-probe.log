@@ -1,0 +1,82 @@
+=== RUN   TestPublicCustomEncoding
+--- PASS: TestPublicCustomEncoding (0.00s)
+=== RUN   TestPublicRawPreservesTypedValue
+--- PASS: TestPublicRawPreservesTypedValue (0.00s)
+=== RUN   TestConcurrentSchemaDefaultsAndExplicitMapping
+--- PASS: TestConcurrentSchemaDefaultsAndExplicitMapping (0.41s)
+=== RUN   TestUntrustedReplayCannotBypassAlgebra
+--- PASS: TestUntrustedReplayCannotBypassAlgebra (0.01s)
+=== RUN   TestPublicPayloadFreeStatusAndValidators
+--- PASS: TestPublicPayloadFreeStatusAndValidators (0.00s)
+=== RUN   TestPublicGenericErrorCannotDeclareSuccessfulStatus
+--- PASS: TestPublicGenericErrorCannotDeclareSuccessfulStatus (0.00s)
+=== RUN   TestPublicNoWireRetainsUnencodableBYOT
+--- PASS: TestPublicNoWireRetainsUnencodableBYOT (0.00s)
+=== RUN   TestSupportedNoWireTypedCacheReplay
+--- PASS: TestSupportedNoWireTypedCacheReplay (0.00s)
+=== RUN   TestPublicCustomEncoding
+--- PASS: TestPublicCustomEncoding (0.00s)
+=== RUN   TestPublicRawPreservesTypedValue
+--- PASS: TestPublicRawPreservesTypedValue (0.00s)
+=== RUN   TestConcurrentSchemaDefaultsAndExplicitMapping
+--- PASS: TestConcurrentSchemaDefaultsAndExplicitMapping (0.30s)
+=== RUN   TestUntrustedReplayCannotBypassAlgebra
+--- PASS: TestUntrustedReplayCannotBypassAlgebra (0.00s)
+=== RUN   TestPublicPayloadFreeStatusAndValidators
+--- PASS: TestPublicPayloadFreeStatusAndValidators (0.02s)
+=== RUN   TestPublicGenericErrorCannotDeclareSuccessfulStatus
+--- PASS: TestPublicGenericErrorCannotDeclareSuccessfulStatus (0.00s)
+=== RUN   TestPublicNoWireRetainsUnencodableBYOT
+--- PASS: TestPublicNoWireRetainsUnencodableBYOT (0.01s)
+=== RUN   TestSupportedNoWireTypedCacheReplay
+--- PASS: TestSupportedNoWireTypedCacheReplay (0.00s)
+=== RUN   TestPublicCustomEncoding
+--- PASS: TestPublicCustomEncoding (0.00s)
+=== RUN   TestPublicRawPreservesTypedValue
+--- PASS: TestPublicRawPreservesTypedValue (0.00s)
+=== RUN   TestConcurrentSchemaDefaultsAndExplicitMapping
+--- PASS: TestConcurrentSchemaDefaultsAndExplicitMapping (0.27s)
+=== RUN   TestUntrustedReplayCannotBypassAlgebra
+--- PASS: TestUntrustedReplayCannotBypassAlgebra (0.01s)
+=== RUN   TestPublicPayloadFreeStatusAndValidators
+--- PASS: TestPublicPayloadFreeStatusAndValidators (0.00s)
+=== RUN   TestPublicGenericErrorCannotDeclareSuccessfulStatus
+--- PASS: TestPublicGenericErrorCannotDeclareSuccessfulStatus (0.00s)
+=== RUN   TestPublicNoWireRetainsUnencodableBYOT
+--- PASS: TestPublicNoWireRetainsUnencodableBYOT (0.00s)
+=== RUN   TestSupportedNoWireTypedCacheReplay
+--- PASS: TestSupportedNoWireTypedCacheReplay (0.00s)
+=== RUN   TestPublicCustomEncoding
+--- PASS: TestPublicCustomEncoding (0.00s)
+=== RUN   TestPublicRawPreservesTypedValue
+--- PASS: TestPublicRawPreservesTypedValue (0.00s)
+=== RUN   TestConcurrentSchemaDefaultsAndExplicitMapping
+--- PASS: TestConcurrentSchemaDefaultsAndExplicitMapping (0.22s)
+=== RUN   TestUntrustedReplayCannotBypassAlgebra
+--- PASS: TestUntrustedReplayCannotBypassAlgebra (0.00s)
+=== RUN   TestPublicPayloadFreeStatusAndValidators
+--- PASS: TestPublicPayloadFreeStatusAndValidators (0.00s)
+=== RUN   TestPublicGenericErrorCannotDeclareSuccessfulStatus
+--- PASS: TestPublicGenericErrorCannotDeclareSuccessfulStatus (0.00s)
+=== RUN   TestPublicNoWireRetainsUnencodableBYOT
+--- PASS: TestPublicNoWireRetainsUnencodableBYOT (0.00s)
+=== RUN   TestSupportedNoWireTypedCacheReplay
+--- PASS: TestSupportedNoWireTypedCacheReplay (0.00s)
+=== RUN   TestPublicCustomEncoding
+--- PASS: TestPublicCustomEncoding (0.00s)
+=== RUN   TestPublicRawPreservesTypedValue
+--- PASS: TestPublicRawPreservesTypedValue (0.00s)
+=== RUN   TestConcurrentSchemaDefaultsAndExplicitMapping
+--- PASS: TestConcurrentSchemaDefaultsAndExplicitMapping (0.15s)
+=== RUN   TestUntrustedReplayCannotBypassAlgebra
+--- PASS: TestUntrustedReplayCannotBypassAlgebra (0.00s)
+=== RUN   TestPublicPayloadFreeStatusAndValidators
+--- PASS: TestPublicPayloadFreeStatusAndValidators (0.00s)
+=== RUN   TestPublicGenericErrorCannotDeclareSuccessfulStatus
+--- PASS: TestPublicGenericErrorCannotDeclareSuccessfulStatus (0.00s)
+=== RUN   TestPublicNoWireRetainsUnencodableBYOT
+--- PASS: TestPublicNoWireRetainsUnencodableBYOT (0.00s)
+=== RUN   TestSupportedNoWireTypedCacheReplay
+--- PASS: TestSupportedNoWireTypedCacheReplay (0.00s)
+PASS
+ok  	task41r11b	2.910s

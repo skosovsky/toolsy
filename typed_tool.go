@@ -52,6 +52,10 @@ type TypedPolicyRequest[TSubject, TScope, TArgs any] struct {
 type TypedPolicy[TSubject, TScope, TArgs any] func(context.Context, TypedPolicyRequest[TSubject, TScope, TArgs]) Decision
 
 // ToolResult is the typed result/effects contract returned by production typed tools.
+// Empty and Noop are exclusive statuses without wire bytes; they retain Value.
+// Empty may declare effects; Noop may not. Both may declare controls. Nonempty Raw replaces
+// wire encoding only, preserving Value, and cannot accompany Empty or Noop.
+// RawMimeType requires nonempty Raw; otherwise ordinary Value is encoded as JSON.
 type ToolResult[TResult, TEffect any] struct {
 	Value            TResult
 	Empty            bool
@@ -81,7 +85,8 @@ func NewToolResult[TResult, TEffect any](value TResult) ToolResult[TResult, TEff
 	}
 }
 
-// NewEmptyToolResult returns an intentional successful no-op/empty result.
+// NewEmptyToolResult returns a successful result without a wire payload.
+// It may report effects and controls; this does not assert absence of side effects.
 func NewEmptyToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 	var zero TResult
 	return ToolResult[TResult, TEffect]{
@@ -98,7 +103,9 @@ func NewEmptyToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 	}
 }
 
-// NewNoopToolResult returns an intentional successful no-op result.
+// NewNoopToolResult declares no effects and carries no wire payload.
+// Controls and delivery metadata are allowed; this declaration does not prove
+// that an arbitrary host handler performed no external side effect.
 func NewNoopToolResult[TResult, TEffect any]() ToolResult[TResult, TEffect] {
 	var zero TResult
 	return ToolResult[TResult, TEffect]{
@@ -299,6 +306,12 @@ func emitTypedToolResult[TResult, TEffect any](
 	postcondition PostconditionValidator[TResult, TEffect],
 	yield func(Chunk) error,
 ) error {
+	if err := validateResultFlags(res.Empty, res.Noop, len(res.Raw), len(res.Effects)); err != nil {
+		return err
+	}
+	if res.RawMimeType != "" && len(res.Raw) == 0 {
+		return invalidResultAlgebra("RawMimeType requires nonempty Raw")
+	}
 	if resultValidator != nil && !res.Empty && !res.Noop {
 		resultErr := resultValidator(res.Value)
 		if resultErr != nil {
@@ -341,14 +354,14 @@ func chunkFromToolResult[TResult, TEffect any](res ToolResult[TResult, TEffect])
 		Controls:    append([]ControlSignal(nil), res.Controls...),
 	}
 	switch {
+	case res.Empty || res.Noop:
+		// Retain the BYOT value without serializing it into wire bytes.
 	case len(res.Raw) > 0:
 		chunk.Data = append([]byte(nil), res.Raw...)
 		chunk.MimeType = res.RawMimeType
 		if chunk.MimeType == "" {
 			chunk.MimeType = MimeTypeOctetStream
 		}
-	case res.Empty:
-		return chunk, nil
 	default:
 		data, err := marshalToolResult(res.Value)
 		if err != nil {
@@ -358,7 +371,7 @@ func chunkFromToolResult[TResult, TEffect any](res ToolResult[TResult, TEffect])
 		chunk.MimeType = MimeTypeJSON
 	}
 	chunk.Envelope = NewResultEnvelope(
-		res.Value,
+		chunk.TypedResult,
 		chunk.Data,
 		chunk.MimeType,
 		res.DeliveryClass,

@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted, awaiting its commit; rows 11–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted (commit pending); rows 12–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -389,3 +389,39 @@ A 32-name constructor adds 2048B/four allocations for independent snapshots;
 short timing samples are not a latency guarantee. Clear-break migration includes
 catalog/selection separation and the MAX_CALLS_EXCEEDED wire code. Commit hash
 is recorded in the next row.
+
+### 11 — R11 / D16 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Empty typed results always build a success envelope with audience, delivery
+   class and metadata; wire bytes stay absent, while typed Value, effects/controls and
+   result status survive direct, registry, RunCall and cached replay paths.
+2. Explicit result algebra: Empty/Noop are exclusive statuses without wire bytes; Noop
+   cannot declare effects. Nonempty Raw overrides only wire encoding, retaining
+   the typed Value; Raw conflicts with Empty/Noop. Stray RawMimeType is rejected.
+   Generic result chunks/replays enforce the same flag/wire/effect invariants;
+   typed values are preserved, including empty MCP wire projections.
+   Post-handler contract errors preserve classification and never authorize retry.
+3. Audit exact output schemas before changing mappings: nested RawMessage output
+   supports any valid JSON, while args retain the documented object default;
+   explicit host type mappings override defaults without shared-registry mutation.
+   Top-level custom encoders require explicit output schemas for shape constraints.
+4. BYOT clone limits are explicit: exported data and cycles within one cloned
+   value, host-owned opaque fields/functions/channels/map keys, no general alias
+   graph or serializer guarantee across independent components/overlapping slices.
+5. AAA representation/envelope/schema/cache regressions and affected race/lint
+   pass; baseline probes fail for the defects, current migration describes breaks;
+   two independent reviewers accept 100% with no unresolved detected errors.
+
+Decision: Empty omits wire bytes and may report effects/control; Noop omits wire
+bytes and declares no effects. Both retain typed Value. Raw is only an explicit nonempty wire representation
+of Value, with output-schema validation applying to JSON wire bytes.
+
+
+Evidence: [R11 acceptance](task41/r11-acceptance.md). Independent reviewers
+`r11_acceptance_a` and `r11_acceptance_b` each accepted the final retained-Value
+contract at 100%, with no unresolved detected defects. Both repeated root/MCP
+race checks and adversarial probes after the contract revision. Parent all 24
+modules pass race tests, root lint reports zero issues, and baseline behavioral
+failures now pass. Commit hash is recorded in the next row.

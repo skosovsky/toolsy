@@ -53,8 +53,6 @@ func ensureSchemaConfig(cfg SchemaConfig) SchemaConfig {
 	if cfg.Registry == nil {
 		cfg.Registry = NewSchemaRegistry()
 	}
-	// json.RawMessage is []byte; default jsonschema maps it to "array". Tool args use it for JSON objects.
-	cfg.Registry.RegisterType(json.RawMessage(nil), "object", "")
 	return cfg
 }
 
@@ -77,8 +75,19 @@ func (r *SchemaRegistry) buildTypeSchemas() map[reflect.Type]*jsonschema.Schema 
 // It is called once when building a Tool. cfg.Strict sets additionalProperties: false
 // for all objects (OpenAI Structured Outputs). cfg.Registry controls custom type mappings.
 func generateSchema[T any](cfg SchemaConfig) (map[string]any, schemaValidator, error) {
+	return generateSchemaWithRawDefault[T](cfg, &jsonschema.Schema{Type: "object"})
+}
+
+func generateSchemaWithRawDefault[T any](
+	cfg SchemaConfig,
+	rawDefault *jsonschema.Schema,
+) (map[string]any, schemaValidator, error) {
 	cfg = ensureSchemaConfig(cfg)
-	opts := &jsonschema.ForOptions{TypeSchemas: cfg.Registry.buildTypeSchemas()}
+	typeSchemas := cfg.Registry.buildTypeSchemas()
+	if _, overridden := typeSchemas[reflect.TypeFor[json.RawMessage]()]; !overridden {
+		typeSchemas[reflect.TypeFor[json.RawMessage]()] = rawDefault
+	}
+	opts := &jsonschema.ForOptions{TypeSchemas: typeSchemas}
 	schema, err := jsonschema.For[T](opts)
 	if err != nil {
 		return nil, nil, err

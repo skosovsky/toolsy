@@ -504,6 +504,23 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 - Registry-level: prefer `WithPolicy`; `WithAuthorizer` and `WithAuthorization` accept `AuthorizationRequest` with manifest, input, call context, and view identity.
 - Result cache: mark eligible tools with `WithIdempotent()`, create `NewResultCache(store, partition, codec, maxBytes)` and install it with `WithExecutionProfile`. Binding and current typed policy run before replay; the host provides a trusted partition and complete outcome codec. This cache does not guarantee atomic duplicate dispatch. See [execution contract](docs/execution-contract.md).
 
+### Typed result representations
+
+`ToolResult` has explicit payload states. Ordinary Value is JSON encoded;
+nonempty Raw replaces only its wire representation and retains the typed Value.
+RawMimeType applies only with nonempty Raw (default application/octet-stream).
+Empty and Noop omit wire bytes while retaining typed Value and delivery
+metadata/controls, and are mutually exclusive. Empty may report effects; Noop
+cannot declare effects. Contradictory declarations return an INTERNAL
+ResultContractError after the handler, without permission to retry its effects.
+
+Nested json.RawMessage in generated output schemas accepts any JSON value;
+explicit SchemaRegistry type mappings override that default. Input RawMessage
+keeps its object default. Top-level RawMessage/custom encoders need
+WithOutputSchema to constrain their wire shape. Explicit output schemas take
+precedence; JSON wire bytes are validated without re-encoding arbitrary BYOT
+values. See [task41 migration](docs/migration-task41.md).
+
 ### Session tool choice (RunPolicy)
 
 `RunPolicy` is captured by value: AllowedTools and CatalogRequiredTools slices

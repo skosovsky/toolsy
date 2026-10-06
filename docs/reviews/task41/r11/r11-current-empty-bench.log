@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkR11PayloadFreeResult/empty-10         	   43105	      8645 ns/op	    5812 B/op	      79 allocs/op
+BenchmarkR11PayloadFreeResult/empty-10         	   44514	      5397 ns/op	    5812 B/op	      79 allocs/op
+BenchmarkR11PayloadFreeResult/empty-10         	   50203	      5609 ns/op	    5812 B/op	      79 allocs/op
+BenchmarkR11PayloadFreeResult/noop-10          	   46783	     12235 ns/op	    5811 B/op	      79 allocs/op
+BenchmarkR11PayloadFreeResult/noop-10          	   10000	     28569 ns/op	    5811 B/op	      79 allocs/op
+BenchmarkR11PayloadFreeResult/noop-10          	   10000	     30166 ns/op	    5811 B/op	      79 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	2.699s

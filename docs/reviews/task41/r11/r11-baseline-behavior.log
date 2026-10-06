@@ -1,0 +1,29 @@
+=== RUN   TestR11EmptyEnvelopeBehaviorProbe
+    result_delivery_probe_test.go:13: audience=model class=structured metadata=map[] typed=""
+    result_delivery_probe_test.go:14: 
+        	Error Trace:	/private/tmp/toolsy-task41/r11-baseline/result_delivery_probe_test.go:14
+        	Error:      	Not equal: 
+        	            	expected: "internal"
+        	            	actual  : "model"
+        	            	
+        	            	Diff:
+        	            	--- Expected
+        	            	+++ Actual
+        	            	@@ -1,2 +1,2 @@
+        	            	-(toolsy.ToolAudience) (len=8) "internal"
+        	            	+(toolsy.ToolAudience) (len=5) "model"
+        	            	 
+        	Test:       	TestR11EmptyEnvelopeBehaviorProbe
+--- FAIL: TestR11EmptyEnvelopeBehaviorProbe (0.00s)
+=== RUN   TestR11RawMemberSchemaBehaviorProbe
+    result_delivery_probe_test.go:23: schema=map[string]interface {}{"additionalProperties":false, "properties":map[string]interface {}{"body":map[string]interface {}{"type":"object"}}, "required":[]interface {}{"body"}, "type":"object"}; delivery=INTERNAL: internal error
+    result_delivery_probe_test.go:24: 
+        	Error Trace:	/private/tmp/toolsy-task41/r11-baseline/result_delivery_probe_test.go:24
+        	Error:      	Received unexpected error:
+        	            	INTERNAL: internal error
+        	Test:       	TestR11RawMemberSchemaBehaviorProbe
+        	Messages:   	RawMessage output must admit its actual JSON shape
+--- FAIL: TestR11RawMemberSchemaBehaviorProbe (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	1.008s
+FAIL

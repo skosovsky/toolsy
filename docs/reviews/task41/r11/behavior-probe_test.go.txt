@@ -1,0 +1,25 @@
+package toolsy
+import("context";"encoding/json";"testing";"github.com/stretchr/testify/require")
+func TestR11EmptyEnvelopeBehaviorProbe(t *testing.T){
+ // Arrange.
+ tool,err:=NewTypedTool(TypedToolSpec[NoSubject,NoScope,struct{},string,string]{Name:"empty",Description:"empty",Handler:func(context.Context,TypedCallContext[NoSubject,NoScope],*RunEnv,ValidatedArgs[struct{}])(ToolResult[string,string],error){
+  result:=NewEmptyToolResult[string,string]();result.Audience=AudienceInternal;result.DeliveryClass=DeliveryClassText;result.EnvelopeMetadata=map[string]any{"private":true};return result,nil
+ }});require.NoError(t,err)
+ var output Chunk
+ // Act.
+ err=tool.Execute(t.Context(),nil,ToolInput{ArgsJSON:[]byte(`{}`)},func(c Chunk)error{output=c;return nil})
+ // Assert.
+ require.NoError(t,err)
+ env:=output.ToolEnvelope();t.Logf("audience=%s class=%s metadata=%v typed=%#v",env.Audience,env.DeliveryClass,env.Metadata,output.TypedResult)
+ require.Equal(t,AudienceInternal,env.Audience);require.Equal(t,DeliveryClassText,env.DeliveryClass);require.Equal(t,true,env.Metadata["private"])
+}
+func TestR11RawMemberSchemaBehaviorProbe(t *testing.T){
+ // Arrange.
+ type output struct{Body json.RawMessage `json:"body"`}
+ tool,err:=NewTool("raw","raw",func(context.Context,*RunEnv,struct{})(output,error){return output{Body:json.RawMessage(`true`)},nil});require.NoError(t,err)
+ // Act.
+ err=tool.Execute(t.Context(),nil,ToolInput{ArgsJSON:[]byte(`{}`)},func(Chunk)error{return nil})
+ // Assert.
+ t.Logf("schema=%#v; delivery=%v",tool.Manifest().OutputSchema,err)
+ require.NoError(t,err,"RawMessage output must admit its actual JSON shape")
+}

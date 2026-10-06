@@ -1,0 +1,143 @@
+package r11b
+
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "sync"
+ "testing"
+ toolsy "github.com/skosovsky/toolsy"
+)
+
+type wireHost struct { Opaque chan int }
+func (wireHost) MarshalJSON() ([]byte,error) { return []byte(`false`),nil }
+func TestPublicCustomEncoding(t *testing.T) {
+ // Arrange: reflection cannot infer the host marshaler's boolean wire shape.
+ makeTool:=func(schema map[string]any) toolsy.Tool {
+  tool,err:=toolsy.NewTool("custom","custom",func(context.Context,*toolsy.RunEnv,struct{})(wireHost,error){ return wireHost{Opaque:make(chan int)},nil },toolsy.WithOutputSchema(schema))
+  if err!=nil {t.Fatal(err)}; return tool
+ }
+ good:=makeTool(map[string]any{"type":"boolean"}); bad:=makeTool(map[string]any{"type":"object"})
+ // Act and assert.
+ if err:=good.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(c toolsy.Chunk)error{if string(c.Data)!="false" {t.Fatal(string(c.Data))};return nil});err!=nil {t.Fatal(err)}
+ err:=bad.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(toolsy.Chunk)error{t.Fatal("invalid shape delivered");return nil})
+ var contract *toolsy.ResultContractError
+ if !errors.As(err,&contract) {t.Fatalf("missing contract error: %v",err)}
+}
+
+func TestPublicRawPreservesTypedValue(t *testing.T) {
+ // Arrange: explicit wire override intentionally differs from host Value.
+ tool,err:=toolsy.NewTypedTool(toolsy.TypedToolSpec[toolsy.NoSubject,toolsy.NoScope,struct{},int,string]{Name:"raw",Description:"raw",Options:[]toolsy.ToolOption{toolsy.WithOutputSchema(map[string]any{"type":"boolean"})},Handler:func(context.Context,toolsy.TypedCallContext[toolsy.NoSubject,toolsy.NoScope],*toolsy.RunEnv,toolsy.ValidatedArgs[struct{}])(toolsy.ToolResult[int,string],error){r:=toolsy.NewToolResult[int,string](9);r.Raw=[]byte(`false`);r.RawMimeType=toolsy.MimeTypeJSON;return r,nil}})
+ if err!=nil {t.Fatal(err)}
+ // Act.
+ var got toolsy.Chunk
+ err=tool.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(c toolsy.Chunk)error{got=c;return nil})
+ // Assert.
+ if err!=nil {t.Fatal(err)}
+ if string(got.Data)!="false" || got.TypedResult!=9 || got.Envelope.Result!=9 {t.Fatalf("lost override/value: %#v",got)}
+}
+
+type rawFields struct { Values []json.RawMessage `json:"values"`; Optional *json.RawMessage `json:"optional"` }
+func TestConcurrentSchemaDefaultsAndExplicitMapping(t *testing.T) {
+ // Arrange: one shared schema registry, independent builders with pointer/slice RawMessage.
+ registry:=toolsy.NewSchemaRegistry(); var wg sync.WaitGroup
+ build:=func() { defer wg.Done(); for range 20 {
+  value:=json.RawMessage(`null`)
+  tool,err:=toolsy.NewTool("schema","schema",func(context.Context,*toolsy.RunEnv,struct{})(rawFields,error){return rawFields{Values:[]json.RawMessage{json.RawMessage(`true`),json.RawMessage(`[1]`)},Optional:&value},nil},toolsy.WithSchemaRegistry(registry))
+  if err!=nil {t.Error(err);return}
+  err=tool.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(toolsy.Chunk)error{return nil})
+  if err!=nil {t.Error(err);return}
+ }}
+ // Act.
+ for range 6 {wg.Add(1);go build()};wg.Wait()
+ registry.RegisterType(json.RawMessage(nil),"string","")
+ explicit,err:=toolsy.NewTool("explicit","explicit",func(context.Context,*toolsy.RunEnv,struct{})(rawFields,error){v:=json.RawMessage(`"s"`);return rawFields{Values:[]json.RawMessage{v},Optional:&v},nil},toolsy.WithSchemaRegistry(registry))
+ // Assert: earlier implicit defaults never override an explicit host mapping.
+ if err!=nil {t.Fatal(err)}
+ if err=explicit.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(toolsy.Chunk)error{return nil});err!=nil {t.Fatal(err)}
+}
+
+type alwaysFound struct{}
+func(alwaysFound)Get(context.Context,string)([]byte,bool,error){return []byte(`stored`),true,nil}
+func(alwaysFound)Put(context.Context,string,[]byte)error{panic("unexpected put")}
+type invalidCodec struct {chunk toolsy.Chunk}
+func(invalidCodec)EncodeResult(toolsy.Chunk)([]byte,error){panic("unexpected encode")}
+func(c invalidCodec)DecodeResult([]byte)(toolsy.Chunk,error){return c.chunk,nil}
+func TestUntrustedReplayCannotBypassAlgebra(t *testing.T) {
+ for _,chunk:=range []toolsy.Chunk{{Event:toolsy.EventResult,Noop:true,Effects:[]any{"old-effect"}},{Event:toolsy.EventResult,EmptyResult:true,Noop:true},{Event:toolsy.EventResult,Noop:true,Data:[]byte(`7`),MimeType:toolsy.MimeTypeJSON}} {
+  // Arrange: persisted contradictory legacy payload supplied by host codec.
+  cache,err:=toolsy.NewResultCache(alwaysFound{},func(context.Context,toolsy.PreparedCall)(string,error){return "scope",nil},invalidCodec{chunk:chunk},0);if err!=nil{t.Fatal(err)}
+  calls:=0
+  tool,err:=toolsy.NewTool("cached","cached",func(context.Context,*toolsy.RunEnv,struct{})(int,error){calls++;return 1,nil},toolsy.WithIdempotent());if err!=nil{t.Fatal(err)}
+  reg,err:=toolsy.NewRegistryBuilder(toolsy.WithExecutionProfile(cache)).Add(tool).Build();if err!=nil{t.Fatal(err)}
+  // Act.
+  err=reg.Execute(t.Context(),toolsy.ToolCall{ToolName:"cached",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}},func(toolsy.Chunk)error{t.Fatal("invalid replay delivered");return nil})
+  // Assert: no blind redispatch of persisted operation.
+  var contract *toolsy.ResultContractError
+  te,ok:=toolsy.AsToolError(err)
+  if !ok || te.Code!=toolsy.CodeInternal || te.Retryable || !errors.As(err,&contract) || contract.Kind!="result_algebra" || calls!=0 {t.Fatalf("algebra bypass: calls=%d err=%v",calls,err)}
+ }
+}
+
+func TestPublicPayloadFreeStatusAndValidators(t *testing.T) {
+ for _,noop:=range []bool{false,true} {
+  // Arrange: payload-free statuses ignore an unserializable host value; validators still receive effects/postcondition.
+  results,effects,posts:=0,0,0
+  tool,err:=toolsy.NewTypedTool(toolsy.TypedToolSpec[toolsy.NoSubject,toolsy.NoScope,struct{},wireHost,string]{Name:"free",Description:"free",ResultValidator:func(wireHost)error{results++;return errors.New("must skip")},EffectValidator:func([]string)error{effects++;return nil},Postcondition:func(toolsy.ToolResult[wireHost,string])error{posts++;return nil},Handler:func(context.Context,toolsy.TypedCallContext[toolsy.NoSubject,toolsy.NoScope],*toolsy.RunEnv,toolsy.ValidatedArgs[struct{}])(toolsy.ToolResult[wireHost,string],error){r:=toolsy.NewToolResult[wireHost,string](wireHost{Opaque:make(chan int)});r.Empty=!noop;r.Noop=noop;r.Audience=toolsy.AudienceInternal;r.DeliveryClass=toolsy.DeliveryClassText;r.EnvelopeMetadata=map[string]any{"source":"host"};r.Controls=[]toolsy.ControlSignal{&toolsy.PauseSignal{Reason:"review"}};return r,nil}})
+  if err!=nil{t.Fatal(err)}
+  reg,err:=toolsy.NewRegistryBuilder().Add(tool).Build();if err!=nil{t.Fatal(err)}
+  session,err:=toolsy.NewSession(reg);if err!=nil{t.Fatal(err)}
+  // Act.
+  got,err:=session.RunCall(t.Context(),toolsy.ToolCall{ToolName:"free",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}})
+  // Assert.
+  want:=toolsy.OutcomeEmptySuccess;if noop{want=toolsy.OutcomeNoopSuccess}
+  if err!=nil || got.Status!=want || got.TypedResult==nil || got.Envelope.Result==nil || len(got.Result)!=0 || got.Envelope.Audience!=toolsy.AudienceInternal || got.Envelope.Metadata["source"]!="host" || len(got.Controls)!=1 || results!=0 || effects!=1 || posts!=1 {t.Fatalf("lost payload-free semantics: %#v err=%v validators=%d/%d/%d",got,err,results,effects,posts)}
+ }
+}
+
+func TestPublicGenericErrorCannotDeclareSuccessfulStatus(t *testing.T) {
+ for _,noop:=range []bool{false,true} {
+  // Arrange: producer deliberately ignores validation error; the execution wrapper must retain it.
+  tool,err:=toolsy.NewProxyTool("invalid","invalid",[]byte(`{"type":"object"}`),func(_ context.Context,_ *toolsy.RunEnv,_ []byte,yield func(toolsy.Chunk)error)error{c:=toolsy.NewErrorChunkFromErr(toolsy.NewValidationError("business"));c.EmptyResult=!noop;c.Noop=noop;_ = yield(c);return nil})
+  if err!=nil {t.Fatal(err)}
+  // Act.
+  err=tool.Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:[]byte(`{}`)},func(toolsy.Chunk)error{t.Fatal("contradiction delivered");return nil})
+  // Assert.
+  var contract *toolsy.ResultContractError
+  te,ok:=toolsy.AsToolError(err)
+  if !ok || te.Code!=toolsy.CodeInternal || te.Retryable || !errors.As(err,&contract) || contract.Kind!="result_algebra" {t.Fatalf("error flags bypass: %v",err)}
+ }
+}
+
+type neverEncode struct { Borrowed chan int }
+func (neverEncode) MarshalJSON()([]byte,error){panic("Empty/Noop must not serialize Value")}
+func TestPublicNoWireRetainsUnencodableBYOT(t *testing.T) {
+ for _,noop:=range []bool{false,true} {
+  // Arrange: a host type whose serializer must never run on no-wire success.
+  borrowed:=make(chan int)
+  tool,err:=toolsy.NewTypedTool(toolsy.TypedToolSpec[toolsy.NoSubject,toolsy.NoScope,struct{},neverEncode,string]{Name:"opaque",Description:"opaque",Handler:func(context.Context,toolsy.TypedCallContext[toolsy.NoSubject,toolsy.NoScope],*toolsy.RunEnv,toolsy.ValidatedArgs[struct{}])(toolsy.ToolResult[neverEncode,string],error){r:=toolsy.NewToolResult[neverEncode,string](neverEncode{Borrowed:borrowed});r.Empty=!noop;r.Noop=noop;return r,nil}})
+  if err!=nil{t.Fatal(err)}
+  reg,err:=toolsy.NewRegistryBuilder().Add(tool).Build();if err!=nil{t.Fatal(err)}
+  session,err:=toolsy.NewSession(reg);if err!=nil{t.Fatal(err)}
+  // Act.
+  got,err:=session.RunCall(t.Context(),toolsy.ToolCall{ToolName:"opaque",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}})
+  typed,decodeErr:=toolsy.DecodeOutcomeAs[neverEncode](got)
+  // Assert: wire absent, host data retained, no JSON substitute for BYOT.
+  if err!=nil || decodeErr!=nil || typed.Borrowed!=borrowed || got.Envelope.Result.(neverEncode).Borrowed!=borrowed || len(got.Result)!=0 || got.ResultMimeType!="" {t.Fatalf("BYOT loss: %#v %v %v",got,err,decodeErr)}
+ }
+}
+
+func TestSupportedNoWireTypedCacheReplay(t *testing.T) {
+ for _,noop:=range []bool{false,true} {
+  // Arrange: a host codec restores an Empty/Noop protocol-style typed DTO.
+  chunk:=toolsy.Chunk{Event:toolsy.EventResult,EmptyResult:!noop,Noop:noop,TypedResult:7}
+  cache,err:=toolsy.NewResultCache(alwaysFound{},func(context.Context,toolsy.PreparedCall)(string,error){return "scope",nil},invalidCodec{chunk:chunk},0);if err!=nil{t.Fatal(err)}
+  tool,err:=toolsy.NewTool("cached","cached",func(context.Context,*toolsy.RunEnv,struct{})(int,error){t.Fatal("must replay");return 1,nil},toolsy.WithIdempotent());if err!=nil{t.Fatal(err)}
+  reg,err:=toolsy.NewRegistryBuilder(toolsy.WithExecutionProfile(cache)).Add(tool).Build();if err!=nil{t.Fatal(err)}
+  // Act.
+  var got toolsy.Chunk
+  err=reg.Execute(t.Context(),toolsy.ToolCall{ToolName:"cached",Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}},func(c toolsy.Chunk)error{got=c;return nil})
+  // Assert.
+  if err!=nil || got.TypedResult!=7 || got.Envelope.Result!=7 || len(got.Data)!=0 || got.Envelope.Metadata[toolsy.CacheReplayMetadata]!=true || got.EmptyResult!=!noop || got.Noop!=noop {t.Fatalf("lost no-wire typed replay: %#v %v",got,err)}
+ }
+}

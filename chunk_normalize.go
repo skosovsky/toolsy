@@ -23,6 +23,11 @@ func validateChunk(c Chunk) error {
 		}
 		return nil
 	}
+	if c.Event == EventResult {
+		if err := validateResultChunkAlgebra(c); err != nil {
+			return err
+		}
+	}
 	if c.IsError {
 		return validateErrorChunk(c)
 	}
@@ -38,6 +43,33 @@ func validateChunk(c Chunk) error {
 		}
 	}
 	return nil
+}
+
+func validateResultChunkAlgebra(c Chunk) error {
+	if c.IsError && (c.EmptyResult || c.Noop) {
+		return invalidResultAlgebra("error result cannot declare Empty/Noop success status")
+	}
+	if err := validateResultFlags(c.EmptyResult, c.Noop, len(c.Data), len(c.Effects)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateResultFlags(empty, noop bool, wireBytes, effects int) error {
+	switch {
+	case empty && noop:
+		return invalidResultAlgebra("Empty and Noop are exclusive")
+	case (empty || noop) && wireBytes != 0:
+		return invalidResultAlgebra("Empty/Noop result carries wire bytes")
+	case noop && effects != 0:
+		return invalidResultAlgebra("Noop cannot declare effects")
+	default:
+		return nil
+	}
+}
+
+func invalidResultAlgebra(reason string) error {
+	return NewInternalError(&ResultContractError{Kind: "result_algebra", Cause: errors.New(reason)})
 }
 
 func validateErrorChunk(c Chunk) error {
