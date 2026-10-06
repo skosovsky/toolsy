@@ -1,0 +1,16 @@
+--- FAIL: TestD09PublicMutationAndHandlerProbe (0.00s)
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/nil-env-put (0.00s)
+        d09_probe_test.go:13: required mutation returned 0 values, want inspectable error
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/nil-env-state (0.00s)
+        d09_probe_test.go:14: required mutation returned 0 values, want inspectable error
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/unbound-state (0.00s)
+        d09_probe_test.go:15: required mutation returned 0 values, want inspectable error
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/nil-session-state (0.00s)
+        d09_probe_test.go:16: required mutation returned 0 values, want inspectable error
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/nil-generic-handler (0.00s)
+        d09_probe_test.go:22: nil handler accepted: tool=true err=<nil>
+    --- FAIL: TestD09PublicMutationAndHandlerProbe/nil-stream-handler (0.00s)
+        d09_probe_test.go:27: nil handler accepted: tool=true err=<nil>
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.878s
+FAIL

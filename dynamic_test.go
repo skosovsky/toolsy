@@ -133,7 +133,7 @@ func TestNewDynamicToolFromSpec_NilHandler(t *testing.T) {
 		Handler:     nil,
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "dynamic tool handler must not be nil")
+	assert.ErrorIs(t, err, ErrToolHandlerNil)
 }
 
 func TestNewDynamicToolFromSpec_ErrorClassification(t *testing.T) {

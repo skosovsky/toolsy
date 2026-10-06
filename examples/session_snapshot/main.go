@@ -23,7 +23,9 @@ func main() {
 	reg := mustRegistry()
 	sess := mustSession(reg)
 
-	toolsy.SetSessionState(sess, stateKey, agentPrefs{Locale: "ru", Count: demoCount})
+	if err := toolsy.SetSessionState(sess, stateKey, agentPrefs{Locale: "ru", Count: demoCount}); err != nil {
+		log.Fatal(err)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	if err != nil {

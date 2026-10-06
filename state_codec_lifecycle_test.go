@@ -21,7 +21,9 @@ func TestSessionFreezesEveryCodecRegistrar(t *testing.T) {
 			require.NoError(t, RegisterJSONCodec[int](codecs, "value", WithStateSlotRequired()))
 			session, err := NewSession(nil, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true))
 			require.NoError(t, err)
-			SetSessionState(session, "value", 7)
+			if mutationErr := SetSessionState(session, "value", 7); mutationErr != nil {
+				t.Error(mutationErr)
+			}
 			before := session.Binding()
 			// Act.
 			var registrationErr error
@@ -129,7 +131,9 @@ func TestConcurrentCodecRegistrationAndSessionConstruction(t *testing.T) {
 		for outcome := range outcomes {
 			if outcome.err == nil {
 				admitted++
-				SetSessionState(session, outcome.key, 7)
+				if mutationErr := SetSessionState(session, outcome.key, 7); mutationErr != nil {
+					t.Error(mutationErr)
+				}
 			} else {
 				require.ErrorIs(t, outcome.err, ErrStateCodecRegistryFrozen)
 			}
@@ -161,10 +165,12 @@ func TestRequiredSlotMissingCannotExportCheckpoint(t *testing.T) {
 	// Assert.
 	require.Error(t, err)
 	require.Empty(t, checkpoint)
-	SetSessionState[any](session, "required", nil)
+	require.NoError(t, SetSessionState[any](session, "required", nil))
 	_, err = session.ExportSnapshot()
 	require.Error(t, err)
-	SetSessionState(session, "required", 7)
+	if mutationErr := SetSessionState(session, "required", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	checkpoint, err = session.ExportCheckpoint()
 	require.NoError(t, err)
 	_, err = NewSessionFromCheckpoint(nil, checkpoint, WithStateCodecRegistry(codecs))
@@ -199,7 +205,7 @@ func TestRequiredNullableStateCheckpoint(t *testing.T) {
 			)
 			session, err := NewSession(nil, WithStateCodecRegistry(codecs))
 			require.NoError(t, err)
-			SetSessionState[*int](session, "value", nil)
+			require.NoError(t, SetSessionState[*int](session, "value", nil))
 			// Act.
 			checkpoint, err := session.ExportCheckpoint()
 			// Assert.
@@ -229,7 +235,9 @@ func TestCheckpointRestoreUsesCurrentHostPolicyAndBudget(t *testing.T) {
 	require.NoError(t, err)
 	original, err := NewSession(registry, WithMaxCalls(2), WithRunPolicy(RunPolicy{ForcedTool: "value"}))
 	require.NoError(t, err)
-	SetSessionState(original, "persisted", 7)
+	if mutationErr := SetSessionState(original, "persisted", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	call := ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}}
 	yield := func(Chunk) error { return nil }
 	for range 2 {
@@ -257,7 +265,9 @@ func TestSessionStatePreservesHostAliases(t *testing.T) {
 	session, err := NewSession(nil)
 	require.NoError(t, err)
 	value := map[string]int{"count": 1}
-	SetSessionState(session, "value", value)
+	if mutationErr := SetSessionState(session, "value", value); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	// Act: the host serializes this mutation; state slots do not deep-copy values.
 	read, ok := GetSessionState[map[string]int](session, "value")
 	read["count"] = 2
@@ -280,15 +290,21 @@ func TestFailedHydrationDoesNotRollbackHostCallbackWrites(t *testing.T) {
 	var session *Session
 	codecs := NewStateCodecRegistry()
 	require.NoError(t, RegisterStateCodec[int](codecs, "value", failingReentryCodec{callback: func() {
-		SetSessionState(session, "host-write", 9)
+		if mutationErr := SetSessionState(session, "host-write", 9); mutationErr != nil {
+			t.Error(mutationErr)
+		}
 	}}))
 	var err error
 	session, err = NewSession(nil, WithStateCodecRegistry(codecs))
 	require.NoError(t, err)
-	SetSessionState(session, "value", 7)
+	if mutationErr := SetSessionState(session, "value", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	checkpoint, err := session.ExportCheckpoint()
 	require.NoError(t, err)
-	SetSessionState(session, "value", 8)
+	if mutationErr := SetSessionState(session, "value", 8); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	finished := make(chan error, 1)
 	// Act.
 	go func() { finished <- session.ImportSnapshot(checkpoint.Snapshot) }()

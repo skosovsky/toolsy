@@ -32,7 +32,8 @@ does not close those ports.
 ## Budget admission
 
 `WithBudget()` requires a valid BudgetTracker at DepKeyBudget for every invocation.
-Install it with `Put(env, DepKeyBudget, tracker)` and supply that RunEnv to the call.
+Install it with `Put(env, DepKeyBudget, tracker)`, check its error, and supply that
+RunEnv to the call.
 Missing, wrong-type, nil and typed-nil dependencies return an INTERNAL ToolError
 with ErrBudgetConfiguration in the cause chain before wrapped execution.
 `WithOptionalBudget()` permits only an absent dependency; supplied invalid values

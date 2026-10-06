@@ -331,14 +331,18 @@ codecs := toolsy.NewStateCodecRegistry()
 _ = toolsy.RegisterJSONCodec[MyState](codecs, "agent")
 sess, _ := toolsy.NewSession(reg, toolsy.WithStateCodecRegistry(codecs))
 env := toolsy.NewRunEnv(sess, toolsy.WithStateStore(store))
-toolsy.Put(env, "db", db)
-toolsy.SetSessionState(sess, "trace_id", traceID) // or SetState(env, ...)
+if err := toolsy.Put(env, "db", db); err != nil { return err }
+if err := toolsy.SetSessionState(sess, "trace_id", traceID); err != nil { return err } // or SetState(env, ...)
 
 call.Env = env
 sess.Execute(ctx, call, yield) // validates env is bound to sess
 ```
 
-Do not pass `Env: nil` on `Session.Execute` if tools use `SetState` — in-memory state will not persist.
+`Put`, `SetState` and `SetSessionState` return errors for unusable targets or empty
+keys. Check those results. DI-only environments permit Put but cannot SetState;
+`Session.Execute` with `Env: nil` does not bind a state target automatically. A
+handler propagating SetState failure reports INTERNAL with ErrMutationConfiguration.
+Lookup/Get remain optional. Referenced values remain host-owned. See [task41 migration](docs/migration-task41.md).
 
 ### RunCall (sync agent loops)
 
@@ -538,7 +542,7 @@ Conversation compaction belongs to the host/contexty — see [migration](docs/hi
 
 ```go
 env := toolsy.NewRunEnv(nil)
-toolsy.Put(env, toolsy.DepKeyBudget, tracker)
+if err := toolsy.Put(env, toolsy.DepKeyBudget, tracker); err != nil { return err }
 call.Env = env
 reg.Execute(ctx, call, yield)
 ```

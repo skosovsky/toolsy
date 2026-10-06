@@ -1,0 +1,36 @@
+package toolsy_test
+
+import (
+ "context"
+ "reflect"
+ "testing"
+
+ "github.com/skosovsky/toolsy"
+)
+
+func TestD09PublicMutationAndHandlerProbe(t *testing.T) {
+ for name, callback := range map[string]func(*testing.T){
+  "nil-env-put": func(t *testing.T) { checkMutationResult(t, reflect.ValueOf(toolsy.Put[string]), []reflect.Value{reflect.ValueOf((*toolsy.RunEnv)(nil)), reflect.ValueOf("key"), reflect.ValueOf("value")}) },
+  "nil-env-state": func(t *testing.T) { checkMutationResult(t, reflect.ValueOf(toolsy.SetState[string]), []reflect.Value{reflect.ValueOf((*toolsy.RunEnv)(nil)), reflect.ValueOf("key"), reflect.ValueOf("value")}) },
+  "unbound-state": func(t *testing.T) { checkMutationResult(t, reflect.ValueOf(toolsy.SetState[string]), []reflect.Value{reflect.ValueOf(toolsy.NewRunEnv(nil)), reflect.ValueOf("key"), reflect.ValueOf("value")}) },
+  "nil-session-state": func(t *testing.T) { checkMutationResult(t, reflect.ValueOf(toolsy.SetSessionState[string]), []reflect.Value{reflect.ValueOf((*toolsy.Session)(nil)), reflect.ValueOf("key"), reflect.ValueOf("value")}) },
+ } {
+  t.Run(name, func(t *testing.T) { callback(t) })
+ }
+ t.Run("nil-generic-handler", func(t *testing.T) {
+  tool, err := toolsy.NewTool[struct{}, string]("nil_handler", "Missing handler", nil)
+  if err == nil || tool != nil { t.Fatalf("nil handler accepted: tool=%v err=%v", tool != nil, err) }
+ })
+ t.Run("nil-stream-handler", func(t *testing.T) {
+  var handler func(context.Context, *toolsy.RunEnv, struct{}, func(toolsy.Chunk) error) error
+  tool, err := toolsy.NewStreamTool("nil_handler", "Missing stream handler", handler, toolsy.WithIndependentStream())
+  if err == nil || tool != nil { t.Fatalf("nil handler accepted: tool=%v err=%v", tool != nil, err) }
+ })
+}
+
+func checkMutationResult(t *testing.T, callable reflect.Value, args []reflect.Value) {
+ t.Helper()
+ results := callable.Call(args)
+ if len(results) != 1 { t.Fatalf("required mutation returned %d values, want inspectable error", len(results)) }
+ if results[0].IsNil() { t.Fatal("required mutation silently succeeded on missing target") }
+}

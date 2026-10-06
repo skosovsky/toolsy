@@ -43,7 +43,9 @@ func BenchmarkSessionExportSnapshot(b *testing.B) {
 		b.Fatal(err)
 	}
 	for index := range 32 {
-		SetSessionState(session, strconv.Itoa(index), index)
+		if mutationErr := SetSessionState(session, strconv.Itoa(index), index); mutationErr != nil {
+			b.Error(mutationErr)
+		}
 	}
 	b.ReportAllocs()
 	b.ResetTimer()

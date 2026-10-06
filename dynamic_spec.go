@@ -40,11 +40,11 @@ type DynamicToolSpec struct {
 //
 //nolint:gocognit // schema compile + validated handler pipeline
 func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
+	if spec.Handler == nil {
+		return nil, ErrToolHandlerNil
+	}
 	if spec.Schema == nil {
 		return nil, errors.New("dynamic tool schema provider must not be nil")
-	}
-	if spec.Handler == nil {
-		return nil, errors.New("dynamic tool handler must not be nil")
 	}
 	schemaMap := spec.Schema.ParametersSchema()
 	if schemaMap == nil {

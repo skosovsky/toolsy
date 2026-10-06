@@ -148,7 +148,9 @@ func TestTask32Session_RebindAndCheckpointOwnViewCompatibility(t *testing.T) {
 	require.NoError(t, RegisterJSONCodec[int](codecs, "counter"))
 	sess, err := viewA.NewSession(WithStateCodecRegistry(codecs))
 	require.NoError(t, err)
-	SetSessionState(sess, "counter", 7)
+	if mutationErr := SetSessionState(sess, "counter", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	// Act.
 	checkpoint, err := sess.ExportCheckpoint()
@@ -245,7 +247,9 @@ func TestTask32SessionCheckpoint_RootPolicyIDIsPartOfBinding(t *testing.T) {
 	).Add(tool).Build()
 	sess, err := NewSession(regA)
 	require.NoError(t, err)
-	SetSessionState(sess, "counter", 7)
+	if mutationErr := SetSessionState(sess, "counter", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	// Act.
 	checkpoint, err := sess.ExportCheckpoint()
@@ -288,7 +292,9 @@ func TestTask32SessionCheckpoint_RejectsIncompatibleStateSchema(t *testing.T) {
 	require.NoError(t, RegisterJSONCodec[string](stringCodecs, "counter"))
 	sess, err := view.NewSession(WithStateCodecRegistry(intCodecs))
 	require.NoError(t, err)
-	SetSessionState(sess, "counter", 7)
+	if mutationErr := SetSessionState(sess, "counter", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	// Act.
 	checkpoint, err := sess.ExportCheckpoint()
@@ -315,7 +321,9 @@ func TestTask32SnapshotImport_RejectsNullAndMissingRequiredSlotsBySchema(t *test
 	codecs := NewStateCodecRegistry()
 	require.NoError(t, RegisterJSONCodec[payload](codecs, "payload", WithStateSlotRequired()))
 	sess := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true))
-	SetSessionState(sess, "payload", payload{Name: "keep"})
+	if mutationErr := SetSessionState(sess, "payload", payload{Name: "keep"}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	nullSnap := mustTask32Snapshot(t, sess.Binding(), `{"payload":null}`)
 	missingSnap := mustTask32Snapshot(t, sess.Binding(), `{}`)
 

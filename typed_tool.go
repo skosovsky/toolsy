@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 )
@@ -141,7 +140,7 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 	spec TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect],
 ) (Tool, error) {
 	if spec.Handler == nil {
-		return nil, errTypedToolNilHandler
+		return nil, ErrToolHandlerNil
 	}
 	var cfg ToolConfig
 	for _, opt := range spec.Options {
@@ -198,8 +197,6 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 	}
 	return &tool{manifest: manifest, execute: execute}, nil
 }
-
-var errTypedToolNilHandler = errors.New("toolsy: typed tool handler must not be nil")
 
 func prepareTypedToolCall[TSubject, TScope, TArgs any](
 	ctx context.Context,

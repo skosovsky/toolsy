@@ -66,7 +66,7 @@ func NewPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TS
 }
 
 func validatePolicyToolSpec[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, TScope, TArgs]) error {
-	if spec.Tool == nil {
+	if isNilValue(spec.Tool) {
 		return errors.New("toolsy: policy tool requires base tool")
 	}
 	if spec.ArgsBinder == nil {

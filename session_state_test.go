@@ -47,7 +47,9 @@ func TestSessionState_ExportImportSnapshotRoundtripViaJSON(t *testing.T) {
 		Count:  3,
 		Nested: map[string]int{"a": 1},
 	}
-	SetSessionState(sess, "payload", want)
+	if mutationErr := SetSessionState(sess, "payload", want); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -75,7 +77,9 @@ func TestStateCodecRegistry_StructRoundtrip(t *testing.T) {
 	sess := newTestSession(t, withPayloadStateCodec(t))
 
 	want := sessionStatePayload{Name: "ptr", Count: 1}
-	SetSessionState(sess, "payload", want)
+	if mutationErr := SetSessionState(sess, "payload", want); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -96,7 +100,9 @@ func TestStateCodecRegistry_StructRoundtrip(t *testing.T) {
 func TestSessionState_ImportSnapshotRegisteredKey_InvalidPayloadPreservesState(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t, withPayloadStateCodec(t))
-	SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"})
+	if mutationErr := SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	raw, err := json.Marshal(sessionSnapshotWire{
 		Version: sessionSnapshotVersion,
@@ -121,7 +127,9 @@ func TestSessionState_ImportSnapshotRegisteredKey_InvalidPayloadPreservesState(t
 func TestSessionState_ImportSnapshotEmptyClears(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t)
-	SetSessionState(sess, "k", "v")
+	if mutationErr := SetSessionState(sess, "k", "v"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	empty, err := newTestSession(t).ExportSnapshot()
 	require.NoError(t, err)
@@ -134,7 +142,9 @@ func TestSessionState_ImportSnapshotEmptyClears(t *testing.T) {
 func TestSessionState_ImportSnapshotUnregisteredStructRemainsGenericMap(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t)
-	SetSessionState(sess, "payload", sessionStatePayload{Name: "raw"})
+	if mutationErr := SetSessionState(sess, "payload", sessionStatePayload{Name: "raw"}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -177,7 +187,9 @@ func TestImportSnapshot_StrictMode_EmptySnapshotClears(t *testing.T) {
 	codecs := NewStateCodecRegistry()
 	require.NoError(t, RegisterJSONCodec[sessionStatePayload](codecs, "payload"))
 	sess := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true))
-	SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"})
+	if mutationErr := SetSessionState(sess, "payload", sessionStatePayload{Name: "keep"}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	empty, err := newTestSession(t, WithStateCodecRegistry(codecs), WithStrictStateCodecs(true)).ExportSnapshot()
 	require.NoError(t, err)
@@ -190,7 +202,9 @@ func TestImportSnapshot_StrictMode_EmptySnapshotClears(t *testing.T) {
 func TestImportSnapshot_StrictMode_NullKeyWithoutCodecFails(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t, WithStrictStateCodecs(true))
-	SetSessionState(sess, "orphan", "value")
+	if mutationErr := SetSessionState(sess, "orphan", "value"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	raw, err := json.Marshal(sessionSnapshotWire{
 		Version: sessionSnapshotVersion,
@@ -212,7 +226,9 @@ func TestImportSnapshot_StrictMode_NullKeyWithoutCodecFails(t *testing.T) {
 func TestExportSnapshot_StrictMode_UnregisteredKeyFails(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t, WithStrictStateCodecs(true))
-	SetSessionState(sess, "payload", sessionStatePayload{Name: "x"})
+	if mutationErr := SetSessionState(sess, "payload", sessionStatePayload{Name: "x"}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	_, err := sess.ExportSnapshot()
 	require.Error(t, err)
@@ -227,7 +243,9 @@ func TestExportImportSnapshot_StrictMode_Roundtrip(t *testing.T) {
 
 	sess := newTestSession(t, opts...)
 	want := sessionStatePayload{Name: "strict", Count: 2}
-	SetSessionState(sess, "payload", want)
+	if mutationErr := SetSessionState(sess, "payload", want); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -246,7 +264,9 @@ func TestSessionState_ConcurrentSetAndExportSnapshot(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := range 50 {
-			SetSessionState(sess, "k", i)
+			if mutationErr := SetSessionState(sess, "k", i); mutationErr != nil {
+				t.Error(mutationErr)
+			}
 		}
 		close(done)
 	}()
@@ -263,7 +283,9 @@ func TestStateCodecRegistry_RegisterJSONCodec(t *testing.T) {
 	sess := newTestSession(t, WithStateCodecRegistry(codecs))
 
 	want := sessionStatePayload{Name: "codec", Count: 2}
-	SetSessionState(sess, "payload", want)
+	if mutationErr := SetSessionState(sess, "payload", want); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -302,13 +324,12 @@ func TestValidateRunEnvSession_NilSessionOrEnv(t *testing.T) {
 	require.Equal(t, CodeValidationFailed, te.Code)
 }
 
-func TestSessionExecute_NilEnv_SetStateNoOp(t *testing.T) {
+func TestSessionExecute_NilEnv_SetStateFails(t *testing.T) {
 	t.Parallel()
 	const stateKey = "written"
 	tool := newMiddlewareMinTool("writer",
 		func(_ context.Context, env *RunEnv, _ ToolInput, _ func(Chunk) error) error {
-			SetState(env, stateKey, true)
-			return nil
+			return SetState(env, stateKey, true)
 		},
 	)
 	reg, err := NewRegistryBuilder().Add(tool).Build()
@@ -321,7 +342,7 @@ func TestSessionExecute_NilEnv_SetStateNoOp(t *testing.T) {
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 		Env:      nil,
 	}, func(Chunk) error { return nil })
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrMutationConfiguration)
 
 	_, ok := GetSessionState[bool](sess, stateKey)
 	require.False(t, ok)
@@ -352,7 +373,9 @@ func TestNewSessionSnapshotFromJSON_InvalidWire(t *testing.T) {
 func TestImportSnapshot_EmptySnapshot(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t)
-	SetSessionState(sess, "keep", "original")
+	if mutationErr := SetSessionState(sess, "keep", "original"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	err := sess.ImportSnapshot(SessionSnapshot{})
 	requireToolErrorCode(t, err, CodeInternal)
@@ -377,7 +400,9 @@ func TestImportSnapshot_UnsupportedVersion(t *testing.T) {
 	snap, err := NewSessionSnapshotFromJSON(raw)
 	require.NoError(t, err)
 
-	SetSessionState(sess, "keep", "original")
+	if mutationErr := SetSessionState(sess, "keep", "original"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	err = sess.ImportSnapshot(snap)
 	require.Error(t, err)
 	requireToolErrorCode(t, err, CodeInternal)
@@ -394,7 +419,9 @@ func TestStateCodecRegistry_JSONRoundtrip(t *testing.T) {
 	sess := newTestSession(t, WithStateCodecRegistry(codecs))
 
 	want := sessionStatePayload{Name: "roundtrip", Count: 7}
-	SetSessionState(sess, "payload", want)
+	if mutationErr := SetSessionState(sess, "payload", want); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -432,7 +459,10 @@ func TestSessionState_ConcurrentImportExport(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for i := range 30 {
-			SetSessionState(sess, "counter", sessionStatePayload{Name: "writer", Count: i})
+			mutationErr := SetSessionState(sess, "counter", sessionStatePayload{Name: "writer", Count: i})
+			if mutationErr != nil {
+				t.Error(mutationErr)
+			}
 		}
 		close(done)
 	}()
@@ -504,7 +534,9 @@ func TestRegisterStateCodec_CustomCodec(t *testing.T) {
 	codecs := NewStateCodecRegistry()
 	require.NoError(t, RegisterStateCodec(codecs, "tag", stringStateCodec{}))
 	sess := newTestSession(t, WithStateCodecRegistry(codecs))
-	SetSessionState(sess, "tag", "hello")
+	if mutationErr := SetSessionState(sess, "tag", "hello"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)
@@ -556,8 +588,12 @@ func TestSessionExportSnapshot_ExcludesDeps(t *testing.T) {
 	t.Parallel()
 	sess := newTestSession(t)
 	env := NewRunEnv(sess)
-	Put(env, "db", mockHTTP{})
-	SetSessionState(sess, "trace", "x")
+	if mutationErr := Put(env, "db", mockHTTP{}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
+	if mutationErr := SetSessionState(sess, "trace", "x"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	snap, err := sess.ExportSnapshot()
 	require.NoError(t, err)

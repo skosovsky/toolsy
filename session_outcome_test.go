@@ -435,7 +435,9 @@ func TestWithBudget_RunCallPreservesCode(t *testing.T) {
 	sess, err := NewSession(reg)
 	require.NoError(t, err)
 	env := NewRunEnv(sess)
-	Put(env, DepKeyBudget, tracker)
+	if mutationErr := Put(env, DepKeyBudget, tracker); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	outcome, err := sess.RunCall(context.Background(), ToolCall{
 		ToolName: "guarded",

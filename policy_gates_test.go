@@ -99,10 +99,7 @@ func TestBudgetGateConfigurationMatrix(t *testing.T) {
 		for name, value := range map[string]any{"absent": nil, "nil": nil, "typednil": typedNil, "wrongtype": "tracker"} {
 			t.Run(name+map[bool]string{false: "/required", true: "/optional"}[optional], func(t *testing.T) {
 				// Arrange.
-				env := NewRunEnv(nil)
-				if name != "absent" {
-					Put(env, DepKeyBudget, value)
-				}
+				env := configuredBudgetGateTestEnv(t, name, value)
 				dispatched := 0
 				tool := newMiddlewareMinTool(
 					"gate",
@@ -147,12 +144,16 @@ func TestBudgetCallbackSnapshotAndCancellation(t *testing.T) {
 	tracker := &testBudgetTracker{
 		allowFn: func(_ context.Context, _ ToolManifest, snapshot ToolInput) (bool, string, error) {
 			snapshot.ArgsJSON[0] = '!'
-			Put(env, DepKeyBudget, "replaced")
+			if mutationErr := Put(env, DepKeyBudget, "replaced"); mutationErr != nil {
+				t.Error(mutationErr)
+			}
 			cancel()
 			return true, "", nil
 		},
 	}
-	Put(env, DepKeyBudget, tracker)
+	if mutationErr := Put(env, DepKeyBudget, tracker); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	// Act.
 	err := WithBudget()(tool).Execute(ctx, env, input, func(Chunk) error { return nil })
 	// Assert.
@@ -232,4 +233,13 @@ func TestAsyncBudgetMissingDependencyReportsCompletionError(t *testing.T) {
 		t.Fatal("background budget rejection did not complete")
 	}
 	require.NoError(t, reg.Shutdown(context.Background()))
+}
+
+func configuredBudgetGateTestEnv(t *testing.T, name string, value any) *RunEnv {
+	t.Helper()
+	env := NewRunEnv(nil)
+	if name != "absent" {
+		require.NoError(t, Put(env, DepKeyBudget, value))
+	}
+	return env
 }

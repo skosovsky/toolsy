@@ -30,7 +30,9 @@ func newTestSessionEnv(t *testing.T) (*Session, *RunEnv) {
 func TestPut_Require_TypedNilInterface(t *testing.T) {
 	env := NewRunEnv(nil)
 	var iface pingDB = (*pingDBImpl)(nil)
-	Put(env, "db", iface)
+	if mutationErr := Put(env, "db", iface); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	_, err := Require[pingDB](env, "db")
 	require.Error(t, err)
@@ -43,7 +45,9 @@ func TestPut_Require_Lookup_TypedNil(t *testing.T) {
 	env := NewRunEnv(nil)
 	var p *mockHTTP
 	var i any = p
-	Put(env, "db", i)
+	if mutationErr := Put(env, "db", i); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	_, err := Require[mockHTTP](env, "db")
 	require.Error(t, err)
@@ -57,7 +61,9 @@ func TestPut_Require_Lookup_TypedNil(t *testing.T) {
 
 func TestSetState_GetState_RoundTrip(t *testing.T) {
 	_, env := newTestSessionEnv(t)
-	SetState(env, "trace", "abc-123")
+	if mutationErr := SetState(env, "trace", "abc-123"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	v, ok := GetState[string](env, "trace")
 	require.True(t, ok)
 	require.Equal(t, "abc-123", v)
@@ -65,8 +71,12 @@ func TestSetState_GetState_RoundTrip(t *testing.T) {
 
 func TestNamespaceIsolation_ClientKey(t *testing.T) {
 	_, env := newTestSessionEnv(t)
-	Put(env, "client", mockHTTP{})
-	SetState(env, "client", "user-id")
+	if mutationErr := Put(env, "client", mockHTTP{}); mutationErr != nil {
+		t.Error(mutationErr)
+	}
+	if mutationErr := SetState(env, "client", "user-id"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	got, err := Require[mockHTTP](env, "client")
 	require.NoError(t, err)
@@ -90,7 +100,9 @@ func TestMiddlewareBudget_UsesDepKey(t *testing.T) {
 	require.NoError(t, err)
 
 	env := NewRunEnv(nil)
-	Put(env, DepKeyBudget, tracker)
+	if mutationErr := Put(env, DepKeyBudget, tracker); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	err = reg.Execute(context.Background(), ToolCall{
 		ToolName: "t",
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
@@ -101,7 +113,9 @@ func TestMiddlewareBudget_UsesDepKey(t *testing.T) {
 
 func TestSameRunEnv_OrchestratorToTool(t *testing.T) {
 	_, env := newTestSessionEnv(t)
-	SetState(env, "token", "shared")
+	if mutationErr := SetState(env, "token", "shared"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	var seen string
 	type tokenOut struct{ Token string }
@@ -133,13 +147,17 @@ func TestRunEnv_CloneSharesStore_NoDataRace(t *testing.T) {
 	require.Equal(t, sess, exec.session)
 
 	const key = "counter"
-	SetState(parent, key, 0)
+	if mutationErr := SetState(parent, key, 0); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		for i := range 200 {
-			SetState(exec, key, i)
+			if mutationErr := SetState(exec, key, i); mutationErr != nil {
+				t.Error(mutationErr)
+			}
 		}
 	}()
 

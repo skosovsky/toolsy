@@ -2,6 +2,8 @@ package toolsy
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"reflect"
 	"sync"
 )
@@ -137,11 +139,19 @@ func (e *RunEnv) RegistryViewSnapshot() RegistryViewSnapshot {
 	return cloneRegistryViewSnapshot(e.view)
 }
 
-// Put stores a session dependency. Prefer calling before tool execution; tools should read via [Require] or [Lookup].
-// If env is nil, Put is a no-op (use [NewRunEnv] before wiring dependencies).
-func Put[T any](env *RunEnv, key string, val T) {
+// ErrMutationConfiguration identifies an unusable target or key for required mutation.
+var ErrMutationConfiguration = errors.New("toolsy: invalid mutation configuration")
+
+// Put stores a dependency in the environment's shared synchronized store.
+// A DI-only NewRunEnv(nil) is valid. Nil/zero env or empty key returns INTERNAL
+// with ErrMutationConfiguration. Nil values are allowed; Lookup treats them as absent.
+// Referenced values remain host-owned, not universally deep-copied.
+func Put[T any](env *RunEnv, key string, val T) error {
 	if env == nil || env.store == nil {
-		return
+		return mutationConfigurationError("dependency environment is missing its store")
+	}
+	if key == "" {
+		return mutationConfigurationError("dependency key is empty")
 	}
 	env.store.mu.Lock()
 	defer env.store.mu.Unlock()
@@ -149,6 +159,11 @@ func Put[T any](env *RunEnv, key string, val T) {
 		env.store.deps = make(map[string]any)
 	}
 	env.store.deps[key] = val
+	return nil
+}
+
+func mutationConfigurationError(reason string) error {
+	return NewInternalError(fmt.Errorf("%w: %s", ErrMutationConfiguration, reason))
 }
 
 // Require returns a dependency or a [ToolError] with [CodeDependencyMissing].
@@ -177,13 +192,13 @@ func Lookup[T any](env *RunEnv, key string) (T, bool) {
 	return resolveTyped[T](env.store.deps, key)
 }
 
-// SetState stores mutable session-scoped data on the bound [Session].
-// If env or env.session is nil, SetState is a no-op.
-func SetState[T any](env *RunEnv, key string, val T) {
+// SetState stores mutable data on the bound Session and returns an error if
+// env/session is missing or key is empty. A DI-only environment has no state target.
+func SetState[T any](env *RunEnv, key string, val T) error {
 	if env == nil || env.session == nil {
-		return
+		return mutationConfigurationError("state session is not bound")
 	}
-	SetSessionState(env.session, key, val)
+	return SetSessionState(env.session, key, val)
 }
 
 // GetState returns session-scoped data from the bound [Session] when present and non-nil.

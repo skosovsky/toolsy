@@ -689,3 +689,38 @@ physical-attempt accounting belong to host. Config failures cannot dispatch.
 See [current gate contracts](policy-gates.md) for composition, snapshots, callback
 lifecycle, cancellation and budget/replay accounting. No compatibility aliases
 are retained. Independent acceptance evidence is recorded separately.
+
+
+## D09 — required mutation and handler construction
+
+Put, SetState and SetSessionState return error. Check or propagate that result.
+Absent/zero RunEnv, unbound state Session, nil Session or empty key fail with
+INTERNAL retaining ErrMutationConfiguration. A DI-only NewRunEnv(nil) supports Put
+but cannot SetState. Nil values may be stored deliberately; Lookup/Get retain their
+optional non-nil typed semantics. Host owns synchronization of referenced BYOT
+values. All tool handler constructors reject nil functions with ErrToolHandlerNil;
+policy wrapper rejects nil/typednil base tools. Nil handler rejection precedes
+options/schema construction, including missing schema on proxy/dynamic constructors.
+
+```go
+if err := toolsy.Put(env, "db", db); err != nil { return err }
+if err := toolsy.SetState(env, "counter", count); err != nil { return err }
+if err := toolsy.SetSessionState(session, "counter", count); err != nil { return err }
+```
+
+There is no permissive mutation alias. For intentional absence, the host explicitly
+branches before calling a required mutation. An empty key is invalid; nonempty keys
+are opaque and are not trimmed. Put needs the initialized store from NewRunEnv;
+SetState needs a bound session, while SetSessionState directly targets that session.
+Storage accepts nil values; optional reads continue treating nil/typednil as absent.
+The synchronized map is shared by cloned execution environments and the bound
+session; arbitrary referenced values are not deep-copied or synchronized.
+Session.Execute with Env:nil remains unbound and a propagated state mutation error
+is observable instead of silently losing state. Existing caller code must handle
+the newly returned errors, including dependency wiring before a budget gate.
+
+See the [executable DI-only mutation example](../mutation_example_test.go) and
+[snapshot example](../examples/session_snapshot/main.go). Nil function handlers fail
+NewTool/NewStreamTool/NewProxyTool/NewDynamicToolFromSpec/NewTypedTool and
+NewPolicyToolFromSpec before a callable tool is returned. NewPolicyTool validates
+its base port; this does not certify arbitrary caller-owned tools' internals.

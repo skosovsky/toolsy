@@ -25,7 +25,9 @@ func (t *testBudgetTracker) Allow(ctx context.Context, manifest ToolManifest, in
 
 func budgetEnv(tracker BudgetTracker) *RunEnv {
 	env := NewRunEnv(nil)
-	Put(env, DepKeyBudget, tracker)
+	if mutationErr := Put(env, DepKeyBudget, tracker); mutationErr != nil {
+		panic(mutationErr)
+	}
 	return env
 }
 
@@ -59,7 +61,9 @@ func TestWithOptionalBudget_MissingBudgetDepPassThrough(t *testing.T) {
 	wrapped := WithOptionalBudget()(inner)
 
 	env := NewRunEnv(nil)
-	Put(env, "other", "x")
+	if mutationErr := Put(env, "other", "x"); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	err := wrapped.Execute(
 		context.Background(),
 		env,

@@ -12,6 +12,9 @@ import (
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
+// ErrToolHandlerNil identifies a nil handler rejected during tool construction.
+var ErrToolHandlerNil = errors.New("toolsy: tool handler must not be nil")
+
 // tool is the internal implementation of Tool built by NewTool, NewStreamTool, NewDynamicToolFromSpec, or NewProxyTool.
 type tool struct {
 	manifest ToolManifest
@@ -30,6 +33,9 @@ func NewTool[T any, R any](
 	fn func(ctx context.Context, env *RunEnv, args T) (R, error),
 	opts ...ToolOption,
 ) (Tool, error) {
+	if fn == nil {
+		return nil, ErrToolHandlerNil
+	}
 	var cfg ToolConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -205,6 +211,9 @@ func NewStreamTool[T any](
 	fn func(ctx context.Context, env *RunEnv, args T, yield func(Chunk) error) error,
 	opts ...ToolOption,
 ) (Tool, error) {
+	if fn == nil {
+		return nil, ErrToolHandlerNil
+	}
 	var cfg ToolConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -277,15 +286,15 @@ func NewProxyTool(
 	handler func(ctx context.Context, env *RunEnv, rawArgs []byte, yield func(Chunk) error) error,
 	opts ...ToolOption,
 ) (Tool, error) {
+	if handler == nil {
+		return nil, ErrToolHandlerNil
+	}
 	var cfg ToolConfig
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 	if len(rawJSONSchema) == 0 {
 		return nil, errors.New("proxy schema must not be empty")
-	}
-	if handler == nil {
-		return nil, errors.New("proxy tool handler must not be nil")
 	}
 	decoded, err := jsonschemax.Decode(rawJSONSchema)
 	if err != nil {

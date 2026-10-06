@@ -22,9 +22,13 @@ func GetSessionState[T any](s *Session, key string) (T, bool) {
 
 // SetSessionState stores a value in the synchronized state map. It does not deep
 // copy pointers/maps/slices; referenced value synchronization belongs to the host.
-func SetSessionState[T any](s *Session, key string, val T) {
-	if s == nil || key == "" {
-		return
+// Nil session or empty key returns INTERNAL with ErrMutationConfiguration.
+func SetSessionState[T any](s *Session, key string, val T) error {
+	if s == nil {
+		return mutationConfigurationError("state session is nil")
+	}
+	if key == "" {
+		return mutationConfigurationError("state key is empty")
 	}
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
@@ -32,6 +36,7 @@ func SetSessionState[T any](s *Session, key string, val T) {
 		s.state = make(map[string]any)
 	}
 	s.state[key] = val
+	return nil
 }
 
 // ExportSnapshot returns an opaque snapshot of in-memory session state.

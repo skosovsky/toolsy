@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted (commit pending); rows 26–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted (commit pending); rows 27–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -939,3 +939,60 @@ unresolved detected defects. Reviewer reports and B independent full-root raw
 race/lint retained in docs/reviews/task41/d04-d05/. Both independently assessed
 current diff and did not read peer verdicts. All affected checks pass. Commit:
 `fix: required gates` (hash recorded after successful signed commit).
+
+
+### 26 — D09 (accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Required Put, SetState and SetSessionState return inspectable configuration
+   errors for absent/unusable targets or empty keys; valid mutation returns nil.
+   No ambiguous silent no-op remains; intentional optionality belongs to host.
+2. Optional Lookup/GetState/GetSessionState and required Require behavior retained;
+   valid DI without session and bound state share correct store/session; nil values
+   are permitted storage values, typed lookup semantics unchanged. Framework map
+   synchronization remains correct; referenced BYOT values remain host-owned.
+3. Generic, stream, proxy, dynamic, typed and policy-constructor entry points reject
+   nil handlers at construction with common inspectable ErrToolHandlerNil; base
+   tool nil/typednil rejected by policy wrapper. No request-time nil dispatch.
+4. Public baseline/current probes, AAA positive/negative/bound/concurrent mutation
+   and constructor tests, executable examples and affected race/lint pass. Existing
+   mutation call sites handle errors rather than discarding them.
+5. Current docs/examples and clear-break migration explain mutation errors,
+   zero/unbound environments, key/nil-value behavior, BYOT and handler construction;
+   no competing legacy helper, and both reviewers find no unresolved defects.
+
+Spec-first: retain primary mutation names but return error. ErrMutationConfiguration
+is wrapped by INTERNAL, nonretryable/noncorrectable; nil RunEnv, zero RunEnv without
+store, unbound session, nil Session and empty keys are invalid targets. Put still
+permits DI-only NewRunEnv(nil); nil/typednil stored values remain legal (Lookup
+reports missing/non-nil semantics unchanged). SetState delegates to bound Session;
+SetSessionState mutates a valid synchronized session map. No implicit state creation
+on DI-only RunEnv and no permissive helper. All handler constructors report shared
+ErrToolHandlerNil before dispatch; policy wrapper rejects typednil base tool.
+
+D09 baseline at 4b76f5f records six behavioral failures: Put/SetState/SetSessionState
+return no error for nil/unbound targets (four cases), generic/stream constructors
+accept nil handlers (two cases). Production bytes verified equal to baseline and
+SHA256 retained. Current same public fixture PASS; new AAA direct contract tests
+PASS under race, snapshot example executes. Implementation returns INTERNAL with
+ErrMutationConfiguration and common constructor ErrToolHandlerNil. Existing mutation
+call sites check errors, including goroutine-safe test error handling; nil Session
+Execute state mutation now propagates failure. Root final lint 0 issues. Current
+24-module race and root-final race are running; no independent row26 acceptance yet.
+
+D09 final root race PASS; all24 modules race PASS, exit0,24 module markers. Current
+original public fixture count3 PASS. Reviewer A found two explicit-type-argument
+SetSessionState calls whose returned errors were not handled; both now checked.
+Production unchanged; targeted codec/mutation/current tests and lint rerun, both
+independent reviews continue against updated diff. No acceptance/commit claim.
+
+D09 after-review targeted race count3 PASS2.412s, root lint0. A independently
+rechecked latest diff/tests/lint and accepted100% (five20/20), earlier two ignored
+calls resolved. B independent full-root race still live; no double acceptance yet.
+
+D09 independent final acceptance: A100% (five20/20), B100% (five20/20), no
+unresolved detected defects. Both reviewed latest diff and independently repeated
+race/probe/lint. A's two ignored generic mutation calls fixed; both verified latest
+call sites. Reports/raw reviewer logs retained docs/reviews/task41/d09. Commit:
+`fix: required mutations` (hash recorded after successful signed commit). Core
+BYOT reference synchronization remains host contract; no external service claims.

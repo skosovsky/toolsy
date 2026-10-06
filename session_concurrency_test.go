@@ -31,7 +31,9 @@ func TestConcurrentSessionRebindExecutionAndCheckpoint(t *testing.T) {
 	first, second := sessionConcurrencyRegistry(t, "first"), sessionConcurrencyRegistry(t, "second")
 	session, err := NewSession(first)
 	require.NoError(t, err)
-	SetSessionState(session, "value", 7)
+	if mutationErr := SetSessionState(session, "value", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	initial := session.Binding()
 	failures := make(chan error, 1000)
 	var workers sync.WaitGroup
@@ -175,7 +177,9 @@ func TestSnapshotCallbacksReenterWithoutLocks(t *testing.T) {
 	var session *Session
 	codecs := NewStateCodecRegistry()
 	callback := func() {
-		SetSessionState(session, "callback", 1)
+		if mutationErr := SetSessionState(session, "callback", 1); mutationErr != nil {
+			t.Error(mutationErr)
+		}
 		_ = session.Binding()
 		if err := session.Rebind(registry); err != nil {
 			t.Error(err)
@@ -185,7 +189,9 @@ func TestSnapshotCallbacksReenterWithoutLocks(t *testing.T) {
 	var err error
 	session, err = NewSession(registry, WithStateCodecRegistry(codecs))
 	require.NoError(t, err)
-	SetSessionState(session, "value", 7)
+	if mutationErr := SetSessionState(session, "value", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	finished := make(chan error, 1)
 	// Act: export and import both invoke the host callback.
 	go func() {
@@ -215,7 +221,9 @@ func TestIncompatibleRebindPreservesConfigurationAndState(t *testing.T) {
 	require.NoError(t, err)
 	incompatible, err := NewRegistry()
 	require.NoError(t, err)
-	SetSessionState(session, "value", 7)
+	if mutationErr := SetSessionState(session, "value", 7); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	before := session.Binding()
 	// Act.
 	err = session.Rebind(incompatible)
@@ -246,11 +254,17 @@ func TestSnapshotMarshalCallbackReentersState(t *testing.T) {
 	// Arrange.
 	session, err := NewSession(sessionConcurrencyRegistry(t, "first"))
 	require.NoError(t, err)
-	SetSessionState(
+	if mutationErr := SetSessionState(
 		session,
 		"value",
-		reentryMarshalValue{value: 7, callback: func() { SetSessionState(session, "callback", 1) }},
-	)
+		reentryMarshalValue{value: 7, callback: func() {
+			if mutationErr := SetSessionState(session, "callback", 1); mutationErr != nil {
+				t.Error(mutationErr)
+			}
+		}},
+	); mutationErr != nil {
+		t.Error(mutationErr)
+	}
 	finished := make(chan error, 1)
 	// Act.
 	go func() { _, exportErr := session.ExportCheckpoint(); finished <- exportErr }()
