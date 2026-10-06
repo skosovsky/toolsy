@@ -1,0 +1,32 @@
+--- FAIL: TestRunPreservesExactPrintedBytesForEveryGuestExit (0.00s)
+    --- FAIL: TestRunPreservesExactPrintedBytesForEveryGuestExit/success (0.00s)
+        r15_stdout_probe_test.go:24: 
+            	Error Trace:	/private/tmp/toolsy-task41/r15-baseline/adapters/sandbox/starlark/r15_stdout_probe_test.go:24
+            	Error:      	Not equal: 
+            	            	expected: "hello\n"
+            	            	actual  : "hello"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -1,2 +1 @@
+            	            	 hello
+            	            	-
+            	Test:       	TestRunPreservesExactPrintedBytesForEveryGuestExit/success
+    --- FAIL: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines (0.00s)
+        r15_stdout_probe_test.go:24: 
+            	Error Trace:	/private/tmp/toolsy-task41/r15-baseline/adapters/sandbox/starlark/r15_stdout_probe_test.go:24
+            	Error:      	Not equal: 
+            	            	expected: "hello\n\n\n"
+            	            	actual  : "hello\n\n"
+            	            	
+            	            	Diff:
+            	            	--- Expected
+            	            	+++ Actual
+            	            	@@ -3,2 +3 @@
+            	            	 
+            	            	-
+            	Test:       	TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/starlark	0.423s

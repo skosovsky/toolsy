@@ -487,8 +487,10 @@ func (m *setupTimeoutClient) ContainerStart(
 }
 
 func TestCollectContainerLogs_ExceedsLimit(t *testing.T) {
-	large := strings.Repeat("x", defaultMaxContainerLogBytes+1)
-	s := &Sandbox{client: &mockClient{logs: muxLogs(large, "")}}
+	policy := DefaultPolicy()
+	policy.OutputBytes = 1024
+	large := strings.Repeat("x", policy.OutputBytes+1)
+	s := &Sandbox{client: &mockClient{logs: muxLogs(large, "")}, policy: policy}
 	outBuf, errBuf, err := s.collectContainerLogs(context.Background(), "abc123")
 	require.Error(t, err)
 	require.NotNil(t, outBuf)
@@ -499,7 +501,7 @@ func TestCollectContainerLogs_ExceedsLimit(t *testing.T) {
 }
 
 func TestDocker_Run_LogOverflowWithCanceledCtx_InterruptWins(t *testing.T) {
-	large := strings.Repeat("x", defaultMaxContainerLogBytes+1)
+	large := strings.Repeat("x", DefaultPolicy().OutputBytes+1)
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &cancelOnLogsClient{
 		waitResponse: container.WaitResponse{StatusCode: 0},

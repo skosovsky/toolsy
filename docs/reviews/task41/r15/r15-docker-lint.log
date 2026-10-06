@@ -1,0 +1,5 @@
+adapters/sandbox/docker/client_contract_test.go:4:1: File is not properly formatted (goimports)
+	sdk "github.com/docker/docker/client"
+^
+1 issues:
+* goimports: 1

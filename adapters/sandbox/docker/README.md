@@ -56,3 +56,11 @@ default images plus Linux cgroup, UID/capability, readonly filesystem, disabled
 network, bounded scratch and output checks against an actual local daemon.
 The live restrictions test currently targets Linux cgroup v2. Skipped live tests
 are not evidence of isolation; reports must identify whether they ran.
+
+WithClient accepts the exported focused Client interface. It contains only daemon
+capability discovery and owned container lifecycle/log methods; the Docker SDK client
+satisfies it directly. Custom ports must report capabilities truthfully, respect
+contexts and return owned log readers whose Close unblocks reads. A ContainerWait
+response is terminal status, not an acknowledgement. The local workspace must be
+visible at the same path to the daemon. Policy fields validated by New are the sole
+runtime bounds; there are no zero-value output/log-timeout fallback defaults.

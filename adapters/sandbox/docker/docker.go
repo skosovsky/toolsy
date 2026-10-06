@@ -24,10 +24,9 @@ import (
 )
 
 const (
-	containerWorkspace          = "/workspace"
-	cleanupTimeout              = 5 * time.Second
-	logsTimeout                 = 5 * time.Second
-	defaultMaxContainerLogBytes = sandboxfs.DefaultMaxSandboxOutputBytes
+	containerWorkspace = "/workspace"
+	cleanupTimeout     = 5 * time.Second
+	logsTimeout        = 5 * time.Second
 )
 
 func classifySetupError(runCtx context.Context, err error, op string) error {
@@ -48,7 +47,12 @@ func classifySetupError(runCtx context.Context, err error, op string) error {
 	return fmt.Errorf("%w: %s: %w", exectool.ErrSandboxFailure, op, err)
 }
 
-type dockerClient interface {
+// Client is the focused Docker lifecycle port used by this adapter.
+// Info must truthfully report mandatory daemon capabilities; all methods must
+// respect their contexts. ContainerLogs owns a reader whose Close unblocks reads.
+// ContainerWait reports terminal status/errors, rather than acknowledging start.
+// The daemon must have local access to the configured workspace path.
+type Client interface {
 	Info(context.Context) (system.Info, error)
 	ContainerCreate(
 		ctx context.Context,
@@ -71,7 +75,7 @@ type dockerClient interface {
 
 // Sandbox executes code in ephemeral Docker containers.
 type Sandbox struct {
-	client        dockerClient
+	client        Client
 	runtimes      map[string]Runtime
 	languages     []string
 	policy        Policy
@@ -237,7 +241,6 @@ func (s *Sandbox) collectExecution(ctx context.Context, containerID string) (exe
 			stderrBuf,
 			int(completed.code),
 			completed.duration,
-			false,
 		)
 	}
 	if completed.err != nil && !toolsy.IsContextInterrupt(completed.err) {
@@ -248,7 +251,6 @@ func (s *Sandbox) collectExecution(ctx context.Context, containerID string) (exe
 			stderrBuf,
 			int(completed.code),
 			completed.duration,
-			false,
 		)
 	}
 	if logErr != nil {
@@ -259,7 +261,6 @@ func (s *Sandbox) collectExecution(ctx context.Context, containerID string) (exe
 			stderrBuf,
 			int(completed.code),
 			completed.duration,
-			false,
 		)
 	}
 	return sandboxfs.FinalizeOrInterrupt(
@@ -269,7 +270,6 @@ func (s *Sandbox) collectExecution(ctx context.Context, containerID string) (exe
 		stderrBuf,
 		int(completed.code),
 		completed.duration,
-		false,
 	)
 }
 
@@ -404,11 +404,7 @@ func (s *Sandbox) collectContainerLogs(
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return nil, nil, collectionFailure(ctxErr)
 	}
-	limit := s.policy.LogTimeout
-	if limit <= 0 {
-		limit = logsTimeout
-	}
-	logsCtx, logsCancel := context.WithTimeout(ctx, limit)
+	logsCtx, logsCancel := context.WithTimeout(ctx, s.policy.LogTimeout)
 	defer logsCancel()
 
 	var logOpts container.LogsOptions
@@ -424,8 +420,8 @@ func (s *Sandbox) collectContainerLogs(
 		_ = logs.Close()
 	}()
 
-	outBuf := sandboxfs.NewCappedBuffer("container stdout", s.outputLimit())
-	errBuf := sandboxfs.NewCappedBuffer("container stderr", s.outputLimit())
+	outBuf := sandboxfs.NewCappedBuffer("container stdout", s.policy.OutputBytes)
+	errBuf := sandboxfs.NewCappedBuffer("container stderr", s.policy.OutputBytes)
 	stopClose := context.AfterFunc(logsCtx, func() { _ = logs.Close() })
 	defer stopClose()
 	if demuxErr := demuxLogs(logs, outBuf, errBuf); demuxErr != nil {
@@ -450,13 +446,6 @@ func encodeEnv(env map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-func (s *Sandbox) outputLimit() int {
-	if s.policy.OutputBytes > 0 {
-		return s.policy.OutputBytes
-	}
-	return defaultMaxContainerLogBytes
 }
 
 // demuxLogs rejects partial headers/payloads: Docker's StdCopy treats a short final header as EOF.
@@ -505,7 +494,7 @@ func collectionFailure(err error) error {
 	return fmt.Errorf("%w: log collection: %w", exectool.ErrSandboxFailure, err)
 }
 
-func localDaemonHost(cli dockerClient) string {
+func localDaemonHost(cli Client) string {
 	native, ok := cli.(*client.Client)
 	if !ok {
 		return ""

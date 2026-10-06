@@ -487,3 +487,15 @@ exectool failed execution retains the sandbox-returned RunResult in RunOutcomeEr
 reachable through errors.As; the cause and error classification remain inspectable.
 There is no successful result chunk on failure. A returned zero/partial result is
 not automatically complete, and cleanup failure must not trigger a blind retry.
+
+## R15 / D29 — exact Starlark output and focused Docker configuration
+
+Starlark RunResult.Stdout now retains every printed newline on both exit0 and
+exit1, including trailing empty lines. Consumers choose presentation trimming.
+The internal finalizer trim flag is removed across all sandbox adapters.
+
+Docker WithClient accepts exported Client, the focused adapter lifecycle port;
+its mandatory context/reader/capability contract is in the adapter README. The
+constructor-validated policy is the only source of output/log-timeout bounds.
+Starlark fs.read limit errors intentionally remain guest exit1 with bounded stderr;
+stdout/stderr collection overflow remains an infrastructure/output error.

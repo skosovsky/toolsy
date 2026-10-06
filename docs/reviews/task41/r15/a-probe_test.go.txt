@@ -1,0 +1,30 @@
+package starlark_test
+
+import (
+ "testing"
+ "errors"
+ "context"
+ "strings"
+ "github.com/skosovsky/toolsy/adapters/sandbox/starlark"
+ "github.com/skosovsky/toolsy/exectool"
+)
+func TestReviewExactOutput(t *testing.T) {
+ for _, tail := range []string{"", `; fail("bad")`} {
+  for _, tc := range []struct{code,want string}{{`print("\u0000\r\n")`, "\x00\r\n\n"}, {`print(); print()`, "\n\n"}, {`x = 1`, ""}} {
+   sb,err:=starlark.New(starlark.DefaultConfig()); if err!=nil {t.Fatal(err)}
+   got,err:=sb.Run(t.Context(), exectool.RunRequest{Language:"starlark", Code:tc.code+tail})
+   if err!=nil || got.Stdout!=tc.want {t.Fatalf("%q tail=%q got=%q err=%v",tc.code,tail,got.Stdout,err)}
+   wantExit:=0; if tail!="" {wantExit=1}; if got.ExitCode!=wantExit {t.Fatalf("exit %d",got.ExitCode)}
+  }
+ }
+}
+func TestReviewGuestReadAndOutputOverflow(t *testing.T) {
+ sb,err:=starlark.New(starlark.DefaultConfig()); if err!=nil {t.Fatal(err)}
+ result,err:=sb.Run(t.Context(), exectool.RunRequest{Language:"starlark", Code:`print("prefix"); fs.read("missing")`})
+ if err!=nil || result.ExitCode!=1 || result.Stdout!="prefix\n" || result.Stderr=="" {t.Fatalf("guest read: %+v %v",result,err)}
+ _,err=sb.Run(t.Context(), exectool.RunRequest{Language:"starlark", Code:`print("`+strings.Repeat("x",8<<20)+`")`})
+ if !errors.Is(err,exectool.ErrSandboxFailure) {t.Fatalf("overflow %v",err)}
+ ctx,cancel:=context.WithCancel(t.Context()); cancel()
+ _,err=sb.Run(ctx,exectool.RunRequest{Language:"starlark",Code:`print("x")`})
+ if !errors.Is(err,context.Canceled) {t.Fatalf("cancel %v",err)}
+}

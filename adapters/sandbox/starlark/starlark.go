@@ -61,7 +61,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	}
 
 	if ctx.Err() != nil {
-		return sandboxfs.FinalizeOrInterrupt(ctx, nil, nil, nil, 0, 0, false)
+		return sandboxfs.FinalizeOrInterrupt(ctx, nil, nil, nil, 0, 0)
 	}
 	if s.maxExecutionSteps == 0 {
 		return exectool.RunResult{}, fmt.Errorf("%w: missing execution step policy", exectool.ErrSandboxFailure)
@@ -108,21 +108,21 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	if stepLimitReached {
 		return sandboxfs.FinalizeOrInterrupt(ctx,
 			fmt.Errorf("%w: %w (limit %d)", exectool.ErrSandboxFailure, ErrStepLimit, s.maxExecutionSteps),
-			stdout, nil, 0, duration, false)
+			stdout, nil, 0, duration)
 	}
 
 	if printErr != nil {
 		return sandboxfs.FinalizeOrInterrupt(
 			ctx,
 			fmt.Errorf("%w: stdout: %w", exectool.ErrSandboxFailure, printErr),
-			stdout, nil, 0, duration, false,
+			stdout, nil, 0, duration,
 		)
 	}
 
 	if err != nil {
 		var stderrBuf = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
 		if _, writeErr := io.WriteString(stderrBuf, err.Error()); writeErr != nil {
-			return sandboxfs.FinalizeOrInterrupt(ctx, writeErr, stdout, stderrBuf, 0, duration, false)
+			return sandboxfs.FinalizeOrInterrupt(ctx, writeErr, stdout, stderrBuf, 0, duration)
 		}
 
 		return sandboxfs.FinalizeOrInterrupt(
@@ -132,11 +132,10 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 			stderrBuf,
 			1,
 			duration,
-			false,
 		)
 	}
 
-	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, duration, true)
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, duration)
 }
 
 // watchCancellation owns and joins its watcher; no goroutine outlives Run.

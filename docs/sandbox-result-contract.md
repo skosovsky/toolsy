@@ -29,3 +29,9 @@ inspection through errors.As. It emits no success chunk on that path. Cleanup-on
 failures can carry a completed guest exit/output; interrupted/setup failures may
 carry zero or incomplete results. The typed error does not claim completeness or
 authorize retry. Primary cancellation/timeout/output-limit classification survives.
+
+Completed stdout/stderr are exact collected bytes; the shared finalizer has no
+presentation trim flag. Starlark print's newline is retained on success and guest
+failure. Consumers may explicitly trim for display. Starlark fs.read failures,
+including its file cap, are guest evaluation errors; missing complete collected
+stdout/stderr instead returns an infrastructure/output error.

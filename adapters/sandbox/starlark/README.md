@@ -32,3 +32,10 @@ They are not a hard wall-clock bound and cannot prevent a large allocation
 inside a single operation. For hostile code requiring enforceable memory or
 process resource isolation, the host must select a backend providing those
 capabilities. This adapter does not advertise a memory cap.
+
+RunResult preserves exact stdout bytes for all completed guest exits, including
+print's final newline and trailing blank lines. It performs no presentation trim.
+An fs.read path/missing-file/read-cap failure is a guest evaluation error: exit1,
+nil Run error and bounded stderr. Stdout/stderr collection overflow instead returns
+an infrastructure/output error; cancellation still takes precedence. This distinction
+is intentional: failure of a guest instruction differs from missing complete output.

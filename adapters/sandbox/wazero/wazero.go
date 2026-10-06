@@ -139,7 +139,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 	if err != nil {
 		if exitErr, ok := errors.AsType[*wazerosys.ExitError](err); ok {
 			result, runErr = sandboxfs.FinalizeOrInterrupt(
-				ctx, nil, stdout, stderr, int(exitErr.ExitCode()), duration, false,
+				ctx, nil, stdout, stderr, int(exitErr.ExitCode()), duration,
 			)
 			return result, runErr
 		}
@@ -147,11 +147,11 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 		return sandboxfs.FinalizeOrInterrupt(
 			ctx,
 			fmt.Errorf("%w: execute guest: %w", exectool.ErrSandboxFailure, err),
-			stdout, stderr, 0, duration, false,
+			stdout, stderr, 0, duration,
 		)
 	}
 
-	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, stderr, 0, duration, false)
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, stderr, 0, duration)
 }
 
 //nolint:nonamedreturns // Deferred runtime cleanup attaches diagnostics without replacing execution errors.

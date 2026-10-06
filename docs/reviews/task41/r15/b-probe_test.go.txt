@@ -1,0 +1,24 @@
+package starlark_test
+import("context";"strings";"testing";"errors"; st "github.com/skosovsky/toolsy/adapters/sandbox/starlark"; "github.com/skosovsky/toolsy/exectool"; "github.com/skosovsky/toolsy/textprocessor")
+func TestR15BExactBytes(t *testing.T){
+ for _,tc:=range []struct{code,want string;exit int}{ {`print("a\r\n\n"); print("")`,"a\r\n\n\n\n",0}, {`print("a\r\n\n"); print(""); fail("bad")`,"a\r\n\n\n\n",1},{`x=1`,"",0},{`fail("bad")`,"",1},{`print("\x00")`,"\x00\n",0}} {
+ // Arrange.
+ sb,e:=st.New(st.DefaultConfig());if e!=nil{t.Fatal(e)}
+ // Act.
+ got,e:=sb.Run(context.Background(),exectool.RunRequest{Language:"starlark",Code:tc.code})
+ // Assert.
+ if e!=nil||got.ExitCode!=tc.exit||got.Stdout!=tc.want{t.Errorf("code %s: output=%q exit=%d err=%v want=%q",tc.code,got.Stdout,got.ExitCode,e,tc.want)}
+ }
+}
+func TestR15BGuestReadVsCollection(t *testing.T){
+ // Arrange.
+ sb,e:=st.New(st.DefaultConfig());if e!=nil{t.Fatal(e)}; big:=strings.Repeat("x",(64<<20)+1)
+ // Act.
+ guest,e:=sb.Run(context.Background(),exectool.RunRequest{Language:"starlark",Code:`print("prefix"); fs.read("big")`,Files:map[string][]byte{"big":[]byte(big)}})
+ // Assert.
+ if e!=nil||guest.ExitCode!=1||guest.Stdout!="prefix\n"||!strings.Contains(guest.Stderr,"limit"){t.Fatalf("read %+v err %v",guest,e)}
+ // Act.
+ output,e:=sb.Run(context.Background(),exectool.RunRequest{Language:"starlark",Code:`print(env["BIG"])`,Env:map[string]string{"BIG":big}})
+ // Assert.
+ if !errors.Is(e,exectool.ErrSandboxFailure)||!errors.Is(e,textprocessor.ErrReadLimitExceeded)||output.Stdout!=""{t.Fatalf("output len %d err %v",len(output.Stdout),e)}
+}

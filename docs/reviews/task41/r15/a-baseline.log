@@ -1,0 +1,5 @@
+--- FAIL: TestReviewExactOutput (0.00s)
+    review_r15_test.go:16: "print(\"\\u0000\\r\\n\")" tail="" got="\x00\r\n" err=<nil>
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/starlark	0.502s
+FAIL

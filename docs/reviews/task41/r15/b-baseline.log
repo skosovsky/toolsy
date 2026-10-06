@@ -1,0 +1,6 @@
+--- FAIL: TestR15BExactBytes (0.00s)
+    r15_b_probe_test.go:10: code print("a\r\n\n"); print(""): output="a\r\n\n\n" exit=0 err=<nil> want="a\r\n\n\n\n"
+    r15_b_probe_test.go:10: code print("\x00"): output="\x00" exit=0 err=<nil> want="\x00\n"
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/starlark	0.454s
+FAIL

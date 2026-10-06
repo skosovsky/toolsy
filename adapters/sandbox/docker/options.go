@@ -61,7 +61,7 @@ type options struct {
 	runtimes      map[string]Runtime
 	policy        Policy
 	workspaceRoot string
-	client        dockerClient
+	client        Client
 }
 
 // WithPolicy selects mandatory enforceable bounds; CPUQuota is microseconds per 100ms period.
@@ -87,7 +87,7 @@ func WithMemoryLimit(bytes int64) Option { return func(o *options) { o.policy.Me
 
 // WithClient injects a client. Info must truthfully report mandatory cgroup capabilities;
 // the client must target a local daemon with access to the workspace paths.
-func WithClient(client dockerClient) Option { return func(o *options) { o.client = client } }
+func WithClient(client Client) Option { return func(o *options) { o.client = client } }
 func defaultRuntimes() map[string]Runtime {
 	return map[string]Runtime{
 		languageBash: {

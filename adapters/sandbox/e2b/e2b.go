@@ -481,12 +481,12 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 		return sandboxfs.FinalizeOrInterrupt(
 			ctx,
 			classifyControlPlaneError(ctx, err, "start process"),
-			stdoutBuf, stderrBuf, 0, time.Since(start), false,
+			stdoutBuf, stderrBuf, 0, time.Since(start),
 		)
 	}
 
 	return sandboxfs.FinalizeOrInterrupt(
-		ctx, nil, stdoutBuf, stderrBuf, commandResult.ExitCode, time.Since(start), false,
+		ctx, nil, stdoutBuf, stderrBuf, commandResult.ExitCode, time.Since(start),
 	)
 }
 

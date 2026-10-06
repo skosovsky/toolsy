@@ -1,7 +1,8 @@
 # R14 / D28 verification
 
 Row baseline: 1180b3a. The public descendant completion probe fails on all four
-baseline combinations (exit0/7; inherited/redirected pipes): children remain alive.
+baseline combinations (exit0/7; inherited/redirected pipes): inherited pipes
+surface WaitDelay failure; redirected children remain alive.
 The unchanged probe passes on the current owned-group implementation.
 
 Unix runs the configured guest directly through Go exec, preserving start failures,

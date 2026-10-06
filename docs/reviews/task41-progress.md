@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted (commit pending); rows 15–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted (commit pending); rows 16–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -544,3 +544,29 @@ collection/fork+overflowcount20race5.421s, publicstart1.851s, lint0,
 Linux/WindowscompilePASS). No unresolved detected defects. Parent finalhostrace
 11.622s, targetedcount10race4.235s, exectoolrace1.912s, host/rootlint0.
 Evidence: docs/reviews/task41/r14/. Commit: fix: host descendants.
+
+### 15 — R15 / D29 (accepted)
+
+Criteria for each reviewer (20% each):
+1. Starlark preserves exact stdout bytes on guest exit0/1, including trailing empty
+   lines and no output; no success-only presentation trim or internal trim flag.
+2. Shared finalizer signature/callers across every sandbox remain coherent; normal
+   guest exits, output overflow and cancellation classification stay intact.
+3. Docker constructor-positive policy is the single source of limits: unreachable
+   output/log-timeout fallback defaults removed; custom bounds and rejection remain.
+4. Export focused Docker Client port with its lifecycle/reader/capability ownership
+   contract, without giant SDK dependence in core. Starlark fs cap remains an
+   explicitly documented guest error, distinct from infrastructure stdout overflow.
+5. AAA byte-identity baseline/current probes, all affected tests/race/lint and docs
+   pass; two independent reviewers100%, no unresolved detected defects.
+
+Decision D29: interpreter fs.read failures are guest evaluation errors (exit1,
+bounded stderr, nil Run error); stdout collection overflow is infrastructure/output
+failure. Preserve this meaningful distinction rather than remapping every failure.
+
+Row15 gate: A100%, B100%; independently verified exactbyte baselineFAIL/current
+race probesPASS and all five adapter/sharedhelper race; root+alladapterlint0.
+No unresolved detected defects. Parent public currentprobe count5PASS1.477s,
+all affected race/rootracePASS, final pinnedlint0. Evidence docs/reviews/task41/r15/.
+No live Docker/E2B; interpretation/resource limits remain backend-specific.
+Commit: fix: sandbox output.

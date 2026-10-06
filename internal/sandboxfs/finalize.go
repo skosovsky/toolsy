@@ -3,7 +3,6 @@ package sandboxfs
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/skosovsky/toolsy/exectool"
@@ -18,7 +17,6 @@ func FinalizeOrInterrupt(
 	stdout, stderr *CappedBuffer,
 	exitCode int,
 	duration time.Duration,
-	trimStdoutNewline bool,
 ) (exectool.RunResult, error) {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return exectool.RunResult{}, exectool.ErrTimeout
@@ -30,9 +28,6 @@ func FinalizeOrInterrupt(
 	var stdoutOverflow, stderrOverflow error
 	if stdout != nil {
 		stdoutStr = stdout.String()
-		if trimStdoutNewline {
-			stdoutStr = strings.TrimSuffix(stdoutStr, "\n")
-		}
 		stdoutOverflow = stdout.OverflowErr()
 	}
 	if stderr != nil {

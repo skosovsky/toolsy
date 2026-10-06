@@ -25,7 +25,7 @@ func TestRunPrintsToStdout(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
-	require.Equal(t, "hello", res.Stdout)
+	require.Equal(t, "hello\n", res.Stdout)
 }
 
 func TestRunReadsInMemoryFiles(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRunReadsInMemoryFiles(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
-	require.Equal(t, "world", res.Stdout)
+	require.Equal(t, "world\n", res.Stdout)
 }
 
 func TestRunNormalizesFileLookups(t *testing.T) {
@@ -51,7 +51,7 @@ func TestRunNormalizesFileLookups(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
-	require.Equal(t, "world", res.Stdout)
+	require.Equal(t, "world\n", res.Stdout)
 }
 
 func TestRunExposesEnv(t *testing.T) {
@@ -64,7 +64,7 @@ func TestRunExposesEnv(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
-	require.Equal(t, "toolsy", res.Stdout)
+	require.Equal(t, "toolsy\n", res.Stdout)
 }
 
 func TestRunReturnsScriptErrorsInStderr(t *testing.T) {
@@ -267,4 +267,30 @@ func TestRunAlreadyCanceledDoesNotEvaluate(t *testing.T) {
 	_, err = sb.Run(ctx, exectool.RunRequest{Language: "starlark", Code: `fail("guest error")`})
 	// Assert.
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestRunPreservesExactPrintedBytesForEveryGuestExit(t *testing.T) {
+	for _, tc := range []struct {
+		name, code, want string
+		exit             int
+	}{
+		{"success", `print("hello")`, "hello\n", 0},
+		{"failure", `print("hello"); fail("guest")`, "hello\n", 1},
+		{"success_blank_lines", `print("hello\n"); print()`, "hello\n\n\n", 0},
+		{"failure_blank_lines", `print("hello\n"); print(); fail("guest")`, "hello\n\n\n", 1},
+		{"success_empty", `value = 1`, "", 0},
+		{"failure_empty", `fail("guest")`, "", 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange.
+			sb, err := New(DefaultConfig())
+			require.NoError(t, err)
+			// Act.
+			result, err := sb.Run(t.Context(), exectool.RunRequest{Language: "starlark", Code: tc.code})
+			// Assert.
+			require.NoError(t, err)
+			require.Equal(t, tc.exit, result.ExitCode)
+			require.Equal(t, tc.want, result.Stdout)
+		})
+	}
 }

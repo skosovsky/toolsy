@@ -1,0 +1,9 @@
+package docker
+import "testing"
+func TestReviewAllPolicyBounds(t *testing.T) {
+ mutators:=[]func(*Policy){func(p *Policy){p.MemoryBytes=0},func(p *Policy){p.CPUQuota=0},func(p *Policy){p.PIDs=0},func(p *Policy){p.TmpBytes=0},func(p *Policy){p.OutputBytes=0},func(p *Policy){p.InputBytes=0},func(p *Policy){p.MaxFiles=0},func(p *Policy){p.LogTimeout=0}}
+ for i,mut:=range mutators {
+  p:=DefaultPolicy(); mut(&p)
+  sb,err:=New(WithPolicy(p),WithClient(&mockClient{})); if err==nil || sb!=nil {t.Fatalf("bound %d accepted %+v",i,p)}
+ }
+}

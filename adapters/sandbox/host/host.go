@@ -163,7 +163,7 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exec
 	if executionErr != nil {
 		executionErr = fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, executionErr)
 	}
-	result, runErr = sandboxfs.FinalizeOrInterrupt(ctx, executionErr, stdout, stderr, exitCode, duration, false)
+	result, runErr = sandboxfs.FinalizeOrInterrupt(ctx, executionErr, stdout, stderr, exitCode, duration)
 	if cleanupErr != nil {
 		mayRemoveWorkspace = false
 		runErr = errors.Join(
