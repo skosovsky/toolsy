@@ -13,6 +13,9 @@ func parseHTTPURL(rawURL string) (*url.URL, string, error) {
 	if err != nil {
 		return nil, "", toolsy.NewValidationError("invalid URL: " + err.Error())
 	}
+	if u.User != nil {
+		return nil, "", toolsy.NewValidationError("URL credentials are not allowed")
+	}
 	scheme := strings.ToLower(u.Scheme)
 	if scheme != "http" && scheme != "https" {
 		return nil, "", toolsy.NewValidationError("only http and https schemes are allowed")

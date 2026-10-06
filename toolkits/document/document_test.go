@@ -36,7 +36,7 @@ func TestExtractCSV_Success(t *testing.T) {
 	csvPath := filepath.Join(dir, "data.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte("a,b\n1,2\n3,4"), 0o600))
 
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -64,7 +64,7 @@ func TestExtractCSV_MultilineCellNormalized(t *testing.T) {
 	content := "name,note\nAlice,\"line1\nline2\"\nBob,single"
 	require.NoError(t, os.WriteFile(csvPath, []byte(content), 0o600))
 
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -91,7 +91,7 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 	path := filepath.Join(dir, "x.xyz")
 	require.NoError(t, os.WriteFile(path, []byte("x"), 0o600))
 
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -109,7 +109,7 @@ func TestExtract_UnsupportedFormat(t *testing.T) {
 }
 
 func TestExtract_URLDisabled(t *testing.T) {
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -127,7 +127,7 @@ func TestExtract_URLDisabled(t *testing.T) {
 }
 
 func TestExtract_EmptyArgs(t *testing.T) {
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -144,20 +144,20 @@ func TestExtract_EmptyArgs(t *testing.T) {
 }
 
 func TestAsTool_ReturnsOneTool(t *testing.T) {
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 	require.NotNil(t, tool)
 	require.Equal(t, "document_extract_text", tool.Manifest().Name)
 }
 
 func TestAsTool_DefaultReadOnlyManifest(t *testing.T) {
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 	require.True(t, tool.Manifest().ReadOnly)
 }
 
 func TestAsTool_AllowRemoteClearsReadOnlyManifest(t *testing.T) {
-	tool, err := AsTool(WithAllowRemote(true))
+	tool, err := testAsTool(WithAllowRemote(true))
 	require.NoError(t, err)
 	require.False(t, tool.Manifest().ReadOnly)
 }
@@ -172,7 +172,7 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	}
 	require.NoError(t, os.WriteFile(csvPath, large, 0o600))
 
-	tool, err := AsTool(WithMaxBytes(1024 * 1024))
+	tool, err := testAsTool(WithMaxBytes(1024*1024), WithLimits(Limits{SourceBytes: 1024 * 1024}))
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -186,7 +186,7 @@ func TestExtract_FileTooLarge(t *testing.T) {
 	require.True(t, ok)
 	require.True(t, toolsy.ClientCorrectable(te.Code))
 	assert.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, strconv.Itoa(contentByteCap(1024*1024)))
+	require.Contains(t, te.Reason, strconv.Itoa(1024*1024))
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
@@ -198,8 +198,9 @@ func TestExtract_CSVTableExceedsCap(t *testing.T) {
 	require.NoError(t, os.WriteFile(csvPath, []byte(body), 0o600))
 
 	const maxBytes = 40
-	contentCap := contentByteCap(maxBytes)
-	tool, err := AsTool(WithMaxBytes(maxBytes))
+	contentCap := maxBytes
+	tool, err := testAsTool(WithMaxBytes(maxBytes),
+		WithLimits(Limits{ParsedBytes: contentCap}))
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -217,15 +218,16 @@ func TestExtract_CSVTableExceedsCap(t *testing.T) {
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
-func TestExtract_LocalFileBetweenWireAndContentCap(t *testing.T) {
+func TestExtract_LocalSourceBudgetIndependentOfWire(t *testing.T) {
 	const wireMax = 1000
-	contentCap := contentByteCap(wireMax)
+	contentCap := wireMax
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "edge.csv")
-	// Size between content cap and wire max would pass old wire-only stat check.
+	// Source has its own host-configured budget.
 	require.NoError(t, os.WriteFile(csvPath, []byte(strings.Repeat("x", contentCap+1)), 0o600))
 
-	tool, err := AsTool(WithMaxBytes(wireMax))
+	tool, err := testAsTool(WithMaxBytes(wireMax),
+		WithLimits(Limits{SourceBytes: contentCap}))
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -267,7 +269,7 @@ func TestExtract_DOCX_Success(t *testing.T) {
 	dir := t.TempDir()
 	docxPath := minimalDOCX(t, dir)
 
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -321,7 +323,7 @@ func TestExtract_CancelDuringParse(t *testing.T) {
 	csvPath := filepath.Join(dir, "data.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte("a,b\n1,2\n3,4"), 0o600))
 
-	tool, err := AsTool()
+	tool, err := testAsTool()
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -341,7 +343,7 @@ func TestExtract_CancelDuringParse(t *testing.T) {
 }
 
 func TestExtract_Remote_SSRFBlocked(t *testing.T) {
-	tool, err := AsTool(WithAllowRemote(true))
+	tool, err := testAsTool(WithAllowRemote(true))
 	require.NoError(t, err)
 
 	err = tool.Execute(
@@ -366,9 +368,10 @@ func TestExtract_Remote_ExceedsMaxBytes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithAllowRemote(true),
 		WithHTTPClient(server.Client()),
+		WithLimits(Limits{SourceBytes: maxBytes}),
 		WithAllowPrivateIPs(true),
 		WithMaxBytes(maxBytes),
 	)
@@ -384,23 +387,24 @@ func TestExtract_Remote_ExceedsMaxBytes(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, strconv.Itoa(contentByteCap(maxBytes)))
+	require.Contains(t, te.Reason, strconv.Itoa(maxBytes))
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
 
-func TestExtract_Remote_BetweenWireAndContentCap(t *testing.T) {
+func TestExtract_RemoteSourceBudgetIndependentOfWire(t *testing.T) {
 	const wireMax = 1000
-	contentCap := contentByteCap(wireMax)
+	contentCap := wireMax
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/csv")
 		_, _ = w.Write([]byte(strings.Repeat("x", contentCap+1)))
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithAllowRemote(true),
 		WithHTTPClient(server.Client()),
+		WithLimits(Limits{SourceBytes: contentCap}),
 		WithAllowPrivateIPs(true),
 		WithMaxBytes(wireMax),
 	)
@@ -440,7 +444,7 @@ func TestCopyRemote_CancelOverReadLimit_InterruptWins(t *testing.T) {
 	cancel()
 	o := &options{maxBytes: 64, allowRemote: true}
 	applyDefaults(o)
-	contentCap := contentByteCap(o.maxBytes)
+	contentCap := o.maxBytes
 	huge := strings.Repeat("x", contentCap+128)
 	resp := &http.Response{
 		StatusCode: http.StatusOK,
@@ -465,7 +469,7 @@ func TestExtract_Remote_CancelDuringDo(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithAllowRemote(true),
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
@@ -496,7 +500,7 @@ func TestExtract_Remote_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -522,7 +526,7 @@ func TestExtract_Remote_Non2xxStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
@@ -543,7 +547,7 @@ func TestExtract_Remote_QueryStringURL(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 
 	var result ExtractWireResult
@@ -584,7 +588,7 @@ func TestExtract_Remote_Redirect_AllowsLoopbackWhenPrivateAllowed(t *testing.T) 
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
+	tool, err := testAsTool(WithAllowRemote(true), WithHTTPClient(server.Client()), WithAllowPrivateIPs(true))
 	require.NoError(t, err)
 	err = tool.Execute(
 		context.Background(),
@@ -600,7 +604,7 @@ func TestAsTool_WithResultFormatter(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(WithResultFormatter(func(res ExtractWireResult) (any, error) {
+	tool, err := testAsTool(WithResultFormatter(func(res ExtractWireResult) (any, error) {
 		return map[string]int{"len": len(res.Text)}, nil
 	}))
 	require.NoError(t, err)
@@ -625,7 +629,7 @@ func TestAsTool_WithMaxBytes_WithResultFormatter(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithMaxBytes(50),
 		WithResultFormatter(func(_ ExtractWireResult) (any, error) {
 			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
@@ -655,7 +659,7 @@ func TestAsTool_RemoteURL_WithFormatterAndValidator(t *testing.T) {
 	}))
 	defer server.Close()
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithAllowRemote(true),
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
@@ -694,7 +698,7 @@ func TestExtractCSV_WireCapSingleTruncSuffix(t *testing.T) {
 	csvPath := filepath.Join(dir, "wide.csv")
 	require.NoError(t, os.WriteFile(csvPath, []byte("text\n"+strings.Repeat("x", 220)), 0o600))
 
-	tool, err := AsTool(WithMaxBytes(250))
+	tool, err := testAsTool(WithMaxBytes(512))
 	require.NoError(t, err)
 	var wire []byte
 	require.NoError(
@@ -709,7 +713,7 @@ func TestExtractCSV_WireCapSingleTruncSuffix(t *testing.T) {
 			},
 		),
 	)
-	require.LessOrEqual(t, len(wire), 250)
+	require.LessOrEqual(t, len(wire), 512)
 	require.True(t, json.Valid(wire))
 	require.NotContains(t, string(wire), "[Truncated]")
 	var payload ExtractWireResult
@@ -722,7 +726,7 @@ func TestAsTool_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithMaxBytes(80),
 		WithResultFormatter(func(res ExtractWireResult) (any, error) {
 			return map[string]string{"blob": strings.Repeat("z", 500) + res.Text}, nil
@@ -757,7 +761,7 @@ func TestAsTool_WithHostResultValidator_Reject(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(WithHostResultValidator(func(_ any) error {
+	tool, err := testAsTool(WithHostResultValidator(func(_ any) error {
 		return assert.AnError
 	}))
 	require.NoError(t, err)
@@ -778,7 +782,7 @@ func TestAsTool_WithHostResultValidator(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(WithHostResultValidator(func(v any) error {
+	tool, err := testAsTool(WithHostResultValidator(func(v any) error {
 		_, ok := v.(ExtractWireResult)
 		if !ok {
 			return assert.AnError
@@ -802,7 +806,7 @@ func TestAsTool_FormatterAndValidator(t *testing.T) {
 	path := filepath.Join(dir, "sample.csv")
 	require.NoError(t, os.WriteFile(path, []byte("a,b\n1,2"), 0o600))
 
-	tool, err := AsTool(
+	tool, err := testAsTool(
 		WithResultFormatter(func(res ExtractWireResult) (any, error) {
 			return map[string]int{"len": len(res.Text)}, nil
 		}),
@@ -831,4 +835,15 @@ func TestAsTool_FormatterAndValidator(t *testing.T) {
 		),
 	)
 	require.Positive(t, payload["len"])
+}
+
+// Tests that intentionally authorize arbitrary temporary paths use an explicit host port.
+func testAsTool(opts ...Option) (toolsy.Tool, error) {
+	authorized := WithLocalSource(func(ctx context.Context, ref string) (io.ReadCloser, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return os.Open(ref)
+	})
+	return AsTool(append([]Option{authorized}, opts...)...)
 }

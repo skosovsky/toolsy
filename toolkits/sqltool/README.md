@@ -1,6 +1,6 @@
 # Toolsy: SQL Toolkit (sqltool)
 
-**Description:** Lets the agent inspect database schema and run read-only SELECT (and WITH/CTE) queries. Results are returned as Markdown tables with row and cell size limits to protect context window and memory.
+**Description:** Inspect schema and execute a lexically filtered SELECT/CTE through a host-owned `database/sql` connection. Database privileges define the access boundary. The SELECT lexer is a usability filter, not authorization: SQL functions, dialect syntax and database-side effects require a suitably restricted role.
 
 ## Installation
 
@@ -18,19 +18,28 @@ go get github.com/skosovsky/toolsy/toolkits/sqltool
 | `sql_execute_read`   | Execute a SELECT query           | `{"query": "string"}`                      |
 
 - Inspect result: `{"schema": "## Table: t\n\n| Column | Type | ..."}` (Markdown).
-- Execute result: `{"result": "col1 | col2\n---\n...", "row_count": N}`. Rows are capped by `MaxRows`; cell values are truncated by `MaxCellBytes`. If the limit is reached, `[Truncated: max rows reached]` is appended.
+- Execute result: `{"result":"...", "row_count":N, "truncated":false}`. A successful result explicitly reports row or cell display truncation. Row overflow is detected by reading one extra row; no continuation token is invented. Hosts can issue a new query with their own dialect-specific range/offset/keyset contract. This toolkit does not promise stable pagination across changing data.
 
-## Configuration & Security
+## Limits and access contract
 
-> **Warning:** Use a **read-only database user** for the connection passed to `AsTools`. The toolkit rejects multiple statements (`;`), DML/DDL keywords in the query body, and returns an error if `db` is nil.
+All zero/negative options select finite defaults; positive values override them. Limits apply to actual database results, even when the query omits a LIMIT clause.
 
-- **MaxRows:** Use `WithMaxRows(n)` to cap returned rows (default 100).
-- **MaxCellBytes:** Use `WithMaxCellBytes(n)` to truncate long cell values and avoid context-window blowup (default 200).
-- **MaxSchemaBytes:** `WithMaxSchemaBytes(n)` limits complete **inspect** wire JSON (default 512 KiB). Oversized JSON returns `CodeValidationFailed` without a successful result.
-- **Execute caps:** `WithMaxRows` / `WithMaxCellBytes` are **semantic** limits on query result markdown (row/cell suffixes), not a wire byte budget. There is no `WithMaxExecuteBytes`; execute formatter output is not wire-capped unless the host formatter returns a smaller payload.
-- **AllowedTables:** Use `WithAllowedTables([]string{"t1","t2"})` to restrict schema inspection to specific tables.
-- **Dialects:** Supported drivers: `postgres`, `pgx`, `mysql`, `sqlite3`, `sqlite`.
-- **IoC:** `WithExecuteResultFormatter`, `WithInspectResultFormatter`, and `WithHostResultValidator` (inspect and execute tools).
+| Option | Default | Enforcement |
+| --- | --- | --- |
+| `WithMaxRows` | 100 | Returned execute rows; extra row produces explicit truncation |
+| `WithMaxColumns` | 128 | Execute columns; inspected columns per table; overflow errors |
+| `WithMaxCells` | 10000 | Execute cells; total schema fields (four per column); overflow errors |
+| `WithMaxCellBytes` | 200 | Displayed execute value bytes, including Markdown escaping and marker; truncation flagged |
+| `WithMaxTables` | 100 | Requested or database-scanned inspect table names, including filtered names; overflow errors |
+| `WithMaxSourceBytes` | 4 MiB | Consumed execute names/values before truncation; inspect names/rendered schema accumulation; overflow errors |
+| `WithMaxExecuteBytes` | 512 KiB | Complete execute JSON after JSON escaping, including custom formatter output; overflow errors |
+| `WithMaxSchemaBytes` | 512 KiB | Complete inspect JSON after JSON escaping, including custom formatter output; overflow errors |
+
+All limit errors return validation errors and no successful partial payload. Source limits bound toolkit consumption and retained data; `database/sql` and the host driver may materialize a complete cell or prefetch rows before a check. Hosts must configure driver/database deadlines, statement/resource limits and field sizes when hard upstream memory bounds are needed. `QueryContext` carries caller cancellation to the driver, and rows are closed on all exits. Driver cancellation behavior is the driver's contract.
+
+`AllowedTables` filters **inspect** only. It is not an execute ACL. The host chooses the connection, read-only role, credentials, dialect and permissions; model queries do not select a new connection. SQL read-only hints do not grant permissions or prove absence of side effects. No query is rewritten with a dialect-dependent LIMIT.
+
+Supported dialects: `postgres`, `pgx`, `mysql`, `sqlite3`, `sqlite`. Output injection: `WithExecuteResultFormatter`, `WithInspectResultFormatter`, `WithHostResultValidator`. Custom formatters run on bounded DTOs and final JSON has the same wire limits; the host remains responsible for allocations inside its callback.
 
 ## Quick start
 

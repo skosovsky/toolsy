@@ -1,60 +1,11 @@
-# Toolsy: File System Toolkit (fstool)
+# Filesystem toolkit
 
-**Description:** Lets the agent safely list directories, read files, and optionally write files within a sandboxed base directory. All paths are validated to prevent path traversal and symlink escape.
+`AsTools(baseDir, opts...)` registers list/read and optionally write tools. The host selects an existing base directory; model paths are relative, and absolute paths and `..` segments are rejected. Each execution opens `os.Root` and uses its root-relative open/mkdir operations, including symlink containment at actual access. Outside symlinks cannot be followed, including when replaced concurrently. The host controls the base directory itself: do not allow another actor to replace the host root or move its directories outside it. This is not isolation from hard links, mount points, special files, or malicious host filesystem administration. Only regular files are read/written. Unix opens are nonblocking to reject FIFOs without waiting for a peer; on other platforms the host must exclude device paths (their open semantics are not bounded). Writes create parent directories and overwrite the exact approved content; no content truncation and no multi-file atomicity. Confirmation metadata is not an authorization grant.
 
-## Installation
+## Limits and continuation
 
-```bash
-go get github.com/skosovsky/toolsy/toolkits/fstool
-```
+All limits are finite; zero selects the default, negative options reject construction. The source cap must leave room for one overflow-probe byte, and the entry cap must be smaller than the scan cap. `WithMaxBytes` (1 MiB) bounds every successful final JSON result **after escaping**. Oversized results fail validation and emit no successful result. `WithMaxSourceBytes` (1 MiB) bounds a read range and write content. `WithMaxEntries` (100) bounds returned directory entries, `WithMaxScanEntries` (10,000) bounds offset plus lookahead, and `WithMaxNameBytes` (255) bounds each entry name. Names are returned without content shortening. Directory reads allocate only a bounded batch; no full-directory sorting/collection.
 
-**Dependencies:** requires `github.com/skosovsky/toolsy` (core); wire JSON capping uses `github.com/skosovsky/toolsy/internal/format` from the same repo checkout (via `replace` in development).
+`fs_read_file` takes `path`, optional byte `offset`, and optional byte `length` (zero uses the source limit). It returns `path`, `content`, `next_offset`, and `has_more`. File ranges are not snapshots; next offsets use returned byte counts and has_more reflects the size observed at open, so concurrent modification can change subsequent contents. Ranges must end on UTF-8 boundaries; invalid UTF-8 fails validation. Without an explicit length, files beyond the source limit fail validation; use an explicit bounded range to continue. `fs_list_dir` takes `path`, optional `offset` and `limit` (zero uses the entry limit), and returns `path`, `entries`, `next_offset`, and `has_more`. Offset is the actual filesystem enumeration position, not a sorted or snapshot cursor; changes between calls may reorder, duplicate, or omit entries. When the scan ceiling is reached, continuation fails explicitly. Select a smaller range/page if wire JSON does not fit. `fs_write_file` takes `path` and `content` and returns `status`.
 
-## Available tools
-
-| Tool            | Description                          | Input                                     |
-| --------------- | ------------------------------------ | ----------------------------------------- |
-| `fs_list_dir`   | List files and directories in a path | `{"path": "string"}`                      |
-| `fs_read_file`  | Read contents of a text file         | `{"path": "string"}`                      |
-| `fs_write_file` | Write content to a file              | `{"path": "string", "content": "string"}` |
-
-- List result: `{"entries": [{"name": "...", "is_dir": bool, "size": int64}]}`.
-- Read result: `{"content": "..."}`. `WithMaxBytes` is the **wire JSON** budget (default 1 MB). Fail-closed reads use `contentByteCap = maxWire - envelopeOverhead` (envelope `{"content":"..."}` ≈ 15 bytes); exceeding the content cap returns **`CodeValidationFailed`** (stat pre-check or read).
-- Write result: `{"status": "Success"}`. When `WithReadOnly(true)` is set, `fs_write_file` is not registered.
-
-## Configuration & Security
-
-> **Warning:** Path traversal protection is critical. The toolkit uses `filepath.Rel` (not string prefix) so that paths like `/app/sandbox-bypass/secret` are rejected.
-
-- **Base directory:** `AsTools(baseDir, opts...)` requires an existing directory. All agent paths are resolved relative to `baseDir` and validated after symlink resolution.
-
-- **Symlink resolution:** Paths are resolved with `filepath.EvalSymlinks`. If a symlink inside the sandbox points outside, the path is rejected.
-
-- **Read-only mode:** Use `WithReadOnly(true)` to disable `fs_write_file` (e.g. read-only agent).
-
-- **Max bytes:** Use `WithMaxBytes(n)` as the wire JSON budget for read_file. Transport reads use the content cap derived from envelope overhead; exceeding returns **`CodeValidationFailed`** (fail-closed).
-
-- **Tool names/descriptions:** Use `WithListDirName`, `WithReadFileName`, `WithWriteFileName`, and the corresponding `With*Description` options to customize.
-
-## Quick start
-
-```go
-package main
-
-import (
-	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/toolkits/fstool"
-)
-
-func main() {
-	builder := toolsy.NewRegistryBuilder()
-
-	tools, err := fstool.AsTools("/tmp/agent_workspace", fstool.WithReadOnly(true))
-	if err != nil {
-		panic(err)
-	}
-	for _, tool := range tools {
-		builder.Add(tool)
-	}
-}
-```
+Read-only configuration (`WithReadOnly(true)`) omits the write tool. Tool names/descriptions can be overridden with the corresponding options. Root handles are closed after each execution; tools need no separate lifecycle API. Cancellation is checked between local IO operations; local file IO does not provide asynchronous interruption. Symlinks within the root are allowed; absolute symlinks are rejected by os.Root even if their target is inside the root.

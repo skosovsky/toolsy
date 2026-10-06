@@ -3,6 +3,7 @@ package human
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/skosovsky/toolsy"
@@ -22,23 +23,32 @@ type clarificationArgs struct {
 // AsTools returns two suspend-first tools (request_approval, ask_human_clarification).
 // The orchestrator is expected to checkpoint execution when a control pause error is returned.
 func AsTools(opts ...Option) ([]toolsy.Tool, error) {
-	var o options
+	o := options{
+		approvalName: "", approvalDesc: "", clarificationName: "", clarificationDesc: "",
+		maxPayloadBytes: defaultMaxPayloadBytes,
+	}
 	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("toolkit/human: nil option")
+		}
 		opt(&o)
 	}
 	applyDefaults(&o)
+	if o.maxPayloadBytes <= 0 {
+		return nil, errors.New("toolkit/human: payload limit must be positive")
+	}
 
 	approvalTool, err := toolsy.NewStreamTool[approvalArgs](
 		o.approvalName,
 		o.approvalDesc,
 		func(_ context.Context, _ *toolsy.RunEnv, args approvalArgs, yield func(toolsy.Chunk) error) error {
-			payload, marshalErr := json.Marshal(map[string]string{
+			payload, marshalErr := encodePausePayload(map[string]string{
 				payloadKindKey: "approval",
 				"action":       args.Action,
 				"reason":       args.Reason,
-			})
+			}, o.maxPayloadBytes)
 			if marshalErr != nil {
-				return toolsy.NewInternalError(fmt.Errorf("toolkit/human: marshal approval payload: %w", marshalErr))
+				return marshalErr
 			}
 			return toolsy.YieldControl(yield, &toolsy.PauseSignal{
 				Reason: string(payload),
@@ -55,14 +65,12 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		o.clarificationName,
 		o.clarificationDesc,
 		func(_ context.Context, _ *toolsy.RunEnv, args clarificationArgs, yield func(toolsy.Chunk) error) error {
-			payload, marshalErr := json.Marshal(map[string]string{
+			payload, marshalErr := encodePausePayload(map[string]string{
 				payloadKindKey: "clarification",
 				"question":     args.Question,
-			})
+			}, o.maxPayloadBytes)
 			if marshalErr != nil {
-				return toolsy.NewInternalError(
-					fmt.Errorf("toolkit/human: marshal clarification payload: %w", marshalErr),
-				)
+				return marshalErr
 			}
 			return toolsy.YieldControl(yield, &toolsy.PauseSignal{
 				Reason: string(payload),
@@ -76,4 +84,22 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	}
 
 	return []toolsy.Tool{approvalTool, clarificationTool}, nil
+}
+
+func encodePausePayload(fields map[string]string, limit int) ([]byte, error) {
+	remaining := limit
+	for _, value := range fields {
+		if len(value) > remaining {
+			return nil, toolsy.NewValidationError(fmt.Sprintf("human pause payload exceeds %d bytes", limit))
+		}
+		remaining -= len(value)
+	}
+	payload, err := json.Marshal(fields)
+	if err != nil {
+		return nil, toolsy.NewInternalError(fmt.Errorf("human pause payload: %w", err))
+	}
+	if len(payload) > limit {
+		return nil, toolsy.NewValidationError(fmt.Sprintf("human pause payload exceeds %d bytes", limit))
+	}
+	return payload, nil
 }

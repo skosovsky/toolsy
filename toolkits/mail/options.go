@@ -4,21 +4,44 @@ package mail
 type Option func(*options)
 
 type options struct {
-	readOnly     bool
-	maxBodyBytes int
-	sendName     string
-	sendDesc     string
-	searchName   string
-	searchDesc   string
-	readName     string
-	readDesc     string
+	readOnly         bool
+	maxBodyBytes     int
+	maxSourceBytes   int
+	maxItemBytes     int
+	maxSearchResults int
+	maxWireBytes     int
+	sendName         string
+	sendDesc         string
+	searchName       string
+	searchDesc       string
+	readName         string
+	readDesc         string
 }
 
-const defaultMaxBodyBytes = 256 * 1024
+const (
+	defaultMaxBodyBytes     = 256 * 1024
+	defaultMaxSourceBytes   = 1024 * 1024
+	defaultMaxItemBytes     = 256 * 1024
+	defaultMaxWireBytes     = 1024 * 1024
+	defaultMaxSearchResults = 100
+	defaultSearchLimit      = 10
+)
 
 func applyDefaults(o *options) {
-	if o.maxBodyBytes <= 0 {
+	if o.maxBodyBytes == 0 {
 		o.maxBodyBytes = defaultMaxBodyBytes
+	}
+	if o.maxSourceBytes == 0 {
+		o.maxSourceBytes = defaultMaxSourceBytes
+	}
+	if o.maxItemBytes == 0 {
+		o.maxItemBytes = defaultMaxItemBytes
+	}
+	if o.maxSearchResults == 0 {
+		o.maxSearchResults = defaultMaxSearchResults
+	}
+	if o.maxWireBytes == 0 {
+		o.maxWireBytes = defaultMaxWireBytes
 	}
 	if o.sendName == "" {
 		o.sendName = "mail_send"
@@ -47,7 +70,8 @@ func WithReadOnly(readOnly bool) Option {
 	}
 }
 
-// WithMaxBodyBytes sets the maximum body size for send and read (default 256KB).
+// WithMaxBodyBytes caps unchanged outgoing and raw incoming body bytes (default 256 KiB).
+// Zero selects the default; negative is a configuration error.
 func WithMaxBodyBytes(n int) Option {
 	return func(o *options) {
 		o.maxBodyBytes = n
@@ -95,3 +119,19 @@ func WithReadDescription(desc string) Option {
 		o.readDesc = desc
 	}
 }
+
+// WithMaxSourceBytes caps aggregate provider string bytes before formatting (default 1 MiB).
+// Zero selects the default; negative is a configuration error.
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
+
+// WithMaxItemBytes caps all string fields of one provider message (default 256 KiB).
+// Zero selects the default; negative is a configuration error.
+func WithMaxItemBytes(n int) Option { return func(o *options) { o.maxItemBytes = n } }
+
+// WithMaxSearchResults caps requested and actual search counts (default 100).
+// Zero selects the default; negative is a configuration error.
+func WithMaxSearchResults(n int) Option { return func(o *options) { o.maxSearchResults = n } }
+
+// WithMaxWireBytes caps final encoded JSON bytes (default 1 MiB).
+// Zero selects the default; negative is a configuration error.
+func WithMaxWireBytes(n int) Option { return func(o *options) { o.maxWireBytes = n } }

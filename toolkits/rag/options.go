@@ -6,6 +6,7 @@ import (
 
 const defaultMaxBytes = 512 * 1024
 const defaultMaxResults = 10
+const defaultMaxItemBytes = 64 * 1024
 
 // ResultShape controls default tool output encoding.
 type ResultShape int
@@ -28,7 +29,8 @@ type options struct {
 	description         string
 	maxBytes            int
 	maxResults          int
-	maxResultsSet       bool
+	maxItemBytes        int
+	maxSourceBytes      int
 	resultShape         ResultShape
 	scopeFilter         ScopeFilter
 	resultFormatter     func([]Document) (any, error)
@@ -56,11 +58,10 @@ func WithMaxBytes(n int) Option {
 	}
 }
 
-// WithMaxResults sets the maximum number of results to include (0 = no limit).
+// WithMaxResults sets the maximum number of results to include (nonpositive = default 10).
 func WithMaxResults(n int) Option {
 	return func(o *options) {
 		o.maxResults = n
-		o.maxResultsSet = true
 	}
 }
 
@@ -93,6 +94,12 @@ func WithHostResultValidator(v func(any) error) Option {
 }
 
 func (o *options) applyDefaults() {
+	if o.maxItemBytes <= 0 {
+		o.maxItemBytes = defaultMaxItemBytes
+	}
+	if o.maxSourceBytes <= 0 {
+		o.maxSourceBytes = defaultMaxBytes
+	}
 	if o.name == "" {
 		o.name = "search_knowledge_base"
 	}
@@ -102,7 +109,13 @@ func (o *options) applyDefaults() {
 	if o.maxBytes <= 0 {
 		o.maxBytes = defaultMaxBytes
 	}
-	if !o.maxResultsSet {
+	if o.maxResults <= 0 {
 		o.maxResults = defaultMaxResults
 	}
 }
+
+// WithMaxItemBytes limits each encoded provider unit (default 64 KiB).
+func WithMaxItemBytes(n int) Option { return func(o *options) { o.maxItemBytes = n } }
+
+// WithMaxSourceBytes limits the total encoded provider collection (default 512 KiB).
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }

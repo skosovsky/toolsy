@@ -1,5 +1,9 @@
 // Package sqltool provides a Text-to-SQL toolkit for agents: inspect database schema
-// and execute read-only SELECT queries with row and cell size limits.
+// and execute lexically filtered SELECT queries with finite source, count and wire limits.
+// Database role privileges are the authority boundary; the lexer is not authorization.
+// AllowedTables restricts inspection only. Driver allocation and cancellation behavior
+// remain host responsibilities. Successful display truncation is explicit; no
+// pagination token is supplied for arbitrary queries.
 //
 // The read-only validator uses a small lexical subset rather than a full SQL parser.
 // It supports:

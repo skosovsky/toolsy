@@ -310,5 +310,12 @@ func TestScratchpad_Concurrent(t *testing.T) {
 		ToolName: "memory_read_all",
 		Input:    toolsy.ToolInput{CallID: "read", ArgsJSON: []byte(`{}`)},
 	})
-	require.Contains(t, read.Facts, "k0=v")
+	for i := range 10 {
+		require.Contains(t, read.Facts, fmt.Sprintf("k%d=v", i))
+	}
+	raw, err := store.Load(context.Background(), factsStateKey)
+	require.NoError(t, err)
+	var facts map[string]string
+	require.NoError(t, json.Unmarshal(raw, &facts))
+	require.Len(t, facts, 10)
 }

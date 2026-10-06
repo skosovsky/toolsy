@@ -1,7 +1,12 @@
 package document
 
 import (
+	"context"
+	"io"
 	"net/http"
+	"os"
+
+	"github.com/skosovsky/toolsy"
 )
 
 // HTTPClient is the minimal HTTP surface used for remote document fetch. Pass [*http.Client] with Timeout only;
@@ -15,6 +20,9 @@ type Option func(*options)
 
 type options struct {
 	maxBytes            int
+	limits              Limits
+	localSource         LocalSource
+	inProcessPDF        bool
 	allowRemote         bool
 	allowPrivateIPs     bool
 	httpClient          HTTPClient
@@ -25,9 +33,11 @@ type options struct {
 }
 
 const (
-	defaultMaxBytes = 2 * 1024 * 1024 // 2 MB
-	defaultToolName = "document_extract_text"
-	defaultToolDesc = "Extract text from a document (PDF, CSV, DOCX) by file path or URL"
+	defaultMaxItems  = 1024
+	defaultItemBytes = 64 * 1024
+	defaultMaxBytes  = 2 * 1024 * 1024 // 2 MB
+	defaultToolName  = "document_extract_text"
+	defaultToolDesc  = "Extract text from a document (PDF, CSV, DOCX) by file path or URL"
 )
 
 func applyDefaults(o *options) {
@@ -42,8 +52,8 @@ func applyDefaults(o *options) {
 	}
 }
 
-// WithMaxBytes sets the wire JSON byte budget (default 2 MB). Local stat, remote download, and parsers
-// Final JSON is checked against the wire byte budget; oversized payloads return a limit error.
+// WithMaxBytes sets the final JSON byte budget (default 2 MiB). Zero selects the default;
+// negative values fail construction. Source and parser budgets are configured with WithLimits.
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n
@@ -98,4 +108,73 @@ func WithHostResultValidator(v func(any) error) Option {
 	return func(o *options) {
 		o.hostResultValidator = v
 	}
+}
+
+// LocalSource opens a host-authorized reference. The toolkit closes and bounds the reader.
+// The host owns authorization, cancellation of blocking Open/Read calls, and reference semantics.
+type LocalSource func(context.Context, string) (io.ReadCloser, error)
+
+// Limits separates source, parsed data, collection count and individual item budgets.
+// Zero selects finite defaults; negative values are configuration errors.
+type Limits struct {
+	SourceBytes int
+	ParsedBytes int
+	MaxItems    int
+	ItemBytes   int
+}
+
+// WithLimits sets parser budgets independently of final JSON bytes.
+func WithLimits(limits Limits) Option { return func(o *options) { o.limits = limits } }
+
+// WithLocalSource selects a host-authorized source opener. No local source is enabled by default.
+func WithLocalSource(open LocalSource) Option { return func(o *options) { o.localSource = open } }
+
+// WithLocalRoot opens references relative to a host-owned root handle, enforcing containment at access.
+// The host must keep root open for the lifetime of executions.
+func WithLocalRoot(root *os.Root) Option {
+	return func(o *options) {
+		if root == nil {
+			o.localSource = nil
+			return
+		}
+		o.localSource = func(ctx context.Context, ref string) (io.ReadCloser, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			f, err := root.OpenFile(ref, os.O_RDONLY|nonblockFlag, 0)
+			if err != nil {
+				return nil, err
+			}
+			info, err := f.Stat()
+			if err != nil || !info.Mode().IsRegular() {
+				_ = f.Close()
+				if err != nil {
+					return nil, err
+				}
+				return nil, toolsy.NewValidationError("document: local source must be a regular file")
+			}
+			return f, nil
+		}
+	}
+}
+
+// WithInProcessPDF explicitly enables a parser that cannot bound page decode allocations or CPU.
+// Use only when the host accepts this limitation or isolates the entire execution.
+func WithInProcessPDF(allow bool) Option { return func(o *options) { o.inProcessPDF = allow } }
+
+func parserLimits(o *options) Limits {
+	l := o.limits
+	if l.SourceBytes == 0 {
+		l.SourceBytes = defaultMaxBytes
+	}
+	if l.ParsedBytes == 0 {
+		l.ParsedBytes = defaultMaxBytes
+	}
+	if l.MaxItems == 0 {
+		l.MaxItems = defaultMaxItems
+	}
+	if l.ItemBytes == 0 {
+		l.ItemBytes = defaultItemBytes
+	}
+	return l
 }

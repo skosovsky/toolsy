@@ -23,7 +23,8 @@ Result: `time_current` returns `{"utc": "...", "local": "...", "weekday": "...",
 
 ```go
 loc, _ := time.LoadLocation("Europe/Moscow")
-result := timetool.ComputeCurrent(loc)
+result, err := timetool.ComputeCurrent(loc)
+if err != nil { /* location cannot represent an RFC3339 instant */ }
 // result.UTC, result.Local, result.Weekday, result.Unix
 ```
 
@@ -45,10 +46,15 @@ result := timetool.ComputeCurrent(loc)
 	)
 ```
 
-## Configuration & Security
+## Time and bounds contract
 
-- **WithLocation(loc):** Sets the timezone for the "local" field in `time_current` and for **date arithmetic in `time_calculate`** (base_date is interpreted in this zone, then days/hours are added). Default is system local (`time.Local`); fallback to UTC if local is not available.
-- **Date arithmetic:** DST-safe: addition is done in the configured location via `time.AddDate` and `time.Add`, so wall-clock time is preserved across DST boundaries.
+Both tools use one host location resolver. `WithLocationProvider` overrides `WithLocation` on every invocation (including calculate); provider errors and `(nil, nil)` are returned as errors, never passed to `time.In`. The default location is `time.Local`, falling back to UTC. `ComputeCurrent(nil)` is a separate library convenience and uses UTC.
+
+`base_date` uses the strict RFC3339 subset supported by Go calendar validation: four-digit year, two-digit time fields, uppercase T/Z, dot fractional separator with 1–9 fractional digits, and numeric offsets below 24 hours with minutes below 60. Leap seconds are unsupported; excess fractional precision is rejected rather than discarded. Valid numeric zero offsets and trailing-zero fractions are accepted. `base_date` is an RFC3339 instant: its explicit numeric offset determines the instant, rather than being replaced by the host zone. Calculation first converts that instant to the resolved host zone, then applies calendar `add_days` with `time.AddDate`, then elapsed `add_hours` with `time.Add`. Days preserve calendar wall time across ordinary DST transitions; hours are exact elapsed durations and can change wall time. For nonexistent or ambiguous local times `AddDate` follows Go's timezone normalization (the choice of offset in an ambiguity is not guaranteed). The result uses the host zone's offset at the resulting instant. RFC3339Nano retains fractional seconds. Historical offsets containing seconds and fixed offsets outside ±23:59 cannot represent the same instant in RFC3339 and return validation errors in both tools and `ComputeCurrent`.
+
+Hour duration multiplication is checked before conversion to `time.Duration`; calendar input is bounded and calendar/intermediate/final results must stay within RFC3339 years 0000–9999. Overflow returns a validation error instead of wraparound. `base_date` is limited to 64 bytes. There is no collection, source reader, or continuation interface.
+
+`WithMaxWireBytes(n)` bounds both default and host-formatted complete JSON after escaping. Default: 64 KiB; zero/negative select the finite default. Overlimit output is rejected with no truncation, including multibyte and escaped strings. Host formatters remain responsible for their own computation/allocation bounds and business DTOs; the wire limit does not bound arbitrary callback allocations. Host validators run before marshaling. The tools are read-only and confer no authority for subsequent actions.
 
 ## Quick start
 

@@ -28,16 +28,16 @@ Scrape uses `httptool.SafeDialTransport` for SSRF protection and DNS-rebinding p
 | `web_search` | Run a search query         | `{"query": "string"}` |
 | `web_scrape` | Fetch URL and get Markdown | `{"url": "string"}`   |
 
-Result: search returns a Markdown list of links and snippets; scrape returns `{"markdown": "..."}`. Scraper strips script, style, noscript, iframe, nav, header, footer, aside, then converts HTML to Markdown. Byte budgets apply to **final wire JSON** (including JSON envelope overhead).
+Result: search returns a Markdown list of links and snippets; scrape returns `{"markdown": "...", "source_url": "..."}`. Scraper strips script, style, noscript, iframe, nav, header, footer, aside, then converts HTML to Markdown. Byte budgets apply to **final wire JSON** (including JSON envelope overhead).
 
 ## Configuration & Security
 
 > **Warning:** Scraping validates URLs: only http/https, host required. Private/loopback IPs are blocked unless `WithAllowPrivateIPs(true)` (tests only). Redirects are validated with the same rules and blocked domains. DNS rebinding is mitigated by pinning the connection to the resolved IP at dial time (`SafeDialTransport`); URL validation resolves IPs at validate time with the same `IsBlockedIP` policy.
 
-- **WithMaxSearchBytes(n):** Cap `web_search` wire JSON (default 256KB). Applies to default and formatter paths. `SearchResultsTruncationSuffix` (50 hits) is a **semantic** cap, separate from the wire budget.
+- **WithMaxSearchBytes(n):** Cap `web_search` wire JSON (default 256KB). Applies to default and formatter paths. Search provider count/item/source bounds are separate from this wire budget.
 - **WithMaxPageBytes(n):** Cap `web_scrape` wire JSON (default 2MB). HTML read and markdown conversion are fail-closed; oversized HTML or expanded markdown return `CodeValidationFailed` — raise `WithMaxPageBytes` for larger budgets. Oversized final JSON returns `CodeValidationFailed`; serialized JSON is never sliced.
 - **WithBlockedDomains(domains):** Blacklist of hostnames; exact match and subdomains are blocked (e.g. blocking `evil.com` blocks `api.evil.com`). Checked on initial URL and on redirects.
-- **WithScraper(s):** Replace default HTML-to-Markdown scraper (e.g. for JS-rendered pages). Custom scrapers must enforce `maxBytes` fail-closed in `HTMLToMarkdown(ctx, html, maxBytes)` (error when markdown exceeds cap; no silent truncate). They should respect caller context and bound CPU; only the default scraper cancels in-flight HTML conversion when the scrape context is done. Use `WrapMarkdownExceedsLimit` for custom scraper cap errors.
+- **WithScraper(s):** Replace default HTML-to-Markdown scraper (e.g. for JS-rendered pages). Custom scrapers must enforce `maxBytes` fail-closed in `HTMLToMarkdown(ctx, html, maxBytes)` (error when markdown exceeds cap; no silent truncate). They should respect caller context and bound CPU; the default scraper checks cancellation before and after synchronous HTML conversion. Use `WrapMarkdownExceedsLimit` for custom scraper cap errors.
 - **WithAllowPrivateIPs(true):** For tests with httptest on 127.0.0.1 only.
 - **IoC:** `WithSearchFormatter`, `WithScrapeFormatter`, and `WithHostResultValidator`. Validator-only mode validates `SearchWireResult` / `ScrapeWireResult` wire envelopes (not raw slices/strings).
 
@@ -70,3 +70,9 @@ func main() {
 	}
 }
 ```
+
+## Task38 contract
+
+Extracted HTML and search snippets are untrusted data. Removing tags does not make their text safe instructions. Default scrape output carries `source_url` (the actual final response URL). `WithScrapeFormatter` receives the complete `ScrapeWireResult`, allowing host DTOs to retain provenance.
+
+Nonpositive budgets select finite defaults. Search accepts at most 50 results (`WithMaxSearchResults`), 16 KiB per encoded hit (`WithMaxSearchItemBytes`), and 256 KiB total encoded provider hits (`WithMaxSearchSourceBytes`), independently of the final wire budget. Overlimit provider results fail before formatters; no hits disappear silently and no cursor is invented because `SearchProvider` has no continuation capability. Providers own their internal allocations and network policy. Scraping separates HTML source (`WithMaxSourceBytes`, default final wire budget minus 18 bytes), extracted markdown (`WithMaxMarkdownBytes`, same default), and final JSON (`WithMaxPageBytes`). Actual custom scraper output is checked again by the toolkit. The default parser uses bounded input but does not promise a hard allocation or CPU quota; hostile parsing requiring such guarantees belongs in a host sandbox. Final JSON budgets include escaping and provenance.

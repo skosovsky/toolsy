@@ -14,6 +14,15 @@ import (
 // parsePDF extracts text from a PDF file at filePath with a running byte budget (fail-closed).
 // [os.Stat] is a coarse guard before [pdf.Open]; per-page extraction stops before exceeding maxBytes.
 func parsePDF(ctx context.Context, filePath string, maxBytes int) (string, error) {
+	return parsePDFWithLimits(
+		ctx,
+		filePath,
+		Limits{SourceBytes: maxBytes, ParsedBytes: maxBytes, MaxItems: defaultMaxItems, ItemBytes: defaultItemBytes},
+	)
+}
+
+func parsePDFWithLimits(ctx context.Context, filePath string, limits Limits) (string, error) {
+	maxBytes := limits.SourceBytes
 	if ie := toolsy.ToolkitContextError(ctx, "document: pdf open"); ie != nil {
 		return "", ie
 	}
@@ -37,10 +46,14 @@ func parsePDF(ctx context.Context, filePath string, maxBytes int) (string, error
 	}
 	defer func() { _ = f.Close() }()
 
-	return extractPDFTextByPage(ctx, r, maxBytes)
+	if r.NumPage() < 0 || r.NumPage() > limits.MaxItems {
+		return "", toolsy.NewValidationError("PDF page count limit exceeded")
+	}
+	return extractPDFTextByPage(ctx, r, limits)
 }
 
-func extractPDFTextByPage(ctx context.Context, r *pdf.Reader, maxBytes int) (string, error) {
+func extractPDFTextByPage(ctx context.Context, r *pdf.Reader, limits Limits) (string, error) {
+	maxBytes := limits.ParsedBytes
 	numPages := r.NumPage()
 	if numPages == 0 {
 		return "", nil
@@ -63,6 +76,9 @@ func extractPDFTextByPage(ctx context.Context, r *pdf.Reader, maxBytes int) (str
 			return "", toolsy.NewInternalError(fmt.Errorf("document: pdf page %d text: %w", pageNum, err))
 		}
 
+		if len(pageText) > limits.ItemBytes {
+			return "", toolsy.NewValidationError("PDF page text byte limit exceeded")
+		}
 		if maxBytes > 0 && len(pageText) > remaining {
 			return "", toolsy.MapToolkitCapError(ctx, "document: pdf text", maxBytes, "pdf text", "")
 		}

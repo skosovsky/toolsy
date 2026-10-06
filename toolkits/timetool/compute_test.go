@@ -9,7 +9,8 @@ import (
 
 func TestComputeCurrent_UTC(t *testing.T) {
 	loc := time.FixedZone("Test", 3*3600)
-	got := ComputeCurrent(loc)
+	got, err := ComputeCurrent(loc)
+	require.NoError(t, err)
 	require.NotEmpty(t, got.UTC)
 	require.NotEmpty(t, got.Local)
 	require.NotEmpty(t, got.Weekday)
@@ -23,7 +24,8 @@ func TestComputeCurrent_UTC(t *testing.T) {
 }
 
 func TestComputeCurrent_NilLocationUsesUTC(t *testing.T) {
-	got := ComputeCurrent(nil)
+	got, err := ComputeCurrent(nil)
+	require.NoError(t, err)
 	require.NotEmpty(t, got.UTC)
 	require.Equal(t, got.UTC, got.Local)
 }
@@ -31,7 +33,8 @@ func TestComputeCurrent_NilLocationUsesUTC(t *testing.T) {
 func TestComputeCurrent_DSTAwareLocation(t *testing.T) {
 	loc, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
-	got := ComputeCurrent(loc)
+	got, err := ComputeCurrent(loc)
+	require.NoError(t, err)
 	parsedUTC, err := time.Parse(time.RFC3339, got.UTC)
 	require.NoError(t, err)
 	parsedLocal, err := time.Parse(time.RFC3339, got.Local)

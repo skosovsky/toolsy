@@ -131,13 +131,21 @@ func retrieveAndFilter(
 	if err != nil {
 		return nil, toolsy.NewInternalError(fmt.Errorf("toolkit/rag: retrieve failed: %w", err))
 	}
+	if boundsErr := validateDocuments(docs, o); boundsErr != nil {
+		return nil, boundsErr
+	}
 	if o.scopeFilter != nil {
 		docs = o.scopeFilter(ctx, docs)
+		if boundsErr := validateDocuments(docs, o); boundsErr != nil {
+			return nil, boundsErr
+		}
 	}
 	if o.maxResults > 0 && len(docs) > o.maxResults {
-		docs = docs[:o.maxResults]
+		return nil, toolsy.NewValidationError(
+			"retrieval result count exceeds limit; provider has no continuation contract",
+		)
 	}
-	if wantsJSONTool(o) {
+	if o.resultShape == ShapeDocumentsJSON && o.resultFormatter == nil {
 		docs, err = capDocumentsForWire(ctx, docs, o)
 		if err != nil {
 			return nil, err

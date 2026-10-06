@@ -14,31 +14,52 @@ type HTTPClient interface {
 type Option func(*options)
 
 const defaultMaxSearchBytes = 256 * 1024
+const defaultMaxSearchItemBytes = 16 * 1024
 
 type options struct {
-	maxPageBytes        int
-	maxSearchBytes      int
-	httpClient          HTTPClient
-	scraper             Scraper
-	allowPrivateIPs     bool
-	blockedDomains      []string
-	searchName          string
-	searchDesc          string
-	scrapeName          string
-	scrapeDesc          string
-	searchFormatter     func([]SearchResult) (any, error)
-	scrapeFormatter     func(string) (any, error)
-	hostResultValidator func(any) error
+	maxPageBytes         int
+	maxSearchBytes       int
+	maxSearchResults     int
+	maxSearchItemBytes   int
+	maxSearchSourceBytes int
+	maxSourceBytes       int
+	maxMarkdownBytes     int
+	httpClient           HTTPClient
+	scraper              Scraper
+	allowPrivateIPs      bool
+	blockedDomains       []string
+	searchName           string
+	searchDesc           string
+	scrapeName           string
+	scrapeDesc           string
+	searchFormatter      func([]SearchResult) (any, error)
+	scrapeFormatter      func(ScrapeWireResult) (any, error)
+	hostResultValidator  func(any) error
 }
 
 const defaultMaxPageBytes = 2 * 1024 * 1024
 
 func applyDefaults(o *options) {
+	if o.maxSearchResults <= 0 {
+		o.maxSearchResults = 50
+	}
+	if o.maxSearchItemBytes <= 0 {
+		o.maxSearchItemBytes = defaultMaxSearchItemBytes
+	}
+	if o.maxSearchSourceBytes <= 0 {
+		o.maxSearchSourceBytes = defaultMaxSearchBytes
+	}
 	if o.maxPageBytes <= 0 {
 		o.maxPageBytes = defaultMaxPageBytes
 	}
 	if o.maxSearchBytes <= 0 {
 		o.maxSearchBytes = defaultMaxSearchBytes
+	}
+	if o.maxSourceBytes <= 0 {
+		o.maxSourceBytes = scrapeContentByteCap(o.maxPageBytes)
+	}
+	if o.maxMarkdownBytes <= 0 {
+		o.maxMarkdownBytes = scrapeContentByteCap(o.maxPageBytes)
 	}
 	if o.scraper == nil {
 		o.scraper = newHTMLScraper()
@@ -83,7 +104,7 @@ func WithHTTPClient(c HTTPClient) Option {
 // WithScraper sets a custom scraper (e.g. for JS-rendered pages). Default uses html-to-markdown.
 // Custom implementations must enforce maxBytes fail-closed in HTMLToMarkdown (return an error when
 // markdown output exceeds maxBytes; no silent truncate). They should respect caller context and bound
-// CPU; only the default htmlScraper cancels in-flight HTML conversion when the scrape context is done.
+// CPU; the default htmlScraper checks context before and after synchronous conversion.
 func WithScraper(s Scraper) Option {
 	return func(o *options) {
 		o.scraper = s
@@ -139,8 +160,8 @@ func WithSearchFormatter(f func([]SearchResult) (any, error)) Option {
 	}
 }
 
-// WithScrapeFormatter overrides JSON output for web_scrape markdown result.
-func WithScrapeFormatter(f func(string) (any, error)) Option {
+// WithScrapeFormatter maps extracted content and its source URL to a host DTO.
+func WithScrapeFormatter(f func(ScrapeWireResult) (any, error)) Option {
 	return func(o *options) {
 		o.scrapeFormatter = f
 	}
@@ -152,3 +173,20 @@ func WithHostResultValidator(v func(any) error) Option {
 		o.hostResultValidator = v
 	}
 }
+
+// WithMaxSearchResults limits accepted hits; no pagination is implied.
+func WithMaxSearchResults(n int) Option { return func(o *options) { o.maxSearchResults = n } }
+
+// WithMaxSearchItemBytes limits each JSON encoded hit.
+func WithMaxSearchItemBytes(n int) Option { return func(o *options) { o.maxSearchItemBytes = n } }
+
+// WithMaxSearchSourceBytes limits total JSON encoded hits before formatting.
+func WithMaxSearchSourceBytes(n int) Option { return func(o *options) { o.maxSearchSourceBytes = n } }
+
+// WithMaxSourceBytes limits HTML input independently of wire output.
+// Nonpositive values derive a finite default from the wire budget.
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
+
+// WithMaxMarkdownBytes limits extracted content independently of wire output.
+// Nonpositive values derive a finite default from the wire budget.
+func WithMaxMarkdownBytes(n int) Option { return func(o *options) { o.maxMarkdownBytes = n } }

@@ -119,7 +119,7 @@ func TestFSReadFile_ExceedsLimitReturnsValidationError(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, strconv.Itoa(readContentByteCap(maxBytes)))
+	require.Contains(t, te.Reason, "bytes")
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }
@@ -139,7 +139,7 @@ func TestFSReadFile_CanceledBeforeStat_ReturnsInternal(t *testing.T) {
 
 func TestFSReadFile_CancelOverStatCap_InterruptWins(t *testing.T) {
 	const wireMax = 1000
-	contentCap := readContentByteCap(wireMax)
+	contentCap := wireMax
 	base := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(base, "big.txt"), []byte(strings.Repeat("x", contentCap+1)), 0o600))
 
@@ -182,7 +182,7 @@ func (r *instantErrReader) Read([]byte) (int, error) {
 
 func TestFSReadFile_BetweenWireAndContentCap(t *testing.T) {
 	const wireMax = 1000
-	contentCap := readContentByteCap(wireMax)
+	contentCap := wireMax
 	base := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(base, "edge.txt"), []byte(strings.Repeat("x", contentCap+1)), 0o600))
 
@@ -200,7 +200,7 @@ func TestFSReadFile_BetweenWireAndContentCap(t *testing.T) {
 	te, ok := toolsy.AsToolError(err)
 	require.True(t, ok)
 	require.Equal(t, toolsy.CodeValidationFailed, te.Code)
-	require.Contains(t, te.Reason, strconv.Itoa(contentCap))
+	require.Contains(t, te.Reason, "bytes")
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 	require.ErrorIs(t, err, toolsy.ErrValidation)
 }

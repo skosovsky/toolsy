@@ -13,9 +13,6 @@ import (
 	"github.com/skosovsky/toolsy/toolkits/httptool"
 )
 
-// maxSearchResultsDisplayed is the maximum number of search hits included in the markdown list (before truncation).
-const maxSearchResultsDisplayed = 50
-
 // SearchResult is a single search hit from SearchProvider.
 type SearchResult struct {
 	Title   string `json:"title"`
@@ -41,7 +38,8 @@ type scrapeArgs struct {
 }
 
 type ScrapeWireResult struct {
-	Markdown string `json:"markdown"`
+	Markdown  string `json:"markdown"`
+	SourceURL string `json:"source_url"`
 }
 
 // AsTools returns web_search and web_scrape tools. SearchProvider is required for web_search.
@@ -74,7 +72,7 @@ func buildSearchTool(provider SearchProvider, o *options) (toolsy.Tool, error) {
 			o.searchName,
 			o.searchDesc,
 			func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
-				results, err := SearchStructured(ctx, provider, args.Query)
+				results, err := searchStructured(ctx, provider, args.Query, o)
 				if err != nil {
 					return format.JSONResult{}, err
 				}
@@ -99,7 +97,7 @@ func buildSearchTool(provider SearchProvider, o *options) (toolsy.Tool, error) {
 		o.searchName,
 		o.searchDesc,
 		func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (format.JSONResult, error) {
-			res, err := doSearch(ctx, provider, args.Query)
+			res, err := doSearch(ctx, provider, args.Query, o)
 			if err != nil {
 				return format.JSONResult{}, err
 			}
@@ -122,7 +120,7 @@ func buildScrapeTool(o *options) (toolsy.Tool, error) {
 				var scrapeFmt func(ScrapeWireResult) (any, error)
 				if o.scrapeFormatter != nil {
 					scrapeFmt = func(sr ScrapeWireResult) (any, error) {
-						return o.scrapeFormatter(sr.Markdown)
+						return o.scrapeFormatter(sr)
 					}
 				}
 				raw, applyErr := format.ApplyWithEnvelope(
@@ -154,8 +152,8 @@ func buildScrapeTool(o *options) (toolsy.Tool, error) {
 	)
 }
 
-func doSearch(ctx context.Context, provider SearchProvider, query string) (SearchWireResult, error) {
-	results, err := SearchStructured(ctx, provider, query)
+func doSearch(ctx context.Context, provider SearchProvider, query string, o *options) (SearchWireResult, error) {
+	results, err := searchStructured(ctx, provider, query, o)
 	if err != nil {
 		return SearchWireResult{}, err
 	}
@@ -167,10 +165,10 @@ func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (
 	if !httptool.IsSuccessStatus(resp.StatusCode) {
 		return ScrapeWireResult{}, toolsy.NewValidationError("fetch failed: " + resp.Status)
 	}
-	bodyBytes, readErr := textprocessor.ReadLimitedBytes(ctx, resp.Body, scrapeContentByteCap(o.maxPageBytes))
+	bodyBytes, readErr := textprocessor.ReadLimitedBytes(ctx, resp.Body, o.maxSourceBytes)
 	if mapped := toolsy.MapToolkitReadError(
 		ctx, readErr, "toolkit/web: read body",
-		scrapeContentByteCap(o.maxPageBytes), "page", "use WithMaxPageBytes to raise the budget",
+		o.maxSourceBytes, "page", "use WithMaxSourceBytes to raise the source budget",
 	); mapped != nil {
 		return ScrapeWireResult{}, mapped
 	}
@@ -178,7 +176,7 @@ func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: read body: %w", readErr))
 	}
 	body := string(bodyBytes)
-	byteCap := scrapeContentByteCap(o.maxPageBytes)
+	byteCap := o.maxMarkdownBytes
 	markdown, convErr := scrapeHTMLToMarkdown(ctx, o.scraper, body, byteCap)
 	if convErr != nil {
 		if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
@@ -190,12 +188,19 @@ func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (
 				"toolkit/web: convert",
 				byteCap,
 				"markdown",
-				"use WithMaxPageBytes to raise the budget",
+				"use WithMaxMarkdownBytes to raise the extraction budget",
 			)
 		}
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
 	}
-	return ScrapeWireResult{Markdown: markdown}, nil
+	if len(markdown) > byteCap {
+		return ScrapeWireResult{}, toolsy.NewValidationError("markdown exceeds byte limit")
+	}
+	source := ""
+	if resp.Request != nil && resp.Request.URL != nil {
+		source = resp.Request.URL.String()
+	}
+	return ScrapeWireResult{Markdown: markdown, SourceURL: source}, nil
 }
 
 func doScrape(ctx context.Context, o *options, rawURL string) (ScrapeWireResult, error) {

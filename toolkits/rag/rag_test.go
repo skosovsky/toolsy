@@ -59,24 +59,22 @@ func TestAsSearchTool_FormatsMarkdown(t *testing.T) {
 			},
 		),
 	)
-	require.Equal(t, "1. a\n2. b\n3. c", result)
+	require.Equal(t, "1. a\n   Source: unavailable\n2. b\n   Source: unavailable\n3. c\n   Source: unavailable", result)
 }
 
 func TestAsSearchTool_MaxResults(t *testing.T) {
 	r := &mockRetriever{docs: docsFromStrings("a", "b", "c")}
 	tool, err := AsSearchTool(r, WithMaxResults(2))
 	require.NoError(t, err)
-	var result string
-	_ = tool.Execute(
+	yielded := false
+	err = tool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
-		func(c toolsy.Chunk) error {
-			result = decodeSearchMarkdown(t, c)
-			return nil
-		},
+		func(toolsy.Chunk) error { yielded = true; return nil },
 	)
-	require.Equal(t, "1. a\n2. b", result)
+	require.ErrorIs(t, err, toolsy.ErrValidation)
+	require.False(t, yielded)
 }
 
 func TestAsSearchTool_MaxBytesRejectsOversized(t *testing.T) {
@@ -200,7 +198,7 @@ func TestAsSearchTool_WithScopeFilter(t *testing.T) {
 			},
 		),
 	)
-	require.Equal(t, "1. public", result)
+	require.Equal(t, "1. public\n   Source: unavailable", result)
 }
 
 func TestAsSearchTool_WithResultFormatter(t *testing.T) {
@@ -506,25 +504,15 @@ func TestScopeFilter_BeforeMaxResults(t *testing.T) {
 	require.NotContains(t, result, "secret")
 }
 
-func TestAsSearchTool_MaxResultsZeroUnlimited(t *testing.T) {
-	docs := docsFromStrings("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k")
-	r := &mockRetriever{docs: docs}
+func TestAsSearchTool_MaxResultsZeroUsesFiniteDefault(t *testing.T) {
+	r := &mockRetriever{docs: make([]Document, 11)}
 	tool, err := AsSearchTool(r, WithMaxResults(0))
 	require.NoError(t, err)
-	var result string
-	require.NoError(
-		t,
-		tool.Execute(
-			context.Background(),
-			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
-			func(c toolsy.Chunk) error {
-				result = decodeSearchMarkdown(t, c)
-				return nil
-			},
-		),
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"query":"x"}`)},
+		func(toolsy.Chunk) error { t.Fatal("must not yield"); return nil },
 	)
-	for _, letter := range []string{"a", "k"} {
-		require.Contains(t, result, letter)
-	}
+	require.ErrorIs(t, err, toolsy.ErrValidation)
 }

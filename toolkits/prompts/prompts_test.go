@@ -17,14 +17,14 @@ type mockProvider struct {
 	err  error
 }
 
-func (m *mockProvider) Get(ctx context.Context, roleID string, variables map[string]any) (string, error) {
+func (m *mockProvider) Get(ctx context.Context, roleID string, variables map[string]any) (Document, error) {
 	_ = ctx
 	_ = roleID
 	_ = variables
 	if m.err != nil {
-		return "", m.err
+		return Document{}, m.err
 	}
-	return m.text, nil
+	return Document{Instructions: m.text}, nil
 }
 
 // verifyingProvider records the last roleID and variables passed to Get for test assertions.
@@ -35,18 +35,18 @@ type verifyingProvider struct {
 	callCount  int
 }
 
-func (v *verifyingProvider) Get(ctx context.Context, roleID string, variables map[string]any) (string, error) {
+func (v *verifyingProvider) Get(ctx context.Context, roleID string, variables map[string]any) (Document, error) {
 	_ = ctx
 	v.callCount++
 	v.lastRoleID = roleID
 	v.lastVars = variables
-	return v.text, nil
+	return Document{Instructions: v.text}, nil
 }
 
-func decodePromptResult(t *testing.T, c toolsy.Chunk) getResult {
+func decodePromptResult(t *testing.T, c toolsy.Chunk) Document {
 	t.Helper()
 	require.Equal(t, toolsy.MimeTypeJSON, c.MimeType)
-	var out getResult
+	var out Document
 	require.NoError(t, json.Unmarshal(c.Data, &out))
 	return out
 }
@@ -100,25 +100,21 @@ func TestAsTool_WithNameAndDescription(t *testing.T) {
 	require.True(t, tool.Manifest().ReadOnly)
 }
 
-func TestAsTool_MaxBytesTruncate(t *testing.T) {
-	longText := strings.Repeat("x", 100)
-	p := &mockProvider{text: longText}
-	tool, err := AsTool(p, WithMaxBytes(20))
+func TestAsTool_MaxBytesReject(t *testing.T) {
+	// Arrange.
+	tool, err := AsTool(&mockProvider{text: strings.Repeat("x", 100)}, WithMaxBytes(20))
 	require.NoError(t, err)
-	var result string
-	require.NoError(
-		t,
-		tool.Execute(
-			context.Background(),
-			toolsy.NewRunEnv(nil),
-			toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"r"}`)},
-			func(c toolsy.Chunk) error {
-				result = decodePromptResult(t, c).Instructions
-				return nil
-			},
-		),
+	yielded := false
+	// Act.
+	err = tool.Execute(
+		context.Background(),
+		toolsy.NewRunEnv(nil),
+		toolsy.ToolInput{ArgsJSON: []byte(`{"role_id":"r"}`)},
+		func(toolsy.Chunk) error { yielded = true; return nil },
 	)
-	require.True(t, strings.HasSuffix(result, "[Truncated]"), "expected [Truncated] suffix, got %q", result)
+	// Assert.
+	require.Error(t, err)
+	require.False(t, yielded)
 }
 
 func TestAsTool_ProviderCancel(t *testing.T) {

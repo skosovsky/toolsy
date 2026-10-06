@@ -1,10 +1,17 @@
 package sqltool
 
+import "slices"
+
 // Option configures AsTools (row/cell limits, allowed tables, tool names).
 type Option func(*options)
 
 type options struct {
 	maxRows             int
+	maxColumns          int
+	maxCells            int
+	maxTables           int
+	maxSourceBytes      int
+	maxExecuteBytes     int
 	maxCellBytes        int
 	maxSchemaBytes      int
 	allowedTables       []string
@@ -18,16 +25,33 @@ type options struct {
 }
 
 const (
-	defaultMaxRows        = 100
-	defaultMaxCellBytes   = 200
-	defaultMaxSchemaBytes = 512 * 1024 // 512 KB
-	defaultInspectName    = "sql_inspect_schema"
-	defaultInspectDesc    = "Get DDL/schema of allowed tables"
-	defaultExecuteName    = "sql_execute_read"
-	defaultExecuteDesc    = "Execute a SELECT query and return results as a table"
+	defaultMaxSourceBytes  = 4 * 1024 * 1024
+	defaultMaxExecuteBytes = 512 * 1024
+	defaultMaxRows         = 100
+	defaultMaxCellBytes    = 200
+	defaultMaxSchemaBytes  = 512 * 1024 // 512 KB
+	defaultInspectName     = "sql_inspect_schema"
+	defaultInspectDesc     = "Get DDL/schema of allowed tables"
+	defaultExecuteName     = "sql_execute_read"
+	defaultExecuteDesc     = "Execute a SELECT query and return results as a table"
 )
 
 func applyDefaults(o *options) {
+	if o.maxColumns <= 0 {
+		o.maxColumns = 128
+	}
+	if o.maxCells <= 0 {
+		o.maxCells = 10000
+	}
+	if o.maxTables <= 0 {
+		o.maxTables = 100
+	}
+	if o.maxSourceBytes <= 0 {
+		o.maxSourceBytes = defaultMaxSourceBytes
+	}
+	if o.maxExecuteBytes <= 0 {
+		o.maxExecuteBytes = defaultMaxExecuteBytes
+	}
 	if o.maxRows <= 0 {
 		o.maxRows = defaultMaxRows
 	}
@@ -76,7 +100,7 @@ func WithMaxSchemaBytes(n int) Option {
 // WithAllowedTables restricts schema inspection to these table names. Empty means no filter.
 func WithAllowedTables(tables []string) Option {
 	return func(o *options) {
-		o.allowedTables = tables
+		o.allowedTables = slices.Clone(tables)
 	}
 }
 
@@ -128,3 +152,20 @@ func WithHostResultValidator(v func(any) error) Option {
 		o.hostResultValidator = v
 	}
 }
+
+// WithMaxColumns limits result columns and schema columns per table (default 128).
+func WithMaxColumns(n int) Option { return func(o *options) { o.maxColumns = n } }
+
+// WithMaxCells limits execute cells and total inspected schema fields (default 10000).
+func WithMaxCells(n int) Option { return func(o *options) { o.maxCells = n } }
+
+// WithMaxTables limits inspected tables, including names scanned from the database (default 100).
+func WithMaxTables(n int) Option { return func(o *options) { o.maxTables = n } }
+
+// WithMaxSourceBytes limits consumed values before display truncation (default 4 MiB).
+// The SQL driver may allocate a complete cell before the toolkit can check its size.
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
+
+// WithMaxExecuteBytes limits final execute JSON, including custom formatter output (default 512 KiB).
+// All nonpositive limits use finite defaults.
+func WithMaxExecuteBytes(n int) Option { return func(o *options) { o.maxExecuteBytes = n } }

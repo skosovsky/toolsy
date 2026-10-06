@@ -432,6 +432,7 @@ func TestHTTPGet_CancelDuringGetAuth(t *testing.T) {
 	defer srv.Close()
 
 	tools, err := AsTools(
+		WithCredentialOrigins([]string{srv.URL}),
 		WithAllowedDomains([]string{"127.0.0.1"}),
 		WithAllowPrivateIPs(true),
 		WithHTTPClient(srv.Client()),

@@ -8,15 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDedup_BySourceURI(t *testing.T) {
+func TestDedup_PreservesChunksSameSource(t *testing.T) {
 	base := &mockRetriever{docs: []Document{
 		{Content: "a", SourceURI: "doc://1"},
 		{Content: "b", SourceURI: "doc://1"},
 		{Content: "c", SourceURI: "doc://2"},
+		{Content: "a", SourceURI: "doc://1"},
 	}}
 	got, err := Dedup(base).Retrieve(context.Background(), "q")
 	require.NoError(t, err)
-	require.Len(t, got, 2)
+	require.Len(t, got, 3)
 }
 
 func TestDedup_ByContentFNV(t *testing.T) {
@@ -65,7 +66,11 @@ func TestFormatDocumentsMarkdown_Empty(t *testing.T) {
 }
 
 func TestDocumentDedupKey_URI(t *testing.T) {
-	require.Equal(t, "uri:doc://x", documentDedupKey(Document{Content: "a", SourceURI: "doc://x"}))
+	require.JSONEq(
+		t,
+		`{"content":"a","source_uri":"doc://x"}`,
+		documentDedupKey(Document{Content: "a", SourceURI: "doc://x"}),
+	)
 }
 
 func TestDocumentDedupKey_FNV(t *testing.T) {
@@ -74,5 +79,5 @@ func TestDocumentDedupKey_FNV(t *testing.T) {
 	k3 := documentDedupKey(Document{Content: "other"})
 	require.Equal(t, k1, k2)
 	require.NotEqual(t, k1, k3)
-	require.Contains(t, k1, "fnv:")
+	require.Contains(t, k1, "hello")
 }

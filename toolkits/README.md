@@ -1,118 +1,67 @@
-# Toolsy Toolkits
+# Toolsy toolkits
 
-Enterprise-ready building blocks for AI agents: each module supports **library mode** (pure functions/DTOs) and **tool mode** (`AsTools` / `AsTool` factories).
+Eleven independent Go modules adapt host capabilities into tools. Providers,
+connections, business DTOs, credentials, permissions and execution policy stay
+with the host. Import only the modules the application needs.
 
-## Dual mode
+| Module | Access and effect boundary | Limits and continuation |
+| --- | --- | --- |
+| [fstool](fstool/README.md) | Host-selected `os.Root`; root-relative access; exact write content | Source, wire, entry/name/scan bounds; real byte ranges and directory offsets, no snapshot promise |
+| [mail](mail/README.md) | Host reader/sender; outgoing body unchanged or rejected before Send | Body, source, item, count and wire bounds; no backend cursor |
+| [rag](rag/README.md) | Host DTO → retrieval unit → formatter; explicit source and unit identity | Provider count/item/source and actual wire bounds; no invented cursor |
+| [web](web/README.md) | Host search provider; SSRF-safe scrape; extracted content is untrusted data | Provider and parser source/item/count/wire bounds; scrape retains final source URL |
+| [document](document/README.md) | Local access disabled until host provides root/source; remote opt-in | Separate source/parser/item/count/wire bounds; PDF explicit opt-in, no hard in-process parser quota |
+| [sqltool](sqltool/README.md) | Host `database/sql` connection and DB role; inspect allowlist is not execute ACL | Rows/cells/columns/tables/source/wire bounds; display truncation explicitly flagged, no fabricated pagination |
+| [memory](memory/README.md) | Host session store; one writer through one toolkit instance | Finite facts/key/value/store/wire bounds; rejects over-budget state, never silently evicts |
+| [prompts](prompts/README.md) | Trusted host provider returns instructions with optional source/version | Finite source/instructions/provenance/wire bounds; instructions unchanged or rejected |
+| [httptool](httptool/README.md) | Allowed domains authorize egress; explicit exact origins authorize credentials | Request/read/wire bounds; cross-origin redirects cannot inherit credentials |
+| [timetool](timetool/README.md) | One host location resolver; calendar days distinct from elapsed hours | Checked arithmetic and finite wire bounds, including host formatter output |
+| [human](human/README.md) | Conversation pause is UX; actual action requires a bound host grant | Finite complete JSON pause payload, no text truncation or authorization fallback |
 
-| Module     | Library API                            | Tool factory   |
-| ---------- | -------------------------------------- | -------------- |
-| `timetool` | `ComputeCurrent`, `CalculateResult`    | `AsTools`      |
-| `httptool` | `SafeDialTransport`, `ReadBodyLimited` | `AsTools`      |
-| `web`      | `SearchStructured`, `ScrapePage`       | `AsTools`      |
-| `rag`      | `Document`, router primitives          | `AsSearchTool` |
-| `sqltool`  | `InspectResult`, `ExecuteResult`       | `AsTools`      |
-| `document` | `ExtractWireResult`                    | `AsTool`       |
+The module README is the executable contract's companion: it defines finite
+defaults, host overrides, zero/negative semantics, DTOs and supported backend
+capabilities. Bounds check actual returned data, including providers which ignore
+requested limits. They cannot constrain allocations inside arbitrary host
+callbacks, database drivers or third-party parsers; those boundaries are stated
+explicitly. Hard CPU/memory isolation belongs in host-owned workers.
 
-## IoC: custom output shape
+## Host output DTOs
 
-Host applications can inject formatters returning `any` (domain DTOs). Toolsy serializes the result to JSON on the wire.
+`timetool`, `web`, `rag`, `sqltool` and `document` expose formatter and validator
+ports. Formatters receive bounded module DTOs and return host-owned DTOs. When
+both ports are configured, the validator sees the formatter output. The complete
+serialized JSON is then checked against the wire budget, including escaping and
+custom output. Oversize returns a validation error, never sliced JSON. A compact
+host DTO may fit even when the module's default representation would not.
 
-```go
-timetool.AsTools(
-    timetool.WithResultFormatter(func(r timetool.CurrentResult) (any, error) {
-        return map[string]string{"ts": r.UTC}, nil
-    }),
-    timetool.WithHostResultValidator(func(v any) error {
-        // PII / injection checks before marshal
-        return nil
-    }),
-)
-```
+Web scrape formatters receive `ScrapeWireResult`, including `source_url`. RAG
+formatters own provenance preservation for their custom DTOs. Source access and
+retrieval content do not confer instruction authority. See
+[result contracts](../docs/result-contract.md) for validation and delivery.
 
-Supported in: `timetool` (`WithResultFormatter`, `WithCalculateResultFormatter`), `web` (`WithSearchFormatter`, `WithScrapeFormatter`), `rag`, `sqltool` (`WithExecuteResultFormatter`, `WithInspectResultFormatter`), `document`. `fstool` is tool-mode only (no library exports).
+## Source bounds and side effects
 
-Wire byte budgets apply to the complete serialized JSON via `internal/format.MarshalWireCap` or `ApplyWithEnvelope`. Oversized JSON returns `CodeValidationFailed` wrapping `format.WireLimitError`; no result is emitted. Text content limits may be applied before serialization. Probe HTTP tools limit the body field separately.
+Source reads, collection counts, item sizes and final wire sizes are separate
+budgets. Explicit SQL display truncation differs from a source or final-wire
+error. Mail, HTTP POST and filesystem writes do not shorten action arguments.
+A response-limit failure after an external action does not roll that action back;
+compose the core operation profile for bound approval, durable state and replay.
+Confirmation hints do not replace host authentication or business policy.
 
-### Byte budget and suffix taxonomy
+Filesystem offsets are actual backend positions. Other injected ports do not
+promise continuation and return explicit errors rather than inventing tokens.
+Hosts can add their own backend-specific adapters without a universal artifact
+store or a shared domain model.
 
-| Tier           | Where                                                   | Suffix                                                                                    | Notes                                                                            |
-| -------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Wire** | `internal/format.ValidateWireJSON` | No suffix | Rejects oversized serialized JSON without modifying it |
-| **Semantic**   | sqltool rows/cells, web search hit list                 | `SQLRowsTruncationSuffix`, `SQLCellTruncationSuffix`, `SearchResultsTruncationSuffix`     | Domain limits (rows, cells, hits); independent of wire cap                       |
-| **DoS / read** | HTML scrape, httptool probe, document/fstool wire tools | fail-closed (`ReadLimitedBytes` / `ReadBodyLimited`); display tier uses `ReadAndTruncate` | Memory safety; probe tier uses body-field budget; envelope tools use content cap |
-| **Probe**      | `httptool.AsTools` DTO                                  | limit → validation error in tool mode                                                     | Status in JSON; separate from toolkit wire cap                                   |
+## HTTP and execution policy
 
-Content pre-caps in `document` and RAG JSON shape may reduce input before serialization. The complete encoded result must still fit the wire budget; otherwise no success result is emitted.
+HTTP consumers reuse `httptool` safe transport with DNS/IP checks and pinning.
+Private addresses require explicit host configuration. Toolkit credential origin
+bindings are separate from egress allowlists; service auth in other protocol
+adapters remains their own host contract.
 
-### Default transport read budgets (toolkits)
-
-| Package                          | Default         | API                                                                |
-| -------------------------------- | --------------- | ------------------------------------------------------------------ |
-| `document` / `web` scrape        | 2 MB            | `WithMaxBytes` / `WithMaxPageBytes`                                |
-| `fstool` read                    | 1 MB            | `WithMaxBytes`                                                     |
-| `httptool` probe                 | 512 KB          | `defaultMaxResponseBody` (body field; wire JSON slightly larger)   |
-| `mail` body                      | 256 KB          | `defaultMaxBodyBytes` (display/wire truncate after fetch)          |
-| `prompts` output                 | toolkit default | display/wire truncate after template render                        |
-| `agents` REST (`agents` package) | 4 MB            | `defaultMaxResponseBytes` — library client, not a toolkit wire DTO |
-
-These are independent of contracts spec/introspection budgets (see [`contracts/README.md`](../contracts/README.md)). The `agents` REST client uses fail-closed `ReadLimitedBytes`; see [`agents/README.md`](../agents/README.md).
-
-Cross-package validators can type-assert exported wire DTOs (`CalculateResult`, `SearchWireResult`, `SearchMarkdownWire`, etc.).
-
-### Validator vs formatter priority
-
-| Module                                      | Formatter set                    | Validator receives                                   |
-| ------------------------------------------- | -------------------------------- | ---------------------------------------------------- |
-| `rag` (default markdown)                    | no                               | `SearchMarkdownWire`                                 |
-| `rag` (+ formatter or `ShapeDocumentsJSON`) | yes                              | formatter output or `SearchDocumentsWire`            |
-| `web` search                                | `[]SearchResult` to formatter    | `SearchWireResult` envelope only when validator-only |
-| `web` scrape                                | `string` (markdown) to formatter | `ScrapeWireResult` envelope only when validator-only |
-| `timetool` / `sqltool`                      | typed DTO to formatter           | default envelope only when validator-only            |
-
-When both formatter and validator are set, validation runs on the formatter return value (`ApplyWithEnvelope` order).
-
-## Wrapper pattern
-
-Wrap toolkit tools with host middleware **before** registering:
-
-```go
-builder := toolsy.NewRegistryBuilder()
-tools, _ := httptool.AsTools(httptool.WithAllowedDomains([]string{"api.example.com"}))
-for _, t := range tools {
-    builder.Add(hostMiddleware.Wrap(t)) // audit, rate limit, PII filter
-}
-```
-
-See [`examples/resiliency`](../../examples/resiliency/main.go) for core toolsy middleware patterns.
-
-## SSRF
-
-HTTP egress protection is centralized in `httptool` (`SafeDialTransport`, `NewSafeHTTPClient`, `ValidateRemoteURL`, `CheckRedirectRemote`). Only modules with **HTTP egress** depend on `httptool`:
-
-| Consumer    | Uses httptool for                                  |
-| ----------- | -------------------------------------------------- |
-| `web`       | scrape client, redirect validation                 |
-| `document`  | remote URL fetch (IP-only; no host blacklist)      |
-| `agents`    | REST client, SSE stream steps                      |
-| `contracts` | OpenAPI/GraphQL execute and spec fetch             |
-| `mcp`       | Streamable HTTP POST/GET (safe dial and redirects) |
-| `httptool`  | `AsTools` HTTP GET                                 |
-
-Leaf modules without HTTP (`fstool`, `sqltool`, `timetool`, `rag`, `mail`, …) must **not** import `httptool`. Local file reads use `textprocessor` (see `fstool.readFileLimited`).
-
-`ReadBodyLimited` is an HTTP response primitive; do not use it for filesystem reads.
-
-```mermaid
-flowchart TB
-  httptool[httptool]
-  textprocessor[textprocessor]
-  web[web]
-  document[document]
-  fstool[fstool]
-  httptool --> web
-  httptool --> document
-  textprocessor --> fstool
-  textprocessor --> httptool
-```
-
-Host HTTP clients should reuse `SafeDialTransport`. `web` scrape and `document` remote fetch delegate to `httptool.NewSafeHTTPClient`.
+Register tools with `NewRegistryBuilder().Add(tools...)`. Hosts provide deadlines,
+permissions, scheduling, retries and external quotas. See
+[resiliency](../examples/resiliency/main.go) and
+[bound approval](human/bound_approval_test.go). No toolkit implements an agent
+loop, business authorization service, prompt repository or distributed database.

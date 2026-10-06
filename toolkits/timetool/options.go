@@ -14,6 +14,7 @@ type LocationProvider func(ctx context.Context, env *toolsy.RunEnv) (*time.Locat
 type Option func(*options)
 
 type options struct {
+	maxWireBytes        int
 	location            *time.Location
 	locationProvider    LocationProvider
 	resultFormatter     func(CurrentResult) (any, error)
@@ -26,6 +27,8 @@ type options struct {
 }
 
 const (
+	defaultMaxWireBytes  = 64 * 1024
+	maxBaseDateBytes     = 64
 	defaultCurrentName   = "time_current"
 	defaultCurrentDesc   = "Get current time in UTC and local timezone with weekday"
 	defaultCalculateName = "time_calculate"
@@ -33,6 +36,9 @@ const (
 )
 
 func applyDefaults(o *options) {
+	if o.maxWireBytes <= 0 {
+		o.maxWireBytes = defaultMaxWireBytes
+	}
 	if o.location == nil {
 		o.location = time.Local
 		if o.location == nil {
@@ -116,3 +122,6 @@ func WithCalculateDescription(desc string) Option {
 		o.calculateDesc = desc
 	}
 }
+
+// WithMaxWireBytes bounds default and host-formatted JSON. Nonpositive uses 64 KiB.
+func WithMaxWireBytes(n int) Option { return func(o *options) { o.maxWireBytes = n } }

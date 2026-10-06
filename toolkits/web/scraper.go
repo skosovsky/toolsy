@@ -24,10 +24,10 @@ func WrapMarkdownExceedsLimit(maxBytes int) error {
 	return fmt.Errorf("toolkit/web: markdown exceeds %d byte limit: %w", maxBytes, ErrMarkdownExceedsLimit)
 }
 
-// Scraper converts a raw HTML string to clean Markdown (e.g. for LLM context).
+// Scraper converts a raw HTML string to Markdown data (e.g. for LLM context).
 // maxBytes > 0 enforces a fail-closed byte budget on markdown output; exceeding returns an error (no silent truncate).
 // When maxBytes <= 0, any non-empty markdown is treated as exceeding the limit (fail-closed).
-// Custom implementations must honor maxBytes the same way; the toolkit passes scrapeContentByteCap from WithMaxPageBytes.
+// Custom implementations must honor maxBytes the same way; the toolkit passes the WithMaxMarkdownBytes limit.
 // Implementations must respect ctx cancellation during conversion.
 type Scraper interface {
 	HTMLToMarkdown(ctx context.Context, html string, maxBytes int) (string, error)

@@ -27,8 +27,9 @@ type executeArgs struct {
 }
 
 type ExecuteResult struct {
-	Result   string `json:"result"`
-	RowCount int    `json:"row_count"`
+	Result    string `json:"result"`
+	RowCount  int    `json:"row_count"`
+	Truncated bool   `json:"truncated"`
 }
 
 const (
@@ -61,28 +62,6 @@ func AsTools(db *sql.DB, driverName string, opts ...Option) ([]toolsy.Tool, erro
 		return nil, fmt.Errorf("toolkit/sqltool: build execute tool: %w", err)
 	}
 	return []toolsy.Tool{inspectTool, executeTool}, nil
-}
-
-// executeWireByteBudget estimates worst-case execute wire JSON from row/cell limits.
-func executeWireByteBudget(o *options, res ExecuteResult) int {
-	const (
-		jsonFieldOverhead = 4
-		wireJSONOverhead  = 256
-	)
-	colCount := max(maxColsFromResult(res.Result), 1)
-	perRow := colCount * (o.maxCellBytes + jsonFieldOverhead)
-	return o.maxRows*perRow + len(truncationSuffix) + wireJSONOverhead
-}
-
-func maxColsFromResult(result string) int {
-	for line := range strings.SplitSeq(result, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		return strings.Count(line, "|") + 1
-	}
-	return 0
 }
 
 func buildInspectTool(db *sql.DB, driverName string, d dialect, o *options) (toolsy.Tool, error) {
@@ -139,7 +118,7 @@ func buildExecuteTool(db *sql.DB, o *options) (toolsy.Tool, error) {
 					func(v ExecuteResult) ExecuteResult { return v },
 					o.executeFormatter,
 					o.hostResultValidator,
-					executeWireByteBudget(o, res),
+					o.maxExecuteBytes,
 				)
 				if applyErr != nil {
 					return format.JSONResult{}, applyErr
@@ -157,7 +136,7 @@ func buildExecuteTool(db *sql.DB, o *options) (toolsy.Tool, error) {
 			if err != nil {
 				return format.JSONResult{}, err
 			}
-			return format.ToJSONResult(res, executeWireByteBudget(o, res))
+			return format.ToJSONResult(res, o.maxExecuteBytes)
 		},
 		toolsy.WithReadOnly(),
 	)
@@ -171,7 +150,13 @@ func doInspectSchema(
 	o *options,
 	tableNames []string,
 ) (InspectResult, error) {
+	if err := ctx.Err(); err != nil {
+		return InspectResult{}, wrapSQLToolErr(err)
+	}
 	tables := tableNames
+	if len(tables) > o.maxTables {
+		return InspectResult{}, limitError("tables")
+	}
 	var err error
 	if len(tables) == 0 {
 		tables, err = fetchTableNamesFromDB(ctx, db, d, o)
@@ -184,11 +169,12 @@ func doInspectSchema(
 
 	var b strings.Builder
 	driverLower := strings.ToLower(driverName)
+	fieldCount := 0
 	for _, table := range tables {
 		if err := ctx.Err(); err != nil {
 			return InspectResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/sqltool: inspect schema: %w", err))
 		}
-		if err := appendColumnsToSchema(ctx, db, driverLower, d, table, &b); err != nil {
+		if err := appendColumnsToSchema(ctx, db, driverLower, d, table, &b, o, &fieldCount); err != nil {
 			return InspectResult{}, err
 		}
 	}
@@ -203,10 +189,19 @@ func fetchTableNamesFromDB(ctx context.Context, db *sql.DB, d dialect, o *option
 	defer func() { _ = rows.Close() }()
 
 	var tables []string
+	scanned, sourceBytes := 0, 0
 	for rows.Next() {
+		scanned++
+		if scanned > o.maxTables {
+			return nil, limitError("tables")
+		}
 		var name string
 		if scanErr := rows.Scan(&name); scanErr != nil {
 			return nil, wrapSQLToolErr(fmt.Errorf("scan table name: %w", scanErr))
+		}
+		sourceBytes += len(name)
+		if sourceBytes > o.maxSourceBytes {
+			return nil, limitError("source bytes")
 		}
 		if len(o.allowedTables) == 0 || contains(o.allowedTables, name) {
 			tables = append(tables, name)
@@ -235,7 +230,12 @@ func appendColumnsToSchema(
 	d dialect,
 	table string,
 	b *strings.Builder,
+	o *options,
+	fieldCount *int,
 ) error {
+	if b.Len()+len(table) > o.maxSourceBytes {
+		return limitError("source bytes")
+	}
 	q, args := d.columnsQuery(table)
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -245,9 +245,16 @@ func appendColumnsToSchema(
 
 	var rowCount int
 	for rows.Next() {
+		if rowCount >= o.maxColumns || *fieldCount > o.maxCells-4 {
+			return limitError("schema columns/cells")
+		}
+		*fieldCount += 4
 		name, dataType, nullableStr, defaultVal, scanErr := scanColumnRow(rows, driverLower)
 		if scanErr != nil {
 			return wrapSQLToolErr(scanErr)
+		}
+		if b.Len()+len(name)+len(dataType)+len(nullableStr)+len(defaultVal) > o.maxSourceBytes {
+			return limitError("source bytes")
 		}
 		if rowCount == 0 {
 			fmt.Fprintf(
@@ -257,7 +264,17 @@ func appendColumnsToSchema(
 			)
 		}
 		rowCount++
-		fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, dataType, nullableStr, defaultVal)
+		fmt.Fprintf(
+			b,
+			"| %s | %s | %s | %s |\n",
+			escapeMarkdownCell(name),
+			escapeMarkdownCell(dataType),
+			escapeMarkdownCell(nullableStr),
+			escapeMarkdownCell(defaultVal),
+		)
+		if b.Len() > o.maxSourceBytes {
+			return limitError("source bytes")
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return wrapSQLToolErr(err)
@@ -266,6 +283,9 @@ func appendColumnsToSchema(
 		fmt.Fprintf(b, "## Table: %s\n\nTable not found or has no columns.\n\n", table)
 	} else {
 		b.WriteString("\n")
+	}
+	if b.Len() > o.maxSourceBytes {
+		return limitError("source bytes")
 	}
 	return nil
 }
@@ -314,6 +334,10 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (E
 	if err != nil {
 		return ExecuteResult{}, err
 	}
+	sourceBytes, err := checkColumns(cols, o)
+	if err != nil {
+		return ExecuteResult{}, err
+	}
 	var b strings.Builder
 	writeMarkdownTableHeader(&b, cols)
 
@@ -323,22 +347,35 @@ func doExecuteRead(ctx context.Context, db *sql.DB, o *options, query string) (E
 		scanDest[i] = &vals[i]
 	}
 	rowCount := 0
+	truncated := false
 	for rows.Next() {
 		if rowCount >= o.maxRows {
 			b.WriteString(truncationSuffix)
+			truncated = true
 			break
+		}
+		if len(cols) > 0 && rowCount >= o.maxCells/len(cols) {
+			return ExecuteResult{}, limitError("cells")
 		}
 		if err := rows.Scan(scanDest...); err != nil {
 			return ExecuteResult{}, wrapSQLToolErr(err)
 		}
+		cellTruncated, consumeErr := consumeCells(vals, o, &sourceBytes)
+		if consumeErr != nil {
+			return ExecuteResult{}, consumeErr
+		}
+		truncated = truncated || cellTruncated
 		appendMarkdownDataRow(&b, vals, o.maxCellBytes)
+		if b.Len() > o.maxExecuteBytes {
+			return ExecuteResult{}, limitError("execute bytes")
+		}
 		b.WriteString("\n")
 		rowCount++
 	}
 	if err := rows.Err(); err != nil {
 		return ExecuteResult{}, wrapSQLToolErr(err)
 	}
-	return ExecuteResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount}, nil
+	return ExecuteResult{Result: strings.TrimSpace(b.String()), RowCount: rowCount, Truncated: truncated}, nil
 }
 
 func writeMarkdownTableHeader(b *strings.Builder, cols []string) {
@@ -365,7 +402,7 @@ func appendMarkdownDataRow(b *strings.Builder, vals []sql.NullString, maxCellByt
 		}
 		s := ""
 		if v.Valid {
-			s = escapeMarkdownCell(textprocessor.TruncateStringUTF8(v.String, maxCellBytes, cellTruncationSuffix))
+			s = boundedCell(v.String, maxCellBytes)
 		}
 		b.WriteString(s)
 	}
@@ -392,4 +429,49 @@ func wrapSQLToolErr(err error) error {
 		return err
 	}
 	return toolsy.NewInternalError(fmt.Errorf("toolkit/sqltool: %w", err))
+}
+
+func limitError(kind string) error {
+	return toolsy.NewValidationError(fmt.Sprintf("toolkit/sqltool: %s limit exceeded", kind))
+}
+
+// The byte limit includes the truncation marker and Markdown escaping.
+func boundedCell(value string, limit int) string {
+	escaped := escapeMarkdownCell(strings.ToValidUTF8(value, "�"))
+	if len(escaped) <= limit {
+		return escaped
+	}
+	suffix := cellTruncationSuffix
+	if len(suffix) > limit {
+		suffix = suffix[:limit]
+	}
+	return textprocessor.TruncateStringUTF8(escaped, limit-len(suffix), "") + suffix
+}
+
+func checkColumns(cols []string, o *options) (int, error) {
+	if len(cols) > o.maxColumns {
+		return 0, limitError("columns")
+	}
+	sourceBytes := 0
+	for _, col := range cols {
+		if len(col) > o.maxSourceBytes-sourceBytes {
+			return 0, limitError("source bytes")
+		}
+		sourceBytes += len(col)
+	}
+	return sourceBytes, nil
+}
+
+func consumeCells(vals []sql.NullString, o *options, sourceBytes *int) (bool, error) {
+	truncated := false
+	for _, v := range vals {
+		if len(v.String) > o.maxSourceBytes-*sourceBytes {
+			return false, limitError("source bytes")
+		}
+		*sourceBytes += len(v.String)
+		if len(escapeMarkdownCell(strings.ToValidUTF8(v.String, "�"))) > o.maxCellBytes {
+			truncated = true
+		}
+	}
+	return truncated, nil
 }

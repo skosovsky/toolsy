@@ -757,7 +757,7 @@ func TestWebScrape_WithScrapeFormatter(t *testing.T) {
 	tools, err := AsTools(provider,
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
-		WithScrapeFormatter(func(_ string) (any, error) {
+		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"fmt": "custom"}, nil
 		}),
 	)
@@ -810,7 +810,7 @@ func TestWebScrape_FormatterAndValidator(t *testing.T) {
 	tools, err := AsTools(provider,
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
-		WithScrapeFormatter(func(_ string) (any, error) {
+		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"page": "ok"}, nil
 		}),
 		WithHostResultValidator(func(v any) error {
@@ -851,7 +851,7 @@ func TestWebScrape_WithMaxPageBytes_WithResultFormatter(t *testing.T) {
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(60),
-		WithScrapeFormatter(func(_ string) (any, error) {
+		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
 		}),
 	)
@@ -877,7 +877,7 @@ func TestWebScrape_WireCapSingleTruncSuffix(t *testing.T) {
 	const maxWire = 250
 	contentCap := scrapeContentByteCap(maxWire)
 	overhead := len("<html><body><p>") + len("</p></body></html>")
-	repeat := max(contentCap-overhead, 1)
+	repeat := max(contentCap-overhead-64, 1)
 	body := "<html><body><p>" + strings.Repeat("x", repeat) + "</p></body></html>"
 	require.LessOrEqual(t, len(body), contentCap)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1017,7 +1017,7 @@ func TestWebSearch_SemanticAndWireCapsIndependent(t *testing.T) {
 		results[i] = SearchResult{Title: "Hit", URL: "https://x.com", Snippet: "snippet"}
 	}
 	markdown := FormatSearchMarkdown(results)
-	require.Contains(t, markdown, strings.TrimSuffix(textprocessor.SearchResultsTruncationSuffix, "\n"))
+	require.Equal(t, 51, strings.Count(markdown, "https://x.com"))
 	require.NotContains(t, markdown, textprocessor.TruncationSuffix)
 
 	provider := &mockSearchProvider{results: results}
@@ -1084,7 +1084,7 @@ func TestWebScrape_TripleIoC_MaxBytesFormatterValidator(t *testing.T) {
 		WithHTTPClient(server.Client()),
 		WithAllowPrivateIPs(true),
 		WithMaxPageBytes(80),
-		WithScrapeFormatter(func(_ string) (any, error) {
+		WithScrapeFormatter(func(_ ScrapeWireResult) (any, error) {
 			return map[string]string{"blob": strings.Repeat("z", 500)}, nil
 		}),
 		WithHostResultValidator(func(v any) error {

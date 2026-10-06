@@ -4,14 +4,18 @@ package fstool
 type Option func(*options)
 
 type options struct {
-	readOnly      bool
-	maxBytes      int
-	listDirName   string
-	listDirDesc   string
-	readFileName  string
-	readFileDesc  string
-	writeFileName string
-	writeFileDesc string
+	readOnly       bool
+	maxBytes       int
+	maxSourceBytes int
+	maxEntries     int
+	maxScanEntries int
+	maxNameBytes   int
+	listDirName    string
+	listDirDesc    string
+	readFileName   string
+	readFileDesc   string
+	writeFileName  string
+	writeFileDesc  string
 }
 
 const (
@@ -25,7 +29,19 @@ const (
 )
 
 func applyDefaults(o *options) {
-	if o.maxBytes <= 0 {
+	if o.maxSourceBytes == 0 {
+		o.maxSourceBytes = defaultMaxBytes
+	}
+	if o.maxEntries == 0 {
+		o.maxEntries = 100
+	}
+	if o.maxScanEntries == 0 {
+		o.maxScanEntries = 10000
+	}
+	if o.maxNameBytes == 0 {
+		o.maxNameBytes = 255
+	}
+	if o.maxBytes == 0 {
 		o.maxBytes = defaultMaxBytes
 	}
 	if o.listDirName == "" {
@@ -55,8 +71,7 @@ func WithReadOnly(readOnly bool) Option {
 	}
 }
 
-// WithMaxBytes sets the wire JSON byte budget for read_file (default 1 MB). Fail-closed reads use
-// readContentByteCap(maxBytes); exceeding returns a validation error (stat pre-check or read).
+// WithMaxBytes sets the final JSON byte budget for all successful results (default 1 MiB).
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n
@@ -104,3 +119,15 @@ func WithWriteFileDescription(desc string) Option {
 		o.writeFileDesc = desc
 	}
 }
+
+// WithMaxSourceBytes bounds read ranges and exact write content (default 1 MiB).
+func WithMaxSourceBytes(n int) Option { return func(o *options) { o.maxSourceBytes = n } }
+
+// WithMaxEntries bounds entries returned per page (default 100).
+func WithMaxEntries(n int) Option { return func(o *options) { o.maxEntries = n } }
+
+// WithMaxScanEntries bounds directory offset plus lookahead (default 10,000).
+func WithMaxScanEntries(n int) Option { return func(o *options) { o.maxScanEntries = n } }
+
+// WithMaxNameBytes bounds each directory entry name (default 255).
+func WithMaxNameBytes(n int) Option { return func(o *options) { o.maxNameBytes = n } }

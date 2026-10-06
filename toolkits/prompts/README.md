@@ -16,14 +16,15 @@ go get github.com/skosovsky/toolsy/toolkits/prompts
 | ------------------------ | ---------------------------------- | ------------------------------------------------------ |
 | `get_agent_instructions` | Get system prompt for a given role | `{"role_id": "string", "variables": {"key": "value"}}` |
 
-Output: Rendered instructions text.
+Output: JSON containing rendered `instructions` and optional provider-supplied `source` and `version`.
 
 ## Configuration and security
 
-- **WithName / WithDescription:** Customize tool name and description for the registry.
-- **WithMaxBytes(n):** Truncates returned instructions to n bytes (UTF-8 safe) with `\n[Truncated]` suffix. Default 512 KB. **Display/wire tier** after template render — not a fail-closed transport read (see [migration-task30.md](../../docs/migration-task30.md)).
+`Provider.Get` returns a `Document`. The host selects a trusted provider and controls which roles the caller may access. Returned text is data: the toolkit does not install it as a system message, authorize actions, or make provider content trusted by its presence in a tool result. Source/version are provenance supplied by the provider, not verified identity or authority. No prompt repository is built in.
 
-All errors from the provider are wrapped with the `toolkit/prompts:` prefix.
+Defaults are 1 MiB total returned source field bytes, 512 KiB instructions bytes, 4096 bytes per provenance field, and 1 MiB final JSON wire bytes after escaping. Override via `WithMaxSourceBytes`, `WithMaxBytes`, `WithMaxProvenanceBytes`, `WithMaxOutputBytes`. Zero selects the default; negative configuration fails construction. Nil (including typed nil) providers fail construction. Oversize or invalid UTF-8 results fail explicitly: instructions are never silently truncated. No continuation token is available from this port. Host providers must bound their own source transport and render allocations, respect context and enforce access controls; checking the returned document cannot constrain allocations made inside the provider.
+
+`WithName` and `WithDescription` customize registry metadata. Provider errors retain their causes.
 
 ## Quick start
 
@@ -40,9 +41,9 @@ import (
 // Your provider (e.g. adapter around prompty)
 type myProvider struct{}
 
-func (m *myProvider) Get(ctx context.Context, roleID string, variables map[string]any) (string, error) {
+func (m *myProvider) Get(ctx context.Context, roleID string, variables map[string]any) (prompts.Document, error) {
 	// Load manifest, render template with variables
-	return "You are a helpful assistant.", nil
+	return prompts.Document{Instructions: "You are a helpful assistant.", Source: "host://roles/helper", Version: "1"}, nil
 }
 
 func main() {

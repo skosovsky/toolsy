@@ -51,6 +51,7 @@ func defaultHTTPClient(o *options) *http.Client {
 		AllowPrivateIPs: o.allowPrivateIPs,
 	}
 	safe := NewSafeHTTPClient(opts, CheckRedirectAllowed(o.allowedDomains, o.allowPrivateIPs))
+	safe.Timeout = defaultTimeout
 	if o.httpClient == nil {
 		return safe
 	}
@@ -62,6 +63,10 @@ func CheckRedirectAllowed(allowedDomains []string, allowPrivateIPs bool) func(*h
 	return func(redirectReq *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return toolsy.NewValidationError("too many redirects")
+		}
+		if len(via) > 0 && origin(redirectReq.URL) != origin(via[0].URL) {
+			redirectReq.Header.Del("Authorization")
+			redirectReq.Header.Del("Cookie")
 		}
 		_, err := validateURL(
 			redirectReq.Context(),

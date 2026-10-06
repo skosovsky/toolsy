@@ -2,18 +2,15 @@ package mail
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/skosovsky/toolsy"
-	"github.com/skosovsky/toolsy/textprocessor"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 )
-
-// maxSearchInboxLimit is the maximum number of inbox search results per tool call.
-const maxSearchInboxLimit = 100
 
 // OutgoingMessage is passed to MailSender.Send.
 type OutgoingMessage struct {
@@ -91,6 +88,10 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 	for _, opt := range opts {
 		opt(&o)
 	}
+	if o.maxBodyBytes < 0 || o.maxSourceBytes < 0 || o.maxItemBytes < 0 || o.maxSearchResults < 0 ||
+		o.maxWireBytes < 0 {
+		return nil, errors.New("toolkit/mail: limits must be nonnegative")
+	}
 	applyDefaults(&o)
 
 	var tools []toolsy.Tool
@@ -99,7 +100,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			o.sendName,
 			o.sendDesc,
 			func(ctx context.Context, _ *toolsy.RunEnv, args sendArgs) (sendResult, error) {
-				return doSend(ctx, sender, args, o.maxBodyBytes)
+				return doSend(ctx, sender, args, o)
 			},
 			toolsy.WithDangerous(),
 			toolsy.WithRequiresConfirmation(),
@@ -114,7 +115,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			o.searchName,
 			o.searchDesc,
 			func(ctx context.Context, _ *toolsy.RunEnv, args searchArgs) (searchResult, error) {
-				return doSearch(ctx, reader, args, o.maxBodyBytes)
+				return doSearch(ctx, reader, args, o)
 			},
 			toolsy.WithReadOnly(),
 		)
@@ -127,7 +128,7 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 			o.readName,
 			o.readDesc,
 			func(ctx context.Context, _ *toolsy.RunEnv, args readArgs) (readResult, error) {
-				return doRead(ctx, reader, args, o.maxBodyBytes)
+				return doRead(ctx, reader, args, o)
 			},
 			toolsy.WithReadOnly(),
 		)
@@ -139,36 +140,48 @@ func AsTools(sender MailSender, reader MailReader, opts ...Option) ([]toolsy.Too
 	return tools, nil
 }
 
-func doSend(ctx context.Context, sender MailSender, args sendArgs, maxBodyBytes int) (sendResult, error) {
+func doSend(ctx context.Context, sender MailSender, args sendArgs, o options) (sendResult, error) {
 	if len(args.To) == 0 {
 		return sendResult{}, toolsy.NewValidationError("at least one recipient (to) is required")
 	}
-	body := args.Body
-	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, textprocessor.TruncationSuffix)
+	if len(args.Body) > o.maxBodyBytes {
+		return sendResult{}, toolsy.NewValidationError("mail body exceeds configured byte limit")
 	}
-	err := sender.Send(ctx, OutgoingMessage{To: args.To, Subject: args.Subject, Body: body})
+	result := sendResult{Status: "sent"}
+	if err := checkWire(result, o.maxWireBytes); err != nil {
+		return sendResult{}, err
+	}
+	err := sender.Send(ctx, OutgoingMessage(args))
 	if err != nil {
 		return sendResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: send: %w", err))
 	}
-	return sendResult{Status: "sent"}, nil
+	return result, nil
 }
 
-func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (searchResult, error) {
+func doSearch(ctx context.Context, reader MailReader, args searchArgs, o options) (searchResult, error) {
 	query := strings.TrimSpace(args.Query)
 	if query == "" {
 		return searchResult{}, toolsy.NewValidationError("query is required (empty query would return entire inbox)")
 	}
 	limit := args.Limit
-	if limit <= 0 {
-		limit = 10
+	if limit < 0 || limit > o.maxSearchResults {
+		return searchResult{}, toolsy.NewValidationError("search limit exceeds configured count bounds")
 	}
-	if limit > maxSearchInboxLimit {
-		limit = maxSearchInboxLimit
+	if limit == 0 {
+		limit = min(defaultSearchLimit, o.maxSearchResults)
 	}
 	list, err := reader.Search(ctx, query, limit)
 	if err != nil {
 		return searchResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: search: %w", err))
+	}
+	if len(list) > limit {
+		return searchResult{}, limitError("provider search count")
+	}
+	remaining := o.maxSourceBytes
+	for _, m := range list {
+		if err := checkFields(o.maxItemBytes, &remaining, m.ID, m.From, m.Subject, m.Date); err != nil {
+			return searchResult{}, err
+		}
 	}
 	var b strings.Builder
 	b.WriteString("| ID | From | Subject | Date |\n|----|------|---------|------|\n")
@@ -183,10 +196,14 @@ func doSearch(ctx context.Context, reader MailReader, args searchArgs, _ int) (s
 		b.WriteString(escapeCell(m.Date))
 		b.WriteString(" |\n")
 	}
-	return searchResult{Results: b.String()}, nil
+	result := searchResult{Results: b.String()}
+	if err := checkWire(result, o.maxWireBytes); err != nil {
+		return searchResult{}, err
+	}
+	return result, nil
 }
 
-func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes int) (readResult, error) {
+func doRead(ctx context.Context, reader MailReader, args readArgs, o options) (readResult, error) {
 	messageID := strings.TrimSpace(args.MessageID)
 	if messageID == "" {
 		return readResult{}, toolsy.NewValidationError("message_id is required")
@@ -195,12 +212,28 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes 
 	if err != nil {
 		return readResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/mail: read: %w", err))
 	}
+	remaining := o.maxSourceBytes
+	if len(msg.Body) > o.maxBodyBytes {
+		return readResult{}, limitError("provider body bytes")
+	}
+	if err := checkFields(o.maxItemBytes, &remaining, msg.ID, msg.From, msg.Subject, msg.Body, msg.Date); err != nil {
+		return readResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return readResult{}, err
+	}
 	body := normalizeBody(ctx, msg.Body)
-	if maxBodyBytes > 0 && len(body) > maxBodyBytes {
-		body = textprocessor.TruncateStringUTF8(body, maxBodyBytes, textprocessor.TruncationSuffix)
+	if err := ctx.Err(); err != nil {
+		return readResult{}, err
 	}
 	var b strings.Builder
-	b.WriteString("From: ")
+	b.WriteString("ID: ")
+	b.WriteString(messageID)
+	if msg.ID != "" && msg.ID != messageID {
+		b.WriteString("\nProvider ID: ")
+		b.WriteString(msg.ID)
+	}
+	b.WriteString("\nFrom: ")
 	b.WriteString(msg.From)
 	b.WriteString("\nSubject: ")
 	b.WriteString(msg.Subject)
@@ -208,7 +241,11 @@ func doRead(ctx context.Context, reader MailReader, args readArgs, maxBodyBytes 
 	b.WriteString(msg.Date)
 	b.WriteString("\n\n")
 	b.WriteString(body)
-	return readResult{Body: b.String()}, nil
+	result := readResult{Body: b.String()}
+	if err := checkWire(result, o.maxWireBytes); err != nil {
+		return readResult{}, err
+	}
+	return result, nil
 }
 
 func escapeCell(s string) string {
@@ -257,4 +294,37 @@ func normalizeBody(ctx context.Context, body string) string {
 		return body
 	}
 	return strings.TrimSpace(md)
+}
+
+func limitError(bound string) error {
+	return toolsy.NewValidationError(
+		"mail result exceeds configured limit: " + bound + "; reader does not support continuation",
+	)
+}
+
+// Subtraction keeps aggregate checks safe even for hostile provider lengths.
+func checkFields(itemLimit int, remaining *int, fields ...string) error {
+	itemRemaining := itemLimit
+	for _, field := range fields {
+		if len(field) > itemRemaining {
+			return limitError("item bytes")
+		}
+		if len(field) > *remaining {
+			return limitError("source bytes")
+		}
+		itemRemaining -= len(field)
+		*remaining -= len(field)
+	}
+	return nil
+}
+
+func checkWire(result any, maxBytes int) error {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return toolsy.NewInternalError(err)
+	}
+	if len(data) > maxBytes {
+		return limitError("encoded JSON bytes")
+	}
+	return nil
 }

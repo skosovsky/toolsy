@@ -67,7 +67,7 @@ func TestFormatSearchMarkdown_TruncationSuffix(t *testing.T) {
 		results[i] = SearchResult{Title: "T", URL: "https://x", Snippet: "s"}
 	}
 	text := FormatSearchMarkdown(results)
-	require.Contains(t, text, strings.TrimSuffix(textprocessor.SearchResultsTruncationSuffix, "\n"))
+	require.Equal(t, 51, strings.Count(text, "https://x"))
 }
 
 func TestScrapePage_ExceedsMaxBodyReturnsError(t *testing.T) {

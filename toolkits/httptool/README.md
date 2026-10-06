@@ -17,7 +17,23 @@ go get github.com/skosovsky/toolsy/toolkits/httptool
 | `http_get`  | Perform an HTTP GET request         | `{"url": "string"}`                                     |
 | `http_post` | Perform an HTTP POST with JSON body | `{"url": "string", "json_body": {"key": "value", ...}}` |
 
-Result: `{"status": 200, "body": "..."}`. `WithMaxResponseBody` caps the **body field** budget in probe mode (default 512KB); final wire JSON `{"status":N,"body":"..."}` may be slightly larger due to envelope overhead (~27 bytes). Responses larger than the body limit return **`CodeValidationFailed`** (fail-closed — no silent truncate). Probe tools do **not** use the final JSON wire limit; only the body read budget applies.
+Result: `{"status": 200, "body": "..."}`. Responses retain their body unchanged or return a limit error; there is no silent truncation. The toolkit does not interpret response text as trusted instructions.
+
+## Contract and bounds
+
+- `WithMaxResponseBody`: source body read budget, default 512 KiB.
+- `WithMaxRequestBody`: POST JSON input byte budget, default 512 KiB; reject before dispatch and preserve approved bytes.
+- `WithMaxWireBytes`: complete encoded result budget, default 4 MiB, checked after JSON escaping. Body and wire limits are independent; escaping can make a body within its read budget exceed the wire budget.
+- Nonpositive values select these finite defaults. URLs are limited to 8192 bytes.
+- Exceeding a limit returns a validation error with no successful result. A POST may already have occurred when its response exceeds a result limit; response bounds are not an operation rollback guarantee. Compose host operation profiles for durable approval/idempotency.
+- The safe tool client has a 30-second default timeout; a positive custom `http.Client.Timeout` overrides it and context cancellation still applies. The host selects allowed destinations and private-IP exceptions.
+- No generic pagination is promised. A host can expose API-specific query/cursor parameters in the URL; stable continuation depends on that API. Status/body are returned without synthesizing a token.
+
+## Credentials and destinations
+
+Run credentials are used only when the host supplies `WithCredentialOrigins([]string{"https://api.example.com"})`. Bindings compare the exact scheme, hostname and effective port (443/80 defaults). Allowed domains permit network access; they do not authorize credentials. An unbound allowed destination receives no credential and does not call the credentials provider.
+
+Cross-origin redirects always remove Authorization, including redirects to another allowed domain or port and HTTPS-to-HTTP redirects. A redirect never acquires credentials for its destination. Same-origin redirects can retain credentials. URL userinfo and static Authorization/Proxy-Authorization/Cookie headers are rejected. `WithHeaders` is for non-secret request metadata; arbitrary application-specific secret headers are the host's responsibility and must not be supplied there. Use the origin-bound credentials provider or a host proxy for authentication. Tool names alone do not establish a destination grant.
 
 ## Library mode (without tools)
 
@@ -51,7 +67,7 @@ body := string(data)
 - `AllowedHosts` non-empty → strict whitelist (only listed hosts; fail-closed on Allowed+Blocked overlap).
 - `AllowedHosts` empty → blacklist via `BlockedHosts` plus always `IsBlockedIP` at dial time.
 
-See `IsBlockedIP` (preferred for SSRF dial/resolve) and `IsPrivateIP` (legacy alias) in godoc for details.
+See `IsBlockedIP` in godoc for details.
 
 ## Tool mode
 
@@ -63,11 +79,9 @@ See `IsBlockedIP` (preferred for SSRF dial/resolve) and `IsPrivateIP` (legacy al
 
 - **Custom client:** `WithHTTPClient` merges only `Timeout` onto the safe client; Transport and CheckRedirect from a custom client are ignored.
 
-- **Response size:** `WithMaxResponseBody(n)` sets the **body field** read budget in probe tools (default 512KB), not the full wire JSON size. Exceeding the body limit returns **`CodeValidationFailed`** (fail-closed). Envelope fields (`status`, JSON keys) add fixed overhead on the wire.
+- **Headers:** `WithHeaders` sets non-secret metadata; authentication uses the explicit origin binding above.
 
-- **Headers:** Use `WithHeaders(map[string]string{...})` to add headers to every request. Prefer not to pass secrets to the agent via headers; use a proxy or server-side auth instead.
-
-- **Response headers:** V1 returns only `Status` and `Body`. A future version may add `Headers map[string]string` (filtered, e.g. without `Set-Cookie`, `Server`) for pagination (e.g. `Link`) or rate limits (`X-RateLimit-Remaining`).
+- **Response headers:** Results contain only status and body. API-specific continuation headers require a separate host adapter.
 
 ## Quick start
 

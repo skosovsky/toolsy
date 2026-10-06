@@ -687,10 +687,7 @@ func TestSQLExecute_WithMaxRows_WithResultFormatter(t *testing.T) {
 		}),
 	)
 	require.NoError(t, err)
-	budget := executeWireByteBudget(
-		&options{maxRows: 10, maxCellBytes: 50},
-		ExecuteResult{Result: "id | name\n--- | ---\n1 | alice"},
-	)
+	budget := 512 * 1024
 	var wire []byte
 	require.NoError(
 		t,

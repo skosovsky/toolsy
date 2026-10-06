@@ -14,7 +14,7 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-var rfc3339Re = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$`)
+var rfc3339Re = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
 
 func decodeTimeChunk[T any](t *testing.T, c toolsy.Chunk) T {
 	t.Helper()

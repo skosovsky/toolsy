@@ -8,14 +8,22 @@ type options struct {
 	approvalDesc      string
 	clarificationName string
 	clarificationDesc string
+	maxPayloadBytes   int
 }
 
 const (
 	defaultApprovalName      = "request_approval"
-	defaultApprovalDesc      = "Request human approval for a dangerous action"
+	defaultApprovalDesc      = "Request human review; this conversation does not authorize an action"
 	defaultClarificationName = "ask_human_clarification"
 	defaultClarificationDesc = "Ask a human for clarification"
+	defaultMaxPayloadBytes   = 16 * 1024
 )
+
+// WithMaxPayloadBytes sets the complete encoded pause payload limit.
+// An explicitly supplied zero or negative limit is invalid.
+func WithMaxPayloadBytes(limit int) Option {
+	return func(o *options) { o.maxPayloadBytes = limit }
+}
 
 func applyDefaults(o *options) {
 	if o.approvalName == "" {

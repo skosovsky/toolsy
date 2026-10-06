@@ -2,8 +2,8 @@ package rag
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"strings"
 )
 
@@ -25,9 +25,14 @@ func Aggregate(retrievers ...DocumentRetriever) DocumentRetriever {
 	})
 }
 
-// Dedup wraps a retriever and removes duplicate documents by SourceURI or FNV content hash.
+// Dedup removes identical retrieval units, preserving distinct chunks of one source.
 func Dedup(retriever DocumentRetriever) DocumentRetriever {
-	if retriever == nil {
+	return DedupBy(retriever, documentDedupKey)
+}
+
+// DedupBy uses a host identity function. Empty keys are retained without deduplication.
+func DedupBy(retriever DocumentRetriever, identity func(Document) string) DocumentRetriever {
+	if retriever == nil || identity == nil {
 		return nil
 	}
 	return documentRetrieverFunc(func(ctx context.Context, query string) ([]Document, error) {
@@ -38,7 +43,11 @@ func Dedup(retriever DocumentRetriever) DocumentRetriever {
 		seen := make(map[string]struct{}, len(docs))
 		out := make([]Document, 0, len(docs))
 		for _, doc := range docs {
-			key := documentDedupKey(doc)
+			key := identity(doc)
+			if key == "" {
+				out = append(out, doc)
+				continue
+			}
 			if _, ok := seen[key]; ok {
 				continue
 			}
@@ -72,12 +81,8 @@ func (f documentRetrieverFunc) Retrieve(ctx context.Context, query string) ([]Do
 }
 
 func documentDedupKey(doc Document) string {
-	if uri := strings.TrimSpace(doc.SourceURI); uri != "" {
-		return "uri:" + uri
-	}
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(doc.Content))
-	return fmt.Sprintf("fnv:%016x", h.Sum64())
+	raw, _ := json.Marshal(doc)
+	return string(raw)
 }
 
 // FormatDocumentsMarkdown renders documents as numbered Markdown for LLM consumption.
@@ -90,15 +95,19 @@ func FormatDocumentsMarkdown(docs []Document) string {
 	for _, doc := range docs {
 		content := strings.TrimSpace(doc.Content)
 		if content == "" {
-			content = strings.TrimSpace(doc.SourceURI)
-		}
-		if content == "" {
-			continue
+			content = "(empty content)"
 		}
 		if b.Len() > 0 {
 			b.WriteByte('\n')
 		}
-		_, _ = fmt.Fprintf(&b, "%d. %s", n, content)
+		source := strings.TrimSpace(doc.SourceURI)
+		if source == "" {
+			source = "unavailable"
+		}
+		_, _ = fmt.Fprintf(&b, "%d. %s\n   Source: %s", n, content, source)
+		if doc.ID != "" {
+			_, _ = fmt.Fprintf(&b, "\n   ID: %s", doc.ID)
+		}
 		n++
 	}
 	if b.Len() == 0 {
