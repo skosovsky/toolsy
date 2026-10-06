@@ -1,0 +1,1 @@
+PASS: latest README/migration-task28 call terminology and CallAttempts accounting; git diff --check exit0. Production audit and prior independent race/lint evidence remain applicable.

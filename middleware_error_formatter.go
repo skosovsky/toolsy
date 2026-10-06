@@ -14,7 +14,7 @@ import (
 // WithErrorFormatter converts terminal execution errors from the wrapped tool/middleware
 // execution path into an error chunk for LLM self-correction.
 //
-// Registry/session pre-tool failures (for example ErrToolNotFound, ErrMaxStepsExceeded,
+// Registry/session pre-tool failures (for example ErrToolNotFound, ErrMaxCallsExceeded,
 // shutdown, validator rejection) happen before middleware execution and remain hard errors.
 func WithErrorFormatter() Middleware {
 	return func(next Tool) Tool {

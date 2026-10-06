@@ -91,7 +91,7 @@ func run(ctx context.Context, cfg config, out io.Writer) error {
 	}
 	session, err := toolsy.NewSession(
 		reg,
-		toolsy.WithMaxSteps(2),
+		toolsy.WithMaxCalls(2),
 		toolsy.WithRunPolicy(toolsy.RunPolicy{AllowedTools: []string{appendNoteTool}}),
 	)
 	if err != nil {

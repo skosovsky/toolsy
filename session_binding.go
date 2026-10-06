@@ -30,7 +30,7 @@ type SessionBinding struct {
 }
 
 // SessionCheckpoint is a state+binding checkpoint, not a full workflow continuation.
-// It excludes RunPolicy, step limits/counts, dependencies and external effects.
+// It excludes RunPolicy, call limits/counts, dependencies and external effects.
 // Hosts restore current authority and durable budgets explicitly.
 type SessionCheckpoint struct {
 	Binding  SessionBinding  `json:"binding"`

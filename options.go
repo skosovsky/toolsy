@@ -204,7 +204,7 @@ func WithOnChunk(fn func(context.Context, Chunk)) RegistryOption {
 type SessionOption func(*sessionOptions)
 
 type sessionOptions struct {
-	maxSteps          int
+	maxCalls          int
 	policy            RunPolicy
 	codecRegistry     *StateCodecRegistry
 	strictStateCodecs bool
@@ -227,16 +227,18 @@ func WithStrictStateCodecs(strict bool) SessionOption {
 	}
 }
 
-// WithMaxSteps limits the total number of tool executions within a session track.
-func WithMaxSteps(n int) SessionOption {
+// WithMaxCalls limits outer session call admissions. Zero is unlimited; negatives
+// fail NewSession. CallAttempts also includes attempts rejected by this limit.
+func WithMaxCalls(n int) SessionOption {
 	return func(o *sessionOptions) {
-		o.maxSteps = n
+		o.maxCalls = n
 	}
 }
 
 // WithRunPolicy attaches session-level tool choice constraints enforced before each Execute.
 func WithRunPolicy(p RunPolicy) SessionOption {
+	p = cloneRunPolicy(p)
 	return func(o *sessionOptions) {
-		o.policy = p
+		o.policy = cloneRunPolicy(p)
 	}
 }

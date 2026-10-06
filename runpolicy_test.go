@@ -22,20 +22,20 @@ func TestValidateRunPolicy_ForcedInAllowed(t *testing.T) {
 	}))
 }
 
-func TestValidateRunPolicy_ForcedNotInRequired(t *testing.T) {
+func TestValidateRunPolicy_ForcedIndependentOfCatalogRequirements(t *testing.T) {
 	err := ValidateRunPolicy(RunPolicy{
-		ForcedTool:    "a",
-		RequiredTools: []string{"b"},
+		ForcedTool:           "a",
+		CatalogRequiredTools: []string{"b"},
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
-func TestValidateRunPolicy_RequiredNotSubsetOfAllowed(t *testing.T) {
+func TestValidateRunPolicy_CatalogIndependentOfAllowed(t *testing.T) {
 	err := ValidateRunPolicy(RunPolicy{
-		RequiredTools: []string{"a", "c"},
-		AllowedTools:  []string{"a", "b"},
+		CatalogRequiredTools: []string{"a", "c"},
+		AllowedTools:         []string{"a", "b"},
 	})
-	require.Error(t, err)
+	require.NoError(t, err)
 }
 
 func TestValidateRunPolicy_DuplicateAllowed(t *testing.T) {
@@ -45,7 +45,7 @@ func TestValidateRunPolicy_DuplicateAllowed(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSession_EnforcesRequiredTools(t *testing.T) {
+func TestSession_CatalogRequiredToolsDoNotRestrictCalls(t *testing.T) {
 	toolA := newMiddlewareMinTool(
 		"a",
 		func(_ context.Context, _ *RunEnv, _ ToolInput, yield func(Chunk) error) error {
@@ -61,14 +61,13 @@ func TestSession_EnforcesRequiredTools(t *testing.T) {
 	reg, err := NewRegistryBuilder().Add(toolA, toolB).Build()
 	require.NoError(t, err)
 
-	sess, err := NewSession(reg, WithRunPolicy(RunPolicy{RequiredTools: []string{"a"}}))
+	sess, err := NewSession(reg, WithRunPolicy(RunPolicy{CatalogRequiredTools: []string{"a"}}))
 	require.NoError(t, err)
 	err = sess.Execute(context.Background(), ToolCall{
 		ToolName: "b",
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 	}, func(Chunk) error { return nil })
-	require.Error(t, err)
-	requireToolErrorCode(t, err, CodeValidationFailed)
+	require.NoError(t, err)
 
 	err = sess.Execute(context.Background(), ToolCall{
 		ToolName: "a",

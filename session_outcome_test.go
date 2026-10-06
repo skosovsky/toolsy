@@ -162,7 +162,7 @@ func TestRunCallInfraError_Classification(t *testing.T) {
 	}{
 		{name: "not_found", err: NewToolNotFoundError()},
 		{name: "shutdown", err: NewShutdownError()},
-		{name: "max_steps", err: NewMaxStepsExceededError()},
+		{name: "max_calls", err: NewMaxCallsExceededError()},
 		{name: "registry_not_ready", err: NewRegistryStateError()},
 		{name: "stream_aborted", err: ErrStreamAborted},
 		{name: "dependency_missing", err: NewDependencyMissingError("db")},
@@ -285,14 +285,14 @@ func TestSession_RunCall_DeadlineExceeded_IsInfraWithChain(t *testing.T) {
 	}
 }
 
-func TestSession_RunCall_InfraMaxSteps(t *testing.T) {
+func TestSession_RunCall_InfraMaxCalls(t *testing.T) {
 	t.Parallel()
 	tool := newMiddlewareMinTool("ok", func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
 		return nil
 	})
 	reg, err := NewRegistryBuilder().Add(tool).Build()
 	require.NoError(t, err)
-	sess, err := NewSession(reg, WithMaxSteps(1))
+	sess, err := NewSession(reg, WithMaxCalls(1))
 	require.NoError(t, err)
 
 	_, err = sess.RunCall(context.Background(), ToolCall{
@@ -307,7 +307,7 @@ func TestSession_RunCall_InfraMaxSteps(t *testing.T) {
 		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
 		Env:      NewRunEnv(sess),
 	})
-	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxCallsExceeded, ErrMaxCallsExceeded)
 	assert.Equal(t, OutcomeInfrastructureError, outcome.Status)
 }
 

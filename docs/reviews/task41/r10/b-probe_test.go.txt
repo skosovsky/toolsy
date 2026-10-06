@@ -1,0 +1,91 @@
+package r10acceptanceb
+
+import (
+ "context"
+ "errors"
+ "sync"
+ "sync/atomic"
+ "testing"
+ ts "github.com/skosovsky/toolsy"
+)
+
+func registry(t *testing.T, handler func(context.Context,*ts.RunEnv,struct{})(string,error)) *ts.Registry {
+ t.Helper()
+ read,err:=ts.NewTool("read","Read",handler);if err!=nil {t.Fatal(err)}
+ write,err:=ts.NewTool("write","Write",handler);if err!=nil {t.Fatal(err)}
+ reg,err:=ts.NewRegistry(read,write);if err!=nil {t.Fatal(err)};return reg
+}
+func call(name string) ts.ToolCall {return ts.ToolCall{ToolName:name,Input:ts.ToolInput{ArgsJSON:[]byte(`{}`)}}}
+func execute(s *ts.Session,name string)error{return s.Execute(context.Background(),call(name),func(ts.Chunk)error{return nil})}
+
+func TestPublicCapturedSlicesConcurrentReuse(t *testing.T){
+ // Arrange: required catalog entry differs from the allowed call.
+ reg:=registry(t,func(context.Context,*ts.RunEnv,struct{})(string,error){return "ok",nil})
+ allowed,required:=[]string{"read"},[]string{"write"}
+ option:=ts.WithRunPolicy(ts.RunPolicy{AllowedTools:allowed,CatalogRequiredTools:required})
+ allowed[0]="write";required[0]="missing"
+ s,err:=ts.NewSession(reg,option);if err!=nil{t.Fatal(err)}
+ start:=make(chan struct{});var wg sync.WaitGroup
+ // Act: caller writes original storage while sessions consume and reuse captured option.
+ wg.Go(func(){<-start;for range 20000 {allowed[0]="write";required[0]="absent"}})
+ for range 12 {wg.Go(func(){<-start;for range 120 {
+  fresh,buildErr:=ts.NewSession(reg,option);if buildErr!=nil{t.Error(buildErr);return}
+  if err:=execute(fresh,"read");err!=nil{t.Error(err)}
+  if err:=execute(s,"write");err==nil{t.Error("caller slice changed admission")}
+ }})};close(start);wg.Wait()
+ // Assert: catalog-required write is not a whitelist and read remains allowed.
+ if err:=execute(s,"read");err!=nil{t.Fatal(err)}
+}
+
+func TestPublicRunCallContentionAndRestore(t *testing.T){
+ // Arrange.
+ var handled atomic.Int64
+ reg:=registry(t,func(context.Context,*ts.RunEnv,struct{})(string,error){handled.Add(1);return "ok",nil})
+ s,err:=ts.NewSession(reg,ts.WithMaxCalls(13));if err!=nil{t.Fatal(err)}
+ var wg sync.WaitGroup;var denied atomic.Int64
+ // Act: RunCall and Execute share one gate.
+ for i:=range 150 {wg.Go(func(){var err error;if i%2==0 {_,err=s.RunCall(context.Background(),call("read"))}else{err=execute(s,"read")};if err!=nil {if !errors.Is(err,ts.ErrMaxCallsExceeded){t.Error(err)};denied.Add(1)}})};wg.Wait()
+ checkpoint,err:=s.ExportCheckpoint();if err!=nil{t.Fatal(err)}
+ restored,err:=ts.NewSessionFromCheckpoint(reg,checkpoint,ts.WithMaxCalls(1),ts.WithRunPolicy(ts.RunPolicy{ForcedTool:"write",CatalogRequiredTools:[]string{"read"}}));if err!=nil{t.Fatal(err)}
+ // Assert.
+ if handled.Load()!=13||denied.Load()!=137||s.Track().CallAttempts()!=150{t.Fatalf("handlers=%d denied=%d attempts=%d",handled.Load(),denied.Load(),s.Track().CallAttempts())}
+ if restored.Track().CallAttempts()!=0||restored.Track().MaxCalls()!=1{t.Fatal("checkpoint restored old budget")}
+ if err:=execute(restored,"read");err==nil||restored.Track().CallAttempts()!=0{t.Fatal("current authority was ignored")}
+ if err:=execute(restored,"write");err!=nil{t.Fatal(err)}
+ if err:=execute(restored,"write");!errors.Is(err,ts.ErrMaxCallsExceeded)||restored.Track().CallAttempts()!=2{t.Fatal(err)}
+}
+
+func TestPublicNestedAndNilAdmissions(t *testing.T){
+ // Arrange: an outer handler submits another call through the same supplied session.
+ var s *ts.Session
+ var nested error
+ child,err:=ts.NewTool("child","Child",func(context.Context,*ts.RunEnv,struct{})(string,error){return "child",nil});if err!=nil{t.Fatal(err)}
+ parent,err:=ts.NewTool("parent","Parent",func(context.Context,*ts.RunEnv,struct{})(string,error){nested=execute(s,"child");return "parent",nil});if err!=nil{t.Fatal(err)}
+ reg,err:=ts.NewRegistry(parent,child);if err!=nil{t.Fatal(err)}
+ s,err=ts.NewSession(reg,ts.WithMaxCalls(1));if err!=nil{t.Fatal(err)}
+ // Act.
+ err=execute(s,"parent")
+ empty,buildErr:=ts.NewSession(nil,ts.WithMaxCalls(1));if buildErr!=nil{t.Fatal(buildErr)}
+ _,nilErr:=empty.RunCall(context.Background(),call("absent"))
+ // Assert.
+ if err!=nil||!errors.Is(nested,ts.ErrMaxCallsExceeded)||s.Track().CallAttempts()!=2{t.Fatalf("outer=%v nested=%v attempts=%d",err,nested,s.Track().CallAttempts())}
+ if nilErr==nil||empty.Track().CallAttempts()!=0{t.Fatal("nil registry consumed attempt")}
+}
+
+type retryTool struct{ts.Tool}
+func (r retryTool) Execute(ctx context.Context,env *ts.RunEnv,in ts.ToolInput,yield func(ts.Chunk)error)error{
+ var err error
+ for range 3 {err=r.Tool.Execute(ctx,env,in,yield);if err==nil{return nil}}
+ return err
+}
+func TestPublicInternalRetriesOneAdmission(t *testing.T){
+ // Arrange: the retry wrapper is beneath the session boundary.
+ var invocations int
+ tool,err:=ts.NewTool("read","Read",func(context.Context,*ts.RunEnv,struct{})(string,error){invocations++;if invocations<3{return "",errors.New("transient")};return "ok",nil});if err!=nil{t.Fatal(err)}
+ reg,err:=ts.NewRegistry(retryTool{tool});if err!=nil{t.Fatal(err)}
+ s,err:=ts.NewSession(reg,ts.WithMaxCalls(1));if err!=nil{t.Fatal(err)}
+ // Act.
+ err=execute(s,"read")
+ // Assert.
+ if err!=nil||invocations!=3||s.Track().CallAttempts()!=1{t.Fatalf("error=%v handlers=%d attempts=%d",err,invocations,s.Track().CallAttempts())}
+}

@@ -37,7 +37,7 @@ Legacy `MimeTypeText` + `IsError: true` chunks are **normalized** before deliver
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Business failures (`CodeValidationFailed`, `CodeBudgetExceeded`, handler `*ToolError`, …) | `(outcome, nil)` with `outcome.ExecutionError != nil`        |
 | Normalized malformed chunks (`CodeInternal` from legacy text wire)                        | `(zero, infra *ToolError)` — infrastructure, not LLM-fixable |
-| Registry/session infra (`CodeToolNotFound`, shutdown, max steps, …)                       | `(partial outcome, infra error)`                             |
+| Registry/session infra (`CodeToolNotFound`, shutdown, max calls, …)                       | `(partial outcome, infra error)`                             |
 
 Do not use `strings.Contains` on chunk text; use `AsToolError` on `outcome.ExecutionError` or the infra `err`.
 

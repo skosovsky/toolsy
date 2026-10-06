@@ -1,0 +1,8 @@
+package toolsy
+import("strconv";"testing")
+func BenchmarkR10SessionPolicySnapshot(b *testing.B){
+ names:=make([]string,32);for i:=range names{names[i]=strconv.Itoa(i)}
+ option:=WithRunPolicy(RunPolicy{AllowedTools:names})
+ b.ReportAllocs();b.ResetTimer()
+ for b.Loop(){if _,err:=NewSession(nil,option);err!=nil{b.Fatal(err)}}
+}

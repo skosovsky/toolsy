@@ -17,7 +17,7 @@ var (
 	ErrShutdown         = errors.New("registry is shutting down")
 	ErrRegistryState    = errors.New("registry runtime state is not initialized")
 	ErrStreamAborted    = errors.New("stream aborted by caller")
-	ErrMaxStepsExceeded = errors.New("max execution steps exceeded")
+	ErrMaxCallsExceeded = errors.New("maximum session calls exceeded")
 	// ErrAsyncCollectedLimitExceeded is returned when background chunk collection exceeds WithMaxCollectedChunks.
 	ErrAsyncCollectedLimitExceeded = errors.New("toolsy: async collected chunks limit exceeded")
 	ErrBudgetExceeded              = errors.New("budget exceeded")
@@ -34,7 +34,7 @@ const (
 	CodeDependencyMissing    ErrorCode = "DEPENDENCY_MISSING"
 	CodeInternal             ErrorCode = "INTERNAL"
 	CodeShutdown             ErrorCode = "SHUTDOWN"
-	CodeMaxStepsExceeded     ErrorCode = "MAX_STEPS_EXCEEDED"
+	CodeMaxCallsExceeded     ErrorCode = "MAX_CALLS_EXCEEDED"
 	CodeRegistryNotReady     ErrorCode = "REGISTRY_NOT_READY"
 	CodeToolsContractMissing ErrorCode = "TOOLS_CONTRACT_MISSING"
 	CodeBudgetExceeded       ErrorCode = "BUDGET_EXCEEDED"
@@ -241,13 +241,13 @@ func NewShutdownError() *ToolError {
 	}
 }
 
-// NewMaxStepsExceededError reports session step budget exhaustion.
-func NewMaxStepsExceededError() *ToolError {
+// NewMaxCallsExceededError reports session call admission exhaustion.
+func NewMaxCallsExceededError() *ToolError {
 	return &ToolError{ //nolint:exhaustruct_v5 // optional envelope fields omitted by design
-		Code:      CodeMaxStepsExceeded,
-		Reason:    ErrMaxStepsExceeded.Error(),
+		Code:      CodeMaxCallsExceeded,
+		Reason:    ErrMaxCallsExceeded.Error(),
 		Retryable: false,
-		Err:       ErrMaxStepsExceeded,
+		Err:       ErrMaxCallsExceeded,
 	}
 }
 
@@ -351,7 +351,7 @@ func AsToolError(err error) (*ToolError, bool) {
 // Returns true for SCHEMA_INVALID, VALIDATION_FAILED, and TOOL_NOT_FOUND — the LLM can fix
 // arguments or pick another tool. Returns false for orchestrator/host issues such as
 // DEPENDENCY_MISSING, TOOLS_CONTRACT_MISSING, INTERNAL, TIMEOUT, SHUTDOWN,
-// MAX_STEPS_EXCEEDED, and REGISTRY_NOT_READY; route those by comparing [ToolError.Code] explicitly.
+// MAX_CALLS_EXCEEDED, and REGISTRY_NOT_READY; route those by comparing [ToolError.Code] explicitly.
 //
 // Example:
 //
@@ -380,7 +380,7 @@ func ClientCorrectable(code ErrorCode) bool {
 
 func orchestratorSystemCode(code ErrorCode) bool {
 	switch code {
-	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady, CodeStateCodecMissing:
+	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxCallsExceeded, CodeRegistryNotReady, CodeStateCodecMissing:
 		return true
 	default:
 		return false

@@ -107,11 +107,11 @@ func TestNestedSuppliedSessionPreservesPolicyViewBudgetAndApproval(t *testing.T)
 			}
 			view, err := reg.View(RegistryViewSpec{ToolNames: names, Owner: "host", Reason: "nested test"})
 			require.NoError(t, err)
-			maxSteps := 20
+			maxCalls := 20
 			if mode == "budget" {
-				maxSteps = 1
+				maxCalls = 1
 			}
-			supplied, err = view.NewSession(WithMaxSteps(maxSteps), WithRunPolicy(RunPolicy{AllowedTools: allowed}))
+			supplied, err = view.NewSession(WithMaxCalls(maxCalls), WithRunPolicy(RunPolicy{AllowedTools: allowed}))
 			require.NoError(t, err)
 			child := "write"
 			if mode == "policy" || mode == "view" {
@@ -131,13 +131,13 @@ func TestNestedSuppliedSessionPreservesPolicyViewBudgetAndApproval(t *testing.T)
 			switch mode {
 			case "policy":
 				require.ErrorContains(t, err, "not allowed by session run policy")
-				assert.Equal(t, int64(1), supplied.Track().ExecutionCount())
+				assert.Equal(t, int64(1), supplied.Track().CallAttempts())
 			case "view":
 				require.ErrorIs(t, err, ErrCapabilityDenied)
-				assert.Equal(t, int64(2), supplied.Track().ExecutionCount())
+				assert.Equal(t, int64(2), supplied.Track().CallAttempts())
 			case "budget":
-				require.ErrorIs(t, err, ErrMaxStepsExceeded)
-				assert.Equal(t, int64(2), supplied.Track().ExecutionCount())
+				require.ErrorIs(t, err, ErrMaxCallsExceeded)
+				assert.Equal(t, int64(2), supplied.Track().CallAttempts())
 			default:
 				var pending *PendingApprovalError
 				require.ErrorAs(t, err, &pending)
@@ -167,7 +167,7 @@ func TestNestedSuppliedSessionPreservesPolicyViewBudgetAndApproval(t *testing.T)
 				assert.Zero(t, leaked)
 				assert.Equal(t, 1, writes)
 				assert.Equal(t, 4, parents)
-				assert.Equal(t, int64(8), supplied.Track().ExecutionCount())
+				assert.Equal(t, int64(8), supplied.Track().CallAttempts())
 			}
 			assert.Zero(t, hiddenCalls)
 			if mode != "approval" {

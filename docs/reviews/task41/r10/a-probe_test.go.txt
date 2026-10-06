@@ -1,0 +1,59 @@
+package toolsy
+
+import (
+ "context"
+ "sync"
+ "testing"
+)
+
+func TestR10ReviewAOptionIsolationAndCatalog(t *testing.T) {
+ // Arrange: a captured option and a retained materialization must stay independent.
+ reg := policySnapshotRegistry(t)
+ names := []string{"read"}
+ option := WithRunPolicy(RunPolicy{AllowedTools: names, CatalogRequiredTools: names})
+ var retained *sessionOptions
+ first, err := NewSession(reg, option, func(o *sessionOptions){ retained = o })
+ if err != nil { t.Fatal(err) }
+ // Act: mutate all externally retained slices while options, sessions and rebind read theirs.
+ var wg sync.WaitGroup
+ wg.Go(func(){for range 500 {names[0]="write";retained.policy.AllowedTools[0]="write";retained.policy.CatalogRequiredTools[0]="absent"}})
+ for range 8 { wg.Go(func(){for range 50 {
+   s, buildErr := NewSession(reg, option)
+   if buildErr != nil {t.Error(buildErr);return}
+   if callErr:=s.Execute(context.Background(),ToolCall{ToolName:"read",Input:ToolInput{ArgsJSON:[]byte(`{}`)}},func(Chunk)error{return nil});callErr!=nil{t.Error(callErr)}
+   if callErr:=first.Execute(context.Background(),ToolCall{ToolName:"write",Input:ToolInput{ArgsJSON:[]byte(`{}`)}},func(Chunk)error{return nil});callErr==nil{t.Error("caller mutated policy admission")}
+   if bindErr:=first.Rebind(reg);bindErr!=nil{t.Error(bindErr)}
+ }}) }
+ wg.Wait()
+ // Assert: catalog-only requirements admit an unrelated visible call even after Rebind.
+ catalogOnly,err:=NewSession(reg,WithRunPolicy(RunPolicy{CatalogRequiredTools:[]string{"read"},ForcedTool:"write"}))
+ if err!=nil{t.Fatal(err)}
+ if err=catalogOnly.Rebind(reg);err!=nil{t.Fatal(err)}
+ if err=catalogOnly.Execute(context.Background(),ToolCall{ToolName:"write",Input:ToolInput{ArgsJSON:[]byte(`{}`)}},func(Chunk)error{return nil});err!=nil{t.Fatal(err)}
+}
+
+type r10RetryProbe struct { Tool }
+func (r r10RetryProbe) UnwrapNext() Tool { return r.Tool }
+func (r r10RetryProbe) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk)error)error {
+ var err error
+ for range 3 {err=r.Tool.Execute(ctx,env,input,yield);if err==nil{return nil}}
+ return err
+}
+func TestR10ReviewARetryAndWireClassification(t *testing.T){
+ // Arrange.
+ var executions int
+ base:=newMiddlewareMinTool("retry",func(context.Context,*RunEnv,ToolInput,func(Chunk)error)error{executions++;if executions<3{return NewInternalError(context.DeadlineExceeded)};return nil})
+ reg,err:=NewRegistry(r10RetryProbe{Tool:base});if err!=nil{t.Fatal(err)}
+ session,err:=NewSession(reg,WithMaxCalls(1));if err!=nil{t.Fatal(err)}
+ call:=ToolCall{ToolName:"retry",Input:ToolInput{ArgsJSON:[]byte(`{}`)}}
+ // Act.
+ _,err=session.RunCall(context.Background(),call);if err!=nil{t.Fatal(err)}
+ outcome,err:=session.RunCall(context.Background(),call)
+ // Assert.
+ if executions!=3 || session.Track().CallAttempts()!=2 {t.Fatalf("executions=%d attempts=%d",executions,session.Track().CallAttempts())}
+ if err==nil || outcome.Status!=OutcomeInfrastructureError {t.Fatalf("budget outcome=%+v err=%v",outcome,err)}
+ te,ok:=AsToolError(err);if !ok || te.Code!=CodeMaxCallsExceeded || te.Retryable || ClientCorrectable(te.Code){t.Fatalf("error classification: %v",err)}
+ decoded,err:=unmarshalToolErrorWire([]byte(`{"code":"MAX_CALLS_EXCEEDED","reason":"limit","retryable":false}`));if err!=nil{t.Fatal(err)}
+ if !runCallInfraError(decoded)||sentinelForErrorCode(decoded.Code)!=ErrMaxCallsExceeded {t.Fatalf("wire classification: %+v",decoded)}
+ if sentinelForErrorCode(ErrorCode("MAX_STEPS_EXCEEDED"))!=nil{t.Fatal("legacy wire sentinel remains")}
+}

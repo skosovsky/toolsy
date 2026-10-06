@@ -393,7 +393,7 @@ func TestSessionExecute_ErrorFormatterSoftErrorCountsStep(t *testing.T) {
 	reg, err := NewRegistryBuilder().Use(WithErrorFormatter()).Add(inner).Build()
 	require.NoError(t, err)
 
-	session, err := NewSession(reg, WithMaxSteps(5))
+	session, err := NewSession(reg, WithMaxCalls(5))
 	require.NoError(t, err)
 	var got Chunk
 	err = session.Execute(
@@ -406,7 +406,7 @@ func TestSessionExecute_ErrorFormatterSoftErrorCountsStep(t *testing.T) {
 	)
 	require.NoError(t, err)
 	assert.True(t, got.IsError)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
 func TestWithErrorFormatter_RegistryExecuteIter_EmitsSoftErrorChunk(t *testing.T) {
@@ -491,7 +491,7 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
 	require.Empty(t, missingToolChunks)
 
-	session, err := NewSession(reg, WithMaxSteps(1))
+	session, err := NewSession(reg, WithMaxCalls(1))
 	require.NoError(t, err)
 	err = session.Execute(
 		context.Background(),
@@ -509,7 +509,7 @@ func TestWithErrorFormatter_PreToolErrorsRemainHard(t *testing.T) {
 			return nil
 		},
 	)
-	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxCallsExceeded, ErrMaxCallsExceeded)
 	require.Empty(t, maxStepChunks)
 }
 

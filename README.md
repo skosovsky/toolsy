@@ -347,7 +347,7 @@ For synchronous tool calls, `Session.RunCall` aggregates chunks into a `ToolOutc
 ```go
 outcome, err := sess.RunCall(ctx, call)
 if err != nil {
-    // infrastructure — not found, shutdown, max steps, control signals (partial outcome preserved)
+    // infrastructure — not found, shutdown, max calls, control signals (partial outcome preserved)
     if toolsy.IsControlError(err) {
         _ = outcome.Controls // Pause/Yield/Halt/UIAction collected before err
     }
@@ -481,8 +481,8 @@ Notes:
 - `WithTruncation` truncates `text/plain` and `text/markdown` by default; `application/json` truncation is opt-in via `WithTruncationIncludeJSON(true)`.
 - Transient retries, timeouts, and bulkheads belong outside `toolsy` as execution wrappers. See `examples/resiliency/main.go`.
 - `WithErrorFormatter` may convert terminal errors into `Chunk{IsError: true}` and then return `nil` (soft error).
-- `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxStepsExceeded`, shutdown/validator failures) remain hard errors.
-- If you need to classify step success/failure in an orchestrator using `SessionTrack`, use `Chunk.IsError` as the failure signal; `SessionTrack` counts executions, not outcome status.
+- `WithErrorFormatter` handles only errors from wrapped tool/middleware execution; pre-tool failures (e.g. `ErrToolNotFound`, `ErrMaxCallsExceeded`, shutdown/validator failures) remain hard errors.
+- For call outcomes, inspect the Execute error and result chunks, or use RunCall's ToolOutcome. `SessionTrack.CallAttempts` counts admission attempts, including budget rejection; it does not classify outcomes.
 
 ## Control flow (typed suspend/yield)
 
@@ -506,7 +506,21 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 
 ### Session tool choice (RunPolicy)
 
-`RunPolicy` is validated and enforced only on `Session.Execute`. Direct `Registry.Execute` does not apply run policy; use `Registry.View` for static tool visibility and capability policy.
+`RunPolicy` is captured by value: AllowedTools and CatalogRequiredTools slices
+are copied at option creation and session construction. Register/catalog builders
+remain stable after setup; caller mutations after capture cannot change admission.
+`AllowedTools` and `ForcedTool` restrict session calls. `CatalogRequiredTools`
+requires names in the visible catalog at construction; it does not require calls
+or act as another whitelist. Direct `Registry.Execute` does not apply RunPolicy;
+use `Registry.View` for static visibility and capability policy.
+
+`WithMaxCalls(n)` limits outer `Execute`/`RunCall` admissions, with zero unlimited
+and negatives rejected by construction. `Track().CallAttempts()` counts attempts
+that pass session selection, including budget rejection, environment/argument
+errors, cancellation and replay. Policy rejection and nil registry consume nothing.
+Internal retries count once; nested Session calls count separately. This is a
+session call limit; the host owns agent iterations and durable budgets. See
+[task41 migration](docs/migration-task41.md) for the API and wire-code break.
 
 ```go
 sess, err := toolsy.NewSession(reg, toolsy.WithRunPolicy(toolsy.RunPolicy{

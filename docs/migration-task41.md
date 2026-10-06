@@ -286,7 +286,7 @@ codecs must roundtrip their values, use stable schema IDs, and support concurren
 calls; referenced callback state remains host-owned.
 
 `SessionCheckpoint` is a state-plus-binding checkpoint. It does not save RunPolicy,
-maxSteps, consumed call count, dependencies, StateStore contents, external effects,
+maxCalls, consumed call-attempt count, dependencies, StateStore contents, external effects,
 or a workflow continuation. Restoring supplies current host authority/configuration
 and starts fresh in-memory counters. Hosts must enforce durable budgets and restore
 workflow position themselves before dispatch.
@@ -297,3 +297,39 @@ during access/encoding. Codec/MarshalJSON callbacks run outside state/configurat
 locks and may reenter the session. Import replaces the map only after successful
 hydration; callback writes and external side effects are not rolled back when
 hydration fails. This is not a deep-copy or transactional callback contract.
+
+## RunPolicy snapshots and call admission (R10, D06)
+
+`WithRunPolicy` copies AllowedTools and CatalogRequiredTools at capture and at each
+materialization. NewSession owns independent execution/options snapshots. Mutating
+original slices after option creation or construction cannot change validation or
+admission; reused options are independent. Do not mutate a slice concurrently
+with the initial WithRunPolicy capture itself. Dynamic policy updates are not
+provided; construct a new session with current authority.
+
+Clear break: replace `RequiredTools` with `CatalogRequiredTools` for presence in
+the visible session catalog. Missing names fail construction with
+TOOLS_CONTRACT_MISSING before codec freeze. It never restricts calls. To preserve
+the old RequiredTools-only whitelist behavior, migrate that list to AllowedTools.
+Catalog requirements may be outside AllowedTools and ForcedTool. ForcedTool still
+must be in AllowedTools when the latter is nonempty. Registry/View capability
+policy remains an independent boundary.
+
+Replace `WithMaxSteps`, `Track().MaxSteps()`, `Track().ExecutionCount()` with
+`WithMaxCalls`, `Track().MaxCalls()`, `Track().CallAttempts()`. Error APIs are now
+ErrMaxCallsExceeded / CodeMaxCallsExceeded / NewMaxCallsExceededError, and the
+serialized code is `MAX_CALLS_EXCEEDED` instead of `MAX_STEPS_EXCEEDED`. Update host
+wire-code switches/readers; the obsolete code no longer maps to the budget
+sentinel/classification in the new reader.
+Zero remains unlimited; a negative limit now fails construction.
+
+Accounting order is unchanged: nil registry and RunPolicy rejection consume no
+attempt; otherwise atomically increment CallAttempts and reject attempts above the
+limit. Budget-rejected attempts remain counted. Environment binding, registry
+capability/policy, argument validation, cancellation, tool failure and result replay
+all occur after admission and consume that attempt. Internal middleware retries
+consume one admission; each nested Session.Execute and each fresh RunCall consumes
+its own admission. At most maxCalls attempts can pass this gate under concurrency.
+This counter does not measure handler effects or successful results and does not
+model LLM/agent iterations. Checkpoints do not persist it; the host enforces durable
+budgets and supplies current policy/limits when restoring.

@@ -227,7 +227,7 @@ func TestCheckpointRestoreUsesCurrentHostPolicyAndBudget(t *testing.T) {
 		func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error { return nil })
 	registry, err := NewRegistry(tool, other)
 	require.NoError(t, err)
-	original, err := NewSession(registry, WithMaxSteps(2), WithRunPolicy(RunPolicy{ForcedTool: "value"}))
+	original, err := NewSession(registry, WithMaxCalls(2), WithRunPolicy(RunPolicy{ForcedTool: "value"}))
 	require.NoError(t, err)
 	SetSessionState(original, "persisted", 7)
 	call := ToolCall{ToolName: "value", Input: ToolInput{ArgsJSON: []byte(`{}`)}}
@@ -239,14 +239,14 @@ func TestCheckpointRestoreUsesCurrentHostPolicyAndBudget(t *testing.T) {
 	require.NoError(t, err)
 	// Act.
 	restored, err := NewSessionFromCheckpoint(registry, checkpoint,
-		WithMaxSteps(1), WithRunPolicy(RunPolicy{ForcedTool: "other"}))
+		WithMaxCalls(1), WithRunPolicy(RunPolicy{ForcedTool: "other"}))
 	// Assert.
 	require.NoError(t, err)
-	require.Equal(t, int64(2), original.Track().ExecutionCount())
-	require.Zero(t, restored.Track().ExecutionCount())
-	require.Equal(t, int64(1), restored.Track().MaxSteps())
+	require.Equal(t, int64(2), original.Track().CallAttempts())
+	require.Zero(t, restored.Track().CallAttempts())
+	require.Equal(t, int64(1), restored.Track().MaxCalls())
 	require.Error(t, restored.Execute(context.Background(), call, yield))
-	require.Zero(t, restored.Track().ExecutionCount())
+	require.Zero(t, restored.Track().CallAttempts())
 	call.ToolName = "other"
 	require.NoError(t, restored.Execute(context.Background(), call, yield))
 	require.Error(t, restored.Execute(context.Background(), call, yield))

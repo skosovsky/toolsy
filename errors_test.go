@@ -51,7 +51,7 @@ func TestErrorsIs_As(t *testing.T) {
 		{"tool not found", NewToolNotFoundError(), ErrToolNotFound, true, true, false},
 		{"timeout", NewTimeoutError(true), ErrTimeout, true, false, true},
 		{"shutdown", NewShutdownError(), ErrShutdown, true, false, true},
-		{"max steps", NewMaxStepsExceededError(), ErrMaxStepsExceeded, true, false, true},
+		{"max steps", NewMaxCallsExceededError(), ErrMaxCallsExceeded, true, false, true},
 		{"registry state", NewRegistryStateError(), ErrRegistryState, true, false, true},
 	}
 	for _, tt := range tests {

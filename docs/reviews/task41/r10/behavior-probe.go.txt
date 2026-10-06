@@ -1,0 +1,24 @@
+package toolsy
+import("context";"testing";"github.com/stretchr/testify/require")
+func TestR10PolicyCaptureBehaviorProbe(t *testing.T){
+ for _,stage:=range []string{"option-capture","session-construction"}{t.Run(stage,func(t *testing.T){
+  // Arrange.
+  handler:=func(context.Context,*RunEnv,ToolInput,func(Chunk)error)error{return nil}
+  reg,err:=NewRegistry(newMiddlewareMinTool("read",handler),newMiddlewareMinTool("write",handler));require.NoError(t,err)
+  allowed:=[]string{"read"}
+  option:=WithRunPolicy(RunPolicy{AllowedTools:allowed})
+  var session *Session
+  if stage=="session-construction"{session,err=NewSession(reg,option);require.NoError(t,err)}
+  // Act.
+  allowed[0]="write"
+  if session==nil{session,err=NewSession(reg,option);require.NoError(t,err)}
+  call:=ToolCall{ToolName:"write",Input:ToolInput{ArgsJSON:[]byte(`{}`)}}
+  writeErr:=session.Execute(t.Context(),call,func(Chunk)error{return nil})
+  call.ToolName="read"
+  readErr:=session.Execute(t.Context(),call,func(Chunk)error{return nil})
+  // Assert.
+  t.Logf("write=%v read=%v",writeErr,readErr)
+  require.Error(t,writeErr,"caller mutation must not authorize write")
+  require.NoError(t,readErr,"caller mutation must not remove captured read admission")
+ })}
+}

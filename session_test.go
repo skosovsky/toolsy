@@ -23,7 +23,7 @@ func newSessionRegistry(t *testing.T, tools []Tool, opts ...RegistryOption) *Reg
 	return reg
 }
 
-func TestSessionTrackExecutionCount(t *testing.T) {
+func TestSessionTrackCallAttempts(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
@@ -33,10 +33,10 @@ func TestSessionTrackExecutionCount(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session, err := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxCalls(0))
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(0), session.Track().ExecutionCount())
+	assert.Equal(t, int64(0), session.Track().CallAttempts())
 	for range 2 {
 		err = session.Execute(
 			context.Background(),
@@ -45,11 +45,11 @@ func TestSessionTrackExecutionCount(t *testing.T) {
 		)
 		require.NoError(t, err)
 	}
-	assert.Equal(t, int64(2), session.Track().ExecutionCount())
-	assert.Equal(t, int64(0), session.Track().MaxSteps())
+	assert.Equal(t, int64(2), session.Track().CallAttempts())
+	assert.Equal(t, int64(0), session.Track().MaxCalls())
 }
 
-func TestSessionValidatorFailureConsumesStep(t *testing.T) {
+func TestSessionValidatorFailureConsumesCallAttempt(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
@@ -65,7 +65,7 @@ func TestSessionValidatorFailureConsumesStep(t *testing.T) {
 			return errors.New("always reject")
 		},
 	}))
-	session, err := NewSession(reg, WithMaxSteps(10))
+	session, err := NewSession(reg, WithMaxCalls(10))
 	require.NoError(t, err)
 
 	err = session.Execute(
@@ -75,10 +75,10 @@ func TestSessionValidatorFailureConsumesStep(t *testing.T) {
 	)
 	require.Error(t, err)
 	require.False(t, executed)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
-func TestSessionMaxStepsExceeded(t *testing.T) {
+func TestSessionMaxCallsExceeded(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
@@ -88,7 +88,7 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session, err := NewSession(reg, WithMaxSteps(3))
+	session, err := NewSession(reg, WithMaxCalls(3))
 	require.NoError(t, err)
 
 	for i := 1; i <= 3; i++ {
@@ -108,11 +108,11 @@ func TestSessionMaxStepsExceeded(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "4", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
-	assert.Equal(t, int64(4), session.Track().ExecutionCount())
+	requireToolErrorCode(t, err, CodeMaxCallsExceeded, ErrMaxCallsExceeded)
+	assert.Equal(t, int64(4), session.Track().CallAttempts())
 }
 
-func TestSessionExecuteIterTracksSteps(t *testing.T) {
+func TestSessionExecuteIterTracksCallAttempts(t *testing.T) {
 	type A struct {
 		N int `json:"n"`
 	}
@@ -134,7 +134,7 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session, err := NewSession(reg, WithMaxSteps(2))
+	session, err := NewSession(reg, WithMaxCalls(2))
 	require.NoError(t, err)
 
 	var seen int
@@ -147,7 +147,7 @@ func TestSessionExecuteIterTracksSteps(t *testing.T) {
 		seen++
 	}
 	assert.Equal(t, 2, seen)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
 func TestSessionExecuteIter_DeadlineExceeded_SuppressedLikeCancel(t *testing.T) {
@@ -263,7 +263,7 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session, err := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxCalls(0))
 	require.NoError(t, err)
 
 	const workers = 8
@@ -289,12 +289,12 @@ func TestSessionConcurrentUseCountsSteps(t *testing.T) {
 	for err := range errCh {
 		require.NoError(t, err)
 	}
-	assert.Equal(t, int64(workers), session.Track().ExecutionCount())
+	assert.Equal(t, int64(workers), session.Track().CallAttempts())
 }
 
-func TestSessionToolNotFoundConsumesStep(t *testing.T) {
+func TestSessionToolNotFoundConsumesCallAttempt(t *testing.T) {
 	reg := newSessionRegistry(t, nil)
-	session, err := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxCalls(0))
 	require.NoError(t, err)
 
 	err = session.Execute(
@@ -303,13 +303,13 @@ func TestSessionToolNotFoundConsumesStep(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	requireToolErrorCode(t, err, CodeToolNotFound, ErrToolNotFound)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
-func TestSessionShutdownConsumesStep(t *testing.T) {
+func TestSessionShutdownConsumesCallAttempt(t *testing.T) {
 	reg := newSessionRegistry(t, nil)
 	require.NoError(t, reg.Shutdown(context.Background()))
-	session, err := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxCalls(0))
 	require.NoError(t, err)
 
 	err = session.Execute(
@@ -318,10 +318,10 @@ func TestSessionShutdownConsumesStep(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	requireToolErrorCode(t, err, CodeShutdown, ErrShutdown)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
-func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
+func TestSession_ContextDeadlineConsumesCallAttempt(t *testing.T) {
 	type A struct{}
 	type R struct{}
 
@@ -332,7 +332,7 @@ func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 	require.NoError(t, err)
 
 	reg := newSessionRegistry(t, []Tool{tool})
-	session, err := NewSession(reg, WithMaxSteps(0))
+	session, err := NewSession(reg, WithMaxCalls(0))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
@@ -343,7 +343,7 @@ func TestSession_ContextDeadlineConsumesStep(t *testing.T) {
 		func(Chunk) error { return nil },
 	)
 	requireToolErrorCode(t, err, CodeTimeout, ErrTimeout)
-	assert.Equal(t, int64(1), session.Track().ExecutionCount())
+	assert.Equal(t, int64(1), session.Track().CallAttempts())
 }
 
 func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
@@ -371,7 +371,7 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 			beforeCount.Add(1)
 		}),
 	)
-	session, err := NewSession(reg, WithMaxSteps(1))
+	session, err := NewSession(reg, WithMaxCalls(1))
 	require.NoError(t, err)
 
 	err = session.Execute(
@@ -390,9 +390,9 @@ func TestSessionOverBudgetShortCircuitsBeforeRegistryExecution(t *testing.T) {
 		ToolCall{ToolName: "noop", Input: ToolInput{CallID: "2", ArgsJSON: []byte(`{}`)}},
 		func(Chunk) error { return nil },
 	)
-	requireToolErrorCode(t, err, CodeMaxStepsExceeded, ErrMaxStepsExceeded)
+	requireToolErrorCode(t, err, CodeMaxCallsExceeded, ErrMaxCallsExceeded)
 	require.False(t, executed.Load())
 	assert.Equal(t, int32(1), beforeCount.Load())
 	assert.Equal(t, int32(1), validateCount.Load())
-	assert.Equal(t, int64(2), session.Track().ExecutionCount())
+	assert.Equal(t, int64(2), session.Track().CallAttempts())
 }

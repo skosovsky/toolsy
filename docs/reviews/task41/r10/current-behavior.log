@@ -1,0 +1,10 @@
+=== RUN   TestR10PolicyCaptureBehaviorProbe
+=== RUN   TestR10PolicyCaptureBehaviorProbe/option-capture
+    policy_capture_probe_test.go:20: write=VALIDATION_FAILED: tool write is not allowed by session run policy read=<nil>
+=== RUN   TestR10PolicyCaptureBehaviorProbe/session-construction
+    policy_capture_probe_test.go:20: write=VALIDATION_FAILED: tool write is not allowed by session run policy read=<nil>
+--- PASS: TestR10PolicyCaptureBehaviorProbe (0.00s)
+    --- PASS: TestR10PolicyCaptureBehaviorProbe/option-capture (0.00s)
+    --- PASS: TestR10PolicyCaptureBehaviorProbe/session-construction (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.530s

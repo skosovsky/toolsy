@@ -8,45 +8,46 @@ import (
 	"sync/atomic"
 )
 
-// SessionTrack stores session-level execution budget state.
+// SessionTrack stores session-level call admission state.
 type SessionTrack struct {
 	count    atomic.Int64
-	maxSteps int64
+	maxCalls int64
 }
 
 func newSessionTrack(opts sessionOptions) *SessionTrack {
 	return &SessionTrack{
 		count:    atomic.Int64{},
-		maxSteps: int64(opts.maxSteps),
+		maxCalls: int64(opts.maxCalls),
 	}
 }
 
-func (t *SessionTrack) consumeStep() error {
+func (t *SessionTrack) consumeCallAttempt() error {
 	if t == nil {
 		return nil
 	}
-	step := t.count.Add(1)
-	if t.maxSteps > 0 && step > t.maxSteps {
-		return NewMaxStepsExceededError()
+	attempt := t.count.Add(1)
+	if t.maxCalls > 0 && attempt > t.maxCalls {
+		return NewMaxCallsExceededError()
 	}
 	return nil
 }
 
-// ExecutionCount returns the number of consumed session steps (outer Session.Execute calls).
-// Internal retry attempts are not counted separately.
-func (t *SessionTrack) ExecutionCount() int64 {
+// CallAttempts counts outer Execute/RunCall admissions, including budget rejection,
+// subsequent environment/registry/argument errors, cancellation and replay. A nil
+// registry or RunPolicy rejection consumes nothing. Internal retries count once.
+func (t *SessionTrack) CallAttempts() int64 {
 	if t == nil {
 		return 0
 	}
 	return t.count.Load()
 }
 
-// MaxSteps returns the configured execution budget for this track. Zero means unlimited.
-func (t *SessionTrack) MaxSteps() int64 {
+// MaxCalls returns the configured call admission limit. Zero means unlimited.
+func (t *SessionTrack) MaxCalls() int64 {
 	if t == nil {
 		return 0
 	}
-	return t.maxSteps
+	return t.maxCalls
 }
 
 // Session is a stateful, concurrency-safe executor built on top of a stateless registry.
@@ -67,6 +68,10 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	cfg.policy = cloneRunPolicy(cfg.policy)
+	if cfg.maxCalls < 0 {
+		return nil, NewValidationError("maximum session calls must be nonnegative")
+	}
 	if err := ValidateRunPolicy(cfg.policy); err != nil {
 		return nil, err
 	}
@@ -77,12 +82,17 @@ func NewSession(reg *Registry, opts ...SessionOption) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateRunPolicyCatalog(cfg.policy, binding.ToolNames); err != nil {
+		return nil, err
+	}
 	cfg.codecRegistry.Freeze()
 	binding.StateSchemaDigest = stateSchemaDigest(cfg.codecRegistry)
+	storedOptions := cfg
+	storedOptions.policy = cloneRunPolicy(cfg.policy)
 	session := &Session{ //nolint:exhaustruct_v5 // Configuration/state locks have zero values; maps and pointer initialized below
 		track:  newSessionTrack(cfg),
-		policy: cfg.policy,
-		opts:   cfg,
+		policy: cloneRunPolicy(cfg.policy),
+		opts:   storedOptions,
 		state:  make(map[string]any),
 	}
 	session.configuration.Store(&sessionConfiguration{registry: reg, binding: binding})
@@ -119,7 +129,7 @@ func (s *Session) executeWithConfiguration(
 	if err := enforceRunPolicy(s.policy, call); err != nil {
 		return err
 	}
-	if err := s.track.consumeStep(); err != nil {
+	if err := s.track.consumeCallAttempt(); err != nil {
 		return err
 	}
 	if call.Env != nil {
@@ -139,12 +149,6 @@ func enforceRunPolicy(p RunPolicy, call ToolCall) error {
 			return nil
 		}
 		return NewValidationError("tool " + call.ToolName + " is not allowed by session run policy")
-	}
-	if len(p.RequiredTools) > 0 {
-		if slices.Contains(p.RequiredTools, call.ToolName) {
-			return nil
-		}
-		return NewValidationError("tool " + call.ToolName + " is not in required tools for this session")
 	}
 	return nil
 }

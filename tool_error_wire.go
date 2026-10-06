@@ -69,8 +69,8 @@ func sentinelForErrorCode(code ErrorCode) error {
 		return ErrTimeout
 	case CodeShutdown:
 		return ErrShutdown
-	case CodeMaxStepsExceeded:
-		return ErrMaxStepsExceeded
+	case CodeMaxCallsExceeded:
+		return ErrMaxCallsExceeded
 	case CodeRegistryNotReady:
 		return ErrRegistryState
 	case CodeBudgetExceeded:

@@ -222,7 +222,7 @@ func runCallInfraError(err error) bool {
 		return true
 	}
 	switch te.Code {
-	case CodeToolNotFound, CodeShutdown, CodeMaxStepsExceeded, CodeRegistryNotReady,
+	case CodeToolNotFound, CodeShutdown, CodeMaxCallsExceeded, CodeRegistryNotReady,
 		CodeDependencyMissing, CodeToolsContractMissing, CodePolicyDenied, CodeCapabilityDenied:
 		return true
 	default:

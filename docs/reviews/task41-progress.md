@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted, awaiting its commit; rows 10–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted, awaiting its commit; rows 11–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -351,3 +351,41 @@ same probe passes on the fix. Registered 32-slot snapshot export adds approximat
 Execute allocation counts are unchanged. Short timing samples are not a
 statistical guarantee. Checkpoint authority/budgets and callback/value ownership
 remain explicit host responsibilities. Commit hash is recorded in the next row.
+
+### 10 — R10 / D06 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. RunPolicy slices are cloned when WithRunPolicy captures and materializes its
+   option, and again when NewSession publishes configuration; reused options and
+   separate sessions own independent snapshots. Caller mutation after capture or
+   construction cannot alter admission or race with library reads.
+2. CatalogRequiredTools declares visible catalog requirements, validated during
+   construction before codec freeze. It never serves as an alternative call
+   whitelist. AllowedTools and ForcedTool define call selection; catalog-required
+   tools may differ from allowed/forced calls. Registry execution remains separate.
+3. WithMaxCalls / CallAttempts / MaxCalls replace agent-step terminology and legacy
+   exports. Negative limits fail construction; zero is unlimited. Atomic attempt
+   accounting has explicit admission ordering and bounded successful admissions
+   under contention; budget-rejected attempts count, policy-denied/nil-registry
+   attempts do not. Internal retries consume one outer admission.
+4. AAA regression probes cover capture/materialization/reuse mutations, concurrent
+   caller writes, catalog validation, accounting/error wire and checkpoint restore
+   semantics. The baseline public policy-mutation probe fails before the fix.
+5. Affected tests/race/lint and documentation/migration pass; obsolete primary
+   names are removed; two independent reviewers accept all five criteria at 100%
+   without unresolved detected bugs.
+
+Decision: clear break to CatalogRequiredTools and call-attempt naming, retaining
+existing admission accounting (including rejected over-budget attempts) explicitly.
+RunPolicy is a constructor snapshot, not an agent iteration state machine.
+
+Evidence: [R10 acceptance](task41/r10-acceptance.md). Independent reviewers
+`r10_acceptance_a` and `r10_acceptance_b` accepted all five criteria at 100%
+on the final diff, with no unresolved detected defects. All 24-module race tests
+passed; root lint has zero issues. Baseline admits caller-mutated write and
+rejects captured read; identical probe now rejects write and accepts read.
+A 32-name constructor adds 2048B/four allocations for independent snapshots;
+short timing samples are not a latency guarantee. Clear-break migration includes
+catalog/selection separation and the MAX_CALLS_EXCEEDED wire code. Commit hash
+is recorded in the next row.
