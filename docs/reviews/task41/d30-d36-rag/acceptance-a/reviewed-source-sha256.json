@@ -1,0 +1,19 @@
+{
+  "toolkits/rag/options.go": "7d0eb00df4ea9eaaef82a9a38ab93f1ebc6c8b9cc2313412719ea58fac32a442",
+  "toolkits/rag/markdown_test.go": "759b7dc95bc7eb5319ff7fa3d83c2b0bae3a6b5fcfc27e720609bc8025f3269b",
+  "toolkits/rag/boundary_test.go": "2ee7351da8eb0308de9dfb4cb70b3460796ec98f6c4498b19559dc6a1560fc27",
+  "toolkits/rag/bounds_test.go": "26a4fbe6ef462559bdd8bbe8fb77fb4f90647554bae44346bdeaf1ae71f3eccf",
+  "toolkits/rag/document.go": "de2edb588c198994c024291215f57f024867186af50aa8d2d1eecfbe0107ca77",
+  "toolkits/rag/rag.go": "9590e99daf920e0106f6f6935b00bc270c017110aa8b0d7515f4af9c746dd567",
+  "toolkits/rag/doc.go": "889698014a79fe3419ad3c5d7b512c2c9d4f16e3c6e3c77b1ff73b3d8e510cd6",
+  "toolkits/rag/markdown.go": "cd7e995cb787f7efa2b7354a99dabefdd0e0703d739b4cdd3990c428ca9ac2b1",
+  "toolkits/rag/rag_test.go": "8723f32e0a3d58fc5ebaf3401611b224825e978b6e5ec6a006cd8c06111a76b3",
+  "toolkits/rag/retriever_benchmark_test.go": "be3d52f15a85f8fdbf474054a595de6c88e615d2e0997ec7cd4be0fd4258eecd",
+  "toolkits/rag/bounds.go": "7d8e612c09d36e6dc147a01670e1535e52d9f865f81fbf71cde04ac1a4a639cf",
+  "toolkits/rag/examples/host/main.go": "5fb31b349943fab90f860bb5bdcbcfc0d34a56e872654dc6a3c74320ef92164c",
+  "toolkits/rag/examples/host/main_test.go": "7f150e65db8ca51dc43a24bacc53fd598711c374b16b7c460d7452a46b169e45",
+  "toolkits/rag/README.md": "c99cded68dbe0c9ea8cbf3f015b68a7c71c15f87c6abbd422c30ab030edf9d59",
+  "docs/migration-task29.md": "e338f2f3c510d830c57220c67d02d4491783f3c04576c8b43da66ba392eee5e8",
+  "docs/migration-task30.md": "ba750bf048fb951516b8fcd494b0461956ce40260a4b251192a2f6b4f8bf1fe7",
+  "docs/migration-task41.md": "f560593fb4d27385a21be9c34f2bc6398dda3387be2260b68b92b80868d7ec48"
+}

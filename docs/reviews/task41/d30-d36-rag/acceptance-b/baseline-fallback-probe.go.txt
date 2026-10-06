@@ -1,0 +1,11 @@
+package rag
+import("context";"errors";"testing";"github.com/stretchr/testify/require")
+func TestBaselineFallbackPreservesPrimaryFailure(t *testing.T){
+ // Arrange: absent secondary must not erase failed primary.
+ cause:=errors.New("primary denied")
+ // Act.
+ docs,err:=Fallback(&mockRetriever{err:cause},nil).Retrieve(context.Background(),"query")
+ // Assert.
+ require.Nil(t,docs)
+ require.ErrorIs(t,err,cause)
+}

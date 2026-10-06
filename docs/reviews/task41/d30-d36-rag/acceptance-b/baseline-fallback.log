@@ -1,0 +1,8 @@
+--- FAIL: TestBaselineFallbackPreservesPrimaryFailure (0.00s)
+    review_b_baseline_test.go:10: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/toolkits/rag/review_b_baseline_test.go:10
+        	Error:      	Expected error with "primary denied" in chain but got nil.
+        	Test:       	TestBaselineFallbackPreservesPrimaryFailure
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/rag	0.430s
+FAIL

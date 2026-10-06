@@ -1,0 +1,10 @@
+ok  	github.com/skosovsky/toolsy/toolkits/rag	1.602s
+--- FAIL: TestAcceptancePolicyCancelFalsePreservesCause (0.00s)
+    acceptance_a_test.go:10: lost terminal policy cancellation: got=primary denied next=0 ctx=context canceled cause=policy canceled
+--- FAIL: TestAcceptancePolicyCancelFalsePreservesCause (0.00s)
+    acceptance_a_test.go:10: lost terminal policy cancellation: got=primary denied next=0 ctx=context canceled cause=policy canceled
+--- FAIL: TestAcceptancePolicyCancelFalsePreservesCause (0.00s)
+    acceptance_a_test.go:10: lost terminal policy cancellation: got=primary denied next=0 ctx=context canceled cause=policy canceled
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/rag/examples/host	0.556s
+FAIL

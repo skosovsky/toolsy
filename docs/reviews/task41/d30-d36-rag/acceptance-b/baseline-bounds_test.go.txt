@@ -50,12 +50,19 @@ func TestDocumentIdentityAndProvenance(t *testing.T) {
 		{ID: "chunk-b", Content: "b", SourceURI: "doc://1"},
 		{ID: "chunk-a", Content: "a", SourceURI: "doc://1"},
 	}
-	// Act: the thin renderer preserves host-selected units, including duplicates.
-	markdown := FormatDocumentsMarkdown(docs)
-	// Assert: routing/dedup policy belongs to the host, not the tool adapter.
-	require.Equal(t, 3, strings.Count(markdown, "Source: doc://1"))
-	require.Equal(t, 2, strings.Count(markdown, "ID: chunk-a"))
+	got, err := Dedup(&mockRetriever{docs: docs}).Retrieve(context.Background(), "query")
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	markdown := FormatDocumentsMarkdown(got)
+	require.Equal(t, 2, strings.Count(markdown, "Source: doc://1"))
+	require.Contains(t, markdown, "ID: chunk-a")
 	require.Contains(t, markdown, "ID: chunk-b")
+	got, err = DedupBy(
+		&mockRetriever{docs: docs},
+		func(d Document) string { return d.SourceURI },
+	).Retrieve(context.Background(), "query")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
 }
 
 func TestDocumentWireLimitDoesNotDropProvenance(t *testing.T) {

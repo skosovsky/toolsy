@@ -1,0 +1,5 @@
+--- FAIL: TestAcceptanceBaselineFallbackCause (0.00s)
+    baseline_probe_test.go:11: failed primary swallowed: <nil>
+FAIL
+FAIL	github.com/skosovsky/toolsy/toolkits/rag	0.434s
+FAIL

@@ -1,0 +1,23 @@
+package main
+import("context";"errors";"testing";"time";"github.com/skosovsky/toolsy/toolkits/rag")
+func TestBHostDualCausesAndPredicateCancellation(t *testing.T){for _,phase:=range []string{"secondary","predicate"}{t.Run(phase,func(t *testing.T){
+ // Arrange.
+ cause:=errors.New("host terminal cause");ctx,cancel:=context.WithCancelCause(t.Context());defer cancel(nil);secondaryCalls,supplementCalls:=0,0
+ k,e:=newKnowledgeBase(func(context.Context,string)([]rag.Document,error){return nil,errIndexUnavailable},func(context.Context,string)([]rag.Document,error){secondaryCalls++;cancel(cause);return nil,errors.New("ignored secondary error")},func(context.Context,string)([]rag.Document,error){supplementCalls++;return nil,nil},func([]rag.Document,error)bool{if phase=="predicate"{cancel(cause)};return true});if e!=nil{t.Fatal(e)}
+ // Act/Assert.
+ d,e:=k.Retrieve(ctx,"q");if d!=nil||!errors.Is(e,context.Canceled)||!errors.Is(e,cause)||supplementCalls!=0{t.Fatalf("terminal %v",e)};if phase=="secondary"{if secondaryCalls!=1||!errors.Is(e,errIndexUnavailable){t.Fatal("dual fallback causes")}}else if secondaryCalls!=0{t.Fatal("predicate cancel dispatched")}
+ })}
+ // Arrange/Act: expired custom deadline never permits any provider.
+ cause:=errors.New("deadline cause");ctx,cancel:=context.WithDeadlineCause(t.Context(),time.Now().Add(-time.Second),cause);defer cancel();calls:=0;p:=func(context.Context,string)([]rag.Document,error){calls++;return nil,nil};k,_:=newKnowledgeBase(p,p,p,func([]rag.Document,error)bool{return true});_,e:=k.Retrieve(ctx,"q")
+ // Assert.
+ if calls!=0||!errors.Is(e,context.DeadlineExceeded)||!errors.Is(e,cause){t.Fatalf("deadline %v %d",e,calls)}
+}
+func TestBHostDeniedPredicateStillTerminal(t *testing.T){
+ // Arrange: host predicate cancels while declining fallback on an original failure.
+ cause:=errors.New("denied predicate cancelled");ctx,cancel:=context.WithCancelCause(t.Context());defer cancel(nil);calls:=0
+ k,_:=newKnowledgeBase(func(context.Context,string)([]rag.Document,error){return nil,errIndexUnavailable},func(context.Context,string)([]rag.Document,error){calls++;return nil,nil},func(context.Context,string)([]rag.Document,error){calls++;return nil,nil},func([]rag.Document,error)bool{cancel(cause);return false})
+ // Act.
+ docs,e:=k.Retrieve(ctx,"q")
+ // Assert: predicate cancellation cannot bypass terminal customcause when returning false.
+ if docs!=nil||calls!=0||!errors.Is(e,context.Canceled)||!errors.Is(e,cause)||!errors.Is(e,errIndexUnavailable){t.Fatalf("denied predicate %v calls%d",e,calls)}
+}

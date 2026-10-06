@@ -42,7 +42,7 @@ Use `timetool.ComputeCurrent(loc)` in library mode. Tool JSON shape unchanged un
 | `httptool` | `IsPrivateIP`, `IsBlockedIP`, `SafeDialTransport`, `ReadBodyLimited`, `IsSuccessStatus` |
 | `timetool` | `ComputeCurrent`, `CurrentResult`                                                       |
 | `web`      | `SearchStructured`, `ScrapePage`, `FormatSearchMarkdown`                                |
-| `rag`      | `Aggregate`, `Dedup`, `Fallback`, `FormatDocumentsMarkdown`                             |
+| `rag`      | `FormatDocumentsMarkdown`; routing helpers removed in [task41](migration-task41.md#d30d36--thin-rag-boundary-and-one-final-wire-check)                             |
 
 ## IoC formatters
 

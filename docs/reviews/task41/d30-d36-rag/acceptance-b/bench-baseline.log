@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/toolkits/rag
+cpu: Apple M1 Max
+BenchmarkSearchDocuments-10    	    3738	    308429 ns/op	  133020 B/op	    1611 allocs/op
+BenchmarkSearchDocuments-10    	    3964	    291864 ns/op	  133060 B/op	    1611 allocs/op
+BenchmarkSearchDocuments-10    	    4261	    291426 ns/op	  133043 B/op	    1611 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/rag	3.737s

@@ -15,10 +15,7 @@ type Document struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
-// DocumentRetriever returns structured documents for a query. The adapter calls it
-// at most once; routing/fallback and provider allocation/cancellation remain host-owned.
-// Result slices and metadata are borrowed and must stay stable during execution;
-// callbacks must not mutate them unless the host separately establishes ownership.
+// DocumentRetriever returns structured documents for a query.
 type DocumentRetriever interface {
 	Retrieve(ctx context.Context, query string) ([]Document, error)
 }

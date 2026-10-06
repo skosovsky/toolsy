@@ -6,7 +6,7 @@ Task30 extends task29 architectural goals (Engine/IoC — already delivered in t
 
 Task30 §1–4 (Dual Mode, IoC formatters, RAG router, SSRF dedup, middleware `ToolInput.ArgsJSON`) is an extension of task29 — no duplicate implementation required. See [migration-task29.md](migration-task29.md).
 
-**IoC verify-only (task29):** Dual Mode, IoC formatters on five toolkits (`timetool`, `web`, `rag`, `sqltool`, `document` — see [migration-task29.md](migration-task29.md#ioc-formatters)), RAG router, middleware `ArgsJSON`; task30 adds read I/O breaking changes only.
+**IoC verify-only (task29):** Dual Mode, IoC formatters on five toolkits (`timetool`, `web`, `rag`, `sqltool`, `document` — see [migration-task29.md](migration-task29.md#ioc-formatters)), host-owned RAG routing (toolkit helpers removed by task41), middleware `ArgsJSON`; task30 adds read I/O breaking changes only.
 
 **New breaking surface in task30:** read primitives only (`textprocessor`, `httptool.ReadBodyLimited`, toolkit call sites).
 
@@ -161,7 +161,7 @@ The core recognizes `context.Canceled` and `context.DeadlineExceeded` via `error
 | Codegen walk          | `internal/toolsygen/generator.go` (`checkContext`, `finishGeneratorRead`) | Generator internal cooperative cancel; post-read uses ctx-first + `IsContextInterrupt` like library tier                                                                                                                                          |
 | E2B output cap        | `adapters/sandbox/e2b/e2b.go`                                             | `StartAndWait` streams into `CappedBuffer` writers; `FinishRun` checks overflow on success and failure paths                                                                                                                                      |
 | Web semantic cap      | `toolkits/web/scraper.go` (`ErrMarkdownExceedsLimit`)                     | Markdown conversion tier after HTML read; tool mode maps via `MapToolkitCapError` (ctx-first)                                                                                                                                                     |
-| RAG wire budget       | `toolkits/rag/cap.go`                                                     | Semantic wire cap after marshal; drops docs then `MapToolkitCapError` (ctx-first)                                                                                                                                                                 |
+| RAG wire budget       | `toolkits/rag/rag.go`, `bounds.go`                                                     | Final JSON wire check rejects the complete result; provider item/source/count bounds remain separate                                                                                                                                                                 |
 | Delegate step display | `agents/delegate.go` `formatStepOutput`                                   | `TruncateStringUTF8` after SSE step aggregation (256 KiB)                                                                                                                                                                                         |
 | Memory count cap      | `toolkits/memory/memory.go`                                               | Item count limit, not I/O read tier                                                                                                                                                                                                               |
 | DOCX zip entry cap    | `toolkits/document/parser_docx.go`                                        | Structural bomb guard (`maxZipEntries`), not byte-read                                                                                                                                                                                            |
@@ -181,7 +181,7 @@ The core recognizes `context.Canceled` and `context.DeadlineExceeded` via `error
 
 **Starlark guest `fs.read` limit:** guest script read-limit surfaces as `exit_code:1` + stderr text from eval — not promoted to `CodeValidationFailed` at the exectool boundary (intentional guest-exit contract).
 
-**RAG wire budget:** `toolkits/rag/cap.go` applies semantic JSON wire trim synchronously (no I/O); cancel asymmetry does not apply.
+**RAG wire budget:** item/source/count bounds and one final encoded-wire check reject overlimits without trimming documents or serialized JSON. Cancellation is terminal at provider/filter/formatter/validator boundaries; host callbacks remain cooperative. See [task41 migration](migration-task41.md).
 
 **MCP cancel-over-limit:** when a composite error carries both `ctx.Err()` and `ErrReadLimitExceeded`, MCP transport `finish*CallResponse`, `streamLimitErr()`, `call()` select branches, `mapCallReadLimit`, and `handleToolCallResult` return the interrupt — not `CodeValidationFailed`. Same rule for `agents/sse` `parseSSESteps` when `scanner.Err()` chains an interrupt before read-limit.
 
@@ -199,5 +199,5 @@ Proxy handlers (`agents/delegate`, `mcp/client` tool **Execute**) must call `Map
 2. Update `httptool.ReadBodyLimited` callers: expect `[]byte`; handle `ErrReadLimitExceeded`.
 3. Use `errors.Is(err, textprocessor.ErrReadLimitExceeded)` instead of string matching on `"read exceeds"`.
 4. For large web pages, pass `web.WithMaxPageBytes` or handle validation errors in the agent loop.
-5. IoC / Engine items (Dual Mode, IoC formatters, RAG router, middleware `ArgsJSON`): verify against [migration-task29.md](migration-task29.md) — not reimplemented in task30.
+5. IoC / Engine items (Dual Mode, IoC formatters, host-owned RAG routing (toolkit helpers removed by task41), middleware `ArgsJSON`): verify against [migration-task29.md](migration-task29.md) — not reimplemented in task30.
 6. Run tests: `go test -race ./textprocessor/... ./toolkits/... ./contracts/... ./agents/...`

@@ -875,3 +875,35 @@ buffered-output fallback exists. Inclusive per-stream256KiB, cancellation/timeou
 nonzero exit and detached5s cleanup contracts remain. The thin client must cooperate
 with contexts; unit and executable local seams do not prove cloud destruction or
 filesystem/network/CPU isolation. See [E2B contract/example](../adapters/sandbox/e2b/README.md).
+
+## D30/D36 — thin RAG boundary and one final wire check
+
+`toolkits/rag.Aggregate`, `Dedup`, `DedupBy`, and `Fallback` are removed. Pass one
+host-owned `DocumentRetriever` to `AsSearchTool`; it is called at most once, with no hidden
+routing/retry/fallback. Nil/typed-nil required retrievers fail construction.
+Move those policies into your host/ragy/routery adapter.
+The [runnable host recipe](../toolkits/rag/examples/host/main.go) validates required
+providers/policy, uses explicit unavailable-index or empty-success fallback, keeps
+cancellation/deadline terminal, joins primary/secondary causes on failure and
+merges/deduplicates by a host-selected public source/chunk identity. No ragy/routery
+SDK integration or external availability guarantee is claimed.
+
+`capDocumentsForWire`, `wireByteSize` and `cloneDocuments` are removed. Provider
+item/source bounds still count actual escaped JSON; filtered count still rejects
+oversized collections without manufacturing continuation. A single formatter/
+default-envelope → host-validator → JSON wire check now enforces the final cap.
+`WithMaxBytes` counts that complete wire JSON, including envelope and escaping,
+with inclusive limits. `format.WireLimitError` remains inspectable through the
+returned validation error. JSON and documents are never sliced/dropped. Host
+validators run before the final wire cap; do not depend on the former precheck
+preventing validator invocation on oversized default envelopes.
+
+Retriever/filter/formatter/validator containers and metadata are borrowed host
+values: keep them stable/read-only or arrange your own ownership/synchronization.
+The removed shallow clone was not a deep-copy guarantee. Once the RAG handler is
+entered, cancellation and custom parent causes survive its callback boundaries.
+An already-cancelled/expired call may instead be rejected by the existing core
+predispatch check before this handler: the standard interrupt is retained, but
+custom cause is not promised there, and no retriever runs. Uncooperative callbacks
+cannot be preempted. Provider/internal callback resource costs remain outside accepted-input
+and exported-wire bounds. Read the [RAG contract](../toolkits/rag/README.md).

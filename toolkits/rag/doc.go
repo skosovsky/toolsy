@@ -1,4 +1,4 @@
-// Package rag exposes vector/knowledge retrievers as toolsy tools with structured [Document] results,
-// composable retriever routing (Aggregate, Dedup, Fallback), and host IoC via [WithResultFormatter]
-// and [WithHostResultValidator].
+// Package rag exposes one host-owned knowledge retriever as a bounded toolsy tool.
+// Retrieval routing, deduplication, fallback and retry policy belong to the host.
+// Host IoC is available through WithResultFormatter and WithHostResultValidator.
 package rag

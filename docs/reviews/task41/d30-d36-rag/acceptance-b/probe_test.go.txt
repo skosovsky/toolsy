@@ -1,0 +1,42 @@
+package rag_test
+import("context";"encoding/json";"errors";"sync";"sync/atomic";"testing";"time";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/rag")
+type probeFetch func(context.Context,string)([]rag.Document,error)
+func(f probeFetch)Retrieve(c context.Context,q string)([]rag.Document,error){return f(c,q)}
+func runProbe(t *testing.T,c context.Context,r rag.DocumentRetriever,opts ...rag.Option)([]byte,error){t.Helper(); tool,e:=rag.AsSearchTool(r,opts...);if e!=nil{t.Fatal(e)};var raw []byte;e=tool.Execute(c,toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"query":"x"}`)},func(ch toolsy.Chunk)error{raw=append([]byte(nil),ch.Data...);return nil});return raw,e}
+func TestBConcurrentBorrowedReadOnly(t *testing.T){
+ // Arrange: shared immutable host containers and one adapter, no copying by host.
+ docs:=[]rag.Document{{ID:"chunk-a",Content:"<界",SourceURI:"doc://one",Metadata:map[string]string{"private":"stable"}},{ID:"chunk-b",Content:"B",SourceURI:"doc://one"}};var calls atomic.Int64
+ tool,e:=rag.AsSearchTool(probeFetch(func(context.Context,string)([]rag.Document,error){calls.Add(1);return docs,nil}),rag.WithResultShape(rag.ShapeDocumentsJSON),rag.WithScopeFilter(func(_ context.Context,d []rag.Document)[]rag.Document{return d}),rag.WithHostResultValidator(func(v any)error{if len(v.(rag.SearchDocumentsWire).Documents)!=2{panic("lost unit")};return nil}));if e!=nil{t.Fatal(e)}
+ // Act.
+ var wg sync.WaitGroup;for range 80{wg.Go(func(){var raw []byte;e:=tool.Execute(t.Context(),toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"query":"x"}`)},func(ch toolsy.Chunk)error{raw=ch.Data;return nil});if e!=nil{t.Error(e);return};var got rag.SearchDocumentsWire;if json.Unmarshal(raw,&got)!=nil||len(got.Documents)!=2||got.Documents[1].ID!="chunk-b"{t.Errorf("lost JSON provenance: %s",raw)}})};wg.Wait()
+ // Assert.
+ if calls.Load()!=80||docs[0].Metadata["private"]!="stable"{t.Fatal("count or borrowed mutation")}
+}
+func TestBFilterExpansionAndWire(t *testing.T){
+ base:=[]rag.Document{{ID:"a",Content:"<界",SourceURI:"doc://1"}};fetch:=probeFetch(func(context.Context,string)([]rag.Document,error){return base,nil})
+ for _,kind:=range []string{"item","source","count"}{t.Run(kind,func(t *testing.T){
+ // Arrange.
+ formatted:=false;opts:=[]rag.Option{rag.WithResultFormatter(func([]rag.Document)(any,error){formatted=true;return 1,nil})};d:=append([]rag.Document(nil),base...)
+ switch kind{case "item":d[0].Content=string(make([]byte,100));opts=append(opts,rag.WithMaxItemBytes(80));case "source":d=append(d,d...);one,_:=json.Marshal(base);opts=append(opts,rag.WithMaxSourceBytes(len(one)));case "count":d=append(d,d...);opts=append(opts,rag.WithMaxResults(1))};opts=append(opts,rag.WithScopeFilter(func(context.Context,[]rag.Document)[]rag.Document{return d}))
+ // Act/Assert.
+ raw,e:=runProbe(t,t.Context(),fetch,opts...);if !errors.Is(e,toolsy.ErrValidation)||raw!=nil||formatted{t.Fatalf("expansion bypass %s: %s %v %t",kind,raw,e,formatted)}
+ })}
+ // Arrange: exact complete JSON limit with escaping, envelope and two provenance IDs.
+ d:=append(append([]rag.Document(nil),base...),rag.Document{ID:"b",SourceURI:"doc://1"});f:=probeFetch(func(context.Context,string)([]rag.Document,error){return d,nil});expected,_:=json.Marshal(rag.SearchDocumentsWire{Documents:d});validated:=false
+ // Act/Assert.
+ raw,e:=runProbe(t,t.Context(),f,rag.WithResultShape(rag.ShapeDocumentsJSON),rag.WithMaxBytes(len(expected)),rag.WithHostResultValidator(func(any)error{validated=true;return nil}));if e!=nil||string(raw)!=string(expected)||!validated{t.Fatalf("exact %s %v",raw,e)}
+ validated=false;raw,e=runProbe(t,t.Context(),f,rag.WithResultShape(rag.ShapeDocumentsJSON),rag.WithMaxBytes(len(expected)-1),rag.WithHostResultValidator(func(any)error{validated=true;return nil}));if raw!=nil||!errors.Is(e,toolsy.ErrValidation)||!validated{t.Fatal("full wire cap/validator invocation")}
+}
+func TestBNilEmptyAndHostErrors(t *testing.T){for _,docs:=range [][]rag.Document{nil,{}}{
+ // Arrange/Act.
+ raw,e:=runProbe(t,t.Context(),probeFetch(func(context.Context,string)([]rag.Document,error){return docs,nil}),rag.WithResultShape(rag.ShapeDocumentsJSON));want,_:=json.Marshal(rag.SearchDocumentsWire{Documents:docs})
+ // Assert.
+ if e!=nil||string(raw)!=string(want){t.Fatalf("nil/empty provenance %s %s %v",raw,want,e)}
+ };sentinel:=errors.New("host causal error");for _,stage:=range []string{"provider","formatter","validator"}{t.Run(stage,func(t *testing.T){f:=probeFetch(func(context.Context,string)([]rag.Document,error){if stage=="provider"{return nil,sentinel};return nil,nil});opts:=[]rag.Option{};if stage=="formatter"{opts=append(opts,rag.WithResultFormatter(func([]rag.Document)(any,error){return nil,sentinel}))};if stage=="validator"{opts=append(opts,rag.WithHostResultValidator(func(any)error{return sentinel}))};raw,e:=runProbe(t,t.Context(),f,opts...);if raw!=nil||!errors.Is(e,sentinel){t.Fatalf("original cause lost %v",e)}})}}
+func TestBTerminalDeadlineStages(t *testing.T){for _,stage:=range []string{"before","provider","filter","formatter","validator"}{t.Run(stage,func(t *testing.T){
+ // Arrange: real expired deadline with a custom cause.
+ cause:=errors.New("deadline budget exhausted");ctx,cancel:=context.WithDeadlineCause(t.Context(),time.Now().Add(15*time.Millisecond),cause);defer cancel();var p,f,m,v int;stop:=func(name string){if stage==name{<-ctx.Done()}};if stage=="before"{<-ctx.Done()}
+ retriever:=probeFetch(func(context.Context,string)([]rag.Document,error){p++;stop("provider");return []rag.Document{{Content:"ok"}},nil});opts:=[]rag.Option{rag.WithScopeFilter(func(_ context.Context,d []rag.Document)[]rag.Document{f++;stop("filter");return d}),rag.WithResultFormatter(func(d []rag.Document)(any,error){m++;stop("formatter");return d,nil}),rag.WithHostResultValidator(func(any)error{v++;stop("validator");return nil})}
+ // Act/Assert.
+ raw,e:=runProbe(t,ctx,retriever,opts...);if raw!=nil||!errors.Is(e,context.DeadlineExceeded)||(stage!="before"&&!errors.Is(e,cause)){t.Fatalf("terminal cause %s %v",raw,e)};if stage=="before"&&errors.Is(e,cause){t.Fatal("core predispatch changed; review limitation")};switch stage{case "before":if p+f+m+v!=0{t.Fatal("dispatched expired")};case "provider":if p!=1||f+m+v!=0{t.Fatal("provider downstream")};case "filter":if f!=1||m+v!=0{t.Fatal("filter downstream")};case "formatter":if m!=1||v!=0{t.Fatal("formatter downstream")};case "validator":if v!=1{t.Fatal("validator count")}}
+ })}}

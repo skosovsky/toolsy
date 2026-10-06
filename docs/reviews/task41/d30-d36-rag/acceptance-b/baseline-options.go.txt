@@ -51,7 +51,7 @@ func WithDescription(description string) Option {
 	}
 }
 
-// WithMaxBytes limits final encoded wire JSON, including its envelope (default 512 KiB).
+// WithMaxBytes sets the maximum length of the combined result text in bytes (default: 512KB).
 func WithMaxBytes(n int) Option {
 	return func(o *options) {
 		o.maxBytes = n

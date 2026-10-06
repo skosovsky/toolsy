@@ -1,0 +1,28 @@
+package rag_test
+import("context";"encoding/json";"errors";"strings";"testing";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/rag";"github.com/skosovsky/toolsy/internal/format")
+type acceptanceFetch func(context.Context,string)([]rag.Document,error)
+func(f acceptanceFetch)Retrieve(c context.Context,q string)([]rag.Document,error){return f(c,q)}
+func executeA(t *testing.T, c context.Context, docs []rag.Document, opts ...rag.Option)([]byte,error){t.Helper(); tool,err:=rag.AsSearchTool(acceptanceFetch(func(context.Context,string)([]rag.Document,error){return docs,nil}),opts...);if err!=nil{t.Fatal(err)};var out []byte;err=tool.Execute(c,toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:[]byte(`{"query":"a"}`)},func(ch toolsy.Chunk)error{out=append(out,ch.Data...);return nil});return out,err}
+func TestAcceptancePublicExactWire(t *testing.T){
+ for _,shape:=range []rag.ResultShape{rag.ShapeMarkdown,rag.ShapeDocumentsJSON}{for _,custom:=range []bool{false,true}{
+ // Arrange: provider representation independent of final custom DTO; validator sees final DTO.
+ docs:=[]rag.Document{{ID:"chunk<",Content:"<界\n",SourceURI:"doc://a",Metadata:map[string]string{"opaque":"x"}}};opts:=[]rag.Option{rag.WithResultShape(shape)};calls:=0
+ if custom{opts=append(opts,rag.WithResultFormatter(func([]rag.Document)(any,error){return map[string]string{"source":"doc://a","id":"chunk<"},nil}))}
+ opts=append(opts,rag.WithHostResultValidator(func(v any)error{calls++;return nil}));raw,err:=executeA(t,t.Context(),docs,opts...);if err!=nil{t.Fatal(err)};exact:=len(raw)
+ // Act/Assert: exact inclusive, one byte less terminal with original limit cause; validator still invoked.
+ for _,cap:=range []int{exact,exact-1}{calls=0;b,e:=executeA(t,t.Context(),docs,append(opts,rag.WithMaxBytes(cap))...);if calls!=1{t.Fatalf("validator calls=%d",calls)};if cap==exact{if e!=nil||string(b)!=string(raw){t.Fatalf("exact rejected %v",e)}}else{var limit *format.WireLimitError;if len(b)!=0||!errors.As(e,&limit)||limit.Size!=exact||limit.Limit!=cap{t.Fatalf("bad limit %v",e)}}}
+ }}
+}
+func TestAcceptanceProviderFilterAndValidator(t *testing.T){
+ // Arrange: exact escaped provider bounds; filter and small DTO cannot bypass oversized provider.
+ docs:=[]rag.Document{{ID:"a",Content:"<界",SourceURI:"doc://a"}};item,_:=json.Marshal(docs[0]);source,_:=json.Marshal(docs);calls:=0;filterCalls:=0
+ formatter:=rag.WithResultFormatter(func([]rag.Document)(any,error){calls++;return "ok",nil});filter:=rag.WithScopeFilter(func(_ context.Context,d []rag.Document)[]rag.Document{filterCalls++;return d})
+ // Act/Assert.
+ _,err:=executeA(t,t.Context(),docs,rag.WithMaxItemBytes(len(item)),rag.WithMaxSourceBytes(len(source)),filter,formatter);if err!=nil||calls!=1||filterCalls!=1{t.Fatalf("inclusive provider rejected: %v",err)}
+ for _,opt:=range []rag.Option{rag.WithMaxItemBytes(len(item)-1),rag.WithMaxSourceBytes(len(source)-1)}{calls=0;filterCalls=0;out,err:=executeA(t,t.Context(),docs,opt,filter,formatter);if !errors.Is(err,toolsy.ErrValidation)||len(out)!=0||calls!=0||filterCalls!=0{t.Fatalf("provider bypass: %v",err)}}
+ // Arrange/Act/Assert: filter-expanded provider bounded before formatter.
+ calls=0;_,err=executeA(t,t.Context(),docs,rag.WithMaxResults(1),rag.WithScopeFilter(func(context.Context,[]rag.Document)[]rag.Document{return append(docs,docs...)}),formatter);if !errors.Is(err,toolsy.ErrValidation)||calls!=0{t.Fatalf("expanded count bypass: %v",err)}
+ validatorErr:=errors.New("host deny");_,err=executeA(t,t.Context(),docs,rag.WithMaxBytes(1),rag.WithHostResultValidator(func(any)error{return validatorErr}));if !errors.Is(err,validatorErr){t.Fatalf("lost validator cause %v",err)}
+ // Act/Assert: huge provider below provider budget, small DTO below final cap succeeds.
+ _,err=executeA(t,t.Context(),[]rag.Document{{Content:strings.Repeat("x",1000)}},rag.WithMaxBytes(4),formatter);if err!=nil{t.Fatalf("provider mistaken for final DTO %v",err)}
+}

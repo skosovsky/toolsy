@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted, signed commit pending; rows 33–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted, signed commit pending; rows 34–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1297,3 +1297,67 @@ mutation, reusedoptions, literalbytes/Unicode, canonicalcollisions, ignoredwrite
 errors/exact256KiB/+1, interruption and cleanup; B realOSargvtransport exercised.
 Reports/probes/rawlogs retained task41/d27/acceptance-a/b. Cloudlimits remainhost.
 Accepted for separate signed commit `refactor: e2b argv`.
+
+### 33 — D30, D36 (RAG; accepted)
+
+Criteria for both independent reviewers, 20% each:
+1. Thin retriever boundary remains; Aggregate/Dedup/DedupBy/Fallback exported
+   routing APIs removed without hidden replacements/dependencies. Library calls
+   supplied retriever at most once; host owns aggregation/identity/fallback/retry policy.
+2. Executable host recipe has explicit fallback predicate and validated endpoints,
+   terminal cancellation/no implicit any-error retry, preserved causal errors and
+   concrete aggregation/identity preserving distinct source chunks.
+3. Remove capDocumentsForWire stale naming and unnecessary envelope encode/clone;
+   one final JSON representation checked inclusively, item/source/count/filter/
+   formatter/validator/provenance bounds preserved. Borrowed host data ownership
+   explicit; no universal clone/serializer or silent document omission.
+4. AAA singlecall/error/cancel/budget/customDTO/provenance regressions, runnable
+   host recipe and relevant baseline/current allocation benchmark; affected module
+   race/lint pass and no compile-only baseline behavioral claim.
+5. README/API/migration agree on removal, host responsibilities and honest bounds,
+   no ragy/routery dependency or claimed automatic integration/live backend proof;
+   two independent100%, no unresolved detected errors.
+
+Spec-first: AsSearchTool invokes a borrowed host retriever at most once, propagates errors
+causally, checks cancellation before/after provider/filter/format callbacks. Provider
+bounds -> scopefilter -> bounds/count -> formatter/defaultenvelope -> hostvalidator
+-> one final JSON wire check; cancellation terminal throughout. Remove routing APIs
+and their behavioral tests from library; public runnable host recipe composes its
+selected providers under explicit error/empty fallback and host-defined unit key.
+Host retriever/filter/formatter/validator own lifetime/synchronization; supplied
+containers/metadata are borrowed read-only unless host arranges ownership itself.
+Keep per-unit JSON encoding for actual item/source accounting; remove separate
+full-envelope pre-encode/shallowclone. Final format.WireLimitError remains causal;
+cap rejects whole output without truncating/slicing documents/JSON. Nonpositive
+budgets retain current finite defaults (D32 validation separately scheduled).
+
+D30/D36 RAG implementation complete: routing APIs removed, thin singlecall provider,
+terminal callback-boundary cancellation/customcause, nil/typednilrequired port
+rejection; one finalwireencode/check, redundant fullenvelopepreencode/shallowclone
+removed. Provider perunit/source/count/provenance bounds retained. Runnable host
+policy validatesproviders, explicitpredicate, terminalcancel and causalerrorjoin,
+merge/publicchunkidentity. Baseline error+nilfallback behavior FAIL reproduced;
+removedAPIprobe not claimed currentcompilable. Current hostcounterparts pass.
+Fullrag/hostrace3PASS1.730s/1.646s,pinnedlint0. IdenticalpublicExecute benchmark
+1611→1597alloc, ~133076→130429B; no timing/speedupclaim. Evidence task41/d30-d36-rag.
+Two independent acceptance pending.
+
+RAG acceptance corrections: A found false-returning fallback predicate could cancel
+parent and hide customcause; host recipe now checks context after predicate before
+branching for both decisions, preserves primary/cancel causes and skips downstream.
+Regression for both booleans added. B demonstrated existing unchanged core guard
+for an already-expired call preserves DeadlineExceeded but omits custom parentcause
+before RAG handler admission. README/migration now explicitly distinguish this
+phase; no predispatch customcause guarantee is claimed. RAG handler/host recipe
+retain customcause at their own callback boundaries; no core expansion this row.
+Corrected parent fullrag/hostrace3PASS1.333s/1.457s, pinnedlint0. Both final independent
+rechecks pending. Retained Markdown-empty renderer regression moved from routertests.
+
+Final independent A/B both100%, five20/20 each, no unresolved detected errors.
+A full rag/host race3PASS1.426s/1.368s, probes3PASS1.664s/1.589s, lint0;
+B full rag/host race3PASS1.334s/1.249s, final probes3PASS1.690s/1.721s, lint0.
+Both independently reconstructed exactbaseline source, reproduced failedprimary+
+nilfallback loss, and reran identical benchmark1611→1597alloc (~2.6KiB lower).
+Predicate-cancel defect fixed/rechecked; core predispatch customcause limitation
+explicitly documented. Reports and original probe failures retained under
+ task41/d30-d36-rag/acceptance-a/b. Accepted for signed `refactor: retrieval boundary`.
