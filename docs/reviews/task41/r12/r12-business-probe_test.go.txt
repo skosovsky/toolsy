@@ -1,0 +1,22 @@
+package toolsy
+import (
+ "context"
+ "testing"
+)
+func TestR12BusinessTerminalProbe(t *testing.T) {
+ // Arrange.
+ tool, err := NewStreamTool("business", "Business", func(_ context.Context, _ *RunEnv, _ struct{}, yield func(Chunk) error) error {
+  return yield(NewErrorChunkFromErr(NewBudgetExceededError("domain quota")))
+ }, WithIdempotent(), WithIndependentStream())
+ if err != nil { t.Fatal(err) }
+ cache, err := NewResultCache(NewMemoryResultCacheStore(), func(context.Context, PreparedCall) (string,error) { return "fixed",nil }, JSONResultCodec[string,string]{}, 0)
+ if err != nil { t.Fatal(err) }
+ reg, err := NewRegistryBuilder(WithExecutionProfile(cache)).Add(tool).Build()
+ if err != nil { t.Fatal(err) }
+ chunks:=0
+ // Act.
+ err=reg.Execute(context.Background(),ToolCall{ToolName:"business",Input:ToolInput{ArgsJSON:[]byte(`{}`)}},func(c Chunk)error { chunks++; if !c.IsError { t.Error("error terminal lost") }; return nil })
+ // Assert.
+ t.Logf("chunks=%d err=%v",chunks,err)
+ if err!=nil || chunks!=1 { t.Fatalf("business delivery changed: chunks=%d err=%v",chunks,err) }
+}

@@ -1,0 +1,17 @@
+package toolsy
+import("context";"testing")
+func BenchmarkR12CacheProfile(b *testing.B){
+ for _, hit := range []bool{false,true} {
+  name:="bypass";if hit{name="hit"}
+  b.Run(name,func(b *testing.B){
+   cache,err:=NewResultCache(NewMemoryResultCacheStore(),func(context.Context,PreparedCall)(bool,error){return hit,nil},func(context.Context,PreparedCall)(string,error){return "revision-1",nil},JSONResultCodec[string,string]{},0)
+   if err!=nil{b.Fatal(err)}
+   call:=PreparedCall{Manifest:ToolManifest{Name:"bench",Idempotent:hit},Input:ToolInput{ArgsJSON:[]byte(`{"n":1}`),Attachments:[]Attachment{{Data:make([]byte,1024),MimeType:MimeTypeText}}}}
+   invoke:=func(yield func(Chunk)error)error{return yield(Chunk{Event:EventResult,Data:[]byte(`"ok"`),MimeType:MimeTypeJSON,TypedResult:"ok"})}
+   yield:=func(Chunk)error{return nil}
+   if err=cache.ExecutePrepared(context.Background(),call,invoke,yield);err!=nil{b.Fatal(err)}
+   b.ReportAllocs();b.ResetTimer()
+   for i:=0;i<b.N;i++{if err=cache.ExecutePrepared(context.Background(),call,invoke,yield);err!=nil{b.Fatal(err)}}
+  })
+ }
+}

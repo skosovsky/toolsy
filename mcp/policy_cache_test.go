@@ -90,6 +90,7 @@ func TestRemoteHintsRequireHostTrustForCacheAndCurrentPolicy(t *testing.T) {
 			policyCalls := 0
 			cache, err := toolsy.NewResultCache(
 				toolsy.NewMemoryResultCacheStore(),
+				func(context.Context, toolsy.PreparedCall) (bool, error) { return trusted, nil },
 				func(context.Context, toolsy.PreparedCall) (string, error) { return "host-owned-tenant", nil },
 				toolsy.JSONResultCodec[CallToolResult, string]{},
 				0,
@@ -129,10 +130,14 @@ func TestRemoteHintsRequireHostTrustForCacheAndCurrentPolicy(t *testing.T) {
 			require.Len(t, chunks, delivered)
 			if trusted {
 				require.Equal(t, 1, calls)
-				require.Equal(t, true, chunks[1].ToolEnvelope().Metadata[toolsy.CacheReplayMetadata])
+				require.Equal(
+					t,
+					toolsy.ReplaySourceCache,
+					chunks[1].ToolEnvelope().Metadata[toolsy.ReplaySourceMetadata],
+				)
 			} else {
 				require.Equal(t, 2, calls)
-				require.NotContains(t, chunks[1].ToolEnvelope().Metadata, toolsy.CacheReplayMetadata)
+				require.NotContains(t, chunks[1].ToolEnvelope().Metadata, toolsy.ReplaySourceMetadata)
 			}
 		})
 	}

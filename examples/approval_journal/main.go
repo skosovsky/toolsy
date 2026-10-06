@@ -166,7 +166,7 @@ func printResult(out io.Writer, c toolsy.Chunk) error {
 	if c.Event != toolsy.EventResult {
 		return nil
 	}
-	_, err := fmt.Fprintf(out, "result=%s replay=%v\n", c.Data, c.ToolEnvelope().Metadata[toolsy.CacheReplayMetadata])
+	_, err := fmt.Fprintf(out, "result=%s replay=%v\n", c.Data, c.ToolEnvelope().Metadata[toolsy.ReplaySourceMetadata])
 	return err
 }
 

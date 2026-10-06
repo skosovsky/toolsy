@@ -97,7 +97,7 @@ func TestResultCacheAuthorizesEveryReplay(t *testing.T) {
 			assert.Equal(t, first.Data, replay.Data)
 			assert.Equal(t, AudienceInternal, replay.ToolEnvelope().Audience)
 			assert.Equal(t, true, replay.ToolEnvelope().Metadata["sensitive"])
-			assert.Equal(t, true, replay.ToolEnvelope().Metadata[CacheReplayMetadata])
+			assert.Equal(t, ReplaySourceCache, replay.ToolEnvelope().Metadata[ReplaySourceMetadata])
 			assert.Equal(t, "second", replay.CallID)
 		})
 	}
@@ -312,7 +312,13 @@ func TestResultCacheDoesNotCompleteFailedProducer(t *testing.T) {
 
 func mustResultCache(t *testing.T, partition CachePartition) *ResultCache {
 	t.Helper()
-	cache, err := NewResultCache(NewMemoryResultCacheStore(), partition, JSONResultCodec[string, string]{}, 0)
+	cache, err := NewResultCache(
+		NewMemoryResultCacheStore(),
+		allowTestCacheReuse,
+		partition,
+		JSONResultCodec[string, string]{},
+		0,
+	)
 	require.NoError(t, err)
 	return cache
 }
@@ -368,7 +374,13 @@ func TestResultCacheUnsupportedCodecFailsExplicitly(t *testing.T) {
 		WithIdempotent(),
 	)
 	require.NoError(t, err)
-	cache, err := NewResultCache(NewMemoryResultCacheStore(), constantPartition, JSONResultCodec[int, string]{}, 0)
+	cache, err := NewResultCache(
+		NewMemoryResultCacheStore(),
+		allowTestCacheReuse,
+		constantPartition,
+		JSONResultCodec[int, string]{},
+		0,
+	)
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(WithExecutionProfile(cache)).Add(tool).Build()
 	require.NoError(t, err)
@@ -443,7 +455,7 @@ func TestResultCacheReplayDoesNotReapplyHostEffects(t *testing.T) {
 					CallContext: NewCallContext("alice", "scope"),
 				},
 				func(c Chunk) error {
-					if c.ToolEnvelope().Metadata[CacheReplayMetadata] != true {
+					if c.ToolEnvelope().Metadata[ReplaySourceMetadata] == nil {
 						applied += len(c.Effects)
 					}
 					return nil
@@ -460,4 +472,14 @@ func runCacheCall(t *testing.T, reg *Registry, call ToolCall) Chunk {
 	var result Chunk
 	require.NoError(t, reg.Execute(context.Background(), call, func(c Chunk) error { result = c; return nil }))
 	return result
+}
+
+// Test fixtures explicitly accept their stable in-memory data lifetime.
+func allowTestCacheReuse(context.Context, PreparedCall) (bool, error) { return true, nil }
+
+func expectedReplaySource(kind string) string {
+	if kind == "operation" {
+		return ReplaySourceOperation
+	}
+	return ReplaySourceCache
 }

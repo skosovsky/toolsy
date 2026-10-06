@@ -61,7 +61,7 @@ func numberReplayProfile(t *testing.T, kind string) ExecutionProfile {
 	t.Helper()
 	codec := JSONResultCodec[map[string]any, map[string]any]{}
 	if kind == "cache" {
-		profile, err := NewResultCache(NewMemoryResultCacheStore(), constantPartition, codec, 0)
+		profile, err := NewResultCache(NewMemoryResultCacheStore(), allowTestCacheReuse, constantPartition, codec, 0)
 		require.NoError(t, err)
 		return profile
 	}
@@ -114,7 +114,7 @@ func TestJSONDynamicNumbersSurviveProtectedReplay(t *testing.T) {
 				require.NoError(t, encodeErr)
 				assert.Equal(t, string(chunk.Data), string(encoded))
 			}
-			assert.Equal(t, true, chunks[1].ToolEnvelope().Metadata[CacheReplayMetadata])
+			assert.Equal(t, expectedReplaySource(kind), chunks[1].ToolEnvelope().Metadata[ReplaySourceMetadata])
 		})
 	}
 }

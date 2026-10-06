@@ -28,8 +28,8 @@ type ToolAnnotations struct {
 }
 
 // ToolExecutionProperties is the host's explicit classification of a remote
-// tool. It is not an authorization grant. Idempotent permits the optional host
-// ResultCache to cache results; the host must also supply its trusted partition.
+// tool. It is not an authorization grant or cache freshness decision. ResultCache
+// additionally requires per-attempt host eligibility and a trusted partition.
 type ToolExecutionProperties struct {
 	ReadOnly             bool
 	Dangerous            bool

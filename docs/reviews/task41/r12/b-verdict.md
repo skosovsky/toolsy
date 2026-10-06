@@ -1,0 +1,23 @@
+# R12 / D13 / D15 independent acceptance B
+
+Decision: ACCEPTED, 100% of the five stated criteria, 20/20 each. No unresolved detected defect in the final candidate relative to baseline a492d5f. This is scoped acceptance, not proof of universal bug absence.
+
+I independently read the task, row 12 contract, production diff, migration, tests, and public API behavior. I did not inspect reviewer A's verdict or participate in implementation. All fixtures were kept outside the repository.
+
+1. **Business terminal delivery and interruptions — 20/20.** Business-error results are forwarded with their established error envelope and nil execution return, never encoded or Put; absence of a terminal remains INTERNAL. Root direct/registry/RunCall fixtures pass. My public profile tests independently cover business delivery, ignored consumer abort followed by claimed success, and ignored multiple terminals. Sticky failures prevent successful persistence. Existing producer/pause/cancellation suites pass.
+2. **Infrastructure classification — 20/20.** Eligibility, partition, Get, Put, codec, size and invalid stored-record errors remain INTERNAL and nonretryable, not argument repair. Original causes survive wrapping, including my host predicate returning a ValidationError. Failed predicates do not dispatch or reach storage. Cancellation at partition, Get miss/hit, encode, decode and Put suppresses subsequent dispatch/delivery as appropriate; successful Put can already exist when cancellation arrives, without any rollback claim.
+3. **Explicit current eligibility and freshness — 20/20.** Constructor requires a host predicate. False bypasses partition/Get/Put/codec completely; true can authorize reuse without idempotence/read-only hints. Current authorization precedes the prepared profile. Independent miss/hit/false/revision-change probe verifies per-attempt checks and changed partition cache keys. Call snapshots are detached for supported mutable shapes. Host expiry/dependency/identity responsibility and concurrent miss limits are explicit.
+4. **Distinct replay source and policy privacy — 20/20.** Cache and operation profiles share replayResult and emit distinct string sources. Existing codec records retain complete results and current correlation. My public nested policy test independently executes both sources, stores an internal audience, replays under model then user wrappers, and verifies private audience, authoritative source, current CallID, one handler call, and one effect reduction. Policy constructor rejects reserved source overlays; source preservation and conservative audience intersection are covered by the root suite.
+5. **Regression, checks and migration — 20/20.** Baseline business probe fails and current probe passes; final source removes the old boolean marker alias and documents constructor and reducer migration. Independent root and MCP race suites pass; root and MCP lint pass with 0 issues; whitespace check is clean. Parent final all-24-module race log was inspected through its final examples/resiliency result with no FAIL entries. Independent public API probes pass race count=5.
+
+Evidence:
+- `probe_test.go`, `overlay.json`, `probe-final.log`: six public API test functions (with subcases), repeated five times under race; PASS 1.577s.
+- `root-race.log`: full root module race suite PASS.
+- `mcp-race.log`: full MCP module race suite PASS 19.803s.
+- `lint-final.log`, `mcp-lint.log`: both 0 issues.
+- `/tmp/toolsy-task41/r12-all-race.log`: final parent all-module race log, inspected independently, no FAIL entries.
+- `/tmp/toolsy-task41/r12-baseline-business.log` and `r12-current-business.log`: behavioral baseline/current regression evidence.
+
+Resolved findings: my initial public direct-tool cached-hit test reproduced canceled Get returning nil error and delivering one result (three repeats in `probe.log`). The final candidate adds context checks around host callbacks and shared replay; the exact probe and additional callback-boundary cases now pass. My first lint pass found an embedded-field blank-line violation in the new fixture; final lint is clean. These original logs are retained as superseded evidence, not final acceptance failures.
+
+Limits: host callback concurrency, codec semantic fidelity and freshness are host contracts; opaque borrowed host values are not universally deep-copied. Cache reuse does not coordinate concurrent misses or guarantee exactly-once dispatch. Checks used local/memory fixtures, not production stores or external service publication. No repository files were changed or committed by this reviewer.

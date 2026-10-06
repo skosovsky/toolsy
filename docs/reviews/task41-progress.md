@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted (commit pending); rows 12–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted (commit pending); rows 13–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -425,3 +425,40 @@ contract at 100%, with no unresolved detected defects. Both repeated root/MCP
 race checks and adversarial probes after the contract revision. Parent all 24
 modules pass race tests, root lint reports zero issues, and baseline behavioral
 failures now pass. Commit hash is recorded in the next row.
+
+### 12 — R12 / D13 / D15 (accepted)
+
+Criteria for both reviewers (each worth 20%):
+
+1. Eligible cache misses deliver business-error terminals unchanged, without Put;
+   direct/registry/RunCall classification agrees with no cache. Unsuccessful and
+   missing terminals are distinct; producer/consumer/control/cancellation failures
+   remain inspectable and sticky without successful persistence.
+2. Cache infrastructure/configuration/limit/codec failures are INTERNAL,
+   nonretryable and not input-correctable, preserving causes; failures after
+   handler dispatch do not authorize correction or imply effect rollback.
+3. Mandatory host CacheEligibility predicate runs after current authorization
+   on every attempt, before partition/storage; false bypasses caching completely.
+   Idempotent/ReadOnly alone do not enable reuse. Eligibility errors fail closed;
+   partition and host freshness/expiry obligations are explicit.
+4. Neutral ReplaySourceMetadata distinguishes result_cache and completed_operation;
+   codec/decode/rebinding is shared without a fake cache instance. Nested policy
+   overlays cannot erase provenance or broaden replay audience; reducers handle
+   both sources without reapplying declared effects.
+5. AAA baseline/current business-error probe, targeted/all affected race/lint,
+   migration and examples pass; two independent reviewers accept all criteria at
+   100% without unresolved detected defects.
+
+Decision: require an explicit per-attempt eligibility predicate, independently of
+manifest idempotence. The host must prove reuse safe and bind freshness to its
+partition/store policy. Replace the cache-specific boolean marker with a neutral
+string provenance key and distinct source values; no legacy alias remains.
+
+Evidence: [R12 acceptance](task41/r12-acceptance.md). Independent reviewers
+`r12_acceptance_a` and `r12_acceptance_b` each accepted all five criteria at
+100%, no unresolved detected defects. Both found callback cancellation gaps;
+context guards after host boundaries and in shared operation/cache replay closed
+those findings, with final independent repeated probes/root/MCP race checks.
+Parent all 24 modules pass race tests; root/MCP/filejournal lint zero issues.
+Baseline business terminal loses delivery; corrected probe delivers unchanged.
+Commit hash is recorded in the next row.

@@ -165,9 +165,9 @@ being delivered. Remote metadata, model text and claimed tool names cannot
 establish authenticated subject/scope or connection trust.
 
 The optional `ResultCache` runs after current host authorization and requires a
-host-owned partition/codec. Server hints alone never enable caching. A host
-mapper's `Idempotent: true` explicitly permits the profile; it does not promise
-remote exactly-once execution. Cached delivery and dispatch both reject stale
+host-owned eligibility predicate, freshness partition and complete codec. Server
+hints and a mapper's `Idempotent: true` alone never enable reuse or promise remote
+exactly-once execution. The per-attempt host predicate must approve reusable data. Cached delivery and dispatch both reject stale
 MCP discovery generations, and revoking the current Registry policy prevents
 both handler execution and replay. A policy must enforce consent explicitly;
 `Dangerous` is a classification field, not an automatic approval mechanism.

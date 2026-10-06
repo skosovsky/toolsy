@@ -283,7 +283,7 @@ func TestPolicyCompositionReplayNeverExpandsAudience(t *testing.T) {
 				),
 			)
 			// Assert: stored private data stays private under the broader wrapper.
-			assert.Equal(t, true, received.ToolEnvelope().Metadata[CacheReplayMetadata])
+			assert.Equal(t, expectedReplaySource(kind), received.ToolEnvelope().Metadata[ReplaySourceMetadata])
 			assert.Equal(t, AudienceInternal, received.ToolEnvelope().Audience)
 		})
 	}

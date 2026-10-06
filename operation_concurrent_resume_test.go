@@ -105,7 +105,7 @@ func TestConcurrentApprovedResumesDispatchOnce(t *testing.T) {
 	require.NoError(t, <-results)
 	call.Input.CallID = "replay"
 	require.NoError(t, reg.Execute(ctx, call, func(c Chunk) error {
-		assert.Equal(t, true, c.ToolEnvelope().Metadata[CacheReplayMetadata])
+		assert.Equal(t, ReplaySourceOperation, c.ToolEnvelope().Metadata[ReplaySourceMetadata])
 		return nil
 	}))
 	// Assert: all current policies ran, exactly one handler dispatched, grant consumed once.

@@ -1,0 +1,12 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkR12CacheProfile/bypass-10         	 4043592	        75.76 ns/op	       4 B/op	       1 allocs/op
+BenchmarkR12CacheProfile/bypass-10         	 9139114	        23.75 ns/op	       4 B/op	       1 allocs/op
+BenchmarkR12CacheProfile/bypass-10         	10381912	        23.77 ns/op	       4 B/op	       1 allocs/op
+BenchmarkR12CacheProfile/hit-10            	   21739	     10624 ns/op	    9965 B/op	      92 allocs/op
+BenchmarkR12CacheProfile/hit-10            	   21430	     13186 ns/op	    9963 B/op	      92 allocs/op
+BenchmarkR12CacheProfile/hit-10            	   22238	     10844 ns/op	    9964 B/op	      92 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	3.224s

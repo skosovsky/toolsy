@@ -1,0 +1,162 @@
+=== RUN   TestBReplayCancellationDirectTool
+--- PASS: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBCancellationAtHostCallbacks
+=== RUN   TestBCancellationAtHostCallbacks/partition
+=== RUN   TestBCancellationAtHostCallbacks/get-miss
+=== RUN   TestBCancellationAtHostCallbacks/put
+=== RUN   TestBCancellationAtHostCallbacks/encode
+=== RUN   TestBCancellationAtHostCallbacks/decode
+--- PASS: TestBCancellationAtHostCallbacks (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/partition (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/get-miss (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/put (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/encode (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/decode (0.00s)
+=== RUN   TestBInfraCauseAndNoRepair
+--- PASS: TestBInfraCauseAndNoRepair (0.00s)
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/cache
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/operation
+--- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy (0.01s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/cache (0.00s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/operation (0.01s)
+=== RUN   TestBReplayCancellationDirectTool
+--- PASS: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBCancellationAtHostCallbacks
+=== RUN   TestBCancellationAtHostCallbacks/partition
+=== RUN   TestBCancellationAtHostCallbacks/get-miss
+=== RUN   TestBCancellationAtHostCallbacks/put
+=== RUN   TestBCancellationAtHostCallbacks/encode
+=== RUN   TestBCancellationAtHostCallbacks/decode
+--- PASS: TestBCancellationAtHostCallbacks (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/partition (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/get-miss (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/put (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/encode (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/decode (0.00s)
+=== RUN   TestBInfraCauseAndNoRepair
+--- PASS: TestBInfraCauseAndNoRepair (0.00s)
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/cache
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/operation
+--- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy (0.01s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/cache (0.00s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/operation (0.00s)
+=== RUN   TestBReplayCancellationDirectTool
+--- PASS: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBCancellationAtHostCallbacks
+=== RUN   TestBCancellationAtHostCallbacks/partition
+=== RUN   TestBCancellationAtHostCallbacks/get-miss
+=== RUN   TestBCancellationAtHostCallbacks/put
+=== RUN   TestBCancellationAtHostCallbacks/encode
+=== RUN   TestBCancellationAtHostCallbacks/decode
+--- PASS: TestBCancellationAtHostCallbacks (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/partition (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/get-miss (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/put (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/encode (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/decode (0.00s)
+=== RUN   TestBInfraCauseAndNoRepair
+--- PASS: TestBInfraCauseAndNoRepair (0.00s)
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/cache
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/operation
+--- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy (0.01s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/cache (0.00s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/operation (0.00s)
+=== RUN   TestBReplayCancellationDirectTool
+--- PASS: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBCancellationAtHostCallbacks
+=== RUN   TestBCancellationAtHostCallbacks/partition
+=== RUN   TestBCancellationAtHostCallbacks/get-miss
+=== RUN   TestBCancellationAtHostCallbacks/put
+=== RUN   TestBCancellationAtHostCallbacks/encode
+=== RUN   TestBCancellationAtHostCallbacks/decode
+--- PASS: TestBCancellationAtHostCallbacks (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/partition (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/get-miss (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/put (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/encode (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/decode (0.00s)
+=== RUN   TestBInfraCauseAndNoRepair
+--- PASS: TestBInfraCauseAndNoRepair (0.00s)
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/cache
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/operation
+--- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy (0.02s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/cache (0.01s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/operation (0.01s)
+=== RUN   TestBReplayCancellationDirectTool
+--- PASS: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBCancellationAtHostCallbacks
+=== RUN   TestBCancellationAtHostCallbacks/partition
+=== RUN   TestBCancellationAtHostCallbacks/get-miss
+=== RUN   TestBCancellationAtHostCallbacks/put
+=== RUN   TestBCancellationAtHostCallbacks/encode
+=== RUN   TestBCancellationAtHostCallbacks/decode
+--- PASS: TestBCancellationAtHostCallbacks (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/partition (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/get-miss (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/put (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/encode (0.00s)
+    --- PASS: TestBCancellationAtHostCallbacks/decode (0.00s)
+=== RUN   TestBInfraCauseAndNoRepair
+--- PASS: TestBInfraCauseAndNoRepair (0.00s)
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/cache
+=== RUN   TestBBothSourcesStayPrivateAcrossNestedPolicy/operation
+--- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy (0.01s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/cache (0.00s)
+    --- PASS: TestBBothSourcesStayPrivateAcrossNestedPolicy/operation (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.577s

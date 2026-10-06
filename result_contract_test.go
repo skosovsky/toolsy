@@ -113,7 +113,7 @@ func TestResultContractWireFormatterSchema(t *testing.T) {
 func TestResultContractRejectedOutputIsNotCached(t *testing.T) {
 	// Arrange: use the actual cache profile, not a capture-only test double.
 	store := NewMemoryResultCacheStore()
-	cache, err := NewResultCache(store, constantPartition, JSONResultCodec[int, string]{}, 0)
+	cache, err := NewResultCache(store, allowTestCacheReuse, constantPartition, JSONResultCodec[int, string]{}, 0)
 	require.NoError(t, err)
 	tool, err := NewTool("bad", "Bad", func(context.Context, *RunEnv, struct{}) (int, error) { return -1, nil },
 		WithIdempotent(), WithOutputSchema(map[string]any{"type": "integer", "minimum": 1}))

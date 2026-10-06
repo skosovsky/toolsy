@@ -251,7 +251,7 @@ func TestJournalRemoteCommitCrashRecovery(t *testing.T) {
 	// Assert: the remote effect is recovered, never blindly run a second time.
 	assert.Zero(t, redispatches)
 	assert.Equal(t, "remote written", replay.TypedResult)
-	assert.Equal(t, true, replay.ToolEnvelope().Metadata[toolsy.CacheReplayMetadata])
+	assert.Equal(t, toolsy.ReplaySourceOperation, replay.ToolEnvelope().Metadata[toolsy.ReplaySourceMetadata])
 }
 
 func TestJournalCrashChild(t *testing.T) {

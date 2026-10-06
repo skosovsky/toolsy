@@ -75,7 +75,7 @@ func validatePolicyToolSpec[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSu
 	if !supportsPreparedExecution(spec.Tool) {
 		return errors.New("toolsy: policy tool requires a prepared execution boundary")
 	}
-	if _, reserved := spec.EnvelopeMetadata[CacheReplayMetadata]; reserved {
+	if _, reserved := spec.EnvelopeMetadata[ReplaySourceMetadata]; reserved {
 		return errors.New("toolsy: policy tool cannot configure reserved replay metadata")
 	}
 	return nil
@@ -222,7 +222,8 @@ func applyPolicyToolEnvelope(
 		envelope.DeliveryClass = deliveryClass
 	}
 	if audience != "" {
-		if replay, _ := envelope.Metadata[CacheReplayMetadata].(bool); replay && envelope.Audience != audience {
+		if source, _ := envelope.Metadata[ReplaySourceMetadata].(string); source != "" &&
+			envelope.Audience != audience {
 			// Model and user are disjoint delivery targets; internal is the
 			// conservative intersection. A stored private outcome never becomes public.
 			envelope.Audience = AudienceInternal
@@ -237,7 +238,7 @@ func applyPolicyToolEnvelope(
 		}
 		overlay := deepCloneMap(metadata)
 		// Replay provenance belongs to the execution profile, never to an overlay.
-		delete(overlay, CacheReplayMetadata)
+		delete(overlay, ReplaySourceMetadata)
 		maps.Copy(merged, overlay)
 		envelope.Metadata = merged
 	}

@@ -1,0 +1,7 @@
+=== RUN   TestR12BusinessTerminalProbe
+    r12_business_probe_test.go:20: chunks=0 err=stream aborted by caller: VALIDATION_FAILED: unsuccessful result is not cacheable
+    r12_business_probe_test.go:21: business delivery changed: chunks=0 err=stream aborted by caller: VALIDATION_FAILED: unsuccessful result is not cacheable
+--- FAIL: TestR12BusinessTerminalProbe (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.542s
+FAIL

@@ -215,7 +215,7 @@ func TestOperationProfilePendingResumeReplayAndDeliveryFailure(t *testing.T) {
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, "repeat", replay.CallID)
 	assert.Equal(t, "ok", replay.TypedResult)
-	assert.Equal(t, true, replay.ToolEnvelope().Metadata[CacheReplayMetadata])
+	assert.Equal(t, ReplaySourceOperation, replay.ToolEnvelope().Metadata[ReplaySourceMetadata])
 }
 
 func TestOperationProfileLateFailureCannotReplaySuccess(t *testing.T) {

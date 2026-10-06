@@ -22,7 +22,7 @@ func TestPolicyConstructorRejectsReplayMetadata(t *testing.T) {
 				ArgsBinder: func(context.Context, ArgsBindRequest) (ValidatedArgs[struct{}], error) {
 					return ValidatedArgs[struct{}]{Raw: []byte(`{}`)}, nil
 				},
-				EnvelopeMetadata: map[string]any{CacheReplayMetadata: value},
+				EnvelopeMetadata: map[string]any{ReplaySourceMetadata: value},
 			})
 			// Assert: even a false/nil declaration is rejected before dispatch.
 			require.ErrorContains(t, err, "reserved replay metadata")
@@ -33,19 +33,22 @@ func TestPolicyConstructorRejectsReplayMetadata(t *testing.T) {
 
 func TestPolicyReplayOverlayPreservesProvenance(t *testing.T) {
 	// Arrange: defense in depth for repeated transforms, independent of bootstrap validation.
-	envelope := ToolEnvelope{Audience: AudienceInternal, Metadata: map[string]any{CacheReplayMetadata: true}}
+	envelope := ToolEnvelope{
+		Audience: AudienceInternal,
+		Metadata: map[string]any{ReplaySourceMetadata: ReplaySourceCache},
+	}
 	chunk := Chunk{Event: EventResult, Envelope: &envelope}
-	overlay := map[string]any{CacheReplayMetadata: false, "host": "label"}
+	overlay := map[string]any{ReplaySourceMetadata: false, "host": "label"}
 	// Act: emulate inner/outer and capture/delivery transform composition.
 	for range 4 {
 		chunk = applyPolicyToolEnvelope(chunk, "", AudienceModel, overlay)
 	}
 	// Assert: no widening, marker loss or mutation of source metadata.
 	assert.Equal(t, AudienceInternal, chunk.ToolEnvelope().Audience)
-	assert.Equal(t, true, chunk.ToolEnvelope().Metadata[CacheReplayMetadata])
+	assert.Equal(t, ReplaySourceCache, chunk.ToolEnvelope().Metadata[ReplaySourceMetadata])
 	assert.Equal(t, "label", chunk.ToolEnvelope().Metadata["host"])
-	assert.Equal(t, true, envelope.Metadata[CacheReplayMetadata])
-	assert.Equal(t, false, overlay[CacheReplayMetadata])
+	assert.Equal(t, ReplaySourceCache, envelope.Metadata[ReplaySourceMetadata])
+	assert.Equal(t, false, overlay[ReplaySourceMetadata])
 }
 
 func TestNestedPolicyReplayEffectsApplyOnce(t *testing.T) {
@@ -82,7 +85,7 @@ func TestNestedPolicyReplayEffectsApplyOnce(t *testing.T) {
 			reducer := func(chunk Chunk) error {
 				outcome := chunk.ToolEnvelope()
 				outcomes = append(outcomes, outcome)
-				if replay, _ := outcome.Metadata[CacheReplayMetadata].(bool); !replay {
+				if source, _ := outcome.Metadata[ReplaySourceMetadata].(string); source == "" {
 					reductions += len(chunk.Effects)
 				}
 				return nil
@@ -104,7 +107,7 @@ func TestNestedPolicyReplayEffectsApplyOnce(t *testing.T) {
 			require.Len(t, outcomes, 3)
 			for _, outcome := range outcomes[1:] {
 				assert.Equal(t, AudienceInternal, outcome.Audience)
-				assert.Equal(t, true, outcome.Metadata[CacheReplayMetadata])
+				assert.Equal(t, expectedReplaySource(kind), outcome.Metadata[ReplaySourceMetadata])
 			}
 		})
 	}

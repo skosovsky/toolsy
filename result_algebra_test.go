@@ -40,7 +40,7 @@ func runPayloadFreePath(t *testing.T, path string, tool Tool) Chunk {
 	var options []RegistryOption
 	if path == "cache" {
 		cache, err := NewResultCache(
-			NewMemoryResultCacheStore(),
+			NewMemoryResultCacheStore(), allowTestCacheReuse,
 			constantPartition,
 			JSONResultCodec[map[string]any, string]{},
 			0,
@@ -113,7 +113,7 @@ func TestPayloadFreeResultPreservesEnvelope(t *testing.T) {
 					require.Empty(t, delivered.Effects)
 				}
 				if path == "cache" {
-					require.Equal(t, true, delivered.Envelope.Metadata[CacheReplayMetadata])
+					require.Equal(t, ReplaySourceCache, delivered.Envelope.Metadata[ReplaySourceMetadata])
 				}
 			})
 		}

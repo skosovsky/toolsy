@@ -1,0 +1,113 @@
+package toolsy_test
+import (
+ "context"
+ "errors"
+ "testing"
+ "time"
+ ts "github.com/skosovsky/toolsy"
+)
+type probeStore struct { raw []byte; found bool; keys []string; gets,puts int; getHook,putHook func(); err error }
+func(s *probeStore)Get(_ context.Context,key string)([]byte,bool,error){s.gets++;s.keys=append(s.keys,key);if s.getHook!=nil{s.getHook()};return s.raw,s.found,s.err}
+func(s *probeStore)Put(_ context.Context,_ string,b []byte)error{s.puts++;s.raw=append([]byte(nil),b...);s.found=true;if s.putHook!=nil{s.putHook()};return s.err}
+func probeCache(t *testing.T,s *probeStore,e ts.CacheEligibility,p ts.CachePartition)*ts.ResultCache{t.Helper();c,err:=ts.NewResultCache(s,e,p,ts.JSONResultCodec[string,string]{},0);if err!=nil{t.Fatal(err)};return c}
+func allowed(context.Context,ts.PreparedCall)(bool,error){return true,nil}
+func partition(context.Context,ts.PreparedCall)(string,error){return "v1",nil}
+func TestBReplayCancellationDirectTool(t *testing.T){
+ // Arrange: normal typed public tool and a store which notices cancellation but returns its available result.
+ s:=&probeStore{};c:=probeCache(t,s,allowed,partition)
+ tool,err:=ts.NewTool("cancel","Cancel",func(context.Context,*ts.RunEnv,struct{})(string,error){return "ok",nil});if err!=nil{t.Fatal(err)}
+ env:=ts.NewRunEnv(nil,ts.WithRunExecutionProfile(c));in:=ts.ToolInput{ArgsJSON:[]byte(`{}`)}
+ if err=tool.Execute(context.Background(),env,in,func(ts.Chunk)error{return nil});err!=nil{t.Fatal(err)}
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel();s.getHook=cancel; delivered:=0
+ // Act.
+ err=tool.Execute(ctx,ts.NewRunEnv(nil,ts.WithRunExecutionProfile(c)),in,func(ts.Chunk)error{delivered++;return nil})
+ // Assert: a canceled execution cannot report successful delivery.
+ if !errors.Is(err,context.Canceled)||delivered!=0{t.Fatalf("err=%v delivered=%d",err,delivered)}
+}
+func TestBFreshnessAndBypass(t *testing.T){
+ // Arrange.
+ s:=&probeStore{};eligible:=true;revision:="v1";checks,partitions,calls:=0,0,0
+ c:=probeCache(t,s,func(context.Context,ts.PreparedCall)(bool,error){checks++;return eligible,nil},func(context.Context,ts.PreparedCall)(string,error){partitions++;return revision,nil})
+ call:=ts.PreparedCall{Manifest:ts.ToolManifest{Name:"data"},Input:ts.ToolInput{ArgsJSON:[]byte(`{}`)}}
+ invoke:=func(y func(ts.Chunk)error)error{calls++;return y(ts.Chunk{Event:ts.EventResult,TypedResult:"ok",Data:[]byte(`"ok"`),MimeType:ts.MimeTypeJSON})}
+ // Act: miss, replay, opt-out bypass, then current freshness changes partition.
+ var source any
+ out:=func(v ts.Chunk)error{source=v.ToolEnvelope().Metadata[ts.ReplaySourceMetadata];return nil}
+ for range 2{if err:=c.ExecutePrepared(t.Context(),call,invoke,out);err!=nil{t.Fatal(err)}}
+ if source!=ts.ReplaySourceCache{t.Fatalf("source %v",source)}
+ eligible=false;if err:=c.ExecutePrepared(t.Context(),call,invoke,out);err!=nil{t.Fatal(err)}
+ eligible=true;revision="v2";s.found=false;if err:=c.ExecutePrepared(t.Context(),call,invoke,out);err!=nil{t.Fatal(err)}
+ // Assert.
+ if len(s.keys)!=3||s.keys[0]!=s.keys[1]||s.keys[0]==s.keys[2]{t.Fatalf("partition keys=%v",s.keys)}
+ if calls!=3||checks!=4||partitions!=3||s.gets!=3||s.puts!=2{t.Fatalf("calls/checks/partitions/get/put=%d/%d/%d/%d/%d",calls,checks,partitions,s.gets,s.puts)}
+}
+func TestBStickyErrorsAndMultiTerminal(t *testing.T){
+ for _,mode:=range []string{"abort","multi","business"}{t.Run(mode,func(t *testing.T){
+ // Arrange.
+ s:=&probeStore{};c:=probeCache(t,s,allowed,partition);stop:=errors.New("consumer stopped");deliveries:=0
+ call:=ts.PreparedCall{Manifest:ts.ToolManifest{Name:"data"},Input:ts.ToolInput{ArgsJSON:[]byte(`{}`)}}
+ // Act.
+ err:=c.ExecutePrepared(t.Context(),call,func(y func(ts.Chunk)error)error{
+ if mode=="abort"{_ = y(ts.Chunk{Event:ts.EventProgress})}
+ chunk:=ts.Chunk{Event:ts.EventResult,TypedResult:"ok",Data:[]byte(`"ok"`),MimeType:ts.MimeTypeJSON}
+ if mode=="business"{chunk=ts.NewErrorChunkFromErr(ts.NewBudgetExceededError("quota"))}
+ _=y(chunk);if mode=="multi"{_=y(chunk)};return nil
+ },func(ts.Chunk)error{deliveries++;if mode=="abort"{return stop};return nil})
+ // Assert.
+ if s.puts!=0{t.Fatal("persisted unsuccessful attempt")}
+ switch mode{case "abort":if !errors.Is(err,stop)||deliveries!=1{t.Fatalf("abort err=%v delivered=%d",err,deliveries)};case "multi":var e *ts.ToolError;if !errors.As(err,&e)||e.Code!=ts.CodeInternal{t.Fatalf("multi err=%v",err)};case "business":if err!=nil||deliveries!=1{t.Fatalf("business err=%v delivered=%d",err,deliveries)}}
+ })}
+}
+type cancelCodec struct{ cancel func(); on string }
+func(c cancelCodec)EncodeResult(v ts.Chunk)([]byte,error){if c.on=="encode"{c.cancel()};return ts.JSONResultCodec[string,string]{}.EncodeResult(v)}
+func(c cancelCodec)DecodeResult(b []byte)(ts.Chunk,error){if c.on=="decode"{c.cancel()};return ts.JSONResultCodec[string,string]{}.DecodeResult(b)}
+func TestBCancellationAtHostCallbacks(t *testing.T){
+ for _,stage:=range []string{"partition","get-miss","put","encode","decode"}{t.Run(stage,func(t *testing.T){
+ // Arrange: host callback completes its task successfully while cancellation arrives.
+ ctx,cancel:=context.WithCancel(context.Background());defer cancel();s:=&probeStore{}
+ p:=ts.CachePartition(partition);if stage=="partition"{p=func(context.Context,ts.PreparedCall)(string,error){cancel();return "v1",nil}}
+ if stage=="get-miss"{s.getHook=cancel};if stage=="put"{s.putHook=cancel}
+ c,err:=ts.NewResultCache(s,allowed,p,cancelCodec{cancel:cancel,on:stage},0);if err!=nil{t.Fatal(err)}
+ if stage=="decode"{s.raw,err=ts.JSONResultCodec[string,string]{}.EncodeResult(ts.Chunk{Event:ts.EventResult,TypedResult:"ok",Data:[]byte(`"ok"`),MimeType:ts.MimeTypeJSON});if err!=nil{t.Fatal(err)};s.found=true}
+ calls,deliveries:=0,0
+ // Act.
+ err=c.ExecutePrepared(ctx,ts.PreparedCall{Manifest:ts.ToolManifest{Name:"data"},Input:ts.ToolInput{ArgsJSON:[]byte(`{}`)}},func(y func(ts.Chunk)error)error{calls++;return y(ts.Chunk{Event:ts.EventResult,TypedResult:"ok",Data:[]byte(`"ok"`),MimeType:ts.MimeTypeJSON})},func(ts.Chunk)error{deliveries++;return nil})
+ // Assert: Put may already have completed; no post-cancel successful delivery or redispatch.
+ if !errors.Is(err,context.Canceled)||deliveries!=0{t.Fatalf("err=%v deliveries=%d",err,deliveries)}
+ if (stage=="partition"||stage=="get-miss"||stage=="decode")&&calls!=0{t.Fatal("dispatched after cancellation")}
+ if stage=="encode"&&s.puts!=0{t.Fatal("persisted after canceled encoding")}
+ })}
+}
+func TestBInfraCauseAndNoRepair(t *testing.T){
+ // Arrange: host predicate returns an input-looking error; outer infrastructure classification wins.
+ failure:=ts.NewValidationError("host predicate failed","args");s:=&probeStore{}
+ c:=probeCache(t,s,func(context.Context,ts.PreparedCall)(bool,error){return false,failure},partition)
+ called:=false
+ // Act.
+ err:=c.ExecutePrepared(t.Context(),ts.PreparedCall{},func(func(ts.Chunk)error)error{called=true;return nil},func(ts.Chunk)error{return nil})
+ // Assert.
+ var te *ts.ToolError;if !errors.As(err,&te)||te.Code!=ts.CodeInternal||te.Retryable||!errors.Is(err,failure)||called||s.gets!=0{t.Fatalf("err=%v called=%v get=%d",err,called,s.gets)}
+}
+func TestBBothSourcesStayPrivateAcrossNestedPolicy(t *testing.T){
+ for _,kind:=range []string{"cache","operation"}{t.Run(kind,func(t *testing.T){
+ // Arrange: private outcome has an effect; broadening current wrapper must not broaden replay.
+ calls:=0
+ base,err:=ts.NewTypedTool(ts.TypedToolSpec[ts.NoSubject,ts.NoScope,struct{},string,string]{Name:"private",Description:"Private",Handler:func(context.Context,ts.TypedCallContext[ts.NoSubject,ts.NoScope],*ts.RunEnv,ts.ValidatedArgs[struct{}])(ts.ToolResult[string,string],error){calls++;r:=ts.NewToolResult[string,string]("secret");r.Effects=[]string{"apply"};return r,nil}});if err!=nil{t.Fatal(err)}
+ var profile ts.ExecutionProfile;source:=ts.ReplaySourceCache
+ if kind=="cache"{profile=probeCache(t,&probeStore{},allowed,partition)}else{
+ source=ts.ReplaySourceOperation
+ profile,err=ts.NewOperationProfile(ts.NewMemoryOperationStore(),func(_ context.Context,c ts.PreparedCall)(ts.OperationIntent,error){return ts.OperationIntent{Namespace:"test",Scope:"scope",Subject:"subject",OperationID:"intent",AttemptID:c.Input.CallID,PolicyFingerprint:"p",CanonicalDigest:"d",CanonicalRules:"json",DisplayJSON:[]byte(`{}`)},nil},ts.JSONResultCodec[string,string]{},"host",time.Now,time.Minute,0);if err!=nil{t.Fatal(err)}
+ }
+ reductions:=0;var received ts.Chunk
+ // Act: persist with internal audience, then replay with model and user overlays.
+ for i,audience:=range []ts.ToolAudience{ts.AudienceInternal,ts.AudienceModel,ts.AudienceUser}{
+ var tool ts.Tool=base
+ for range 2{tool,err=ts.NewPolicyTool(ts.ToolPolicySpec[ts.NoSubject,ts.NoScope,struct{}]{Tool:tool,Audience:audience,EnvelopeMetadata:map[string]any{"host":"label"},ArgsBinder:func(context.Context,ts.ArgsBindRequest)(ts.ValidatedArgs[struct{}],error){return ts.ValidatedArgs[struct{}]{Raw:[]byte(`{}`)},nil}});if err!=nil{t.Fatal(err)}}
+ reg,e:=ts.NewRegistryBuilder(ts.WithExecutionProfile(profile)).Add(tool).Build();if e!=nil{t.Fatal(e)}
+ id:=string(rune('a'+i));e=reg.Execute(t.Context(),ts.ToolCall{ToolName:"private",Input:ts.ToolInput{CallID:id,ArgsJSON:[]byte(`{}`)}},func(c ts.Chunk)error{received=c;if c.ToolEnvelope().Metadata[ts.ReplaySourceMetadata]==nil{reductions+=len(c.Effects)};return nil});if e!=nil{t.Fatal(e)}
+ if i>0&&(received.ToolEnvelope().Audience!=ts.AudienceInternal||received.ToolEnvelope().Metadata[ts.ReplaySourceMetadata]!=source||received.CallID!=id){t.Fatalf("replay=%+v envelope=%+v",received,received.ToolEnvelope())}
+ }
+ // Assert: provenance preserves reducer semantics and operation replay is distinct.
+ if calls!=1||reductions!=1{t.Fatalf("calls=%d reductions=%d",calls,reductions)}
+ })}
+}

@@ -21,7 +21,7 @@ func TestLosslessDynamicInputIdentity(t *testing.T) {
 	var snapshots []string
 	var keys []string
 	cache, err := NewResultCache(
-		NewMemoryResultCacheStore(),
+		NewMemoryResultCacheStore(), allowTestCacheReuse,
 		func(context.Context, PreparedCall) (string, error) { return "test", nil },
 		JSONResultCodec[any, any]{},
 		0,

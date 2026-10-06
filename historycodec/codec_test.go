@@ -47,7 +47,7 @@ func TestResultPreservesDeliveryAndReplayProvenance(t *testing.T) {
 					toolsy.DeliveryClassBinary,
 					audience,
 					map[string]any{
-						toolsy.CacheReplayMetadata: true,
+						toolsy.ReplaySourceMetadata: toolsy.ReplaySourceOperation,
 						"source": map[string]any{
 							"sequence": json.Number("9007199254740993"),
 							"tags":     []any{"safe", nil},
@@ -63,7 +63,7 @@ func TestResultPreservesDeliveryAndReplayProvenance(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, chunk, back)
 			require.Equal(t, audience, back.ToolEnvelope().Audience)
-			require.Equal(t, true, back.ToolEnvelope().Metadata[toolsy.CacheReplayMetadata])
+			require.Equal(t, toolsy.ReplaySourceOperation, back.ToolEnvelope().Metadata[toolsy.ReplaySourceMetadata])
 		})
 	}
 }
@@ -183,7 +183,7 @@ func TestDecodingRejectsLossyAndAmbiguousRecords(t *testing.T) {
 				"",
 				"",
 				toolsy.AudienceInternal,
-				map[string]any{toolsy.CacheReplayMetadata: true},
+				map[string]any{toolsy.ReplaySourceMetadata: toolsy.ReplaySourceOperation},
 			),
 		},
 	)
@@ -220,8 +220,8 @@ func TestDecodingRejectsLossyAndAmbiguousRecords(t *testing.T) {
 		),
 		"duplicate metadata": strings.Replace(
 			valid,
-			`"toolsy.cache_replay":true`,
-			`"toolsy.cache_replay":true,"toolsy.cache_replay":false`,
+			`"toolsy.replay_source":"completed_operation"`,
+			`"toolsy.replay_source":"completed_operation","toolsy.replay_source":"result_cache"`,
 			1,
 		),
 	}

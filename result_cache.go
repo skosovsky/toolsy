@@ -28,9 +28,21 @@ type ResultCodec interface {
 // additionally binds the key to canonical input, attachments and manifest/view.
 type CachePartition func(context.Context, PreparedCall) (string, error)
 
-// CacheReplayMetadata marks cached declarations for host reducers. Replayed
-// effects must not be applied as new effects; call correlation is still current.
-const CacheReplayMetadata = "toolsy.cache_replay"
+// CacheEligibility explicitly decides whether the current authorized call may
+// reuse a stored result. Idempotence/read-only hints are not freshness guarantees.
+// The host callback must be concurrency-safe and is evaluated on every attempt.
+type CacheEligibility func(context.Context, PreparedCall) (bool, error)
+
+// ReplaySourceMetadata identifies library replay provenance. Reducers must not
+// apply replayed effect declarations again; current call correlation is retained.
+const ReplaySourceMetadata = "toolsy.replay_source"
+
+const (
+	// ReplaySourceCache denotes reuse of a result under current host freshness policy.
+	ReplaySourceCache = "result_cache"
+	// ReplaySourceOperation denotes delivery of an already completed logical operation.
+	ReplaySourceOperation = "completed_operation"
+)
 
 const defaultCacheResultLimit = 1 << 20
 
@@ -38,22 +50,24 @@ const defaultCacheResultLimit = 1 << 20
 // atomic dispatch or remote exactly-once guarantee; use an operation journal for
 // those semantics. A successful result is persisted before delivery.
 type ResultCache struct {
-	store     ResultCacheStore
-	partition CachePartition
-	codec     ResultCodec
-	maxBytes  int
+	store       ResultCacheStore
+	eligibility CacheEligibility
+	partition   CachePartition
+	codec       ResultCodec
+	maxBytes    int
 }
 
-// NewResultCache requires an explicit host partition and complete outcome codec.
+// NewResultCache requires explicit eligibility, a host partition and complete outcome codec.
 // maxBytes bounds encoded storage and replay; zero selects a bounded default.
 func NewResultCache(
 	store ResultCacheStore,
+	eligibility CacheEligibility,
 	partition CachePartition,
 	codec ResultCodec,
 	maxBytes int,
 ) (*ResultCache, error) {
-	if store == nil || partition == nil || codec == nil {
-		return nil, errors.New("toolsy: result cache requires store, partition and codec")
+	if store == nil || eligibility == nil || partition == nil || codec == nil {
+		return nil, errors.New("toolsy: result cache requires store, eligibility, partition and codec")
 	}
 	if maxBytes < 0 {
 		return nil, errors.New("toolsy: result cache limit cannot be negative")
@@ -61,7 +75,13 @@ func NewResultCache(
 	if maxBytes == 0 {
 		maxBytes = defaultCacheResultLimit
 	}
-	return &ResultCache{store: store, partition: partition, codec: codec, maxBytes: maxBytes}, nil
+	return &ResultCache{
+		store:       store,
+		eligibility: eligibility,
+		partition:   partition,
+		codec:       codec,
+		maxBytes:    maxBytes,
+	}, nil
 }
 
 // ExecutePrepared caches exactly one successful result after argument binding.
@@ -71,21 +91,37 @@ func (c *ResultCache) ExecutePrepared(
 	invoke InvocationHandler,
 	yield func(Chunk) error,
 ) error {
-	if !call.Manifest.Idempotent {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	eligible, err := c.eligibility(ctx, clonePreparedCall(call))
+	if err != nil {
+		return NewInternalError(fmt.Errorf("result cache eligibility: %w", err))
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if !eligible {
 		return invoke(yield)
 	}
 	key, err := c.key(ctx, call)
 	if err != nil {
 		return err
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	raw, found, err := c.store.Get(ctx, key)
 	if err != nil {
 		return NewInternalError(fmt.Errorf("result cache read: %w", err))
 	}
-	if found {
-		return c.replay(call, raw, yield)
+	if err = ctx.Err(); err != nil {
+		return err
 	}
-	capture := resultCacheCapture{ctx: ctx, maxBytes: c.maxBytes, yield: yield, result: nil, err: nil}
+	if found {
+		return replayResult(ctx, call, raw, c.codec, c.maxBytes, ReplaySourceCache, yield)
+	}
+	capture := resultCacheCapture{ctx: ctx, maxBytes: c.maxBytes, yield: yield, result: nil, terminal: false, err: nil}
 	err = invoke(capture.accept)
 	if err != nil {
 		return err
@@ -97,17 +133,26 @@ func (c *ResultCache) ExecutePrepared(
 		return err
 	}
 	if capture.result == nil {
-		return NewValidationError("result cache requires a successful terminal result")
+		if capture.terminal {
+			return nil
+		}
+		return NewInternalError(errors.New("result cache requires a terminal result"))
 	}
 	raw, err = c.codec.EncodeResult(*capture.result)
 	if err != nil {
 		return NewInternalError(fmt.Errorf("result cache encode: %w", err))
 	}
 	if len(raw) > c.maxBytes {
-		return NewValidationError("result cache output limit exceeded")
+		return NewInternalError(errors.New("result cache output limit exceeded"))
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if err = c.store.Put(ctx, key, raw); err != nil {
 		return NewInternalError(fmt.Errorf("result cache write: %w", err))
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	return yield(cloneResultChunk(*capture.result))
 }
@@ -117,6 +162,7 @@ type resultCacheCapture struct {
 	maxBytes int
 	yield    func(Chunk) error
 	result   *Chunk
+	terminal bool
 	err      error
 }
 
@@ -134,13 +180,16 @@ func (c *resultCacheCapture) accept(chunk Chunk) error {
 		}
 		return c.err
 	}
+	if c.terminal {
+		c.err = NewInternalError(errors.New("result cache requires exactly one terminal result"))
+		return c.err
+	}
+	c.terminal = true
 	switch {
 	case chunk.IsError:
-		c.err = NewValidationError("unsuccessful result is not cacheable")
-	case c.result != nil:
-		c.err = NewValidationError("result cache requires exactly one successful result")
+		c.err = c.yield(chunk)
 	case len(chunk.Data) > c.maxBytes:
-		c.err = NewValidationError("result cache output limit exceeded")
+		c.err = NewInternalError(errors.New("result cache output limit exceeded"))
 	default:
 		copyChunk := cloneResultChunk(chunk)
 		c.result = &copyChunk
@@ -151,10 +200,10 @@ func (c *resultCacheCapture) accept(chunk Chunk) error {
 func (c *ResultCache) key(ctx context.Context, call PreparedCall) (string, error) {
 	partition, err := c.partition(ctx, clonePreparedCall(call))
 	if err != nil {
-		return "", err
+		return "", NewInternalError(fmt.Errorf("result cache partition: %w", err))
 	}
 	if partition == "" {
-		return "", NewPolicyDeniedError("result cache partition is required", "cache_partition")
+		return "", NewInternalError(errors.New("result cache partition is required"))
 	}
 	manifestHash := sha256.New()
 	if digestErr := writeManifestDigest(manifestHash, call.Manifest); digestErr != nil {
@@ -183,19 +232,33 @@ type cacheAttachment struct {
 	Data []byte `json:"data"`
 }
 
-func (c *ResultCache) replay(call PreparedCall, raw []byte, yield func(Chunk) error) error {
-	if len(raw) > c.maxBytes {
-		return NewValidationError("result cache output limit exceeded")
+func replayResult(
+	ctx context.Context,
+	call PreparedCall,
+	raw []byte,
+	codec ResultCodec,
+	maxBytes int,
+	source string,
+	yield func(Chunk) error,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	chunk, err := c.codec.DecodeResult(append([]byte(nil), raw...))
+	if len(raw) > maxBytes {
+		return NewInternalError(errors.New("stored replay output limit exceeded"))
+	}
+	chunk, err := codec.DecodeResult(append([]byte(nil), raw...))
 	if err != nil {
-		return NewInternalError(fmt.Errorf("result cache decode: %w", err))
+		return NewInternalError(fmt.Errorf("stored replay decode: %w", err))
 	}
 	if chunk.Event != EventResult || chunk.IsError {
-		return NewValidationError("invalid cached result")
+		return NewInternalError(errors.New("invalid stored replay result"))
 	}
 	chunk, err = prepareChunk(chunk)
 	if err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 	chunk.CallID, chunk.ToolName = call.Input.CallID, call.Manifest.Name
@@ -203,7 +266,7 @@ func (c *ResultCache) replay(call PreparedCall, raw []byte, yield func(Chunk) er
 	if envelope.Metadata == nil {
 		envelope.Metadata = make(map[string]any)
 	}
-	envelope.Metadata[CacheReplayMetadata] = true
+	envelope.Metadata[ReplaySourceMetadata] = source
 	chunk.Envelope = &envelope
 	return yield(chunk)
 }

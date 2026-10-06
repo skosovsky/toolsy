@@ -1,0 +1,79 @@
+package toolsy_test
+
+import (
+ "context"
+ "errors"
+ "testing"
+ s "github.com/skosovsky/toolsy"
+)
+type probeStore struct { get func(context.Context)([]byte,bool,error); gets,puts int; put func() }
+func(p *probeStore)Get(c context.Context,_ string)([]byte,bool,error){p.gets++;if p.get!=nil{return p.get(c)};return nil,false,nil}
+func(p *probeStore)Put(context.Context,string,[]byte)error{p.puts++;if p.put!=nil{p.put()};return nil}
+type probeCodec struct{ decode func() s.Chunk; encode func() }
+func(p probeCodec)EncodeResult(s.Chunk)([]byte,error){if p.encode!=nil{p.encode()};return []byte("stored"),nil}
+func(p probeCodec)DecodeResult([]byte)(s.Chunk,error){return p.decode(),nil}
+func probeCall()s.PreparedCall{return s.PreparedCall{Manifest:s.ToolManifest{Name:"probe"}, Input:s.ToolInput{CallID:"new",ArgsJSON:[]byte(`{}`)}}}
+func probeChunk()s.Chunk{return s.Chunk{Event:s.EventResult,Data:[]byte(`"ok"`),MimeType:s.MimeTypeJSON,TypedResult:"ok"}}
+func TestIndependentBusinessCodes(t *testing.T){
+ for _,terminal:=range []s.Chunk{s.NewErrorChunkFromErr(s.NewBudgetExceededError("quota")),s.NewErrorChunkFromErr(s.NewValidationError("domain")),s.NewErrorChunkFromErr(s.NewInternalError(errors.New("host")))}{
+  // Arrange.
+  store:=&probeStore{}; cache,err:=s.NewResultCache(store,func(context.Context,s.PreparedCall)(bool,error){return true,nil},func(context.Context,s.PreparedCall)(string,error){return "p",nil},s.JSONResultCodec[string,string]{},1);if err!=nil{t.Fatal(err)}
+  n:=0
+  // Act.
+  err=cache.ExecutePrepared(t.Context(),probeCall(),func(y func(s.Chunk)error)error{return y(terminal)},func(c s.Chunk)error{n++;if string(c.Data)!=string(terminal.Data)||c.ToolEnvelope().Error.Code!=terminal.ToolEnvelope().Error.Code{t.Fatal("changed business error")};return nil})
+  // Assert: even a large failure terminal bypasses successful-result limit/persistence.
+  if err!=nil||n!=1||store.puts!=0{t.Fatalf("err=%v delivered=%d puts=%d",err,n,store.puts)}
+ }
+}
+func TestIndependentDynamicEligibility(t *testing.T){
+ // Arrange.
+ store:=&probeStore{}; eligible:=true; decisions:=0; dispatches:=0
+ cache,err:=s.NewResultCache(store,func(context.Context,s.PreparedCall)(bool,error){decisions++;return eligible,nil},func(context.Context,s.PreparedCall)(string,error){return "p",nil},s.JSONResultCodec[string,string]{},0);if err!=nil{t.Fatal(err)}
+ invoke:=func(y func(s.Chunk)error)error{dispatches++;return y(probeChunk())}
+ // Act: host revokes reuse after one invocation.
+ if err=cache.ExecutePrepared(t.Context(),probeCall(),invoke,func(s.Chunk)error{return nil});err!=nil{t.Fatal(err)};eligible=false
+ if err=cache.ExecutePrepared(t.Context(),probeCall(),invoke,func(s.Chunk)error{return nil});err!=nil{t.Fatal(err)}
+ // Assert.
+ if decisions!=2||dispatches!=2||store.gets!=1||store.puts!=1{t.Fatalf("decisions=%d dispatches=%d get=%d put=%d",decisions,dispatches,store.gets,store.puts)}
+}
+func TestIndependentCanceledHostStages(t *testing.T){
+ for _,stage:=range []string{"partition","get-miss","get-hit","decode"}{t.Run(stage,func(t *testing.T){
+ // Arrange: trusted host callbacks cancel synchronously but return success.
+ ctx,cancel:=context.WithCancel(t.Context());defer cancel();store:=&probeStore{};codec:=probeCodec{decode:probeChunk};part:=func(context.Context,s.PreparedCall)(string,error){if stage=="partition"{cancel()};return "p",nil}
+ if stage=="get-miss"||stage=="get-hit"{store.get=func(context.Context)([]byte,bool,error){cancel();return []byte("stored"),stage=="get-hit",nil}}
+ if stage=="decode"{store.get=func(context.Context)([]byte,bool,error){return []byte("stored"),true,nil};codec.decode=func()s.Chunk{cancel();return probeChunk()}}
+ cache,err:=s.NewResultCache(store,func(context.Context,s.PreparedCall)(bool,error){return true,nil},part,codec,0);if err!=nil{t.Fatal(err)};dispatch,delivery:=0,0
+ // Act.
+ err=cache.ExecutePrepared(ctx,probeCall(),func(y func(s.Chunk)error)error{dispatch++;return y(probeChunk())},func(s.Chunk)error{delivery++;return nil})
+ // Assert.
+ if !errors.Is(err,context.Canceled)||dispatch!=0||delivery!=0||store.puts!=0{t.Fatalf("cancellation lost: err=%v dispatch=%d delivery=%d put=%d",err,dispatch,delivery,store.puts)}
+ })}
+}
+
+func TestIndependentCanceledPersistence(t *testing.T){
+ for _,stage:=range []string{"encode","put"}{t.Run(stage,func(t *testing.T){
+ // Arrange.
+ ctx,cancel:=context.WithCancel(t.Context());defer cancel();store:=&probeStore{};codec:=probeCodec{decode:probeChunk}
+ if stage=="encode"{codec.encode=cancel}else{store.put=cancel}
+ cache,err:=s.NewResultCache(store,func(context.Context,s.PreparedCall)(bool,error){return true,nil},func(context.Context,s.PreparedCall)(string,error){return "p",nil},codec,0);if err!=nil{t.Fatal(err)};delivery:=0
+ // Act.
+ err=cache.ExecutePrepared(ctx,probeCall(),func(y func(s.Chunk)error)error{return y(probeChunk())},func(s.Chunk)error{delivery++;return nil})
+ // Assert: completed Put may have persisted despite cancellation, but delivery stops.
+ if !errors.Is(err,context.Canceled)||delivery!=0{t.Fatalf("err=%v delivered=%d",err,delivery)}
+ if stage=="encode"&&store.puts!=0{t.Fatal("Put after encode cancellation")}
+ })}
+}
+func TestIndependentReplaySourceOverwriteAndAbort(t *testing.T){
+ // Arrange: trusted codec returns an old source, old correlation and effects.
+ old:=probeChunk();old.CallID="old";old.ToolName="old";old.Effects=[]any{"once"}
+ envelope:=old.ToolEnvelope();envelope.Audience=s.AudienceInternal;envelope.Metadata=map[string]any{s.ReplaySourceMetadata:s.ReplaySourceOperation,"private":true};old.Envelope=&envelope
+ store:=&probeStore{get:func(context.Context)([]byte,bool,error){return []byte("stored"),true,nil}}
+ codec:=probeCodec{decode:func()s.Chunk{return old}}
+ cache,err:=s.NewResultCache(store,func(context.Context,s.PreparedCall)(bool,error){return true,nil},func(context.Context,s.PreparedCall)(string,error){return "p",nil},codec,0);if err!=nil{t.Fatal(err)}
+ stop:=errors.New("consumer stop");dispatch,delivery:=0,0
+ // Act.
+ err=cache.ExecutePrepared(t.Context(),probeCall(),func(func(s.Chunk)error)error{dispatch++;return nil},func(c s.Chunk)error{delivery++;e:=c.ToolEnvelope();if e.Metadata[s.ReplaySourceMetadata]!=s.ReplaySourceCache||e.Audience!=s.AudienceInternal||c.CallID!="new"||c.ToolName!="probe"||len(c.Effects)!=1{t.Fatal("replay semantics lost")};return stop})
+ // Assert.
+ if !errors.Is(err,stop)||dispatch!=0||delivery!=1||store.puts!=0{t.Fatalf("err=%v dispatch=%d delivery=%d",err,dispatch,delivery)}
+ if old.Envelope.Metadata[s.ReplaySourceMetadata]!=s.ReplaySourceOperation{t.Fatal("codec borrowed metadata mutated")}
+}

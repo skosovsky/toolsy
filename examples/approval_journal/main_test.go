@@ -31,7 +31,7 @@ func TestOrdinaryHostPendingApproveRestartReplay(t *testing.T) {
 	require.NoError(t, err)
 	// Assert: restart replays complete output, never issues a new approval/effect.
 	assert.Equal(t, first, second)
-	assert.Contains(t, output.String(), "replay=true")
+	assert.Contains(t, output.String(), "replay=completed_operation")
 	assert.NotContains(t, output.String(), "pending action=")
 	// Act/Assert: changing args under the old intent conflicts; a new intent is explicit.
 	cfg.Note = "changed"

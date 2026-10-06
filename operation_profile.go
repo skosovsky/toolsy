@@ -193,11 +193,7 @@ func (p *OperationProfile) ExecutePrepared(
 	}
 	if !decision.Dispatch {
 		if decision.Record.State == OperationCompleted {
-			return (&ResultCache{store: nil, partition: nil, codec: p.codec, maxBytes: p.maxBytes}).replay(
-				call,
-				decision.Record.Result,
-				yield,
-			)
+			return replayResult(ctx, call, decision.Record.Result, p.codec, p.maxBytes, ReplaySourceOperation, yield)
 		}
 		return &OperationStateError{Record: cloneOperationRecord(decision.Record)}
 	}

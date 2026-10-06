@@ -391,3 +391,40 @@ capacity or universal identity preservation. Delivery is not a universal deep
 copy of every host object: keep borrowed typed values/opaque data immutable while
 they are consumed, and use a complete trusted ResultCodec for persistence. No
 JSON roundtrip is introduced to simulate cloning arbitrary BYOT types.
+
+## R12 / D13 / D15 — explicit reuse and replay source
+
+Clear break: NewResultCache takes `(store, eligibility, partition, codec, maxBytes)`.
+CacheEligibility is `func(context.Context, PreparedCall) (bool, error)`; it runs
+on every currently authorized attempt, including hits. False invokes the handler
+without partition/storage/codec work. Idempotent and ReadOnly are classifications,
+not freshness proofs. Do not migrate by blindly returning true for every tool.
+Approve reuse only for a domain result whose freshness, principal/scope and relevant
+input/dependency revisions are bound to the trusted partition/store expiry policy.
+Concurrent misses may dispatch twice; use OperationProfile for durable effect
+identity/recovery rather than the cache.
+
+Business-error terminal chunks keep their delivery and RunCall classification;
+they are never persisted. Missing/multiple terminals, limits and host cache
+infrastructure errors now fail INTERNAL, nonretryable and not input-correctable.
+Causes remain available to host diagnostics. After dispatch such failure does not
+prove that an effect was rolled back or authorize automatic redispatch.
+
+Clear break: remove CacheReplayMetadata / `toolsy.cache_replay` boolean checks.
+ReplaySourceMetadata (`toolsy.replay_source`) stores a string:
+ReplaySourceCache (`result_cache`) for reusable data, or ReplaySourceOperation
+(`completed_operation`) for an already-completed durable logical operation.
+Reducers skip effect application for either source. Current CallID/ToolName remain
+rebound on delivery. Policy configuration cannot set this reserved key; repeated
+metadata overlays retain it and keep private replay audiences private.
+A trusted profile stamps the actual source, overwriting any stored source. The
+marker is provenance, not a permission grant or authenticity proof for arbitrary
+custom-tool output.
+
+Old encoded successful records may retain their old metadata, but current replay
+adds the new authoritative source. Host reducers must use the new key; do not
+interpret absence of the old key as a fresh dispatch. If custom codecs reject the
+new metadata or rely on a boolean schema, deliberately migrate those records.
+Never evict durable completed-operation records to force redispatch. Cache entries
+may be invalidated under the host's ordinary reuse policy; journal outcomes require
+fenced reconciliation. Codec and opaque host value ownership remain unchanged.

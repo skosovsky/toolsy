@@ -1,0 +1,222 @@
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+=== RUN   TestIndependentBusinessCodes
+--- PASS: TestIndependentBusinessCodes (0.00s)
+=== RUN   TestIndependentDynamicEligibility
+--- PASS: TestIndependentDynamicEligibility (0.00s)
+=== RUN   TestIndependentCanceledHostStages
+=== RUN   TestIndependentCanceledHostStages/partition
+=== RUN   TestIndependentCanceledHostStages/get-miss
+=== RUN   TestIndependentCanceledHostStages/get-hit
+=== RUN   TestIndependentCanceledHostStages/decode
+--- PASS: TestIndependentCanceledHostStages (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/partition (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-miss (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/get-hit (0.00s)
+    --- PASS: TestIndependentCanceledHostStages/decode (0.00s)
+=== RUN   TestIndependentCanceledPersistence
+=== RUN   TestIndependentCanceledPersistence/encode
+=== RUN   TestIndependentCanceledPersistence/put
+--- PASS: TestIndependentCanceledPersistence (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/encode (0.00s)
+    --- PASS: TestIndependentCanceledPersistence/put (0.00s)
+=== RUN   TestIndependentReplaySourceOverwriteAndAbort
+--- PASS: TestIndependentReplaySourceOverwriteAndAbort (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.605s

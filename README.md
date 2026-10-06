@@ -502,7 +502,7 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 ## Authorization and idempotency
 
 - Registry-level: prefer `WithPolicy`; `WithAuthorizer` and `WithAuthorization` accept `AuthorizationRequest` with manifest, input, call context, and view identity.
-- Result cache: mark eligible tools with `WithIdempotent()`, create `NewResultCache(store, partition, codec, maxBytes)` and install it with `WithExecutionProfile`. Binding and current typed policy run before replay; the host provides a trusted partition and complete outcome codec. This cache does not guarantee atomic duplicate dispatch. See [execution contract](docs/execution-contract.md).
+- Result cache: supply a per-attempt host `CacheEligibility` predicate and create `NewResultCache(store, eligibility, partition, codec, maxBytes)` and install it with `WithExecutionProfile`. Binding and current typed policy run before replay; the host provides a trusted freshness partition and complete outcome codec. Idempotent/ReadOnly hints alone never enable reuse. This cache does not guarantee atomic duplicate dispatch. See [execution contract](docs/execution-contract.md).
 
 ### Typed result representations
 

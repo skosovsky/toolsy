@@ -1,0 +1,42 @@
+=== RUN   TestBReplayCancellationDirectTool
+    r12_b_external_probe_test.go:26: err=<nil> delivered=1
+--- FAIL: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBReplayCancellationDirectTool
+    r12_b_external_probe_test.go:26: err=<nil> delivered=1
+--- FAIL: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+=== RUN   TestBReplayCancellationDirectTool
+    r12_b_external_probe_test.go:26: err=<nil> delivered=1
+--- FAIL: TestBReplayCancellationDirectTool (0.00s)
+=== RUN   TestBFreshnessAndBypass
+--- PASS: TestBFreshnessAndBypass (0.00s)
+=== RUN   TestBStickyErrorsAndMultiTerminal
+=== RUN   TestBStickyErrorsAndMultiTerminal/abort
+=== RUN   TestBStickyErrorsAndMultiTerminal/multi
+=== RUN   TestBStickyErrorsAndMultiTerminal/business
+--- PASS: TestBStickyErrorsAndMultiTerminal (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/abort (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/multi (0.00s)
+    --- PASS: TestBStickyErrorsAndMultiTerminal/business (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.632s
+FAIL

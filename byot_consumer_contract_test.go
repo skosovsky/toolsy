@@ -119,7 +119,7 @@ func exerciseOrdinaryConsumer[S, C any](
 	require.NoError(t, execute(ctx, call, func(toolsy.Chunk) error { return nil }))
 	call.Input.CallID = "repeat"
 	require.NoError(t, execute(ctx, call, func(c toolsy.Chunk) error {
-		assert.Equal(t, true, c.ToolEnvelope().Metadata[toolsy.CacheReplayMetadata])
+		assert.Equal(t, toolsy.ReplaySourceOperation, c.ToolEnvelope().Metadata[toolsy.ReplaySourceMetadata])
 		return nil
 	}))
 	// Assert: the same generic Tool worked with host-owned types, no agent loop.
