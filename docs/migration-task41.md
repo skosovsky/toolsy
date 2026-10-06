@@ -647,3 +647,25 @@ UTF-8/JSON, typed-nil rejection. This is a clear API and cache-record break.
 See [exact contract](control-contract.md) for field/name/delivery/cancellation
 limits and [host example](../examples/host_event/main.go). Existing human toolkit
 16KiB default payload cap fits the core bound; larger host overrides must also fit.
+
+## D03 — human review is an intent
+
+Human toolkit default `request_approval` is now `request_human_review`;
+payload kind `approval` is now `human_review`. Action/reason field names remain
+conversation data; `ask_human_clarification` and its payload remain unchanged.
+Replace `WithApprovalName` / `WithApprovalDescription` with `WithReviewName` /
+`WithReviewDescription`. Removed APIs have no compatibility aliases. Hosts must
+update catalog names and payload routing explicitly; old transcripts describe the
+old contract and must not be silently promoted to authority.
+
+A review pause/reply has no authenticated approver, exact operation binding,
+policy fingerprint, issuer, expiry or consume-once authority. Grant issuance
+belongs to the authenticated host using the actual action's OperationProfile
+challenge; resume the original operation through current policy. Conversation
+text must not stand in for challenge DisplayJSON/Binding or permit dispatch.
+The adapter owns no operation store, issuer or action execution port.
+
+Payload configuration must fit core's inclusive 64KiB control budget; explicit
+limits outside 1..MaxControlBytes fail construction. Default remains16KiB with
+complete encodedJSON bounds and no text truncation. See [toolkit contract and
+executable composition](../toolkits/human/README.md).

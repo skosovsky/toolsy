@@ -47,7 +47,7 @@ func TestPausePayloadExactBounds(t *testing.T) {
 
 func TestPauseRejectsInvalidConfigurationAndLargeAction(t *testing.T) {
 	// Arrange and act: explicit invalid limits and options fail construction.
-	for _, limit := range []int{0, -1} {
+	for _, limit := range []int{0, -1, toolsy.MaxControlBytes + 1} {
 		_, err := AsTools(WithMaxPayloadBytes(limit))
 		require.Error(t, err)
 	}

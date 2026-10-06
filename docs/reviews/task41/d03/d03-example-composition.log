@@ -1,0 +1,6 @@
+=== RUN   TestConversationPauseDoesNotGrantAction
+--- PASS: TestConversationPauseDoesNotGrantAction (0.00s)
+=== RUN   ExampleAsTools
+--- PASS: ExampleAsTools (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/human	0.541s

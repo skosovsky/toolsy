@@ -11,7 +11,7 @@ import (
 
 const payloadKindKey = "kind"
 
-type approvalArgs struct {
+type reviewArgs struct {
 	Action string `json:"action"`
 	Reason string `json:"reason"`
 }
@@ -20,11 +20,12 @@ type clarificationArgs struct {
 	Question string `json:"question"`
 }
 
-// AsTools returns two suspend-first tools (request_approval, ask_human_clarification).
-// The orchestrator is expected to checkpoint execution when a control pause error is returned.
+// AsTools returns data-only request_human_review and ask_human_clarification tools.
+// Neither authenticates a reviewer, binds an operation or issues an ApprovalGrant.
+// Hosts own continuation, UI routing and authenticated action authorization.
 func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 	o := options{
-		approvalName: "", approvalDesc: "", clarificationName: "", clarificationDesc: "",
+		reviewName: "", reviewDesc: "", clarificationName: "", clarificationDesc: "",
 		maxPayloadBytes: defaultMaxPayloadBytes,
 	}
 	for _, opt := range opts {
@@ -34,16 +35,16 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		opt(&o)
 	}
 	applyDefaults(&o)
-	if o.maxPayloadBytes <= 0 {
-		return nil, errors.New("toolkit/human: payload limit must be positive")
+	if o.maxPayloadBytes <= 0 || o.maxPayloadBytes > toolsy.MaxControlBytes {
+		return nil, fmt.Errorf("toolkit/human: payload limit must be between 1 and %d bytes", toolsy.MaxControlBytes)
 	}
 
-	approvalTool, err := toolsy.NewStreamTool[approvalArgs](
-		o.approvalName,
-		o.approvalDesc,
-		func(_ context.Context, _ *toolsy.RunEnv, args approvalArgs, yield func(toolsy.Chunk) error) error {
+	reviewTool, err := toolsy.NewStreamTool[reviewArgs](
+		o.reviewName,
+		o.reviewDesc,
+		func(_ context.Context, _ *toolsy.RunEnv, args reviewArgs, yield func(toolsy.Chunk) error) error {
 			payload, marshalErr := encodePausePayload(map[string]string{
-				payloadKindKey: "approval",
+				payloadKindKey: "human_review",
 				"action":       args.Action,
 				"reason":       args.Reason,
 			}, o.maxPayloadBytes)
@@ -58,7 +59,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		toolsy.WithIndependentStream(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("toolkit/human: build approval tool: %w", err)
+		return nil, fmt.Errorf("toolkit/human: build review tool: %w", err)
 	}
 
 	clarificationTool, err := toolsy.NewStreamTool[clarificationArgs](
@@ -83,7 +84,7 @@ func AsTools(opts ...Option) ([]toolsy.Tool, error) {
 		return nil, fmt.Errorf("toolkit/human: build clarification tool: %w", err)
 	}
 
-	return []toolsy.Tool{approvalTool, clarificationTool}, nil
+	return []toolsy.Tool{reviewTool, clarificationTool}, nil
 }
 
 func encodePausePayload(fields map[string]string, limit int) ([]byte, error) {

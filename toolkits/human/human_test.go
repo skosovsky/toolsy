@@ -11,13 +11,13 @@ import (
 	"github.com/skosovsky/toolsy"
 )
 
-func TestRequestApproval_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
+func TestRequestHumanReview_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
-	approvalTool := tools[0]
+	reviewTool := tools[0]
 
 	var gotChunk toolsy.Chunk
-	err = approvalTool.Execute(
+	err = reviewTool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
@@ -32,7 +32,7 @@ func TestRequestApproval_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	require.True(t, ok)
 	require.JSONEq(
 		t,
-		`{"kind":"approval","action":"delete","reason":"user asked"}`,
+		`{"kind":"human_review","action":"delete","reason":"user asked"}`,
 		pause.Reason,
 	)
 }
@@ -63,13 +63,13 @@ func TestAskClarification_YieldsControlPauseThenReturnsErrPause(t *testing.T) {
 	)
 }
 
-func TestRequestApproval_YieldErrorShortCircuitsBeforeErrPause(t *testing.T) {
+func TestRequestHumanReview_YieldErrorShortCircuitsBeforeErrPause(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
-	approvalTool := tools[0]
+	reviewTool := tools[0]
 
 	yieldErr := errors.New("stream closed")
-	err = approvalTool.Execute(
+	err = reviewTool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"delete","reason":"user asked"}`)},
@@ -79,13 +79,13 @@ func TestRequestApproval_YieldErrorShortCircuitsBeforeErrPause(t *testing.T) {
 	require.NotErrorIs(t, err, toolsy.ErrPause)
 }
 
-func TestRequestApproval_PayloadShape(t *testing.T) {
+func TestRequestHumanReview_PayloadShape(t *testing.T) {
 	tools, err := AsTools()
 	require.NoError(t, err)
-	approvalTool := tools[0]
+	reviewTool := tools[0]
 
 	var pauseReason string
-	err = approvalTool.Execute(
+	err = reviewTool.Execute(
 		context.Background(),
 		toolsy.NewRunEnv(nil),
 		toolsy.ToolInput{ArgsJSON: []byte(`{"action":"send_email","reason":"user requested"}`)},
@@ -102,7 +102,7 @@ func TestRequestApproval_PayloadShape(t *testing.T) {
 	require.Equal(
 		t,
 		map[string]string{
-			"kind":   "approval",
+			"kind":   "human_review",
 			"action": "send_email",
 			"reason": "user requested",
 		},
@@ -147,7 +147,7 @@ func TestAsTools_ToolCount(t *testing.T) {
 }
 
 func TestAsTools_CustomNames(t *testing.T) {
-	tools, err := AsTools(WithApprovalName("approve"), WithClarificationName("clarify"))
+	tools, err := AsTools(WithReviewName("approve"), WithClarificationName("clarify"))
 	require.NoError(t, err)
 	require.Len(t, tools, 2)
 	require.Equal(t, "approve", tools[0].Manifest().Name)

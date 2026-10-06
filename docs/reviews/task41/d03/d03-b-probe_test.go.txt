@@ -1,0 +1,10 @@
+package human_test
+import("context";"errors";"testing";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/human")
+func TestD03BConsumerStop(t *testing.T) {
+ tools,err:=human.AsTools();if err!=nil {t.Fatal(err)}
+ for i,args:=range []string{`{"action":"delete","reason":"approved"}`,`{"question":"yes?"}`} {
+ ctx,cancel:=context.WithCancel(t.Context());stop:=errors.New("consumer stop");calls:=0
+ err=tools[i].Execute(ctx,nil,toolsy.ToolInput{ArgsJSON:[]byte(args)},func(toolsy.Chunk)error{calls++;cancel();return stop})
+ if calls!=1 || !errors.Is(err,stop)||!errors.Is(err,toolsy.ErrStreamAborted)||errors.Is(err,toolsy.ErrPause){t.Fatalf("i=%d calls=%d err=%v",i,calls,err)}
+ }
+}

@@ -1,36 +1,36 @@
 package human
 
-// Option configures AsTools (tool names and descriptions).
+// Option configures conversational intent tools, not approval authority.
 type Option func(*options)
 
 type options struct {
-	approvalName      string
-	approvalDesc      string
+	reviewName        string
+	reviewDesc        string
 	clarificationName string
 	clarificationDesc string
 	maxPayloadBytes   int
 }
 
 const (
-	defaultApprovalName      = "request_approval"
-	defaultApprovalDesc      = "Request human review; this conversation does not authorize an action"
+	defaultReviewName        = "request_human_review"
+	defaultReviewDesc        = "Request human review; this conversation does not authorize an action"
 	defaultClarificationName = "ask_human_clarification"
 	defaultClarificationDesc = "Ask a human for clarification"
 	defaultMaxPayloadBytes   = 16 * 1024
 )
 
 // WithMaxPayloadBytes sets the complete encoded pause payload limit.
-// An explicitly supplied zero or negative limit is invalid.
+// Limits must be within 1..toolsy.MaxControlBytes; larger budgets cannot be delivered.
 func WithMaxPayloadBytes(limit int) Option {
 	return func(o *options) { o.maxPayloadBytes = limit }
 }
 
 func applyDefaults(o *options) {
-	if o.approvalName == "" {
-		o.approvalName = defaultApprovalName
+	if o.reviewName == "" {
+		o.reviewName = defaultReviewName
 	}
-	if o.approvalDesc == "" {
-		o.approvalDesc = defaultApprovalDesc
+	if o.reviewDesc == "" {
+		o.reviewDesc = defaultReviewDesc
 	}
 	if o.clarificationName == "" {
 		o.clarificationName = defaultClarificationName
@@ -40,17 +40,17 @@ func applyDefaults(o *options) {
 	}
 }
 
-// WithApprovalName sets the name of the approval tool.
-func WithApprovalName(name string) Option {
+// WithReviewName sets the name of the human review intent tool.
+func WithReviewName(name string) Option {
 	return func(o *options) {
-		o.approvalName = name
+		o.reviewName = name
 	}
 }
 
-// WithApprovalDescription sets the description of the approval tool.
-func WithApprovalDescription(desc string) Option {
+// WithReviewDescription sets the description of the human review intent tool.
+func WithReviewDescription(desc string) Option {
 	return func(o *options) {
-		o.approvalDesc = desc
+		o.reviewDesc = desc
 	}
 }
 

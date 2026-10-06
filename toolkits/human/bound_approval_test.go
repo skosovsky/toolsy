@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -75,7 +76,16 @@ func TestConversationPauseDoesNotGrantAction(t *testing.T) {
 	// Act: a conversation pause alone cannot dispatch the action.
 	err = conversation[0].Execute(ctx, nil, toolsy.ToolInput{
 		ArgsJSON: []byte(`{"action":"write_note","reason":"the user said yes"}`),
-	}, yield)
+	}, func(chunk toolsy.Chunk) error {
+		var intent map[string]string
+		require.NoError(t, json.Unmarshal([]byte(chunk.Control.(*toolsy.PauseSignal).Reason), &intent))
+		require.Equal(
+			t,
+			map[string]string{"kind": "human_review", "action": "write_note", "reason": "the user said yes"},
+			intent,
+		)
+		return nil
+	})
 	require.ErrorIs(t, err, toolsy.ErrPause)
 	var pending *toolsy.PendingApprovalError
 	require.ErrorAs(t, registry.Execute(ctx, call, yield), &pending)

@@ -1,4 +1,5 @@
-// Package human provides suspend-first human-in-the-loop (HITL) tools.
-// Each execution yields a typed PauseSignal (EventControl) and returns toolsy.ErrPause,
-// leaving checkpointing and resume mechanics to the orchestrator.
+// Package human provides conversational human review and clarification intents.
+// A valid execution delivers a bounded typed PauseSignal and returns toolsy.ErrPause.
+// Host owns continuation and authenticated grant issuance for actual operations.
+// Neither a free-text intent nor a human/model response grants execution authority.
 package human

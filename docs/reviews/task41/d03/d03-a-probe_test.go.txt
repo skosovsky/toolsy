@@ -1,0 +1,12 @@
+package human_test
+import("context";"errors";"testing";"github.com/skosovsky/toolsy";"github.com/skosovsky/toolsy/toolkits/human")
+func TestD03AcceptanceConsumer(t *testing.T){
+ tools,err:=human.AsTools();if err!=nil{t.Fatal(err)}
+ for i,args:=range []string{`{"action":"delete","reason":"approved"}`,`{"question":"yes?"}`} {
+  for _,sentinel:=range []error{errors.New("consumer failed"),context.Canceled,context.DeadlineExceeded}{
+   n:=0
+   err=tools[i].Execute(context.Background(),nil,toolsy.ToolInput{ArgsJSON:[]byte(args)},func(c toolsy.Chunk)error{n++;if c.Event!=toolsy.EventControl{t.Fatal(c.Event)};return sentinel})
+   if !errors.Is(err,sentinel)||errors.Is(err,toolsy.ErrPause)||n!=1{t.Fatalf("i=%d err=%v n=%d",i,err,n)}
+  }
+ }
+}

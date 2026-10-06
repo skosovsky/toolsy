@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted; rows 24–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted; rows 25–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -842,3 +842,38 @@ Both executed host allowlist example; extra decode/snapshot/outputclassification
 fixtures PASS. Evidence docs/reviews/task41/d02/. No hardproducerpreemption,
 pre-allocation quota, genericaliasraceprotection or actualUI/scheduler proof.
 Commit: refactor: host events.
+
+### 24 — D03 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Default conversational tool renamed request_human_review, payload kind
+   human_review, option API WithReviewName/WithReviewDescription; no legacy aliases.
+2. Thin bounded data-only pause adapter retained, no grant/authenticator/action
+   execution port; clarification unchanged, both host-owned continuation requests.
+3. Public AAA regressions verify new manifest/payload/custom descriptions, encoded
+   inclusive bounds and no-grant action rejection after human/model assent; trusted
+   host grant, exact original action replay and revoked policy remain protected.
+4. Migration/current docs/examples state free-text intent has no identity, exact
+   operation binding, expiry or grant authority; challenge/issuance host-owned,
+   resumed operation/current policy required; executable example, module race/lint.
+5. Bounds fit core MaxControlBytes, nil/invalid options fail explicitly; consumer
+   error/cancel behavior preserved, no stale live old API; both reviewers100%.
+
+Spec-first: human toolkit is a conversational review intent adapter. Rename public
+review tool/option/payload contracts in a clear break. No scheduler, issuer or
+operation-store dependency is introduced. Actual action authorization is governed
+by OperationProfile's bound challenge and authenticated host-owned grant issuance.
+Cap configuration must fit core's finite control delivery budget (1..65536bytes).
+
+Row24 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Review intent naming/options/payload replace misleading conversational approval API;
+clarification remains unchanged and thin adapter has no authority/issuer/actionport.
+Configuration fits core control cap; exact encodedUTF8 JSON/64KiB bounds and
+pre-cancel/no-dispatch/hostgrant/replay/revocation contracts preserved.
+Parent humanracecount3PASS2.238s/humanlint0; example+compositionPASS;
+extra rootlint0 separately recorded. A humanracecount3PASS1.674s/lint0,
+adversarialcount10PASS1.943s; B humanracecount3PASS1.748s/lint0,
+adversarialcount10PASS2.988s. Evidence docs/reviews/task41/d03/.
+Trusted-local fixture checks operation binding; no live user authentication/UI,
+remote grant persistence or durable scheduling/hardpreemption proof claimed.
+Commit: refactor: review intent.
