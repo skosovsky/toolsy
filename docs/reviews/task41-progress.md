@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is in progress; rows 19–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is in progress; rows 20–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -664,3 +664,35 @@ publicprobe included in fullrace. Evidence docs/reviews/task41/r18/.
 Host owns callback cooperation, multi-process coordination and already-started
 Save outcome; no hard preemption/rollback/fairness claim.
 Commit: fix: scratchpad admission.
+
+### 19 — R19 / D35 scraper (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Public ScrapePage and tool default/custom Markdown overflows retain
+   ErrMarkdownExceedsLimit/cause; safe CodeValidationFailed/reason independent of
+   custom diagnostic text, errors.Is ErrValidation and no successful output.
+2. Actual custom output over cap without returned error receives same semantic
+   sentinel. HTML source and final JSON wire overflow remain distinguishable from
+   Markdown extraction; independent inclusive source/extraction/wire caps retained.
+3. Cancellation precedes budget mapping, including active-context interrupt cause
+   chains and custom callback cancellation with nil result error. Cancellation guards
+   surround default layout stripping/conversion/custom call; no callback goroutine.
+4. API/README/migration explicitly describe cooperative synchronous bounded-input
+   conversion and host CPU/allocation/deadline responsibility; no hard preemption.
+   Custom cap helpers and independent budget options accurate, no legacy fakecause.
+5. AAA public baseline/current default/custom/unchecked-output/cancel probes and
+   affected race/lint pass; both independent reviewers100%, no unresolved defects.
+
+Decision D35 scraper: keep bounded synchronous conversion with context checkpoints,
+no goroutine-per-uncontrolled callback and no claimed hard CPU/allocation quota.
+
+Row19 gate: A100%, B100% (five20%criteria each), no unresolved detected defects.
+Initial API-option documentation gap corrected and finaldiff re-reviewed.
+A fullwebracePASS1.969s/lint0, adversarialcount5PASS1.637s;
+B fullracePASS1.996s/lint0, externaladversarialcount5PASS1.717s.
+Parent fullwebracecount3PASS3.199s/finalpinnedlint0. Baselinepublic sixsemantic
+sentinelassertionsFAIL as expected; currentpermanentmatrixPASS in fullrace.
+Evidence docs/reviews/task41/r19/. Core outer tool interrupt classification remains
+existing Canceled/TIMEOUT behavior, original causes preserved; no hard preemption,
+intermediate-allocation or liveexternal-network guarantee.
+Commit: fix: markdown causes.

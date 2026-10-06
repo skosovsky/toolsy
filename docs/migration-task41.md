@@ -552,3 +552,21 @@ The final output bound applies to the full encoded object after escaping. Provid
 allocation limits and in-flight callback cancellation remain host responsibility;
 cancellation never promises rollback of an already-started Save. This is bounded
 session scratchpad, not long-term semantic memory.
+
+
+## R19 / D35 scraper — preserve Markdown cap causes
+
+Public ScrapePage/tool extraction overflow now retains ErrMarkdownExceedsLimit
+through CodeValidationFailed; IsMarkdownExceedsLimit and errors.Is work for default,
+custom and unchecked oversized custom output. Original custom cause remains
+inspectable; user-facing limit text uses the configured cap, not custom diagnostics.
+HTML source and final wire limits do not acquire the Markdown sentinel. Cancellation
+wins before cap mapping, even when only the returned cause contains an interrupt.
+
+Scraper calls remain synchronous with context checks before/after invocation; default
+layout filtering also checks before work. Finite source input and returned-output
+checks do not bound converter intermediates or force CPU preemption. Custom scrapers
+must cooperate with context and enforce maxBytes; hostile work requiring hard limits
+belongs in a host sandbox. No abandoned converter goroutine is created. Source,
+Markdown and JSON budgets remain independent; library mode returns plain Markdown
+and applies source/extraction limits, without a tool JSON envelope/wire budget.

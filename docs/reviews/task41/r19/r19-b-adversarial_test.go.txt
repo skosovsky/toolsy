@@ -1,0 +1,43 @@
+package web_test
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "net/http"
+ "net/http/httptest"
+ "testing"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/toolkits/web"
+)
+type acceptanceBScraper func(context.Context,string,int)(string,error)
+func (f acceptanceBScraper) HTMLToMarkdown(c context.Context,s string,n int)(string,error){return f(c,s,n)}
+type acceptanceBProvider struct{}
+func(acceptanceBProvider) Search(context.Context,string)([]web.SearchResult,error){return nil,nil}
+func TestAcceptanceBExactBudgetsAndInterrupts(t *testing.T){
+ // Arrange: source and extracted output exactly at independent byte caps.
+ srv:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){_,_=w.Write([]byte("<p>x</p>"))}));defer srv.Close()
+ base:=[]web.Option{web.WithAllowPrivateIPs(true),web.WithMaxSourceBytes(8),web.WithMaxMarkdownBytes(1)}
+ // Act/Assert: source and Markdown exact limits pass, library ignores tool wire cap.
+ got,err:=web.ScrapePage(t.Context(),srv.URL,append(base,web.WithMaxPageBytes(1))...)
+ if err!=nil||got!="x"{t.Fatalf("exact limits/library wire isolation: %q %v",got,err)}
+ raw,_:=json.Marshal(web.ScrapeWireResult{Markdown:"x",SourceURL:srv.URL})
+ for _,delta:=range []int{0,-1}{
+  opts:=append(append([]web.Option{},base...),web.WithMaxPageBytes(len(raw)+delta))
+  tools,closeIdle,e:=web.AsToolsWithCleanup(acceptanceBProvider{},opts...);if e!=nil{t.Fatal(e)}
+  args,_:=json.Marshal(map[string]string{"url":srv.URL});count:=0
+  e=tools[1].Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:args},func(toolsy.Chunk)error{count++;return nil});closeIdle()
+  if delta==0&&(e!=nil||count!=1){t.Fatalf("exact wire: %v chunks%d",e,count)}
+  if delta==-1&&(e==nil||count!=0||web.IsMarkdownExceedsLimit(e)){t.Fatalf("over wire: %v chunks%d",e,count)}
+ }
+ for _,interrupt:=range []error{context.Canceled,context.DeadlineExceeded,toolsy.ErrTimeout}{
+  // Arrange: active ctx, both semantic cap and interrupt in custom cause.
+  scraper:=acceptanceBScraper(func(context.Context,string,int)(string,error){return "",errors.Join(web.WrapMarkdownExceedsLimit(1),interrupt)})
+  tools,closeIdle,e:=web.AsToolsWithCleanup(acceptanceBProvider{},append(base,web.WithScraper(scraper))...);if e!=nil{t.Fatal(e)}
+  args,_:=json.Marshal(map[string]string{"url":srv.URL});count:=0
+  // Act.
+  e=tools[1].Execute(t.Context(),nil,toolsy.ToolInput{ArgsJSON:args},func(toolsy.Chunk)error{count++;return nil});closeIdle()
+  // Assert: interrupt classification precedes correction; original joined cause retained.
+  te,ok:=toolsy.AsToolError(e)
+  if !errors.Is(e,interrupt)||(ok&&toolsy.ClientCorrectable(te.Code))||count!=0{t.Fatalf("interrupt %v: %v count%d",interrupt,e,count)}
+ }
+}

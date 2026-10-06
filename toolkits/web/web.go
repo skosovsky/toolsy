@@ -198,22 +198,16 @@ func parseScrapeResponse(ctx context.Context, resp *http.Response, o *options) (
 	byteCap := o.maxMarkdownBytes
 	markdown, convErr := scrapeHTMLToMarkdown(ctx, o.scraper, body, byteCap)
 	if convErr != nil {
-		if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
-			return ScrapeWireResult{}, ie
+		if toolsy.IsContextInterrupt(convErr) {
+			return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
 		}
 		if IsMarkdownExceedsLimit(convErr) {
-			return ScrapeWireResult{}, toolsy.MapToolkitCapError(
-				ctx,
-				"toolkit/web: convert",
-				byteCap,
-				"markdown",
-				"use WithMaxMarkdownBytes to raise the extraction budget",
-			)
+			return ScrapeWireResult{}, markdownLimitError(ctx, byteCap, convErr)
 		}
 		return ScrapeWireResult{}, toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", convErr))
 	}
 	if len(markdown) > byteCap {
-		return ScrapeWireResult{}, toolsy.NewValidationError("markdown exceeds byte limit")
+		return ScrapeWireResult{}, markdownLimitError(ctx, byteCap, WrapMarkdownExceedsLimit(byteCap))
 	}
 	source := ""
 	if resp.Request != nil && resp.Request.URL != nil {

@@ -67,8 +67,9 @@ func searchStructured(ctx context.Context, provider SearchProvider, query string
 }
 
 // ScrapePage fetches a URL and returns main content as Markdown (library mode).
-// HTML read and markdown conversion are fail-closed: pages or markdown output exceeding the derived
-// byte cap return an error. Use WithMaxPageBytes to raise the budget (default 2MB wire budget).
+// HTML source and Markdown extraction caps are independent (WithMaxSourceBytes / WithMaxMarkdownBytes).
+// Extraction overflow retains ErrMarkdownExceedsLimit; no tool JSON wire envelope is produced.
+// Conversion is synchronous with cooperative cancellation checkpoints, not hard CPU preemption.
 func ScrapePage(ctx context.Context, rawURL string, opts ...Option) (string, error) {
 	var o options
 	for _, opt := range opts {

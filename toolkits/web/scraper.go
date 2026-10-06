@@ -28,7 +28,8 @@ func WrapMarkdownExceedsLimit(maxBytes int) error {
 // maxBytes > 0 enforces a fail-closed byte budget on markdown output; exceeding returns an error (no silent truncate).
 // When maxBytes <= 0, any non-empty markdown is treated as exceeding the limit (fail-closed).
 // Custom implementations must honor maxBytes the same way; the toolkit passes the WithMaxMarkdownBytes limit.
-// Implementations must respect ctx cancellation during conversion.
+// Calls are synchronous: custom implementations must cooperate with ctx.
+// The default converter checks context around work, without hard CPU preemption.
 type Scraper interface {
 	HTMLToMarkdown(ctx context.Context, html string, maxBytes int) (string, error)
 }
@@ -69,11 +70,11 @@ func convertHTMLString(ctx context.Context, html string) (string, error) {
 		return "", ie
 	}
 	md, err := htmltomarkdown.ConvertString(html)
-	if err != nil {
-		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/web: html convert: %w", err))
-	}
 	if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: html convert"); ie != nil {
 		return "", ie
+	}
+	if err != nil {
+		return "", toolsy.NewInternalError(fmt.Errorf("toolkit/web: html convert: %w", err))
 	}
 	return md, nil
 }
@@ -83,6 +84,9 @@ func (d *htmlScraper) HTMLToMarkdown(ctx context.Context, html string, maxBytes 
 }
 
 func (d *htmlScraper) htmlToMarkdown(ctx context.Context, html string, maxBytes int) (string, error) {
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: layout filtering"); ie != nil {
+		return "", ie
+	}
 	html = stripLayoutHTML(html)
 	markdown, err := convertHTMLString(ctx, html)
 	if err != nil {
@@ -100,7 +104,32 @@ func (d *htmlScraper) htmlToMarkdown(ctx context.Context, html string, maxBytes 
 	return markdown, nil
 }
 
-// scrapeHTMLToMarkdown converts HTML via scraper; default htmlScraper respects ctx on conversion.
+// scrapeHTMLToMarkdown checks cooperative cancellation around the synchronous callback.
 func scrapeHTMLToMarkdown(ctx context.Context, scraper Scraper, html string, maxBytes int) (string, error) {
-	return scraper.HTMLToMarkdown(ctx, html, maxBytes)
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
+		return "", ie
+	}
+	markdown, err := scraper.HTMLToMarkdown(ctx, html, maxBytes)
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
+		return "", ie
+	}
+	return markdown, err
+}
+
+// Preserve the semantic/custom cause while keeping the public limit reason host-defined.
+func markdownLimitError(ctx context.Context, maxBytes int, cause error) error {
+	if ie := toolsy.ToolkitContextError(ctx, "toolkit/web: convert"); ie != nil {
+		return ie
+	}
+	if toolsy.IsContextInterrupt(cause) {
+		return toolsy.NewInternalError(fmt.Errorf("toolkit/web: convert: %w", cause))
+	}
+	err := toolsy.NewValidationError(
+		fmt.Sprintf(
+			"markdown exceeds %d byte limit; use WithMaxMarkdownBytes to raise the extraction budget",
+			maxBytes,
+		),
+	)
+	err.Err = errors.Join(toolsy.ErrValidation, cause)
+	return err
 }

@@ -1,0 +1,52 @@
+--- FAIL: TestR19PublicMarkdownOverflowCause (0.03s)
+    --- FAIL: TestR19PublicMarkdownOverflowCause/library/default (0.01s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds 20 byte limit; use WithMaxMarkdownBytes to raise the extraction budget"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/library/default
+    --- FAIL: TestR19PublicMarkdownOverflowCause/library/custom_error (0.00s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds 20 byte limit; use WithMaxMarkdownBytes to raise the extraction budget"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/library/custom_error
+    --- FAIL: TestR19PublicMarkdownOverflowCause/library/unchecked_output (0.00s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds byte limit"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/library/unchecked_output
+    --- FAIL: TestR19PublicMarkdownOverflowCause/tool/default (0.01s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds 20 byte limit; use WithMaxMarkdownBytes to raise the extraction budget"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/tool/default
+    --- FAIL: TestR19PublicMarkdownOverflowCause/tool/custom_error (0.00s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds 20 byte limit; use WithMaxMarkdownBytes to raise the extraction budget"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/tool/custom_error
+    --- FAIL: TestR19PublicMarkdownOverflowCause/tool/unchecked_output (0.00s)
+        markdown_cause_test.go:63: 
+            	Error Trace:	/private/tmp/toolsy-task41/r19-baseline/toolkits/web/markdown_cause_test.go:63
+            	Error:      	Target error should be in err chain:
+            	            	expected: "markdown exceeds byte limit"
+            	            	in chain: "VALIDATION_FAILED: markdown exceeds byte limit"
+            	            		"validation failed"
+            	Test:       	TestR19PublicMarkdownOverflowCause/tool/unchecked_output
+FAIL
+exit status 1
+FAIL	github.com/skosovsky/toolsy/toolkits/web	0.542s

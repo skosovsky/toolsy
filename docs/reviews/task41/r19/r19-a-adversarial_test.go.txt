@@ -1,0 +1,61 @@
+package web
+import (
+ "context"
+ "errors"
+ "io"
+ "net/http"
+ "strings"
+ "testing"
+ "github.com/stretchr/testify/require"
+ "github.com/skosovsky/toolsy"
+)
+func TestR19AExactSourceAndMarkdown(t *testing.T) {
+ for _, cap := range []int{3,2} {
+  t.Run(string(rune('0'+cap)),func(t *testing.T) {
+   // Arrange: exactly three UTF-8 bytes enter and leave the custom converter.
+   o:=&options{}
+   WithMaxSourceBytes(3)(o); WithMaxMarkdownBytes(cap)(o)
+   WithScraper(&mockScraper{fn:func(context.Context,string,int)(string,error){return "界",nil}})(o)
+   applyDefaults(o)
+   resp:=&http.Response{StatusCode:200,Body:io.NopCloser(strings.NewReader("abc"))}
+   // Act.
+   result,err:=parseScrapeResponse(t.Context(),resp,o)
+   // Assert.
+   if cap==3 {require.NoError(t,err);require.Equal(t,"界",result.Markdown)} else {
+    require.ErrorIs(t,err,ErrMarkdownExceedsLimit);require.ErrorIs(t,err,toolsy.ErrValidation);require.Empty(t,result.Markdown)
+   }
+  })
+ }
+}
+func TestR19AInterruptCausesAndCancellation(t *testing.T) {
+ for _, interrupt:=range []error{context.Canceled,context.DeadlineExceeded,toolsy.ErrTimeout} {
+  // Arrange: live context but semantic overflow joined with an interrupt.
+  diagnostic:=errors.New("private diagnostic")
+  o:=&options{}
+  WithScraper(&mockScraper{fn:func(context.Context,string,int)(string,error){return "",errors.Join(diagnostic,WrapMarkdownExceedsLimit(1),interrupt)}})(o)
+  applyDefaults(o)
+  resp:=&http.Response{StatusCode:200,Body:io.NopCloser(strings.NewReader("abc"))}
+  // Act.
+  result,err:=parseScrapeResponse(t.Context(),resp,o)
+  // Assert.
+  require.Empty(t,result.Markdown);require.ErrorIs(t,err,interrupt);require.ErrorIs(t,err,diagnostic)
+  te,ok:=toolsy.AsToolError(err);require.True(t,ok);require.Equal(t,toolsy.CodeInternal,te.Code);require.NotContains(t,te.Reason,diagnostic.Error())
+ }
+ // Arrange: cancellation during callback with successful under-budget output.
+ ctx,cancel:=context.WithCancel(t.Context());defer cancel()
+ o:=&options{}
+ WithScraper(&mockScraper{fn:func(context.Context,string,int)(string,error){cancel();return "ok",nil}})(o);applyDefaults(o)
+ resp:=&http.Response{StatusCode:200,Body:io.NopCloser(strings.NewReader("abc"))}
+ // Act.
+ result,err:=parseScrapeResponse(ctx,resp,o)
+ // Assert.
+ require.ErrorIs(t,err,context.Canceled);require.Empty(t,result.Markdown)
+}
+func TestR19ADefaultPreCanceled(t *testing.T) {
+ // Arrange.
+ ctx,cancel:=context.WithCancel(t.Context());cancel()
+ // Act.
+ result,err:=newHTMLScraper().HTMLToMarkdown(ctx,"<nav>ignore</nav><p>界</p>",1)
+ // Assert.
+ require.ErrorIs(t,err,context.Canceled);require.Empty(t,result)
+}
