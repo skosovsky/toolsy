@@ -1,6 +1,7 @@
 package sandboxfs
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,36 +10,18 @@ import (
 )
 
 // FinishRun builds a [exectool.RunResult] or returns an error when output collection failed (e.g. cap exceeded).
-// When exitOK is true, a non-nil runErr is treated as a non-zero process exit, not an infrastructure failure.
-// Guest script failures (e.g. starlark eval) that surface read-limit in stderr must pass nil runErr with exitOK=false.
+// Callers normalize known guest exits to nil runErr and their exitCode.
+// Every non-nil runErr denotes incomplete execution or output collection, never a guest exit.
 // stdoutOverflow/stderrOverflow capture [CappedBuffer] overflow even when the process exits non-zero.
 func FinishRun(
 	runErr error,
 	stdout, stderr string,
 	exitCode int,
 	duration time.Duration,
-	exitOK bool,
 	stdoutOverflow, stderrOverflow error,
 ) (exectool.RunResult, error) {
-	if textprocessor.IsReadLimitExceeded(runErr) {
-		return exectool.RunResult{}, fmt.Errorf("%w: execute: %w", exectool.ErrSandboxFailure, runErr)
-	}
-	if stdoutOverflow != nil {
-		return exectool.RunResult{}, fmt.Errorf("%w: execute: %w", exectool.ErrSandboxFailure, stdoutOverflow)
-	}
-	if stderrOverflow != nil {
-		return exectool.RunResult{}, fmt.Errorf("%w: execute: %w", exectool.ErrSandboxFailure, stderrOverflow)
-	}
-	if exitOK {
-		return exectool.RunResult{
-			Stdout:   stdout,
-			Stderr:   stderr,
-			ExitCode: exitCode,
-			Duration: duration,
-		}, nil
-	}
-	if runErr != nil {
-		return exectool.RunResult{}, runErr
+	if failure := errors.Join(runErr, stdoutOverflow, stderrOverflow); failure != nil {
+		return exectool.RunResult{}, fmt.Errorf("%w: execute: %w", exectool.ErrSandboxFailure, failure)
 	}
 	return exectool.RunResult{
 		Stdout:   stdout,

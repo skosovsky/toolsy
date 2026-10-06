@@ -1,5 +1,7 @@
 package host
 
+import "maps"
+
 // Runtime describes how a language should be executed on the host.
 type Runtime struct {
 	Command    string
@@ -11,8 +13,10 @@ type Runtime struct {
 type Option func(*options)
 
 type options struct {
-	runtimes    map[string]Runtime
-	tempDirRoot string
+	runtimes           map[string]Runtime
+	tempDirRoot        string
+	environment        map[string]string
+	inheritEnvironment bool
 }
 
 // WithRuntime adds or overrides a language runtime mapping.
@@ -31,4 +35,17 @@ func WithTempDirRoot(root string) Option {
 	return func(o *options) {
 		o.tempDirRoot = root
 	}
+}
+
+// WithEnvironment sets the host-selected base environment. Request variables override it.
+// The map is copied when the option is created.
+func WithEnvironment(env map[string]string) Option {
+	snapshot := maps.Clone(env)
+	return func(o *options) { o.environment = snapshot }
+}
+
+// WithInheritedEnvironment explicitly enables inheriting the parent environment.
+// This may expose credentials to guest code. WithEnvironment and request Env override it.
+func WithInheritedEnvironment() Option {
+	return func(o *options) { o.inheritEnvironment = true }
 }

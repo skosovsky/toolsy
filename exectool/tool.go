@@ -258,7 +258,7 @@ func mapExecError(err error) error {
 		return toolsy.NewTimeoutErrorFrom(err, true)
 	}
 	if mapped := toolsy.MapSandboxReadLimitError(err); mapped != nil {
-		return mapped
+		return errors.Join(mapped, err)
 	}
 	return fmt.Errorf("exectool: sandbox run: %w", err)
 }

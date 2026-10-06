@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skosovsky/toolsy/exectool"
+	"github.com/skosovsky/toolsy/internal/sandboxfs"
 	"github.com/skosovsky/toolsy/textprocessor"
 )
 
@@ -268,6 +269,16 @@ func TestHostHelperProcess(_ *testing.T) {
 	}
 
 	switch strings.TrimSpace(string(code)) {
+	case "cleanup-failure", "cleanup-failure-exit":
+		helperCleanupFailure(strings.TrimSpace(string(code)))
+	case "env-policy":
+		_, _ = fmt.Fprintf(
+			os.Stdout,
+			"secret=%s base=%s request=%s",
+			os.Getenv("TOOLSY_PARENT_SECRET"),
+			os.Getenv("TOOLSY_BASE"),
+			os.Getenv("TOOLSY_REQUEST"),
+		)
 	case "read":
 		data, err := os.ReadFile(filepath.Join(".", "data.txt"))
 		if err != nil {
@@ -315,4 +326,82 @@ func TestHostHelperProcess(_ *testing.T) {
 	}
 
 	os.Exit(0)
+}
+
+func TestRunEnvironmentPolicy(t *testing.T) {
+	// Arrange.
+	t.Setenv("TOOLSY_PARENT_SECRET", "private")
+	for _, tc := range []struct {
+		name    string
+		options []Option
+		want    string
+	}{
+		{name: "restricted default", want: "secret= base= request=given"},
+		{name: "explicit inheritance", options: []Option{WithInheritedEnvironment()}, want: "secret=private base= request=given"},
+		{name: "explicit base", options: []Option{WithEnvironment(map[string]string{"TOOLSY_BASE": "configured"})}, want: "secret= base=configured request=given"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := append([]Option{WithRuntime("helper", helperRuntime())}, tc.options...)
+			sb, err := New(opts...)
+			require.NoError(t, err)
+			// Act.
+			result, err := sb.Run(
+				context.Background(),
+				exectool.RunRequest{
+					Language: "helper",
+					Code:     "env-policy",
+					Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1", "TOOLSY_REQUEST": "given"},
+				},
+			)
+			// Assert.
+			require.NoError(t, err)
+			require.Equal(t, tc.want, result.Stdout)
+		})
+	}
+}
+
+func TestWithEnvironmentCopiesAndRequestOverrides(t *testing.T) {
+	// Arrange.
+	env := map[string]string{"TOOLSY_BASE": "original"}
+	option := WithEnvironment(env)
+	env["TOOLSY_BASE"] = "mutated"
+	sb, err := New(WithRuntime("helper", helperRuntime()), option)
+	require.NoError(t, err)
+	// Act.
+	result, err := sb.Run(
+		context.Background(),
+		exectool.RunRequest{
+			Language: "helper",
+			Code:     "env-policy",
+			Env:      map[string]string{"GO_WANT_HELPER_PROCESS": "1", "TOOLSY_BASE": "request"},
+		},
+	)
+	// Assert.
+	require.NoError(t, err)
+	require.Contains(t, result.Stdout, "base=request")
+	require.Equal(t, "original", sb.environment["TOOLSY_BASE"])
+}
+
+func TestRemoveWorkspaceCancellationAndFailure(t *testing.T) {
+	// Arrange.
+	workspace := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// Act.
+	err := sandboxfs.RemoveWorkspace(ctx, workspace)
+	// Assert.
+	require.ErrorIs(t, err, context.Canceled)
+	_, err = os.Stat(workspace)
+	require.NoError(t, err)
+	require.NoError(t, sandboxfs.RemoveWorkspace(context.Background(), filepath.Join(workspace, "missing", "child")))
+}
+
+func helperCleanupFailure(code string) {
+	_, _ = fmt.Fprint(os.Stdout, "finished")
+	if err := os.Chmod(".", 0); err != nil {
+		os.Exit(16)
+	}
+	if code == "cleanup-failure-exit" {
+		os.Exit(7)
+	}
 }

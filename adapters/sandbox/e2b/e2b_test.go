@@ -46,6 +46,7 @@ type fakeSession struct {
 	env          map[string]string
 	blockRun     bool
 	blockKill    bool
+	killErr      error
 	writeDelay   time.Duration
 	runDelay     time.Duration
 	stdoutChunks []string
@@ -112,7 +113,7 @@ func (s *fakeSession) Kill(ctx context.Context) error {
 		<-ctx.Done()
 		return ctx.Err()
 	}
-	return nil
+	return s.killErr
 }
 
 func TestRunSuccess(t *testing.T) {
@@ -460,4 +461,94 @@ func TestClassifyControlPlaneError_CancelOverReadLimit(t *testing.T) {
 	inner := fmt.Errorf("setup: %w", errors.Join(wrapped, capErr))
 	err := classifyControlPlaneError(context.Background(), inner, "start process")
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestNewValidatesAllEntrypointForms(t *testing.T) {
+	for _, script := range []string{"main.py", "dir/../main.py"} {
+		for _, command := range []string{
+			"python /workspace/other.py", "python", "python /workspace/" + script + " /workspace/" + script,
+			"sh -c 'python /workspace/" + script + "'", "sh -ec /workspace/" + script,
+			"python /workspace/" + script + "; echo ok", "python /workspace/" + script + "\necho ok",
+			"python /workspace/" + script + " $(echo extra)", `python "/workspace/` + script + `" "$SECRET"`,
+		} {
+			t.Run(script+command, func(t *testing.T) {
+				// Arrange / Act.
+				_, err := New(
+					&fakeClient{session: &fakeSession{}},
+					WithRuntime("custom", Runtime{Command: command, ScriptName: script}),
+				)
+				// Assert.
+				require.Error(t, err)
+			})
+		}
+		t.Run(script+" valid", func(t *testing.T) {
+			// Arrange.
+			session := &fakeSession{result: CommandResult{Stdout: "yes"}}
+			sb, err := New(
+				&fakeClient{session: session},
+				WithRuntime("custom", Runtime{Command: "python /workspace/" + script, ScriptName: script}),
+			)
+			require.NoError(t, err)
+			// Act.
+			result, err := sb.Run(context.Background(), exectool.RunRequest{Language: "custom", Code: "print('yes')"})
+			// Assert.
+			require.NoError(t, err)
+			require.Equal(t, "yes", result.Stdout)
+			require.Equal(t, "python /workspace/main.py", session.command)
+			require.Contains(t, session.writes, "/workspace/main.py")
+		})
+	}
+}
+
+func TestRunCleanupFailurePreservesResultAndPrimaryError(t *testing.T) {
+	for _, primary := range []error{nil, context.Canceled, errors.New("transport failed")} {
+		t.Run(fmt.Sprint(primary), func(t *testing.T) {
+			// Arrange.
+			cleanupErr := errors.New("kill not confirmed")
+			session := &fakeSession{
+				result:  CommandResult{Stdout: "done", ExitCode: 7},
+				err:     primary,
+				killErr: cleanupErr,
+			}
+			sb, err := New(&fakeClient{session: session})
+			require.NoError(t, err)
+			// Act.
+			result, err := sb.Run(context.Background(), exectool.RunRequest{Language: "python", Code: "print(1)"})
+			// Assert.
+			require.ErrorIs(t, err, exectool.ErrSandboxCleanup)
+			if primary == nil {
+				require.Equal(t, 7, result.ExitCode)
+				require.Equal(t, "done", result.Stdout)
+			} else {
+				require.ErrorIs(t, err, primary)
+			}
+			var diagnostic *exectool.CleanupError
+			require.ErrorAs(t, err, &diagnostic)
+			require.Equal(t, "e2b", diagnostic.Backend)
+			require.ErrorIs(t, diagnostic.Cause, cleanupErr)
+		})
+	}
+}
+
+func TestNewShellWhitespaceAndLiteralUnicodePath(t *testing.T) {
+	for _, space := range []string{"\u00a0", "\u2003"} {
+		// Arrange / Act.
+		_, err := New(
+			&fakeClient{session: &fakeSession{}},
+			WithRuntime("custom", Runtime{Command: "python" + space + "/workspace/main.py", ScriptName: "main.py"}),
+		)
+		// Assert.
+		require.Error(t, err)
+	}
+	// Arrange / Act.
+	sb, err := New(
+		&fakeClient{session: &fakeSession{}},
+		WithRuntime(
+			"custom",
+			Runtime{Command: "python '/workspace/main\u00a0script.py'", ScriptName: "main\u00a0script.py"},
+		),
+	)
+	// Assert.
+	require.NoError(t, err)
+	require.Equal(t, "python '/workspace/main\u00a0script.py'", sb.runtimes["custom"].Command)
 }

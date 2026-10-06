@@ -1,6 +1,11 @@
 package docker
 
-import "github.com/docker/docker/api/types/container"
+import (
+	"strconv"
+	"time"
+
+	"github.com/docker/docker/api/types/container"
+)
 
 const (
 	languageBash   = "bash"
@@ -14,51 +19,75 @@ type Runtime struct {
 	ScriptName string
 }
 
+// Policy contains mandatory limits. Zero/negative limits are rejected.
+// Workspace is immutable; TmpBytes limits /tmp and, independently, /dev/shm.
+type Policy struct {
+	MemoryBytes int64
+	CPUQuota    int64
+	PIDs        int64
+	TmpBytes    int64
+	OutputBytes int
+	InputBytes  int
+	MaxFiles    int
+	LogTimeout  time.Duration
+}
+
+// DefaultPolicy disables networking and bounds memory, CPU, processes and writable scratch.
+func DefaultPolicy() Policy {
+	const (
+		defaultMemory   = 256 << 20
+		defaultCPUQuota = 100000
+		defaultPIDs     = 64
+		defaultTmp      = 32 << 20
+		defaultOutput   = 8 << 20
+		defaultInput    = 64 << 20
+		defaultFiles    = 256
+	)
+	return Policy{
+		MemoryBytes: defaultMemory,
+		CPUQuota:    defaultCPUQuota,
+		PIDs:        defaultPIDs,
+		TmpBytes:    defaultTmp,
+		OutputBytes: defaultOutput,
+		InputBytes:  defaultInput,
+		MaxFiles:    defaultFiles,
+		LogTimeout:  logsTimeout,
+	}
+}
+
 // Option configures the Docker sandbox.
 type Option func(*options)
-
 type options struct {
-	runtimes        map[string]Runtime
-	networkDisabled bool
-	memoryLimit     int64
-	client          dockerClient
+	runtimes      map[string]Runtime
+	policy        Policy
+	workspaceRoot string
+	client        dockerClient
 }
 
-// WithImageMapping overrides runtime images for supported languages.
+// WithPolicy selects mandatory enforceable bounds; CPUQuota is microseconds per 100ms period.
+func WithPolicy(policy Policy) Option { return func(o *options) { o.policy = policy } }
+
+// WithWorkspaceRoot selects a local directory visible at the SAME path to the Docker daemon.
+// A remote daemon cannot use this adapter's immutable local workspace contract.
+func WithWorkspaceRoot(root string) Option { return func(o *options) { o.workspaceRoot = root } }
+
+// WithImageMapping overrides runtime images. Images must support the unprivileged readonly profile.
 func WithImageMapping(images map[string]string) Option {
 	return func(o *options) {
-		if o.runtimes == nil {
-			o.runtimes = defaultRuntimes()
-		}
 		for language, image := range images {
-			runtime := o.runtimes[language]
-			runtime.Image = image
-			o.runtimes[language] = runtime
+			r := o.runtimes[language]
+			r.Image = image
+			o.runtimes[language] = r
 		}
 	}
 }
 
-// WithNetworkDisabled disables network access for created containers.
-func WithNetworkDisabled() Option {
-	return func(o *options) {
-		o.networkDisabled = true
-	}
-}
+// WithMemoryLimit selects a mandatory memory bound; nonpositive values are rejected.
+func WithMemoryLimit(bytes int64) Option { return func(o *options) { o.policy.MemoryBytes = bytes } }
 
-// WithMemoryLimit caps container memory in bytes.
-func WithMemoryLimit(bytes int64) Option {
-	return func(o *options) {
-		o.memoryLimit = bytes
-	}
-}
-
-// WithClient injects a docker client implementation, primarily for tests.
-func WithClient(client dockerClient) Option {
-	return func(o *options) {
-		o.client = client
-	}
-}
-
+// WithClient injects a client. Info must truthfully report mandatory cgroup capabilities;
+// the client must target a local daemon with access to the workspace paths.
+func WithClient(client dockerClient) Option { return func(o *options) { o.client = client } }
 func defaultRuntimes() map[string]Runtime {
 	return map[string]Runtime{
 		languageBash: {
@@ -78,14 +107,23 @@ func defaultRuntimes() map[string]Runtime {
 		},
 	}
 }
-
-func hostConfig(networkDisabled bool, memoryLimit int64) *container.HostConfig {
+func hostConfig(p Policy, workspace string) *container.HostConfig {
+	const cpuPeriod = 100000
 	var hc container.HostConfig
-	if networkDisabled {
-		hc.NetworkMode = "none"
+	hc.NetworkMode = "none"
+	hc.ReadonlyRootfs = true
+	hc.ShmSize = p.TmpBytes
+	hc.CapDrop = []string{"ALL"}
+	hc.SecurityOpt = []string{"no-new-privileges:true"}
+	hc.Binds = []string{workspace + ":/workspace:ro"}
+	hc.Tmpfs = map[string]string{
+		"/tmp": "rw,noexec,nosuid,nodev,size=" + strconv.FormatInt(p.TmpBytes, 10) + ",mode=1777",
 	}
-	if memoryLimit > 0 {
-		hc.Memory = memoryLimit
-	}
+	hc.LogConfig.Type = "json-file"
+	hc.Memory = p.MemoryBytes
+	hc.MemorySwap = p.MemoryBytes
+	hc.CPUPeriod = cpuPeriod
+	hc.CPUQuota = p.CPUQuota
+	hc.PidsLimit = &p.PIDs
 	return &hc
 }

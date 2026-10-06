@@ -19,14 +19,34 @@ import (
 
 const languageStarlark = "starlark"
 
+// DefaultMaxExecutionSteps is a finite interpreter budget, not a wall-clock or memory limit.
+const DefaultMaxExecutionSteps uint64 = 1_000_000
+
+// ErrStepLimit indicates that the interpreter exhausted its execution budget.
+var ErrStepLimit = errors.New("starlark execution step limit exceeded")
+
+// Config describes enforceable in-process interpreter limits.
+type Config struct {
+	MaxExecutionSteps uint64
+}
+
+// DefaultConfig returns a finite execution policy.
+func DefaultConfig() Config {
+	return Config{MaxExecutionSteps: DefaultMaxExecutionSteps}
+}
+
 // Sandbox executes Starlark code with in-memory files and env bindings.
 type Sandbox struct {
-	languages []string
+	languages         []string
+	maxExecutionSteps uint64
 }
 
 // New creates a Starlark sandbox exposing only the "starlark" language.
-func New() *Sandbox {
-	return &Sandbox{languages: []string{languageStarlark}}
+func New(config Config) (*Sandbox, error) {
+	if config.MaxExecutionSteps == 0 {
+		return nil, fmt.Errorf("%w: MaxExecutionSteps must be positive", exectool.ErrSandboxFailure)
+	}
+	return &Sandbox{languages: []string{languageStarlark}, maxExecutionSteps: config.MaxExecutionSteps}, nil
 }
 
 // SupportedLanguages returns a sorted copy of supported language names.
@@ -40,32 +60,40 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
+	if ctx.Err() != nil {
+		return sandboxfs.FinalizeOrInterrupt(ctx, nil, nil, nil, 0, 0, false)
+	}
+	if s.maxExecutionSteps == 0 {
+		return exectool.RunResult{}, fmt.Errorf("%w: missing execution step policy", exectool.ErrSandboxFailure)
+	}
+
 	var stdout = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
 	var printErr error
 	thread := new(toolstarlark.Thread)
 	thread.Name = "toolsy-starlark"
+	thread.SetMaxExecutionSteps(s.maxExecutionSteps)
+	stepLimitReached := false
+	thread.OnMaxSteps = func(thread *toolstarlark.Thread) {
+		stepLimitReached = true
+		thread.Cancel(ErrStepLimit.Error())
+	}
 	thread.Print = func(_ *toolstarlark.Thread, msg string) {
 		if printErr != nil {
 			return
 		}
 		if _, err := stdout.Write([]byte(msg)); err != nil {
 			printErr = err
+			thread.Cancel("stdout limit exceeded")
 			return
 		}
 		if _, err := stdout.Write([]byte{'\n'}); err != nil {
 			printErr = err
+			thread.Cancel("stdout limit exceeded")
 		}
 	}
 
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			thread.Cancel(ctx.Err().Error())
-		case <-done:
-		}
-	}()
+	stopWatching := watchCancellation(ctx, thread)
+	defer stopWatching()
 
 	predeclared, err := buildPredeclared(req.Env, req.Files)
 	if err != nil {
@@ -77,18 +105,24 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	_, err = toolstarlark.ExecFileOptions(&fileOpts, thread, "main.star", req.Code, predeclared)
 	duration := time.Since(start)
 
+	if stepLimitReached {
+		return sandboxfs.FinalizeOrInterrupt(ctx,
+			fmt.Errorf("%w: %w (limit %d)", exectool.ErrSandboxFailure, ErrStepLimit, s.maxExecutionSteps),
+			stdout, nil, 0, duration, false)
+	}
+
 	if printErr != nil {
 		return sandboxfs.FinalizeOrInterrupt(
 			ctx,
 			fmt.Errorf("%w: stdout: %w", exectool.ErrSandboxFailure, printErr),
-			stdout, nil, 0, duration, false, false,
+			stdout, nil, 0, duration, false,
 		)
 	}
 
 	if err != nil {
 		var stderrBuf = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
 		if _, writeErr := io.WriteString(stderrBuf, err.Error()); writeErr != nil {
-			return sandboxfs.FinalizeOrInterrupt(ctx, writeErr, stdout, stderrBuf, 0, duration, false, false)
+			return sandboxfs.FinalizeOrInterrupt(ctx, writeErr, stdout, stderrBuf, 0, duration, false)
 		}
 
 		return sandboxfs.FinalizeOrInterrupt(
@@ -99,11 +133,28 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 			1,
 			duration,
 			false,
-			false,
 		)
 	}
 
-	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, duration, true, true)
+	return sandboxfs.FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, duration, true)
+}
+
+// watchCancellation owns and joins its watcher; no goroutine outlives Run.
+func watchCancellation(ctx context.Context, thread *toolstarlark.Thread) func() {
+	done := make(chan struct{})
+	watchdogDone := make(chan struct{})
+	go func() {
+		defer close(watchdogDone)
+		select {
+		case <-ctx.Done():
+			thread.Cancel(ctx.Err().Error())
+		case <-done:
+		}
+	}()
+	return func() {
+		close(done)
+		<-watchdogDone
+	}
 }
 
 func (s *Sandbox) supports(language string) bool {

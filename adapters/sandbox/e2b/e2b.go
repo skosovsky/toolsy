@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -79,10 +80,10 @@ func runtimeCommandContractError(command, rawScriptArg, detail string) error {
 	)
 }
 
-func cleanupSession(session Session) {
+func cleanupSession(session Session) error {
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	defer cleanupCancel()
-	_ = session.Kill(cleanupCtx)
+	return session.Kill(cleanupCtx)
 }
 
 func classifyControlPlaneError(runCtx context.Context, err error, op string) error {
@@ -162,8 +163,8 @@ func (s *Sandbox) SupportedLanguages() []string {
 
 func normalizeRuntimeCommand(command, rawScriptName, cleanScriptName string) (string, error) {
 	trimmedScript := strings.TrimSpace(rawScriptName)
-	if trimmedScript == "" || trimmedScript == cleanScriptName {
-		return command, nil
+	if trimmedScript == "" {
+		return "", errors.New("script name must be non-empty")
 	}
 
 	rawScriptArg := workspacePrefix + trimmedScript
@@ -174,15 +175,28 @@ func normalizeRuntimeCommand(command, rawScriptName, cleanScriptName string) (st
 		return "", runtimeCommandContractError(command, rawScriptArg, fmt.Sprintf("invalid shell syntax: %v", err))
 	}
 
+	if len(tokens) == 0 {
+		return "", runtimeCommandContractError(command, rawScriptArg, "executable is missing")
+	}
+	if err := validateShellMode(tokens); err != nil {
+		return "", runtimeCommandContractError(command, rawScriptArg, err.Error())
+	}
 	var normalized strings.Builder
 	normalized.Grow(len(command))
 	last := 0
 	replaced := false
-	for _, token := range tokens {
+	for index, token := range tokens {
 		normalized.WriteString(command[last:token.start])
 
 		switch {
 		case token.decoded == rawScriptArg:
+			if index == 0 {
+				return "", runtimeCommandContractError(
+					command,
+					rawScriptArg,
+					"script must be an argument to the executable",
+				)
+			}
 			if replaced {
 				return "", runtimeCommandContractError(
 					command,
@@ -213,6 +227,9 @@ func normalizeRuntimeCommand(command, rawScriptName, cleanScriptName string) (st
 	}
 	normalized.WriteString(command[last:])
 
+	if !replaced {
+		return "", runtimeCommandContractError(command, rawScriptArg, "script argument is missing or mismatched")
+	}
 	return normalized.String(), nil
 }
 
@@ -255,6 +272,9 @@ func scanDoubleQuotedSegment(command string, i int, decoded *strings.Builder) (i
 				i += nextSize
 			}
 			continue
+		}
+		if r == '$' || r == '`' {
+			return 0, errors.New("shell expansion is unsupported")
 		}
 		decoded.WriteRune(r)
 		i += size
@@ -301,7 +321,7 @@ func scanNextShellToken(command string, start int) (shellToken, int, error) {
 
 	for i < len(command) {
 		r, size := utf8.DecodeRuneInString(command[i:])
-		if unicode.IsSpace(r) {
+		if r == ' ' || r == '\t' {
 			break
 		}
 
@@ -333,6 +353,9 @@ func scanNextShellToken(command string, start int) (shellToken, int, error) {
 			}
 			i = next
 		default:
+			if strings.ContainsRune(";&|<>()$`*?[]{}!#~", r) {
+				return shellToken{}, 0, errors.New("shell operators and expansions are unsupported")
+			}
 			sawBare = true
 			decoded.WriteRune(r)
 			i += size
@@ -354,10 +377,13 @@ func scanNextShellToken(command string, start int) (shellToken, int, error) {
 }
 
 func tokenizeShellCommand(command string) ([]shellToken, error) {
+	if strings.ContainsAny(command, "\n\r\x00") {
+		return nil, errors.New("multiline commands and NUL are unsupported")
+	}
 	tokens := make([]shellToken, 0, shellTokenSliceInitialCap)
 	for i := 0; i < len(command); {
 		r, size := utf8.DecodeRuneInString(command[i:])
-		if unicode.IsSpace(r) {
+		if r == ' ' || r == '\t' {
 			i += size
 			continue
 		}
@@ -365,6 +391,9 @@ func tokenizeShellCommand(command string) ([]shellToken, error) {
 		tok, next, err := scanNextShellToken(command, i)
 		if err != nil {
 			return nil, err
+		}
+		if tok.decoded == "-c" || tok.decoded == "-lc" || tok.decoded == "-cl" {
+			return nil, errors.New("shell command wrappers are unsupported")
 		}
 		tokens = append(tokens, tok)
 		i = next
@@ -412,7 +441,9 @@ func encodeShellToken(value string, style shellTokenStyle) (string, error) {
 }
 
 // Run executes code in a remote sandbox session.
-func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.RunResult, error) {
+//
+//nolint:nonamedreturns // Deferred cleanup must attach diagnostics while preserving the result and primary error.
+func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exectool.RunResult, runErr error) {
 	runtime, ok := s.runtimes[strings.TrimSpace(req.Language)]
 	if !ok {
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
@@ -427,7 +458,10 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	if err != nil {
 		return exectool.RunResult{}, classifyControlPlaneError(ctx, err, "create sandbox")
 	}
-	defer cleanupSession(session)
+	if session == nil {
+		return exectool.RunResult{}, fmt.Errorf("%w: client returned nil session", exectool.ErrSandboxFailure)
+	}
+	defer func() { runErr = sandboxfs.WithCleanupError(runErr, "e2b", "kill session", cleanupSession(session)) }()
 
 	for name, data := range canonicalFiles {
 		if err = session.WriteFile(ctx, workspacePrefix+name, data); err != nil {
@@ -442,16 +476,29 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 	start := time.Now()
 	var stdoutBuf = sandboxfs.NewCappedBuffer("stdout", sandboxfs.DefaultMaxSandboxOutputBytes)
 	var stderrBuf = sandboxfs.NewCappedBuffer("stderr", sandboxfs.DefaultMaxSandboxOutputBytes)
-	result, err := session.StartAndWait(ctx, runtime.Command, req.Env, stdoutBuf, stderrBuf)
+	commandResult, err := session.StartAndWait(ctx, runtime.Command, req.Env, stdoutBuf, stderrBuf)
 	if err != nil {
 		return sandboxfs.FinalizeOrInterrupt(
 			ctx,
 			classifyControlPlaneError(ctx, err, "start process"),
-			stdoutBuf, stderrBuf, 0, time.Since(start), false, false,
+			stdoutBuf, stderrBuf, 0, time.Since(start), false,
 		)
 	}
 
 	return sandboxfs.FinalizeOrInterrupt(
-		ctx, nil, stdoutBuf, stderrBuf, result.ExitCode, time.Since(start), true, false,
+		ctx, nil, stdoutBuf, stderrBuf, commandResult.ExitCode, time.Since(start), false,
 	)
+}
+
+func validateShellMode(tokens []shellToken) error {
+	program := path.Base(tokens[0].decoded)
+	if program == "sh" || program == "bash" || program == "dash" || program == "zsh" || program == "ksh" {
+		for _, token := range tokens[1:] {
+			if strings.HasPrefix(token.decoded, "-") && strings.Contains(token.decoded, "c") {
+				return errors.New("shell command wrappers are unsupported")
+			}
+		}
+	}
+
+	return nil
 }

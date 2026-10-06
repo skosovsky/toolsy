@@ -2,6 +2,7 @@ package textprocessor_test
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -9,6 +10,61 @@ import (
 
 	"github.com/skosovsky/toolsy/textprocessor"
 )
+
+type gatedReader struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (r *gatedReader) Read(p []byte) (int, error) {
+	close(r.started)
+	<-r.release
+	p[0] = 'a'
+	return 1, nil
+}
+
+func TestReaderWithContext_CancellationIsBetweenReads(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	underlying := &gatedReader{started: make(chan struct{}), release: make(chan struct{})}
+	reader := textprocessor.ReaderWithContext(ctx, underlying)
+	type result struct {
+		n   int
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		n, err := reader.Read(make([]byte, 1))
+		done <- result{n: n, err: err}
+	}()
+	<-underlying.started
+
+	cancel()
+	select {
+	case <-done:
+		t.Fatal("generic reader unexpectedly interrupted a blocked read")
+	default:
+	}
+	close(underlying.release)
+	first := <-done
+	n, err := reader.Read(make([]byte, 1))
+
+	require.NoError(t, first.err)
+	require.Equal(t, 1, first.n)
+	require.Zero(t, n)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestReaderWithContext_NilContextPreservesReader(t *testing.T) {
+	t.Parallel()
+	reader := io.LimitReader(&slowByteReader{ctx: context.Background()}, 1)
+
+	//nolint:staticcheck // Explicitly verify the documented nil-context passthrough.
+	wrapped := textprocessor.ReaderWithContext(nil, reader)
+
+	require.Same(t, reader, wrapped)
+}
 
 type slowByteReader struct {
 	ctx context.Context

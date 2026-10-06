@@ -1,9 +1,8 @@
 package docker
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -15,22 +14,19 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/exectool"
 	"github.com/skosovsky/toolsy/internal/sandboxfs"
-	"github.com/skosovsky/toolsy/textprocessor"
 )
 
 const (
 	containerWorkspace          = "/workspace"
 	cleanupTimeout              = 5 * time.Second
 	logsTimeout                 = 5 * time.Second
-	defaultMaxArchiveFileBytes  = 64 * 1024 * 1024
-	defaultMaxArchiveTotalBytes = 256 * 1024 * 1024
 	defaultMaxContainerLogBytes = sandboxfs.DefaultMaxSandboxOutputBytes
 )
 
@@ -53,6 +49,7 @@ func classifySetupError(runCtx context.Context, err error, op string) error {
 }
 
 type dockerClient interface {
+	Info(context.Context) (system.Info, error)
 	ContainerCreate(
 		ctx context.Context,
 		config *container.Config,
@@ -61,12 +58,6 @@ type dockerClient interface {
 		platform *ocispec.Platform,
 		containerName string,
 	) (container.CreateResponse, error)
-	CopyToContainer(
-		ctx context.Context,
-		containerID, dstPath string,
-		content io.Reader,
-		options container.CopyToContainerOptions,
-	) error
 	ContainerStart(ctx context.Context, containerID string, options container.StartOptions) error
 	ContainerWait(
 		ctx context.Context,
@@ -80,25 +71,30 @@ type dockerClient interface {
 
 // Sandbox executes code in ephemeral Docker containers.
 type Sandbox struct {
-	client          dockerClient
-	runtimes        map[string]Runtime
-	languages       []string
-	networkDisabled bool
-	memoryLimit     int64
+	client        dockerClient
+	runtimes      map[string]Runtime
+	languages     []string
+	policy        Policy
+	workspaceRoot string
 }
 
 // New creates a Docker-backed sandbox.
 func New(opts ...Option) (*Sandbox, error) {
 	o := options{
-		runtimes:        defaultRuntimes(),
-		networkDisabled: false,
-		memoryLimit:     0,
-		client:          nil,
+		runtimes:      defaultRuntimes(),
+		policy:        DefaultPolicy(),
+		client:        nil,
+		workspaceRoot: "",
 	}
 	for _, opt := range opts {
 		opt(&o)
 	}
 
+	if o.policy.MemoryBytes <= 0 || o.policy.CPUQuota <= 0 || o.policy.PIDs <= 0 || o.policy.TmpBytes <= 0 ||
+		o.policy.OutputBytes <= 0 ||
+		o.policy.InputBytes <= 0 || o.policy.MaxFiles <= 0 || o.policy.LogTimeout <= 0 {
+		return nil, errors.New("docker sandbox: all policy bounds must be positive")
+	}
 	for language, runtime := range o.runtimes {
 		if strings.TrimSpace(runtime.Image) == "" {
 			return nil, fmt.Errorf("docker sandbox: runtime %q image must be non-empty", language)
@@ -118,6 +114,9 @@ func New(opts ...Option) (*Sandbox, error) {
 		if err != nil {
 			return nil, fmt.Errorf("docker sandbox: create client: %w", err)
 		}
+		if !strings.HasPrefix(localDaemonHost(cli), "unix://") {
+			return nil, errors.New("docker sandbox: local unix daemon required for workspace bind")
+		}
 	}
 
 	languages := make([]string, 0, len(o.runtimes))
@@ -127,11 +126,11 @@ func New(opts ...Option) (*Sandbox, error) {
 	sort.Strings(languages)
 
 	return &Sandbox{
-		client:          cli,
-		runtimes:        o.runtimes,
-		languages:       languages,
-		networkDisabled: o.networkDisabled,
-		memoryLimit:     o.memoryLimit,
+		client:        cli,
+		runtimes:      o.runtimes,
+		languages:     languages,
+		policy:        o.policy,
+		workspaceRoot: o.workspaceRoot,
 	}, nil
 }
 
@@ -141,27 +140,49 @@ func (s *Sandbox) SupportedLanguages() []string {
 }
 
 // Run executes code in an ephemeral Docker container.
-func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.RunResult, error) {
+//
+//nolint:nonamedreturns // Deferred cleanup appends diagnostics while retaining the primary result.
+func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (result exectool.RunResult, runErr error) {
 	runtime, ok := s.runtimes[strings.TrimSpace(req.Language)]
 	if !ok {
 		return exectool.RunResult{}, fmt.Errorf("%w: %s", exectool.ErrUnsupportedLanguage, req.Language)
 	}
 
-	workspace, archive, err := s.materializeWorkspace(ctx, req, runtime)
+	info, err := s.client.Info(ctx)
+	if err != nil {
+		return result, classifySetupError(ctx, err, "daemon capabilities")
+	}
+	if info.OSType != "linux" || !daemonSeccomp(info.SecurityOptions) || !info.MemoryLimit || !info.SwapLimit ||
+		!info.CPUCfsPeriod ||
+		!info.CPUCfsQuota ||
+		!info.PidsLimit {
+		return result, fmt.Errorf("%w: daemon cannot enforce mandatory cgroup policy", exectool.ErrSandboxFailure)
+	}
+	workspace, err := s.materializeWorkspace(ctx, req, runtime)
 	if err != nil {
 		return exectool.RunResult{}, err
 	}
 	defer func() {
-		_ = os.RemoveAll(workspace)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		defer cancel()
+		runErr = sandboxfs.WithCleanupError(
+			runErr,
+			"docker",
+			"remove workspace",
+			sandboxfs.RemoveWorkspace(cleanupCtx, workspace),
+		)
 	}()
 
 	var cfg container.Config
 	cfg.Image = runtime.Image
 	cfg.Cmd = append([]string(nil), runtime.Command...)
 	cfg.WorkingDir = containerWorkspace
-	cfg.Env = encodeEnv(req.Env)
+	cfg.Env = append(encodeEnv(req.Env), "PYTHONDONTWRITEBYTECODE=1", "HOME=/tmp")
+	cfg.User = "65534:65534"
+	cfg.Entrypoint = []string{runtime.Command[0]}
+	cfg.Cmd = append([]string(nil), runtime.Command[1:]...)
 
-	created, err := s.client.ContainerCreate(ctx, &cfg, hostConfig(s.networkDisabled, s.memoryLimit), nil, nil, "")
+	created, err := s.client.ContainerCreate(ctx, &cfg, hostConfig(s.policy, workspace), nil, nil, "")
 	if err != nil {
 		return exectool.RunResult{}, classifySetupError(ctx, err, "create container")
 	}
@@ -171,64 +192,151 @@ func (s *Sandbox) Run(ctx context.Context, req exectool.RunRequest) (exectool.Ru
 		defer cleanupCancel()
 		var rmOpts container.RemoveOptions
 		rmOpts.Force = true
-		_ = s.client.ContainerRemove(cleanupCtx, created.ID, rmOpts)
+		runErr = sandboxfs.WithCleanupError(
+			runErr,
+			"docker",
+			"remove container",
+			s.client.ContainerRemove(cleanupCtx, created.ID, rmOpts),
+		)
 	}()
 
-	var copyOpts container.CopyToContainerOptions
-	if err = s.client.CopyToContainer(
-		ctx,
-		created.ID,
-		containerWorkspace,
-		bytes.NewReader(archive),
-		copyOpts,
-	); err != nil {
-		return exectool.RunResult{}, classifySetupError(ctx, err, "copy workspace")
-	}
 	var startOpts container.StartOptions
 	if err = s.client.ContainerStart(ctx, created.ID, startOpts); err != nil {
 		return exectool.RunResult{}, classifySetupError(ctx, err, "start container")
 	}
 
-	exitCode, duration, err := s.waitForContainer(ctx, created.ID)
-	if err != nil {
-		return exectool.RunResult{}, classifySetupError(ctx, err, "wait container")
-	}
-
-	stdoutBuf, stderrBuf, logErr := s.collectContainerLogs(ctx, created.ID)
-	return sandboxfs.FinalizeOrInterrupt(ctx, logErr, stdoutBuf, stderrBuf, int(exitCode), duration, true, false)
+	return s.collectExecution(ctx, created.ID)
 }
 
+func (s *Sandbox) collectExecution(ctx context.Context, containerID string) (exectool.RunResult, error) {
+	executionCtx, cancelExecution := context.WithCancel(ctx)
+	defer cancelExecution()
+	type completion struct {
+		code     int64
+		duration time.Duration
+		err      error
+	}
+	finished := make(chan completion, 1)
+	go func() {
+		code, duration, waitErr := s.waitForContainer(executionCtx, containerID)
+		if waitErr != nil {
+			cancelExecution()
+		}
+		finished <- completion{code, duration, waitErr}
+	}()
+	stdoutBuf, stderrBuf, logErr := s.collectContainerLogs(executionCtx, containerID)
+	if logErr != nil {
+		cancelExecution()
+	}
+	completed := <-finished
+	if ctx.Err() != nil {
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			ctx.Err(),
+			stdoutBuf,
+			stderrBuf,
+			int(completed.code),
+			completed.duration,
+			false,
+		)
+	}
+	if completed.err != nil && !toolsy.IsContextInterrupt(completed.err) {
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			completed.err,
+			stdoutBuf,
+			stderrBuf,
+			int(completed.code),
+			completed.duration,
+			false,
+		)
+	}
+	if logErr != nil {
+		return sandboxfs.FinalizeOrInterrupt(
+			ctx,
+			logErr,
+			stdoutBuf,
+			stderrBuf,
+			int(completed.code),
+			completed.duration,
+			false,
+		)
+	}
+	return sandboxfs.FinalizeOrInterrupt(
+		ctx,
+		completed.err,
+		stdoutBuf,
+		stderrBuf,
+		int(completed.code),
+		completed.duration,
+		false,
+	)
+}
+
+//nolint:nonamedreturns // Deferred cleanup preserves failures while removing partially prepared input.
 func (s *Sandbox) materializeWorkspace(
 	ctx context.Context,
 	req exectool.RunRequest,
 	runtime Runtime,
-) (string, []byte, error) {
-	workspace, err := os.MkdirTemp("", "toolsy-docker-*")
+) (path string, runErr error) {
+	if err := s.validateInput(req); err != nil {
+		return "", err
+	}
+	workspace, err := os.MkdirTemp(s.workspaceRoot, "toolsy-docker-*")
 	if err != nil {
-		return "", nil, classifySetupError(ctx, err, "create workspace")
+		return "", classifySetupError(ctx, err, "create workspace")
 	}
 
+	defer func() {
+		if runErr != nil {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+			defer cancel()
+			runErr = sandboxfs.WithCleanupError(
+				runErr,
+				"docker",
+				"remove failed workspace",
+				sandboxfs.RemoveWorkspace(cleanupCtx, workspace),
+			)
+		}
+	}()
 	canonicalFiles, err := sandboxfs.CanonicalizeFiles(req.Files, runtime.ScriptName)
 	if err != nil {
-		_ = os.RemoveAll(workspace)
-		return "", nil, classifySetupError(ctx, err, "validate files")
+		return "", classifySetupError(ctx, err, "validate files")
 	}
 
 	if err = sandboxfs.WriteWorkspace(workspace, canonicalFiles); err != nil {
-		_ = os.RemoveAll(workspace)
-		return "", nil, classifySetupError(ctx, err, "materialize files")
+		return "", classifySetupError(ctx, err, "materialize files")
 	}
 	if err = sandboxfs.WriteFile(workspace, runtime.ScriptName, []byte(req.Code)); err != nil {
-		_ = os.RemoveAll(workspace)
-		return "", nil, classifySetupError(ctx, err, "write script")
+		return "", classifySetupError(ctx, err, "write script")
 	}
 
-	archive, err := archiveWorkspace(ctx, workspace)
-	if err != nil {
-		_ = os.RemoveAll(workspace)
-		return "", nil, classifySetupError(ctx, err, "archive workspace")
+	if ctx.Err() != nil {
+		return "", classifySetupError(ctx, ctx.Err(), "prepare workspace")
 	}
-	return workspace, archive, nil
+	rootFS, err := os.OpenRoot(workspace)
+	if err != nil {
+		return "", err
+	}
+	defer func() { runErr = sandboxfs.WithCleanupError(runErr, "docker", "close workspace root", rootFS.Close()) }()
+	if err := filepath.Walk(workspace, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		const readableFileMode = 0o444
+		mode := os.FileMode(readableFileMode)
+		if info.IsDir() {
+			mode = 0o755
+		}
+		rel, err := filepath.Rel(workspace, path)
+		if err != nil {
+			return err
+		}
+		return rootFS.Chmod(rel, mode)
+	}); err != nil {
+		return "", err
+	}
+	return workspace, nil
 }
 
 func (s *Sandbox) waitForContainer(
@@ -244,12 +352,15 @@ func (s *Sandbox) waitForContainer(
 	}
 
 	select {
-	case waitErr := <-errCh:
-		if waitErr == nil {
-			return 0, time.Since(start), nil
+	case waitErr, open := <-errCh:
+		if !open || waitErr == nil {
+			return 0, 0, fmt.Errorf("%w: missing wait response", exectool.ErrSandboxFailure)
 		}
 		return 0, 0, resolveContainerWaitError(runCtx, waitErr, killContainer)
-	case status := <-statusCh:
+	case status, open := <-statusCh:
+		if !open {
+			return 0, 0, fmt.Errorf("%w: missing container status", exectool.ErrSandboxFailure)
+		}
 		if status.Error != nil && status.Error.Message != "" {
 			return 0, 0, fmt.Errorf(
 				"%w: wait container: %s",
@@ -291,142 +402,42 @@ func (s *Sandbox) collectContainerLogs(
 	containerID string,
 ) (*sandboxfs.CappedBuffer, *sandboxfs.CappedBuffer, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, nil, ctxErr
+		return nil, nil, collectionFailure(ctxErr)
 	}
-	logsCtx, logsCancel := context.WithTimeout(ctx, logsTimeout)
+	limit := s.policy.LogTimeout
+	if limit <= 0 {
+		limit = logsTimeout
+	}
+	logsCtx, logsCancel := context.WithTimeout(ctx, limit)
 	defer logsCancel()
 
 	var logOpts container.LogsOptions
 	logOpts.ShowStdout = true
 	logOpts.ShowStderr = true
+	logOpts.Follow = true
 
 	logs, err := s.client.ContainerLogs(logsCtx, containerID, logOpts)
 	if err != nil {
-		return nil, nil, classifySetupError(ctx, err, "read logs")
+		return nil, nil, collectionFailure(err)
 	}
 	defer func() {
 		_ = logs.Close()
 	}()
 
-	outBuf := sandboxfs.NewCappedBuffer("container stdout", defaultMaxContainerLogBytes)
-	errBuf := sandboxfs.NewCappedBuffer("container stderr", defaultMaxContainerLogBytes)
-	if _, demuxErr := stdcopy.StdCopy(outBuf, errBuf, logs); demuxErr != nil {
+	outBuf := sandboxfs.NewCappedBuffer("container stdout", s.outputLimit())
+	errBuf := sandboxfs.NewCappedBuffer("container stderr", s.outputLimit())
+	stopClose := context.AfterFunc(logsCtx, func() { _ = logs.Close() })
+	defer stopClose()
+	if demuxErr := demuxLogs(logs, outBuf, errBuf); demuxErr != nil {
+		if logsCtx.Err() != nil {
+			return outBuf, errBuf, collectionFailure(logsCtx.Err())
+		}
 		return outBuf, errBuf, fmt.Errorf("%w: demux logs: %w", exectool.ErrSandboxFailure, demuxErr)
 	}
+	if err := logsCtx.Err(); err != nil {
+		return outBuf, errBuf, collectionFailure(err)
+	}
 	return outBuf, errBuf, nil
-}
-
-//nolint:gocognit // walk callback: ctx, total budget, per-file read
-func archiveWorkspace(ctx context.Context, root string) ([]byte, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	rootFS, err := os.OpenRoot(root)
-	if err != nil {
-		_ = tw.Close()
-		return nil, err
-	}
-	defer func() {
-		_ = rootFS.Close()
-	}()
-
-	err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if walkCtxErr := ctx.Err(); walkCtxErr != nil {
-			return walkCtxErr
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if buf.Len() > defaultMaxArchiveTotalBytes {
-			return fmt.Errorf(
-				"%w: workspace archive exceeds %d byte limit: %w",
-				exectool.ErrSandboxFailure,
-				defaultMaxArchiveTotalBytes,
-				textprocessor.ErrReadLimitExceeded,
-			)
-		}
-
-		rel, err := filepath.Rel(root, path)
-		if err != nil {
-			return err
-		}
-		name, err := sandboxfs.NormalizeRelativePath(rel)
-		if err != nil {
-			return err
-		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = name
-		if werr := tw.WriteHeader(header); werr != nil {
-			return werr
-		}
-
-		data, err := readArchiveFile(ctx, func(name string) (io.ReadCloser, error) {
-			return rootFS.Open(name)
-		}, name, info.Size(), defaultMaxArchiveFileBytes)
-		if err != nil {
-			return err
-		}
-		_, err = tw.Write(data)
-		return err
-	})
-	if err != nil {
-		_ = tw.Close()
-		return nil, err
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func readArchiveFile(
-	ctx context.Context,
-	open func(name string) (io.ReadCloser, error),
-	name string,
-	fileSize int64,
-	maxBytes int,
-) ([]byte, error) {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
-	}
-	if maxBytes > 0 && fileSize > int64(maxBytes) {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		return nil, fmt.Errorf(
-			"%w: file %s size %d exceeds %d byte limit: %w",
-			exectool.ErrSandboxFailure,
-			name, fileSize, maxBytes, textprocessor.ErrReadLimitExceeded,
-		)
-	}
-	file, err := open(name)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-	data, err := textprocessor.ReadLimitedBytes(ctx, file, maxBytes)
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, ctxErr
-	}
-	if toolsy.IsContextInterrupt(err) {
-		return nil, err
-	}
-	if textprocessor.IsReadLimitExceeded(err) {
-		return nil, fmt.Errorf(
-			"%w: file %s exceeds %d byte limit: %w",
-			exectool.ErrSandboxFailure,
-			name, maxBytes, textprocessor.ErrReadLimitExceeded,
-		)
-	}
-	return data, err
 }
 
 func encodeEnv(env map[string]string) []string {
@@ -439,4 +450,86 @@ func encodeEnv(env map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func (s *Sandbox) outputLimit() int {
+	if s.policy.OutputBytes > 0 {
+		return s.policy.OutputBytes
+	}
+	return defaultMaxContainerLogBytes
+}
+
+// demuxLogs rejects partial headers/payloads: Docker's StdCopy treats a short final header as EOF.
+func demuxLogs(src io.Reader, stdout, stderr io.Writer) error {
+	var header [8]byte
+	for {
+		n, err := io.ReadFull(src, header[:])
+		if err == io.EOF && n == 0 {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("incomplete log frame: %w", err)
+		}
+		if header[1] != 0 || header[2] != 0 || header[3] != 0 {
+			return errors.New("invalid log frame padding")
+		}
+		var dst io.Writer
+		switch header[0] {
+		case 1:
+			dst = stdout
+		case 2:
+			dst = stderr
+		default:
+			return fmt.Errorf("invalid log stream %d", header[0])
+		}
+		size := int64(binary.BigEndian.Uint32(header[4:]))
+		if _, err := io.CopyN(dst, src, size); err != nil {
+			return fmt.Errorf("incomplete log payload: %w", err)
+		}
+	}
+}
+
+func daemonSeccomp(options []string) bool {
+	for _, option := range options {
+		if strings.HasPrefix(option, "name=seccomp") {
+			return true
+		}
+	}
+	return false
+}
+
+func collectionFailure(err error) error {
+	if toolsy.IsContextInterrupt(err) {
+		return fmt.Errorf("%w: log collection interrupted: %v", exectool.ErrSandboxFailure, err.Error())
+	}
+	return fmt.Errorf("%w: log collection: %w", exectool.ErrSandboxFailure, err)
+}
+
+func localDaemonHost(cli dockerClient) string {
+	native, ok := cli.(*client.Client)
+	if !ok {
+		return ""
+	}
+	return native.DaemonHost()
+}
+
+func (s *Sandbox) validateInput(req exectool.RunRequest) error {
+	if len(req.Files) > s.policy.MaxFiles {
+		return fmt.Errorf("%w: workspace file count limit", exectool.ErrSandboxFailure)
+	}
+	total := len(req.Code)
+	for name, data := range req.Files {
+		if len(name) > s.policy.InputBytes-total {
+			return fmt.Errorf("%w: workspace input limit", exectool.ErrSandboxFailure)
+		}
+		total += len(name)
+		if len(data) > s.policy.InputBytes-total {
+			return fmt.Errorf("%w: workspace input limit", exectool.ErrSandboxFailure)
+		}
+		total += len(data)
+	}
+	if total > s.policy.InputBytes {
+		return fmt.Errorf("%w: workspace input limit", exectool.ErrSandboxFailure)
+	}
+	return nil
 }

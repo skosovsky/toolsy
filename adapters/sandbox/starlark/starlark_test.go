@@ -3,6 +3,8 @@ package starlark
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +17,8 @@ import (
 )
 
 func TestRunPrintsToStdout(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print("hello")`,
@@ -26,7 +29,8 @@ func TestRunPrintsToStdout(t *testing.T) {
 }
 
 func TestRunReadsInMemoryFiles(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print(fs.read("data.txt"))`,
@@ -38,7 +42,8 @@ func TestRunReadsInMemoryFiles(t *testing.T) {
 }
 
 func TestRunNormalizesFileLookups(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print(fs.read("dir/../data.txt"))`,
@@ -50,7 +55,8 @@ func TestRunNormalizesFileLookups(t *testing.T) {
 }
 
 func TestRunExposesEnv(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print(env["NAME"])`,
@@ -62,7 +68,8 @@ func TestRunExposesEnv(t *testing.T) {
 }
 
 func TestRunReturnsScriptErrorsInStderr(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print(fs.read("missing.txt"))`,
@@ -73,10 +80,11 @@ func TestRunReturnsScriptErrorsInStderr(t *testing.T) {
 }
 
 func TestRunReturnsTimeout(t *testing.T) {
-	sb := New()
+	sb, err := New(Config{MaxExecutionSteps: 1 << 62})
+	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
-	_, err := sb.Run(ctx, exectool.RunRequest{
+	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "starlark",
 		Code: `def run():
     for i in range(1000000000):
@@ -88,8 +96,9 @@ run()`,
 }
 
 func TestRunRejectsInvalidInputFilePaths(t *testing.T) {
-	sb := New()
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print("hello")`,
 		Files:    map[string][]byte{"../secret.txt": []byte("nope")},
@@ -99,8 +108,9 @@ func TestRunRejectsInvalidInputFilePaths(t *testing.T) {
 }
 
 func TestRunRejectsCollisionsAfterNormalization(t *testing.T) {
-	sb := New()
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     `print("hello")`,
 		Files: map[string][]byte{
@@ -113,7 +123,8 @@ func TestRunRejectsCollisionsAfterNormalization(t *testing.T) {
 }
 
 func TestExecToolSchemaExposesOnlyStarlark(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	tool, err := exectool.New(sb)
 	require.NoError(t, err)
 
@@ -124,8 +135,9 @@ func TestExecToolSchemaExposesOnlyStarlark(t *testing.T) {
 }
 
 func TestRunRejectsPythonAlias(t *testing.T) {
-	sb := New()
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "python",
 		Code:     `print("x")`,
 	})
@@ -134,8 +146,9 @@ func TestRunRejectsPythonAlias(t *testing.T) {
 }
 
 func TestRunRejectsUnsupportedLanguage(t *testing.T) {
-	sb := New()
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "bash",
 		Code:     `print("x")`,
 	})
@@ -144,9 +157,10 @@ func TestRunRejectsUnsupportedLanguage(t *testing.T) {
 }
 
 func TestRunRejectsOversizedEvalStderr(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	huge := strings.Repeat("e", sandboxfs.DefaultMaxSandboxOutputBytes+1)
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     fmt.Sprintf("fail(%q)", huge),
 	})
@@ -156,9 +170,10 @@ func TestRunRejectsOversizedEvalStderr(t *testing.T) {
 }
 
 func TestRunRejectsStdoutExceedingCap(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	big := strings.Repeat("x", sandboxfs.DefaultMaxSandboxOutputBytes+1)
-	_, err := sb.Run(context.Background(), exectool.RunRequest{
+	_, err = sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
 		Code:     fmt.Sprintf(`print(%q)`, big),
 	})
@@ -168,7 +183,8 @@ func TestRunRejectsStdoutExceedingCap(t *testing.T) {
 }
 
 func TestRunRejectsFileReadExceedingCap(t *testing.T) {
-	sb := New()
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
 	big := make([]byte, sandboxfs.DefaultMaxSandboxFileReadBytes+1)
 	res, err := sb.Run(context.Background(), exectool.RunRequest{
 		Language: "starlark",
@@ -179,4 +195,76 @@ func TestRunRejectsFileReadExceedingCap(t *testing.T) {
 	require.Equal(t, 1, res.ExitCode)
 	require.Contains(t, res.Stderr, "exceeds")
 	require.Contains(t, res.Stderr, "read operation exceeded configured byte limit")
+}
+
+func TestNewRejectsUnlimitedExecution(t *testing.T) {
+	// Arrange.
+	config := Config{}
+	// Act.
+	sb, err := New(config)
+	// Assert.
+	require.Nil(t, sb)
+	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+}
+
+// Each workload is isolated in a subprocess: a broken interpreter cancellation
+// policy must not hang the parent test suite.
+func TestRunBoundsComputation(t *testing.T) {
+	mode := os.Getenv("TOOLSY_STARLARK_BOUND_TEST")
+	if mode == "" {
+		for _, childMode := range []string{"steps", "cancel"} {
+			t.Run(childMode, func(t *testing.T) {
+				// Arrange.
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRunBoundsComputation$", "-test.timeout=8s")
+				cmd.Env = append(os.Environ(), "TOOLSY_STARLARK_BOUND_TEST="+childMode)
+				// Act.
+				output, err := cmd.CombinedOutput()
+				// Assert.
+				require.NoError(t, ctx.Err(), string(output))
+				require.NoError(t, err, string(output))
+			})
+		}
+		return
+	}
+	// Arrange. This workload would require billions of years without a limit;
+	// default Starlark forbids literal infinite while loops and recursion.
+	config := Config{MaxExecutionSteps: 1000}
+	ctx := context.Background()
+	if mode == "cancel" {
+		config.MaxExecutionSteps = 1 << 62
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Millisecond)
+		defer cancel()
+	}
+	sb, err := New(config)
+	require.NoError(t, err)
+	started := time.Now()
+	// Act.
+	_, err = sb.Run(ctx, exectool.RunRequest{Language: "starlark", Code: `def run():
+    for i in range(1 << 62):
+        pass
+run()`})
+	// Assert.
+	require.Less(t, time.Since(started), time.Second)
+	if mode == "steps" {
+		require.ErrorIs(t, err, ErrStepLimit)
+		require.ErrorIs(t, err, exectool.ErrSandboxFailure)
+	} else {
+		require.ErrorIs(t, err, exectool.ErrTimeout)
+		require.NotErrorIs(t, err, ErrStepLimit)
+	}
+}
+
+func TestRunAlreadyCanceledDoesNotEvaluate(t *testing.T) {
+	// Arrange.
+	sb, err := New(DefaultConfig())
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// Act.
+	_, err = sb.Run(ctx, exectool.RunRequest{Language: "starlark", Code: `fail("guest error")`})
+	// Assert.
+	require.ErrorIs(t, err, context.Canceled)
 }

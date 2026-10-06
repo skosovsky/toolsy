@@ -3,7 +3,10 @@
 //
 // DANGER: NO ISOLATION. USE ONLY WITH HUMAN-IN-THE-LOOP.
 //
-// On Unix, timeout cleanup kills the entire spawned process group. On other
+// Guest environment inheritance is disabled unless explicitly configured.
+// This backend is for trusted code: it provides no filesystem, resource or network isolation.
+//
+// On Unix, timeout cleanup kills the launched process group. On other
 // platforms, cleanup is best-effort because Go does not expose a portable
 // process-tree termination primitive.
 package host

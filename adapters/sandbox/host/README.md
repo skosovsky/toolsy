@@ -29,3 +29,35 @@ if err != nil {
     panic(err)
 }
 ```
+
+## Execution contract
+
+This backend executes **trusted code without isolation**. It does not restrict
+filesystem access, network access, memory, CPU, process creation, or access to
+other host resources. Workspace path validation prevents request file collisions;
+it does not confine guest code. Human approval is an application policy, not a
+security boundary enforced by this adapter.
+
+The default guest environment starts empty (the Go process launcher can add
+`PWD`). `WithEnvironment(map[string]string)` supplies an explicit base;
+`RunRequest.Env` overrides it. `WithInheritedEnvironment()` explicitly snapshots
+the parent environment at construction, including any secrets. Runtime executable
+lookup uses the host process PATH; select an absolute executable path when its
+identity matters. Inheritance is a clear break from the previous default.
+
+The host config fixes the executable, initial arguments, and entrypoint filename.
+Request code and validated files are materialized exactly as supplied. No shell
+command is constructed. Stdout and stderr each have a 256 KiB cap. Nonzero guest
+exit is a result, while start/collection failures are errors. Cancellation wins
+over output overflow. Unix cancellation kills the launched process group;
+processes that deliberately leave it are outside this guarantee. Non-Unix process
+termination is best effort. Process I/O waiting has a five-second `WaitDelay`.
+
+Workspace cleanup uses a fresh five-second context independent of the caller and
+checks its deadline between filesystem operations. Individual filesystem syscalls
+cannot be interrupted; this is a cooperative cleanup budget, not a hard bound on
+a stalled filesystem. It never follows symlinks during normal traversal. As a
+trusted host backend it does not defend against malicious concurrent filesystem
+mutation. Cleanup failures return an inspectable `*exectool.CleanupError` and
+preserve any primary error and completed result. A failed cleanup is never reported
+as confirmed removal. No background cleanup goroutine is left behind.

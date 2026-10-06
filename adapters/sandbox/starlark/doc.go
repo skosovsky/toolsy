@@ -1,3 +1,4 @@
-// Package starlark provides an in-process sandbox for safe text-based scripting
-// backed by go.starlark.net/starlark.
+// Package starlark executes scripts in the host process with a finite
+// interpreter step budget, cooperative cancellation and capped output.
+// It does not provide hard memory or process resource isolation.
 package starlark

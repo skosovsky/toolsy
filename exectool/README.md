@@ -34,7 +34,10 @@ Policy flags are manifest fields (`ReadOnly`, `Dangerous`, `RequiresConfirmation
 ## Example
 
 ```go
-sb := starlarksandbox.New()
+sb, err := starlarksandbox.New(starlarksandbox.DefaultConfig())
+if err != nil {
+    panic(err)
+}
 
 tool, err := exectool.New(
     sb,
@@ -48,3 +51,8 @@ if err != nil {
 Low-level adapters exchange `exectool.RunRequest` and `exectool.RunResult`,
 which makes it possible to swap `starlark`, `host`, `wazero`, `docker`, or
 `e2b` sandboxes without changing agent business logic.
+
+Backend quotas and isolation differ: see the [capability matrix](../adapters/sandbox/README.md).
+Execution, collection and cleanup follow the [result contract](../docs/sandbox-result-contract.md).
+The host owns approval, durable operation recording and reconciliation of unknown effects;
+`journal_integration_test.go` exercises a collection failure after an external effect with the file journal.

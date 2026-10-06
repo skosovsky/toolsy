@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
-	"time"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
@@ -113,16 +112,25 @@ func TestReadLimitedBytes_InfiniteReaderBoundedAllocs(t *testing.T) {
 	require.Less(t, allocs, float64(64))
 }
 
-func TestReadLimitedBytes_InfiniteReaderFast(t *testing.T) {
-	if testing.Short() {
-		t.Skip("timing test skipped in -short")
-	}
-	start := time.Now()
-	data, err := textprocessor.ReadLimitedBytes(context.Background(), infiniteReader{}, 1<<20)
-	require.Less(t, time.Since(start), 200*time.Millisecond)
+func TestReadLimitedBytes_InfiniteReaderStopsAtLimit(t *testing.T) {
+	// Arrange.
+	const limit = 1 << 20
+	reader := &countingInfiniteReader{}
+	// Act.
+	data, err := textprocessor.ReadLimitedBytes(context.Background(), reader, limit)
+	// Assert.
+	require.Equal(t, limit+1, reader.bytesRead)
 	require.Error(t, err)
 	require.Nil(t, data)
 	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+}
+
+type countingInfiniteReader struct{ bytesRead int }
+
+func (r *countingInfiniteReader) Read(p []byte) (int, error) {
+	n, err := (infiniteReader{}).Read(p)
+	r.bytesRead += n
+	return n, err
 }
 
 func TestReadLimitedBytes_DevZero(t *testing.T) {

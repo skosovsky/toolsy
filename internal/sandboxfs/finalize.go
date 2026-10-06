@@ -11,14 +11,13 @@ import (
 
 // FinalizeOrInterrupt checks context interrupts, then delegates to [FinishRun].
 // Interrupt (cancel/deadline/timeout) wins over output cap errors in composite scenarios.
-// Guest script failures with read-limit in stderr must pass nil runErr with exitOK=false (see FinishRun godoc).
+// Known guest exits pass nil runErr with their exitCode (see FinishRun godoc).
 func FinalizeOrInterrupt(
 	ctx context.Context,
 	runErr error,
 	stdout, stderr *CappedBuffer,
 	exitCode int,
 	duration time.Duration,
-	exitOK bool,
 	trimStdoutNewline bool,
 ) (exectool.RunResult, error) {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -40,5 +39,5 @@ func FinalizeOrInterrupt(
 		stderrStr = stderr.String()
 		stderrOverflow = stderr.OverflowErr()
 	}
-	return FinishRun(runErr, stdoutStr, stderrStr, exitCode, duration, exitOK, stdoutOverflow, stderrOverflow)
+	return FinishRun(runErr, stdoutStr, stderrStr, exitCode, duration, stdoutOverflow, stderrOverflow)
 }

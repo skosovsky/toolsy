@@ -23,7 +23,7 @@ func TestFinalizeOrInterrupt_TimeoutOverOverflow(t *testing.T) {
 	stdout := NewCappedBuffer("stdout", 10)
 	_, _ = stdout.Write([]byte(strings.Repeat("x", 11)))
 
-	_, err := FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, 0, true, false)
+	_, err := FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, 0, false)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
 }
 
@@ -33,9 +33,10 @@ func TestFinalizeOrInterrupt_NonExitErrorWithOverflow(t *testing.T) {
 	_, _ = stdout.Write([]byte(strings.Repeat("x", 11)))
 	infra := fmt.Errorf("%w: execute runtime: %w", exectool.ErrSandboxFailure, errors.New("boom"))
 
-	_, err := FinalizeOrInterrupt(context.Background(), infra, stdout, nil, 0, 0, false, false)
+	_, err := FinalizeOrInterrupt(context.Background(), infra, stdout, nil, 0, 0, false)
 	require.Error(t, err)
 	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
+	require.ErrorIs(t, err, infra)
 }
 
 func TestFinalizeOrInterrupt_CancelOverOverflow(t *testing.T) {
@@ -46,7 +47,7 @@ func TestFinalizeOrInterrupt_CancelOverOverflow(t *testing.T) {
 	stdout := NewCappedBuffer("stdout", 10)
 	_, _ = stdout.Write([]byte(strings.Repeat("x", 11)))
 
-	_, err := FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, 0, true, false)
+	_, err := FinalizeOrInterrupt(ctx, nil, stdout, nil, 0, 0, false)
 	require.ErrorIs(t, err, context.Canceled)
 	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
 }

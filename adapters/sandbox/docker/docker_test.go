@@ -6,15 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/pkg/stdcopy"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -27,7 +25,6 @@ import (
 type mockClient struct {
 	createdConfig     *container.Config
 	createdHostConfig *container.HostConfig
-	copiedToContainer bool
 	started           bool
 	killed            bool
 	removed           bool
@@ -49,17 +46,6 @@ func (m *mockClient) ContainerCreate(
 	m.createdConfig = config
 	m.createdHostConfig = hostConfig
 	return container.CreateResponse{ID: "abc123"}, nil
-}
-
-func (m *mockClient) CopyToContainer(
-	_ context.Context,
-	_ string,
-	_ string,
-	_ io.Reader,
-	_ container.CopyToContainerOptions,
-) error {
-	m.copiedToContainer = true
-	return nil
 }
 
 func (m *mockClient) ContainerStart(_ context.Context, _ string, _ container.StartOptions) error {
@@ -115,7 +101,7 @@ func TestRunSuccess(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, res.ExitCode)
 	require.Equal(t, "hello", res.Stdout)
-	require.True(t, client.copiedToContainer)
+	require.NotEmpty(t, client.createdHostConfig.Binds)
 	require.True(t, client.started)
 	require.True(t, client.removed)
 }
@@ -162,7 +148,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 	for _, name := range testCases {
 		t.Run(name, func(t *testing.T) {
 			client.createdConfig = nil
-			client.copiedToContainer = false
 
 			_, err := sb.Run(context.Background(), exectool.RunRequest{
 				Language: "python",
@@ -172,7 +157,6 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrSandboxFailure)
 			require.Nil(t, client.createdConfig)
-			require.False(t, client.copiedToContainer)
 		})
 	}
 }
@@ -219,8 +203,6 @@ func TestRunReturnsTimeoutDuringSetup(t *testing.T) {
 	}{
 		{name: "create direct deadline", stage: "create", viaCtx: false},
 		{name: "create expired ctx", stage: "create", viaCtx: true},
-		{name: "copy direct deadline", stage: "copy", viaCtx: false},
-		{name: "copy expired ctx", stage: "copy", viaCtx: true},
 		{name: "start direct deadline", stage: "start", viaCtx: false},
 		{name: "start expired ctx", stage: "start", viaCtx: true},
 	}
@@ -312,7 +294,7 @@ func TestNewAppliesImageMappingAndResourceOptions(t *testing.T) {
 	sb, err := New(
 		WithClient(client),
 		WithImageMapping(map[string]string{"python": "python:3.12-alpine"}),
-		WithNetworkDisabled(),
+
 		WithMemoryLimit(256*1024*1024),
 	)
 	require.NoError(t, err)
@@ -325,59 +307,6 @@ func TestNewAppliesImageMappingAndResourceOptions(t *testing.T) {
 	require.Equal(t, "python:3.12-alpine", client.createdConfig.Image)
 	require.Equal(t, container.NetworkMode("none"), client.createdHostConfig.NetworkMode)
 	require.EqualValues(t, 256*1024*1024, client.createdHostConfig.Memory)
-}
-
-func TestReadArchiveFileClosesFileBeforeReturn(t *testing.T) {
-	rc := &trackingReadCloser{Reader: bytes.NewReader([]byte("payload"))}
-
-	data, err := readArchiveFile(context.Background(), func(name string) (io.ReadCloser, error) {
-		require.Equal(t, "data.txt", name)
-		return rc, nil
-	}, "data.txt", 7, defaultMaxArchiveFileBytes)
-	require.NoError(t, err)
-	require.Equal(t, []byte("payload"), data)
-	require.Equal(t, 1, rc.closeCalls)
-}
-
-func TestReadArchiveFileClosesFileOnReadError(t *testing.T) {
-	rc := &trackingReadCloser{
-		Reader: io.MultiReader(
-			bytes.NewReader([]byte("payload")),
-			errorReader{err: errors.New("boom")},
-		),
-	}
-
-	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
-		return rc, nil
-	}, "data.txt", 7, defaultMaxArchiveFileBytes)
-	require.Error(t, err)
-	require.Equal(t, 1, rc.closeCalls)
-}
-
-func TestReadArchiveFile_ExceedsSizeLimit(t *testing.T) {
-	rc := &trackingReadCloser{Reader: bytes.NewReader([]byte("payload"))}
-	const maxBytes = 4
-
-	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
-		return rc, nil
-	}, "big.bin", 100, maxBytes)
-	require.Error(t, err)
-	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
-	require.Contains(t, err.Error(), "exceeds 4 byte limit")
-	require.Equal(t, 0, rc.closeCalls)
-}
-
-func TestReadArchiveFile_ReadExceedsLimit(t *testing.T) {
-	rc := &trackingReadCloser{Reader: bytes.NewReader(make([]byte, 20))}
-	const maxBytes = 10
-
-	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
-		return rc, nil
-	}, "big.bin", 7, maxBytes)
-	require.Error(t, err)
-	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
-	require.Contains(t, err.Error(), "exceeds 10 byte limit")
-	require.Equal(t, 1, rc.closeCalls)
 }
 
 func TestClassifySetupError_ArchiveReadLimitMapsValidation(t *testing.T) {
@@ -457,25 +386,6 @@ type delayedWaitClient struct {
 	mockClient
 
 	delay time.Duration
-}
-
-type trackingReadCloser struct {
-	io.Reader
-
-	closeCalls int
-}
-
-func (r *trackingReadCloser) Close() error {
-	r.closeCalls++
-	return nil
-}
-
-type errorReader struct {
-	err error
-}
-
-func (r errorReader) Read([]byte) (int, error) {
-	return 0, r.err
 }
 
 func (m *delayedWaitClient) ContainerWait(
@@ -565,19 +475,6 @@ func (m *setupTimeoutClient) ContainerCreate(
 	return m.mockClient.ContainerCreate(ctx, config, hostConfig, networkingConfig, platform, containerName)
 }
 
-func (m *setupTimeoutClient) CopyToContainer(
-	ctx context.Context,
-	containerID string,
-	dstPath string,
-	content io.Reader,
-	options container.CopyToContainerOptions,
-) error {
-	if m.stage == "copy" {
-		return m.timeoutErr(ctx)
-	}
-	return m.mockClient.CopyToContainer(ctx, containerID, dstPath, content, options)
-}
-
 func (m *setupTimeoutClient) ContainerStart(
 	ctx context.Context,
 	containerID string,
@@ -638,103 +535,6 @@ func (c *cancelOnLogsClient) ContainerLogs(
 	return c.mockClient.ContainerLogs(ctx, containerID, options)
 }
 
-func TestArchiveWorkspace_ExceedsSingleFileBudget(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "huge.bin")
-	f, err := os.Create(path)
-	require.NoError(t, err)
-	require.NoError(t, f.Truncate(int64(defaultMaxArchiveFileBytes)+1))
-	require.NoError(t, f.Close())
-
-	_, err = archiveWorkspace(context.Background(), root)
-	require.Error(t, err)
-	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
-	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
-	require.Contains(t, err.Error(), "exceeds")
-}
-
-func TestArchiveWorkspace_ExceedsTotalBudget(t *testing.T) {
-	if testing.Short() {
-		t.Skip("archive total budget test writes multi-file sparse payloads")
-	}
-	root := t.TempDir()
-	const fileSize = int64(defaultMaxArchiveFileBytes)
-	for i := range 5 {
-		path := filepath.Join(root, fmt.Sprintf("part%d.bin", i))
-		f, err := os.Create(path)
-		require.NoError(t, err)
-		require.NoError(t, f.Truncate(fileSize))
-		require.NoError(t, f.Close())
-	}
-	_, err := archiveWorkspace(context.Background(), root)
-	require.Error(t, err)
-	require.ErrorIs(t, err, exectool.ErrSandboxFailure)
-	require.ErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
-	require.Contains(t, err.Error(), "workspace archive exceeds")
-}
-
-func TestArchiveWorkspace_CancelDuringWalk(t *testing.T) {
-	root := t.TempDir()
-	for i := range 10 {
-		path := filepath.Join(root, "file"+strconv.Itoa(i)+".txt")
-		require.NoError(t, os.WriteFile(path, []byte("data"), 0o600))
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := archiveWorkspace(ctx, root)
-	require.Error(t, err)
-	require.ErrorIs(t, err, context.Canceled)
-}
-
-func TestReadArchiveFile_CanceledBeforeSizeCheck(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
-		return nil, errors.New("should not open")
-	}, "big.bin", 2048, 1024)
-	require.ErrorIs(t, err, context.Canceled)
-}
-
-func TestReadArchiveFile_CancelOverSizeCap(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
-		return nil, errors.New("should not open")
-	}, "big.bin", 2048, 1024)
-	require.ErrorIs(t, err, context.Canceled)
-	require.NotErrorIs(t, err, textprocessor.ErrReadLimitExceeded)
-}
-
-func TestReadArchiveFile_InterruptInChainOverReadLimit(t *testing.T) {
-	composite := fmt.Errorf(
-		"read: %w",
-		errors.Join(context.Canceled, textprocessor.ErrReadLimitExceeded),
-	)
-	_, err := readArchiveFile(context.Background(), func(string) (io.ReadCloser, error) {
-		return io.NopCloser(&instantErrReader{err: composite}), nil
-	}, "f.bin", 0, 1024)
-	require.ErrorIs(t, err, context.Canceled)
-	require.NotErrorIs(t, err, exectool.ErrSandboxFailure)
-}
-
-func TestReadArchiveFile_CanceledAfterSuccessfulRead(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	data := []byte("ok")
-	_, err := readArchiveFile(ctx, func(string) (io.ReadCloser, error) {
-		cancel()
-		return io.NopCloser(strings.NewReader(string(data))), nil
-	}, "f.bin", int64(len(data)), 1024)
-	require.ErrorIs(t, err, context.Canceled)
-}
-
-type instantErrReader struct {
-	err error
-}
-
-func (r *instantErrReader) Read([]byte) (int, error) {
-	return 0, r.err
-}
-
 func muxLogs(stdout, stderr string) []byte {
 	var buf bytes.Buffer
 	if stdout != "" {
@@ -744,4 +544,16 @@ func muxLogs(stdout, stderr string) []byte {
 		_, _ = io.WriteString(stdcopy.NewStdWriter(&buf, stdcopy.Stderr), stderr)
 	}
 	return buf.Bytes()
+}
+
+func (m *mockClient) Info(context.Context) (system.Info, error) {
+	return system.Info{
+		OSType:          "linux",
+		SecurityOptions: []string{"name=seccomp,profile=builtin"},
+		MemoryLimit:     true,
+		SwapLimit:       true,
+		CPUCfsPeriod:    true,
+		CPUCfsQuota:     true,
+		PidsLimit:       true,
+	}, nil
 }
