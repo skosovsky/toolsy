@@ -16,17 +16,27 @@ func compositionProfile(t *testing.T, kind string) ExecutionProfile {
 		return mustResultCache(t, constantPartition)
 	}
 	profile, err := NewOperationProfile(
-		NewMemoryOperationStore(),
-		func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-			return OperationIntent{Namespace: "composition", Scope: "tenant", Subject: "host", OperationID: "intent",
-				AttemptID: call.Input.CallID, PolicyFingerprint: "current", CanonicalDigest: "host dependency",
-				CanonicalRules: "json", DisplayJSON: []byte(`{}`)}, nil
+		OperationProfileConfig{
+			Store: NewMemoryOperationStore(),
+			Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+				return OperationIntent{
+					Namespace:         "composition",
+					Scope:             "tenant",
+					Subject:           "host",
+					OperationID:       "intent",
+					AttemptID:         call.Input.CallID,
+					PolicyFingerprint: "current",
+					CanonicalDigest:   "host dependency",
+					CanonicalRules:    "json",
+					DisplayJSON:       []byte(`{}`),
+				}, nil
+			},
+			Codec:    JSONResultCodec[string, string]{},
+			Issuer:   "host",
+			Clock:    time.Now,
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		JSONResultCodec[string, string]{},
-		"host",
-		time.Now,
-		time.Minute,
-		0,
 	)
 	require.NoError(t, err)
 	return profile

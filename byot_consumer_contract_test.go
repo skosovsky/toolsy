@@ -45,31 +45,33 @@ func exerciseOrdinaryConsumer[S, C any](
 	})
 	require.NoError(t, err)
 	profile, err := toolsy.NewOperationProfile(
-		store,
-		func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
-			typed, contextErr := toolsy.TypedContext[S, C](call.Context)
-			if contextErr != nil {
-				return toolsy.OperationIntent{}, contextErr
-			}
-			principal, partition := identity(typed.Subject, typed.Scope)
-			return toolsy.OperationIntent{
-				Namespace:         "ordinary",
-				Subject:           principal,
-				Scope:             partition,
-				OperationID:       "write-intent",
-				AttemptID:         call.Input.CallID,
-				GrantID:           grantID,
-				PolicyFingerprint: policyRevision,
-				CanonicalDigest:   "host dependencies",
-				CanonicalRules:    "json",
-				DisplayJSON:       call.Input.ArgsJSON,
-			}, nil
+		toolsy.OperationProfileConfig{
+			Store: store,
+			Prepare: func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+				typed, contextErr := toolsy.TypedContext[S, C](call.Context)
+				if contextErr != nil {
+					return toolsy.OperationIntent{}, contextErr
+				}
+				principal, partition := identity(typed.Subject, typed.Scope)
+				return toolsy.OperationIntent{
+					Namespace:         "ordinary",
+					Subject:           principal,
+					Scope:             partition,
+					OperationID:       "write-intent",
+					AttemptID:         call.Input.CallID,
+					GrantID:           grantID,
+					PolicyFingerprint: policyRevision,
+					CanonicalDigest:   "host dependencies",
+					CanonicalRules:    "json",
+					DisplayJSON:       call.Input.ArgsJSON,
+				}, nil
+			},
+			Codec:    toolsy.JSONResultCodec[string, string]{},
+			Issuer:   "authenticated-host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		toolsy.JSONResultCodec[string, string]{},
-		"authenticated-host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
 	)
 	require.NoError(t, err)
 	reg, err := toolsy.NewRegistryBuilder(toolsy.WithExecutionProfile(profile)).Add(wrapped).Build()

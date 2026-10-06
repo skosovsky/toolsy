@@ -17,26 +17,28 @@ func TestApprovalCannotDelegateAcrossSubjectScopeOrView(t *testing.T) {
 			calls, grantID := 0, ""
 			store := NewMemoryOperationStore()
 			profile, err := NewOperationProfile(
-				store,
-				func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-					return OperationIntent{
-						Namespace:         "delegation",
-						Subject:           call.Context.Subject.(string),
-						Scope:             call.Context.Scope.(string),
-						OperationID:       "intent",
-						AttemptID:         call.Input.CallID,
-						GrantID:           grantID,
-						PolicyFingerprint: "allow both",
-						CanonicalDigest:   "host dependencies",
-						CanonicalRules:    "json",
-						DisplayJSON:       []byte(`{}`),
-					}, nil
+				OperationProfileConfig{
+					Store: store,
+					Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+						return OperationIntent{
+							Namespace:         "delegation",
+							Subject:           call.Context.Subject.(string),
+							Scope:             call.Context.Scope.(string),
+							OperationID:       "intent",
+							AttemptID:         call.Input.CallID,
+							GrantID:           grantID,
+							PolicyFingerprint: "allow both",
+							CanonicalDigest:   "host dependencies",
+							CanonicalRules:    "json",
+							DisplayJSON:       []byte(`{}`),
+						}, nil
+					},
+					Codec:    JSONResultCodec[string, string]{},
+					Issuer:   "host",
+					Clock:    func() time.Time { return now },
+					Lease:    time.Minute,
+					MaxBytes: 0,
 				},
-				JSONResultCodec[string, string]{},
-				"host",
-				func() time.Time { return now },
-				time.Minute,
-				0,
 			)
 			require.NoError(t, err)
 			tool, err := NewTypedTool(

@@ -96,19 +96,27 @@ func (s *postHandlerClaimStore) Claim(ctx context.Context, claim OperationClaim)
 
 func postHandlerProfile(t *testing.T, store OperationStore, clock func() time.Time) *OperationProfile {
 	t.Helper()
-	profile, err := NewOperationProfile(store, func(context.Context, PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "test",
-			Scope:             "tenant",
-			Subject:           "host",
-			OperationID:       "one",
-			AttemptID:         "attempt",
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "digest",
-			CanonicalRules:    "json",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", clock, time.Minute, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(context.Context, PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "test",
+				Scope:             "tenant",
+				Subject:           "host",
+				OperationID:       "one",
+				AttemptID:         "attempt",
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "digest",
+				CanonicalRules:    "json",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    clock,
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	return profile
 }

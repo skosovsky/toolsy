@@ -42,29 +42,37 @@ func TestApprovalUsesCanonicalRedactedSnapshotAndSecretFreshness(t *testing.T) {
 	})
 	require.NoError(t, err)
 	store := NewMemoryOperationStore()
-	profile, err := NewOperationProfile(store, func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-		var canonical args
-		if decodeErr := json.Unmarshal(call.Input.ArgsJSON, &canonical); decodeErr != nil {
-			return OperationIntent{}, decodeErr
-		}
-		assert.Equal(t, 10, canonical.Count)
-		display, encodeErr := json.Marshal(struct {
-			Count      int    `json:"count"`
-			Credential string `json:"credential"`
-		}{Count: canonical.Count, Credential: "redacted"})
-		return OperationIntent{
-			Namespace:         "writes",
-			Scope:             "tenant",
-			Subject:           "host",
-			OperationID:       "intent",
-			AttemptID:         call.Input.CallID,
-			GrantID:           grantID,
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   freshness,
-			CanonicalRules:    "host reference freshness",
-			DisplayJSON:       display,
-		}, encodeErr
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Minute, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+			var canonical args
+			if decodeErr := json.Unmarshal(call.Input.ArgsJSON, &canonical); decodeErr != nil {
+				return OperationIntent{}, decodeErr
+			}
+			assert.Equal(t, 10, canonical.Count)
+			display, encodeErr := json.Marshal(struct {
+				Count      int    `json:"count"`
+				Credential string `json:"credential"`
+			}{Count: canonical.Count, Credential: "redacted"})
+			return OperationIntent{
+				Namespace:         "writes",
+				Scope:             "tenant",
+				Subject:           "host",
+				OperationID:       "intent",
+				AttemptID:         call.Input.CallID,
+				GrantID:           grantID,
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   freshness,
+				CanonicalRules:    "host reference freshness",
+				DisplayJSON:       display,
+			}, encodeErr
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return now },
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(WithExecutionProfile(profile)).Add(tool).Build()
 	require.NoError(t, err)
@@ -121,26 +129,28 @@ func TestApprovalRejectsWrongIssuerAndFutureIssuanceBeforeHandler(t *testing.T) 
 			store := NewMemoryOperationStore()
 			grantID := ""
 			profile, err := NewOperationProfile(
-				store,
-				func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-					return OperationIntent{
-						Namespace:         "write",
-						Scope:             "tenant",
-						Subject:           "host",
-						OperationID:       "intent",
-						AttemptID:         call.Input.CallID,
-						GrantID:           grantID,
-						PolicyFingerprint: "policy",
-						CanonicalDigest:   "dependency",
-						CanonicalRules:    "json",
-						DisplayJSON:       []byte(`{}`),
-					}, nil
+				OperationProfileConfig{
+					Store: store,
+					Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+						return OperationIntent{
+							Namespace:         "write",
+							Scope:             "tenant",
+							Subject:           "host",
+							OperationID:       "intent",
+							AttemptID:         call.Input.CallID,
+							GrantID:           grantID,
+							PolicyFingerprint: "policy",
+							CanonicalDigest:   "dependency",
+							CanonicalRules:    "json",
+							DisplayJSON:       []byte(`{}`),
+						}, nil
+					},
+					Codec:    JSONResultCodec[string, string]{},
+					Issuer:   "trusted-host",
+					Clock:    func() time.Time { return now },
+					Lease:    time.Minute,
+					MaxBytes: 0,
 				},
-				JSONResultCodec[string, string]{},
-				"trusted-host",
-				func() time.Time { return now },
-				time.Minute,
-				0,
 			)
 			require.NoError(t, err)
 			calls := 0

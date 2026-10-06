@@ -55,8 +55,15 @@ func TestCollectionFailureAfterEffectRemainsUnknownAcrossJournalRestart(t *testi
 		}, nil
 	}
 	newRegistry := func(journalStore *filejournal.Store) *toolsy.Registry {
-		profile, profileErr := toolsy.NewOperationProfile(journalStore, prepare,
-			toolsy.JSONResultCodec[RunResult, struct{}]{}, "host", func() time.Time { return now }, time.Minute, 0)
+		profile, profileErr := toolsy.NewOperationProfile(toolsy.OperationProfileConfig{
+			Store:    journalStore,
+			Prepare:  prepare,
+			Codec:    toolsy.JSONResultCodec[RunResult, struct{}]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
+		})
 		require.NoError(t, profileErr)
 		registry, buildErr := toolsy.NewRegistryBuilder(toolsy.WithExecutionProfile(profile)).Add(tool).Build()
 		require.NoError(t, buildErr)

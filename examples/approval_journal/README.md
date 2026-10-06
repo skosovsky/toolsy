@@ -36,3 +36,11 @@ append is not a distributed exactly-once contract.
 Protect the directory from other writers and symlinks; own access controls,
 encryption, bounded growth, retention and lock-file lifecycle. Do not delete or
 replace a live journal to force a retry. The sample is not a secure sandbox.
+
+
+The host installs `OperationProfileConfig` with named Store/Prepare/Codec/Issuer/
+Clock/Lease/MaxBytes fields. Store and callbacks are host-owned; constructor
+validation does not authenticate them. Same-operation recovery retains its original
+grant and requires AllowRecovery, unexpired approval and trusted reconciliation.
+A fresh approval cannot replace an expired original. Audited reauthorization/new
+intent belongs to the host; see the [operation contract](../../docs/execution-contract.md#approval-and-operation-journal-contract).

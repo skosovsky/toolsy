@@ -40,7 +40,49 @@ Terminal transitions are empty → candidate → successful producer completion 
 
 The library combines the host's opaque argument/dependency binding with prepared canonical JSON and attachment MIME/bytes. Input changes therefore invalidate a grant even when the host dependency identity stays unchanged. Hosts still bind secret reference freshness and non-input dependencies affecting the action; those cannot be inferred from generic arguments.
 
+Construct the gate with `NewOperationProfile(config)`. OperationProfileConfig names
+Store, Prepare, Codec, Issuer, Clock, Lease and MaxBytes; initialize keyed fields
+as in the executable example.
+Nil/typed-nil Store or Codec, nil callbacks, empty issuer, nonpositive lease and
+negative MaxBytes fail construction with ErrOperationProfileConfiguration. Zero
+MaxBytes uses 1 MiB for both display JSON and encoded result; positive limits are
+inclusive. Configuration fields are copied without calling host ports. Referenced
+stores/codecs and captured callback state remain host-owned, concurrent-safe and
+valid for the profile lifetime. No port is automatically closed. Issuer is an opaque
+nonempty identity; it is not normalized or authenticated by construction. See the
+[compiling trusted local host](../examples/approval_journal/main.go).
+
 `OperationStore.Claim` returns either dispatch permission for a new fenced attempt, a previously completed result, an in-progress record or unknown outcome. Expiring an in-progress lease produces uncertainty, never a new dispatch. A changed binding for the same namespace/scope/operation ID is a conflict. Grant expiry, rejection, wrong issuer or mismatch refuses dispatch. Reusing a consumed grant for recovery requires its explicit AllowRecovery policy and a trusted reconciliation/downstream-idempotency decision for the same logical operation.
+
+Recovery for an approval-bound operation requires **the original GrantID**, its
+AllowRecovery policy, a still-valid approval and a fenced trusted retry-authorized
+resolution. An otherwise valid fresh grant for the same binding cannot replace the
+consumed original. Expiry of the original therefore blocks recovery dispatch even
+after reconciliation. PutGrant does not refresh or rewrite an immutable grant.
+Completed-result replay is different: it does not dispatch the handler and still
+passes current policy; an expired approval is not a reason to repeat its effects.
+
+If the original approval expires, the host owns audited reauthorization:
+
+1. Inspect/reconcile the old binding and attempt using authoritative external
+   evidence and the original downstream key. Unknown outcome, lease expiry,
+   model text and fresh approval are not evidence that another effect is safe.
+   Replay an already completed outcome through the current authorized executor.
+2. Before creating any new intent, establish verified absence or applicable
+   downstream idempotency for the proposed action. If that cannot be established,
+   retain uncertainty and require host investigation. Changing an operation ID
+   alone never makes duplicate effects safe.
+3. Record an authenticated audit link between the old binding/attempt/grant,
+   expiry and reconciliation proof and the proposed new intent. Reevaluate current
+   identity, scope, policy, canonical arguments, attachments and credential
+   freshness; obtain fresh approval bound to that new intent.
+4. Use a new logical OperationID only for that explicitly authorized new intent.
+   Preserve the original downstream idempotency key when relying on its guarantee;
+   the host must verify its external lifetime/semantics. Do not replace the old
+   journal record or silently reset its grant, fencing or attempt history.
+
+This is host orchestration and audit storage, not a built-in grant refresh API,
+retry scheduler or permission to redispatch an uncertain action.
 
 `Finish` and `Resolve` are compare-and-set operations fenced by binding and attempt. Once handler execution starts, execution/validation/persistence failure without proof of the external result is unknown. Completed bytes contain a full ResultCodec outcome. A later delivery failure does not revert completed execution. Resolution is available only through the trusted host port and requires provenance; proof text supplied by a model is not authority.
 

@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted (commit pending); rows 27–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted (commit pending); rows 28–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -996,3 +996,63 @@ race/probe/lint. A's two ignored generic mutation calls fixed; both verified lat
 call sites. Reports/raw reviewer logs retained docs/reviews/task41/d09. Commit:
 `fix: required mutations` (hash recorded after successful signed commit). Core
 BYOT reference synchronization remains host contract; no external service claims.
+
+
+### 27 — D10 / D11 (accepted)
+
+Criteria for both reviewers, 20% each:
+1. NewOperationProfile accepts one named OperationProfileConfig with Store,
+   Prepare, Codec, Issuer, Clock, Lease, MaxBytes; remove positional constructor
+   and migrate all real callers/examples. Clear, inspectable configuration error.
+2. Required ports reject nil/typednil; callbacks reject nil; issuer nonempty;
+   lease positive, cap nonnegative with documented zero default. Configuration
+   is captured by value; referenced host ports/callbacks retain host lifetime and
+   synchronization ownership, no callback during construction.
+3. Existing atomic approval/claim/finish/fence/reconciliation/replay dispatch
+   boundary retained. No scheduler, automatic retries or grant replacement. Same
+   operation recovery needs original consumed grant, explicit AllowRecovery,
+   valid unexpired approval and trusted fenced reconciliation; fresh grant cannot
+   reopen old operation, including when original approval expired.
+4. AAA public baseline/current typednil config probes, valid/invalid configuration
+   matrix, retained original/fresh/expired-grant recovery and no-effect counters;
+   root/affected race/lint and compiling host examples pass.
+5. Docs/migration/current constructor agree. Audited host reauthorization/new
+   intent after trusted reconciliation explained with provenance/current policy,
+   fresh authenticated approval and downstream duplicate-effect constraints;
+   cannot silently refresh/rewrite immutable original grant. Both reviewers100%,
+   no unresolved detected defects; no new core dependency/domain DTO.
+
+Spec-first: replace the seven positional arguments with exported named config
+(Store, Prepare, Codec, Issuer, Clock, Lease, MaxBytes). ErrOperationProfileConfiguration
+identifies construction failure; typednil store/codec rejected. Retain positive
+lease and cap zero default (bounded display and encoded result, same current cap).
+Do not change journal authority/recovery transitions. An expired original grant
+blocks retry of its old logical operation even after retry-authorized reconciliation;
+a fresh unrelated grant cannot replace it. Host must resolve uncertainty first and
+record audited linkage before creating any new authenticated intent, apply current
+policy/approval and retain downstream idempotency/reconciliation responsibility.
+No new grant refresh/replacement API and no implicit redispatch.
+
+D10/D11 implementation replaces seven positional arguments with named config and
+migrates all real callers. Current same public typednil port probe passes -race
+count3; AAA config/snapshot/recovery tests pass count3. Root/human/mail race PASS;
+human/mail lint0. Existing atomic journal transitions unchanged; recovery still
+requires original unexpired consumed grant, AllowRecovery and fenced reconciliation.
+Store valid/expired/fresh-grant cases and real registry/profile handler counter
+confirm no new dispatch after fresh/expired refusal. Runnable local example:
+challenge -> bound approval -> restart replay, one physical receipt. Updated current
+contract/migration gives audited host new-intent steps without grant replacement.
+Final root lint and independent reviewers pending; no row27 commit/acceptance yet.
+
+D10/D11 final root lint0 and latest contract/config/recovery race count3 PASS1.712s.
+AST search confirms no remaining seven-argument real constructor call. Journal,
+reconciliation and operation contract source bytes equal baseline (only constructor
+and real caller API changed). Root/human/mail checks and physical-one-receipt CLI
+proof saved; independent acceptance starts against current diff. No row27 commit.
+
+Independent acceptance A and B each100%, all five criteria20/20, no unresolved
+detected errors. Reports saved in task41/d10-d11/acceptance-a.md and acceptance-b.md.
+A independently exercised inclusive display/encoded-result caps and default1MiB
+boundaries with a retained overlay fixture; race count3 PASS. Both reproduced
+baseline typednil failures, current race/lint and restart replay with one receipt.
+Accepted for separate signed commit `refactor: operation config`.

@@ -65,12 +65,19 @@ func numberReplayProfile(t *testing.T, kind string) ExecutionProfile {
 		require.NoError(t, err)
 		return profile
 	}
-	profile, err := NewOperationProfile(NewMemoryOperationStore(),
-		func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: NewMemoryOperationStore(),
+		Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
 			return OperationIntent{Namespace: "number", Subject: "host", Scope: "tenant", OperationID: "intent",
 				AttemptID: call.Input.CallID, PolicyFingerprint: "current", CanonicalDigest: "host",
 				CanonicalRules: "json", DisplayJSON: []byte(`{}`)}, nil
-		}, codec, "host", time.Now, time.Minute, 0)
+		},
+		Codec:    codec,
+		Issuer:   "host",
+		Clock:    time.Now,
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	return profile
 }

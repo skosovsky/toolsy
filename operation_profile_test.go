@@ -41,29 +41,31 @@ func TestOperationProfileRegistryAndSessionReauthorize(t *testing.T) {
 			require.NoError(t, buildErr)
 			grantID := ""
 			profile, profileErr := NewOperationProfile(
-				store,
-				func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-					digest := sha256.Sum256(call.Input.ArgsJSON)
-					return OperationIntent{
-						Namespace:         "writes",
-						Scope:             call.Context.Scope.(string),
-						Subject:           call.Context.Subject.(string),
-						OperationID:       "intent",
-						AttemptID:         call.Input.CallID,
-						GrantID:           grantID,
-						PolicyFingerprint: "policy",
-						CanonicalDigest: hex.EncodeToString(
-							digest[:],
-						),
-						CanonicalRules: "json",
-						DisplayJSON:    []byte(`{"action":"write"}`),
-					}, nil
+				OperationProfileConfig{
+					Store: store,
+					Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+						digest := sha256.Sum256(call.Input.ArgsJSON)
+						return OperationIntent{
+							Namespace:         "writes",
+							Scope:             call.Context.Scope.(string),
+							Subject:           call.Context.Subject.(string),
+							OperationID:       "intent",
+							AttemptID:         call.Input.CallID,
+							GrantID:           grantID,
+							PolicyFingerprint: "policy",
+							CanonicalDigest: hex.EncodeToString(
+								digest[:],
+							),
+							CanonicalRules: "json",
+							DisplayJSON:    []byte(`{"action":"write"}`),
+						}, nil
+					},
+					Codec:    JSONResultCodec[string, string]{},
+					Issuer:   "host",
+					Clock:    func() time.Time { return now },
+					Lease:    time.Minute,
+					MaxBytes: 0,
 				},
-				JSONResultCodec[string, string]{},
-				"host",
-				func() time.Time { return now },
-				time.Minute,
-				0,
 			)
 			require.NoError(t, profileErr)
 			reg, registryErr := NewRegistryBuilder(WithExecutionProfile(profile)).Add(tool).Build()
@@ -122,19 +124,27 @@ func TestOperationProfileTimeoutAfterDispatchIsNotRetryable(t *testing.T) {
 	// Arrange: the handler may have committed before timing out.
 	now := time.Now()
 	store := NewMemoryOperationStore()
-	profile, err := NewOperationProfile(store, func(context.Context, PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "writes",
-			Scope:             "tenant",
-			Subject:           "user",
-			OperationID:       "intent",
-			AttemptID:         "attempt",
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "digest",
-			CanonicalRules:    "json",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Minute, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(context.Context, PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "writes",
+				Scope:             "tenant",
+				Subject:           "user",
+				OperationID:       "intent",
+				AttemptID:         "attempt",
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "digest",
+				CanonicalRules:    "json",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return now },
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	var calls int
 	tool, err := NewTool(
@@ -173,13 +183,15 @@ func TestOperationProfilePendingResumeReplayAndDeliveryFailure(t *testing.T) {
 		Input:    ToolInput{CallID: "first"},
 	}
 	profile, err := NewOperationProfile(
-		store,
-		func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
-		JSONResultCodec[string, string]{},
-		"host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
+		OperationProfileConfig{
+			Store:    store,
+			Prepare:  func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
+			Codec:    JSONResultCodec[string, string]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
+		},
 	)
 	require.NoError(t, err)
 	var calls int
@@ -234,13 +246,15 @@ func TestOperationProfileLateFailureCannotReplaySuccess(t *testing.T) {
 		DisplayJSON:       []byte(`{}`),
 	}
 	profile, err := NewOperationProfile(
-		store,
-		func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
-		JSONResultCodec[string, string]{},
-		"host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
+		OperationProfileConfig{
+			Store:    store,
+			Prepare:  func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
+			Codec:    JSONResultCodec[string, string]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
+		},
 	)
 	require.NoError(t, err)
 	call := PreparedCall{Manifest: ToolManifest{Name: "write"}}
@@ -271,20 +285,28 @@ func TestOperationProfileApprovalBindsPreparedArgsAndAttachments(t *testing.T) {
 			now := time.Now()
 			store := NewMemoryOperationStore()
 			grantID := ""
-			profile, err := NewOperationProfile(store, func(context.Context, PreparedCall) (OperationIntent, error) {
-				return OperationIntent{
-					Namespace:         "writes",
-					Scope:             "tenant",
-					Subject:           "subject",
-					OperationID:       "intent",
-					AttemptID:         "attempt",
-					GrantID:           grantID,
-					PolicyFingerprint: "policy",
-					CanonicalDigest:   "opaque dependency identity",
-					CanonicalRules:    "json",
-					DisplayJSON:       []byte(`{"action":"write"}`),
-				}, nil
-			}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Minute, 0)
+			profile, err := NewOperationProfile(OperationProfileConfig{
+				Store: store,
+				Prepare: func(context.Context, PreparedCall) (OperationIntent, error) {
+					return OperationIntent{
+						Namespace:         "writes",
+						Scope:             "tenant",
+						Subject:           "subject",
+						OperationID:       "intent",
+						AttemptID:         "attempt",
+						GrantID:           grantID,
+						PolicyFingerprint: "policy",
+						CanonicalDigest:   "opaque dependency identity",
+						CanonicalRules:    "json",
+						DisplayJSON:       []byte(`{"action":"write"}`),
+					}, nil
+				},
+				Codec:    JSONResultCodec[string, string]{},
+				Issuer:   "host",
+				Clock:    func() time.Time { return now },
+				Lease:    time.Minute,
+				MaxBytes: 0,
+			})
 			require.NoError(t, err)
 			call := PreparedCall{
 				Manifest: ToolManifest{Name: "write", RequiresConfirmation: true},

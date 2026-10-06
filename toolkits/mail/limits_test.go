@@ -177,21 +177,23 @@ func TestMailSendApprovalPreviewMatchesDispatch(t *testing.T) {
 	store := toolsy.NewMemoryOperationStore()
 	grantID := ""
 	profile, err := toolsy.NewOperationProfile(
-		store,
-		func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
-			digest := sha256.Sum256(call.Input.ArgsJSON)
-			return toolsy.OperationIntent{
-				Namespace: "mail", Scope: "tenant", Subject: "alice", OperationID: "send-1",
-				AttemptID: call.Input.CallID, GrantID: grantID, PolicyFingerprint: "mail-policy",
-				CanonicalDigest: hex.EncodeToString(digest[:]), CanonicalRules: "prepared-json",
-				DisplayJSON: call.Input.ArgsJSON,
-			}, nil
+		toolsy.OperationProfileConfig{
+			Store: store,
+			Prepare: func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+				digest := sha256.Sum256(call.Input.ArgsJSON)
+				return toolsy.OperationIntent{
+					Namespace: "mail", Scope: "tenant", Subject: "alice", OperationID: "send-1",
+					AttemptID: call.Input.CallID, GrantID: grantID, PolicyFingerprint: "mail-policy",
+					CanonicalDigest: hex.EncodeToString(digest[:]), CanonicalRules: "prepared-json",
+					DisplayJSON: call.Input.ArgsJSON,
+				}, nil
+			},
+			Codec:    toolsy.JSONResultCodec[sendResult, struct{}]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		toolsy.JSONResultCodec[sendResult, struct{}]{},
-		"host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
 	)
 	require.NoError(t, err)
 	registry, err := toolsy.NewRegistryBuilder(toolsy.WithExecutionProfile(profile)).Add(tools[0]).Build()

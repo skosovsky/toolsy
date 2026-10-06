@@ -57,30 +57,32 @@ func run(ctx context.Context, cfg config, out io.Writer) error {
 	}
 	grantID := ""
 	profile, err := toolsy.NewOperationProfile(
-		store,
-		func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
-			typed, contextErr := toolsy.TypedContext[operator, workspace](call.Context)
-			if contextErr != nil {
-				return toolsy.OperationIntent{}, contextErr
-			}
-			return toolsy.OperationIntent{
-				Namespace:         "local-notes",
-				Subject:           typed.Subject.ID,
-				Scope:             typed.Scope.ID,
-				OperationID:       cfg.OperationID,
-				AttemptID:         call.Input.CallID,
-				GrantID:           grantID,
-				PolicyFingerprint: "local-operator-acl",
-				CanonicalDigest:   receiptPath,
-				CanonicalRules:    "typed JSON and trusted receipt target",
-				DisplayJSON:       call.Input.ArgsJSON,
-			}, nil
+		toolsy.OperationProfileConfig{
+			Store: store,
+			Prepare: func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+				typed, contextErr := toolsy.TypedContext[operator, workspace](call.Context)
+				if contextErr != nil {
+					return toolsy.OperationIntent{}, contextErr
+				}
+				return toolsy.OperationIntent{
+					Namespace:         "local-notes",
+					Subject:           typed.Subject.ID,
+					Scope:             typed.Scope.ID,
+					OperationID:       cfg.OperationID,
+					AttemptID:         call.Input.CallID,
+					GrantID:           grantID,
+					PolicyFingerprint: "local-operator-acl",
+					CanonicalDigest:   receiptPath,
+					CanonicalRules:    "typed JSON and trusted receipt target",
+					DisplayJSON:       call.Input.ArgsJSON,
+				}, nil
+			},
+			Codec:    toolsy.JSONResultCodec[string, string]{},
+			Issuer:   "local-host",
+			Clock:    time.Now,
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		toolsy.JSONResultCodec[string, string]{},
-		"local-host",
-		time.Now,
-		time.Minute,
-		0,
 	)
 	if err != nil {
 		return err

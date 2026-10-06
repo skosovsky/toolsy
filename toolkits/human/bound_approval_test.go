@@ -26,25 +26,27 @@ func TestConversationPauseDoesNotGrantAction(t *testing.T) {
 	revoked := false
 	dispatched := []string{}
 	profile, err := toolsy.NewOperationProfile(
-		store,
-		func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
-			typed, contextErr := toolsy.TypedContext[string, string](call.Context)
-			if contextErr != nil {
-				return toolsy.OperationIntent{}, contextErr
-			}
-			digest := sha256.Sum256(call.Input.ArgsJSON)
-			return toolsy.OperationIntent{
-				Namespace: "notes", Subject: typed.Subject, Scope: typed.Scope,
-				OperationID: "host-intent", AttemptID: call.Input.CallID, GrantID: grantID,
-				PolicyFingerprint: "host-acl", CanonicalDigest: hex.EncodeToString(digest[:]),
-				CanonicalRules: "prepared-json", DisplayJSON: call.Input.ArgsJSON,
-			}, nil
+		toolsy.OperationProfileConfig{
+			Store: store,
+			Prepare: func(_ context.Context, call toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+				typed, contextErr := toolsy.TypedContext[string, string](call.Context)
+				if contextErr != nil {
+					return toolsy.OperationIntent{}, contextErr
+				}
+				digest := sha256.Sum256(call.Input.ArgsJSON)
+				return toolsy.OperationIntent{
+					Namespace: "notes", Subject: typed.Subject, Scope: typed.Scope,
+					OperationID: "host-intent", AttemptID: call.Input.CallID, GrantID: grantID,
+					PolicyFingerprint: "host-acl", CanonicalDigest: hex.EncodeToString(digest[:]),
+					CanonicalRules: "prepared-json", DisplayJSON: call.Input.ArgsJSON,
+				}, nil
+			},
+			Codec:    toolsy.JSONResultCodec[string, string]{},
+			Issuer:   "authenticated-host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		toolsy.JSONResultCodec[string, string]{},
-		"authenticated-host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
 	)
 	require.NoError(t, err)
 	action, err := toolsy.NewTypedTool(toolsy.TypedToolSpec[string, string, boundActionArgs, string, string]{

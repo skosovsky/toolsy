@@ -1,0 +1,9 @@
+{
+  "commit": "38314b41d1b164f3537b2603177c310c404578da",
+  "sha256": {
+    "operation_profile.go": "446867395c75f318f0f0b66f714784babd41d283256d7657ad68a9acf13526ac",
+    "operation_store.go": "21fa868e1eb08c6249531b2274b810a8b3c1e265ab63da98d6d73b2596056e4c",
+    "operation_contract.go": "dac55e5e098b2b09bd685c02f21eca46b70c0387e23898440c937c3175c0ec14",
+    "operation_reconcile.go": "f3578efbaa10c2e2f7b0ee3bdd17708a2d5489a88e7aeb1e3e5c99baae736c75"
+  }
+}

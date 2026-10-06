@@ -1,0 +1,8 @@
+--- FAIL: TestD10PublicTypedNilProfileProbe (0.00s)
+    --- FAIL: TestD10PublicTypedNilProfileProbe/store (0.00s)
+        d10_probe_test.go:37: typed nil store accepted without configuration error
+    --- FAIL: TestD10PublicTypedNilProfileProbe/codec (0.00s)
+        d10_probe_test.go:37: typed nil codec accepted without configuration error
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.491s
+FAIL

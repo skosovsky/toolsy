@@ -65,26 +65,28 @@ func TestNestedSuppliedSessionPreservesPolicyViewBudgetAndApproval(t *testing.T)
 			require.NoError(t, err)
 			store := NewMemoryOperationStore()
 			operation, err := NewOperationProfile(
-				store,
-				func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-					return OperationIntent{
-						Namespace:         "nested",
-						Subject:           call.Context.Subject.(string),
-						Scope:             call.Context.Scope.(string),
-						OperationID:       "stable-write",
-						AttemptID:         call.Input.CallID,
-						GrantID:           grantID,
-						PolicyFingerprint: "host policy",
-						CanonicalDigest:   "host dependencies",
-						CanonicalRules:    "json",
-						DisplayJSON:       []byte(`{"action":"write"}`),
-					}, nil
+				OperationProfileConfig{
+					Store: store,
+					Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+						return OperationIntent{
+							Namespace:         "nested",
+							Subject:           call.Context.Subject.(string),
+							Scope:             call.Context.Scope.(string),
+							OperationID:       "stable-write",
+							AttemptID:         call.Input.CallID,
+							GrantID:           grantID,
+							PolicyFingerprint: "host policy",
+							CanonicalDigest:   "host dependencies",
+							CanonicalRules:    "json",
+							DisplayJSON:       []byte(`{"action":"write"}`),
+						}, nil
+					},
+					Codec:    JSONResultCodec[string, string]{},
+					Issuer:   "host",
+					Clock:    func() time.Time { return now },
+					Lease:    time.Minute,
+					MaxBytes: 0,
 				},
-				JSONResultCodec[string, string]{},
-				"host",
-				func() time.Time { return now },
-				time.Minute,
-				0,
 			)
 			require.NoError(t, err)
 			// Host routing: only write is journaled; parent is a side-effect-free harness.

@@ -724,3 +724,37 @@ See the [executable DI-only mutation example](../mutation_example_test.go) and
 NewTool/NewStreamTool/NewProxyTool/NewDynamicToolFromSpec/NewTypedTool and
 NewPolicyToolFromSpec before a callable tool is returned. NewPolicyTool validates
 its base port; this does not certify arbitrary caller-owned tools' internals.
+
+
+## D10 / D11 — named operation configuration and recovery
+
+NewOperationProfile takes one OperationProfileConfig with named Store, Prepare,
+Codec, Issuer, Clock, Lease and MaxBytes fields; the positional signature is removed. Required nil/typednil
+ports, nil callbacks, empty issuer, nonpositive lease and negative caps fail with
+ErrOperationProfileConfiguration. MaxBytes zero retains the bounded default for
+both display JSON and encoded result. Host ports are captured, not owned/closed.
+
+Retain original-grant recovery: a consumed grant is not replaced by any fresh
+approval. An expired original approval cannot authorize a redispatch of its old
+logical operation. Reconciliation is trusted/fenced evidence, not fresh approval.
+Document audited new intent after uncertainty is resolved, current authority and
+fresh bound approval, original provenance and downstream duplicate-effect safety.
+See the [current operation contract](execution-contract.md#approval-and-operation-journal-contract)
+for the exact original-grant restrictions and audited host reauthorization steps.
+The store/claim/fence/reconciliation execution boundary is retained unchanged;
+no implicit retry, grant replacement or mandatory harness dependency is added.
+
+```go
+profile, err := toolsy.NewOperationProfile(toolsy.OperationProfileConfig{
+    Store: store, Prepare: prepare, Codec: codec, Issuer: "authenticated-host",
+    Clock: time.Now, Lease: time.Minute, MaxBytes: 0,
+})
+if err != nil { return err }
+```
+
+MaxBytes applies to both display and encoded terminal result, defaults to 1 MiB,
+and is inclusive when positive. Issuer is opaque/nonempty; construction does not
+normalize or authenticate it. Config is captured by value, while referenced ports
+and callback captures remain host-owned/concurrent-safe. Construction invokes no
+host callback. The [approval journal example](../examples/approval_journal/main.go)
+uses named fields and demonstrates challenge, bound issuance and durable replay.

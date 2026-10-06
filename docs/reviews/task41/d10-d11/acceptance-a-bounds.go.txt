@@ -1,0 +1,26 @@
+package toolsy
+import("context";"testing";"time";"bytes";"github.com/stretchr/testify/require")
+type reviewerABoundsCodec struct{ size int }
+func(c reviewerABoundsCodec) EncodeResult(Chunk)([]byte,error){return bytes.Repeat([]byte("x"),c.size),nil}
+func(c reviewerABoundsCodec) DecodeResult([]byte)(Chunk,error){return Chunk{Event:EventResult},nil}
+func TestReviewerAOperationBounds(t *testing.T){
+ for _, tc:=range []struct{name string;cap,display,result int; want string;effects int}{
+ {"inclusive",2,2,2,"",1}, {"display over",2,3,2,"invalid_description",0},
+ {"result over",2,2,3,"result_limit",1}, {"default inclusive",0,1048576,1048576,"",1},
+ {"default display over",0,1048577,2,"invalid_description",0},
+ {"default result over",0,2,1048577,"result_limit",1},
+ }{t.Run(tc.name,func(t *testing.T){
+ // Arrange.
+ now:=time.Now();store:=NewMemoryOperationStore();effects:=0
+ display:=append([]byte("{}"),bytes.Repeat([]byte(" "),tc.display-2)...)
+ p,err:=NewOperationProfile(OperationProfileConfig{Store:store,Codec:reviewerABoundsCodec{tc.result},Issuer:"host",Clock:func()time.Time{return now},Lease:time.Minute,MaxBytes:tc.cap,
+ Prepare:func(context.Context,PreparedCall)(OperationIntent,error){return OperationIntent{Namespace:"n",Scope:"s",Subject:"u",OperationID:"o",AttemptID:"a",PolicyFingerprint:"p",CanonicalDigest:"d",CanonicalRules:"r",DisplayJSON:display},nil}})
+ require.NoError(t,err)
+ call:=PreparedCall{Manifest:ToolManifest{Name:"write"},Input:ToolInput{ArgsJSON:[]byte("{}")}}
+ // Act.
+ err=p.ExecutePrepared(context.Background(),call,func(yield func(Chunk)error)error{effects++;return yield(Chunk{Event:EventResult})},func(Chunk)error{return nil})
+ // Assert.
+ if tc.want==""{require.NoError(t,err)}else{var decision *OperationError;require.ErrorAs(t,err,&decision);require.Equal(t,tc.want,decision.Kind)}
+ require.Equal(t,tc.effects,effects)
+ })}
+}

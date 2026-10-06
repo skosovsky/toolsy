@@ -166,25 +166,27 @@ const privateEffectMode = 0o600
 func crashProfile(t *testing.T, store *Store, now time.Time, attempt string) *toolsy.OperationProfile {
 	t.Helper()
 	profile, err := toolsy.NewOperationProfile(
-		store,
-		func(context.Context, toolsy.PreparedCall) (toolsy.OperationIntent, error) {
-			return toolsy.OperationIntent{
-				Namespace:         "writes",
-				Scope:             "tenant",
-				Subject:           "subject",
-				OperationID:       "intent",
-				AttemptID:         attempt,
-				PolicyFingerprint: "policy",
-				CanonicalDigest:   "digest",
-				CanonicalRules:    "rules",
-				DisplayJSON:       []byte(`{}`),
-			}, nil
+		toolsy.OperationProfileConfig{
+			Store: store,
+			Prepare: func(context.Context, toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+				return toolsy.OperationIntent{
+					Namespace:         "writes",
+					Scope:             "tenant",
+					Subject:           "subject",
+					OperationID:       "intent",
+					AttemptID:         attempt,
+					PolicyFingerprint: "policy",
+					CanonicalDigest:   "digest",
+					CanonicalRules:    "rules",
+					DisplayJSON:       []byte(`{}`),
+				}, nil
+			},
+			Codec:    toolsy.JSONResultCodec[string, string]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
 		},
-		toolsy.JSONResultCodec[string, string]{},
-		"host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
 	)
 	require.NoError(t, err)
 	return profile

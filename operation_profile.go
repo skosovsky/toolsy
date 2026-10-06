@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -70,26 +71,60 @@ type OperationProfile struct {
 	maxBytes int
 }
 
-func NewOperationProfile(store OperationStore, prepare PrepareOperation, codec ResultCodec,
-	issuer string, clock func() time.Time, lease time.Duration, maxBytes int,
-) (*OperationProfile, error) {
-	if store == nil || prepare == nil || codec == nil || issuer == "" || clock == nil || lease <= 0 || maxBytes < 0 {
-		return nil, errors.New(
-			"toolsy: operation profile requires store, host preparation, codec, issuer, clock and positive lease",
-		)
+// ErrOperationProfileConfiguration identifies invalid operation-profile setup.
+var ErrOperationProfileConfiguration = errors.New("toolsy: invalid operation profile configuration")
+
+// OperationProfileConfig names host ports and bounds for the prepared dispatch gate.
+// Config fields are captured by value; host-owned referenced ports and callbacks
+// must remain valid and support concurrent calls. Toolsy does not close them.
+type OperationProfileConfig struct {
+	Store   OperationStore
+	Prepare PrepareOperation
+	Codec   ResultCodec
+	Issuer  string
+	Clock   func() time.Time
+	Lease   time.Duration
+	// MaxBytes bounds both display JSON and encoded terminal result. Zero defaults
+	// to 1 MiB; negative values fail construction. A positive value is inclusive.
+	MaxBytes int
+}
+
+// NewOperationProfile validates and captures a named configuration without calling
+// host ports. The profile never schedules retries or replaces a consumed grant.
+func NewOperationProfile(config OperationProfileConfig) (*OperationProfile, error) {
+	if err := validateOperationProfileConfig(config); err != nil {
+		return nil, err
 	}
-	if maxBytes == 0 {
-		maxBytes = defaultCacheResultLimit
+	if config.MaxBytes == 0 {
+		config.MaxBytes = defaultCacheResultLimit
 	}
 	return &OperationProfile{
-		store:    store,
-		prepare:  prepare,
-		codec:    codec,
-		issuer:   issuer,
-		clock:    clock,
-		lease:    lease,
-		maxBytes: maxBytes,
+		store: config.Store, prepare: config.Prepare, codec: config.Codec,
+		issuer: config.Issuer, clock: config.Clock, lease: config.Lease, maxBytes: config.MaxBytes,
 	}, nil
+}
+
+func validateOperationProfileConfig(config OperationProfileConfig) error {
+	var reason string
+	switch {
+	case isNilValue(config.Store):
+		reason = "store is nil"
+	case config.Prepare == nil:
+		reason = "host preparation is nil"
+	case isNilValue(config.Codec):
+		reason = "result codec is nil"
+	case config.Issuer == "":
+		reason = "issuer is empty"
+	case config.Clock == nil:
+		reason = "clock is nil"
+	case config.Lease <= 0:
+		reason = "lease must be positive"
+	case config.MaxBytes < 0:
+		reason = "max bytes must not be negative"
+	default:
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrOperationProfileConfiguration, reason)
 }
 
 func (p *OperationProfile) binding(call PreparedCall, intent OperationIntent) (OperationBinding, error) {

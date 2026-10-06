@@ -26,13 +26,15 @@ func TestOperationNamespaceScopeAndNewIntentAreIndependent(t *testing.T) {
 		DisplayJSON:       []byte(`{}`),
 	}
 	profile, err := NewOperationProfile(
-		store,
-		func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
-		JSONResultCodec[string, string]{},
-		"host",
-		func() time.Time { return now },
-		time.Minute,
-		0,
+		OperationProfileConfig{
+			Store:    store,
+			Prepare:  func(context.Context, PreparedCall) (OperationIntent, error) { return intent, nil },
+			Codec:    JSONResultCodec[string, string]{},
+			Issuer:   "host",
+			Clock:    func() time.Time { return now },
+			Lease:    time.Minute,
+			MaxBytes: 0,
+		},
 	)
 	require.NoError(t, err)
 	call := PreparedCall{Manifest: ToolManifest{Name: "write"}, Input: ToolInput{ArgsJSON: []byte(`{}`)}}
@@ -67,20 +69,28 @@ func TestOperationDownstreamIdempotencyKeepsOriginalKeyOnAuthorizedRetry(t *test
 	var commits, dispatches int
 	var observedKeys []string
 	attempt := "first"
-	profile, err := NewOperationProfile(store, func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "writes",
-			Scope:             call.Context.Scope.(string),
-			Subject:           call.Context.Subject.(string),
-			OperationID:       "intent",
-			AttemptID:         attempt,
-			DownstreamKey:     call.Context.Values["downstream_key"].(string),
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "digest",
-			CanonicalRules:    "json",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Minute, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "writes",
+				Scope:             call.Context.Scope.(string),
+				Subject:           call.Context.Subject.(string),
+				OperationID:       "intent",
+				AttemptID:         attempt,
+				DownstreamKey:     call.Context.Values["downstream_key"].(string),
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "digest",
+				CanonicalRules:    "json",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return now },
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	tool, err := NewTool("write", "Write", func(_ context.Context, env *RunEnv, _ struct{}) (string, error) {
 		dispatches++

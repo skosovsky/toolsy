@@ -46,20 +46,28 @@ func TestConcurrentApprovedResumesDispatchOnce(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	profile, err := NewOperationProfile(store, func(_ context.Context, call PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "workers",
-			Subject:           "host",
-			Scope:             "tenant",
-			OperationID:       "intent",
-			AttemptID:         call.Input.CallID,
-			GrantID:           grantID,
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "host dependency",
-			CanonicalRules:    "json",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Minute, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(_ context.Context, call PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "workers",
+				Subject:           "host",
+				Scope:             "tenant",
+				OperationID:       "intent",
+				AttemptID:         call.Input.CallID,
+				GrantID:           grantID,
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "host dependency",
+				CanonicalRules:    "json",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return now },
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(WithExecutionProfile(profile)).Add(tool).Build()
 	require.NoError(t, err)

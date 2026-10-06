@@ -44,19 +44,27 @@ func (s *faultOperationStore) Finish(ctx context.Context, finish OperationFinish
 
 func testFaultProfile(t *testing.T, store OperationStore, now *time.Time) *OperationProfile {
 	t.Helper()
-	p, err := NewOperationProfile(store, func(context.Context, PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "writes",
-			Scope:             "tenant",
-			Subject:           "subject",
-			OperationID:       "intent",
-			AttemptID:         "attempt",
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "digest",
-			CanonicalRules:    "rules",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return *now }, time.Minute, 0)
+	p, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(context.Context, PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "writes",
+				Scope:             "tenant",
+				Subject:           "subject",
+				OperationID:       "intent",
+				AttemptID:         "attempt",
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "digest",
+				CanonicalRules:    "rules",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return *now },
+		Lease:    time.Minute,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	return p
 }
@@ -222,20 +230,28 @@ func TestOperationFaultApprovalExpiresWhileClaimAcknowledgementWaits(t *testing.
 	now := time.Now()
 	store := &faultOperationStore{MemoryOperationStore: NewMemoryOperationStore()}
 	grantID := ""
-	profile, err := NewOperationProfile(store, func(context.Context, PreparedCall) (OperationIntent, error) {
-		return OperationIntent{
-			Namespace:         "writes",
-			Scope:             "tenant",
-			Subject:           "subject",
-			OperationID:       "intent",
-			AttemptID:         "attempt",
-			GrantID:           grantID,
-			PolicyFingerprint: "policy",
-			CanonicalDigest:   "digest",
-			CanonicalRules:    "json",
-			DisplayJSON:       []byte(`{}`),
-		}, nil
-	}, JSONResultCodec[string, string]{}, "host", func() time.Time { return now }, time.Hour, 0)
+	profile, err := NewOperationProfile(OperationProfileConfig{
+		Store: store,
+		Prepare: func(context.Context, PreparedCall) (OperationIntent, error) {
+			return OperationIntent{
+				Namespace:         "writes",
+				Scope:             "tenant",
+				Subject:           "subject",
+				OperationID:       "intent",
+				AttemptID:         "attempt",
+				GrantID:           grantID,
+				PolicyFingerprint: "policy",
+				CanonicalDigest:   "digest",
+				CanonicalRules:    "json",
+				DisplayJSON:       []byte(`{}`),
+			}, nil
+		},
+		Codec:    JSONResultCodec[string, string]{},
+		Issuer:   "host",
+		Clock:    func() time.Time { return now },
+		Lease:    time.Hour,
+		MaxBytes: 0,
+	})
 	require.NoError(t, err)
 	call := PreparedCall{Manifest: ToolManifest{Name: "write", RequiresConfirmation: true}}
 	var calls int

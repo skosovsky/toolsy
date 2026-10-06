@@ -60,3 +60,9 @@ Obtain binding/attempt from `OperationOutcomeError` or `OperationStateError`; us
 Approval/operation runtime, local durable adapter, terminal stream validation and their integration/fault-injection suites are present. All original MCP migration scenarios are reconciled. The final full workspace test/race, lint and clear-break preflight gates pass. The custom-pending consumer-abort cleanup finding is independently closed: per-invocation cancellation releases custom Await without closing the transport or duplicating cancellation notifications. Both independent final reviews pass:66/67 implemented plus one explicitly accepted historical process exception;67/67 accepted. Optional programmatic/workspace/MCP/catalog profiles retain their activation conditions and all54 deferred requirements in the matrix; none are claimed delivered. No release or issue closure has been performed.
 
 Task41 supersedes the original cache eligibility/marker contract: supply an explicit per-attempt CacheEligibility predicate; WithIdempotent alone is insufficient. ReplaySourceMetadata holds ReplaySourceCache or ReplaySourceOperation, not a boolean. See [task41 migration](migration-task41.md).
+
+
+Task41 changes this constructor to a named OperationProfileConfig. See the
+[current operation contract](execution-contract.md#approval-and-operation-journal-contract)
+and [task41 migration](migration-task41.md) for configuration validation and retained
+original-grant recovery/host reauthorization requirements.

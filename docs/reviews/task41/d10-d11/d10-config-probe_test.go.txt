@@ -1,0 +1,40 @@
+package toolsy_test
+
+import (
+ "context"
+ "reflect"
+ "testing"
+ "time"
+
+ "github.com/skosovsky/toolsy"
+)
+
+func TestD10PublicTypedNilProfileProbe(t *testing.T) {
+ constructor := reflect.ValueOf(toolsy.NewOperationProfile)
+ for _, missing := range []string{"store", "codec"} {
+  t.Run(missing, func(t *testing.T) {
+   // Arrange: the fixture supports the positional baseline and named config.
+   var store toolsy.OperationStore = toolsy.NewMemoryOperationStore()
+   var codec toolsy.ResultCodec = toolsy.JSONResultCodec[string, string]{}
+   if missing == "store" { store = (*toolsy.MemoryOperationStore)(nil) }
+   if missing == "codec" { codec = (*toolsy.JSONResultCodec[string, string])(nil) }
+   prepare := toolsy.PrepareOperation(func(context.Context, toolsy.PreparedCall) (toolsy.OperationIntent, error) {
+    t.Fatal("constructor invoked host preparation")
+    return toolsy.OperationIntent{}, nil
+   })
+   arguments := []reflect.Value{reflect.ValueOf(store), reflect.ValueOf(prepare), reflect.ValueOf(codec),
+    reflect.ValueOf("host"), reflect.ValueOf(time.Now), reflect.ValueOf(time.Minute), reflect.ValueOf(0)}
+   if constructor.Type().NumIn() == 1 {
+    config := reflect.New(constructor.Type().In(0)).Elem()
+    for index, field := range []string{"Store", "Prepare", "Codec", "Issuer", "Clock", "Lease", "MaxBytes"} {
+     config.FieldByName(field).Set(arguments[index])
+    }
+    arguments = []reflect.Value{config}
+   }
+   // Act.
+   result := constructor.Call(arguments)
+   // Assert.
+   if result[1].IsNil() || !result[0].IsNil() { t.Fatalf("typed nil %s accepted without configuration error", missing) }
+  })
+ }
+}
