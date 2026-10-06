@@ -1,0 +1,35 @@
+package toolsy_test
+
+import (
+ "context"
+ "testing"
+
+ "github.com/skosovsky/toolsy"
+)
+
+func TestD05PublicGateMisconfigurationProbe(t *testing.T) {
+ for _,name:=range []string{"nil-policy","missing-budget","typed-nil-budget"} {t.Run(name,func(t *testing.T){
+  // Arrange.
+  calls:=0
+  tool,err:=toolsy.NewTool("gate_probe","gate probe",func(context.Context,*toolsy.RunEnv,struct{})(string,error){calls++;return "dispatched",nil})
+  if err!=nil {t.Fatal(err)}
+  env:=toolsy.NewRunEnv(nil)
+  builder:=toolsy.NewRegistryBuilder().Add(tool)
+  if name=="nil-policy" {builder.WithOptions(toolsy.WithPolicy("required",nil))} else {builder.Use(toolsy.WithBudget())}
+  if name=="typed-nil-budget" {var tracker *probeNilBudget;toolsy.Put(env,toolsy.DepKeyBudget,tracker)}
+  // Act.
+  registry,err:=builder.Build()
+  if name=="nil-policy" {
+   // Assert.
+   if err==nil {t.Fatal("explicit nil policy silently accepted")}
+   return
+  }
+  if err!=nil {t.Fatal(err)}
+  err=registry.Execute(context.Background(),toolsy.ToolCall{ToolName:"gate_probe",Env:env,Input:toolsy.ToolInput{ArgsJSON:[]byte(`{}`)}},func(toolsy.Chunk)error{return nil})
+  // Assert.
+  if err==nil || calls!=0 {t.Fatalf("invalid budget dispatched: calls=%d error=%v",calls,err)}
+ })}
+}
+
+type probeNilBudget struct{}
+func (*probeNilBudget) Allow(context.Context,toolsy.ToolManifest,toolsy.ToolInput)(bool,string,error){panic("nil tracker must not execute")}

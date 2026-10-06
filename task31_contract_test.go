@@ -366,10 +366,13 @@ func TestTask31PolicyAndAuthorizer_ReceiveDefensiveInputCopies(t *testing.T) {
 	)
 	require.NoError(t, err)
 	reg, err := NewRegistryBuilder(
-		WithAuthorizer(AuthorizerFunc(func(_ context.Context, req AuthorizationRequest) error {
-			mutateInput(req.Input)
-			return nil
-		})),
+		WithPolicy(
+			"task31-copy-authorizer",
+			mustAuthorizerPolicy(t, AuthorizerFunc(func(_ context.Context, req PolicyRequest) error {
+				mutateInput(req.Input)
+				return nil
+			})),
+		),
 		WithPolicy("task31-copy-policy", PolicyFunc(func(_ context.Context, req PolicyRequest) Decision {
 			mutateInput(req.Input)
 			return AllowDecision()

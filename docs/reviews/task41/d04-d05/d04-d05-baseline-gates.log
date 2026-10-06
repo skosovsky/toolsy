@@ -1,0 +1,10 @@
+--- FAIL: TestD05PublicGateMisconfigurationProbe (0.00s)
+    --- FAIL: TestD05PublicGateMisconfigurationProbe/nil-policy (0.00s)
+        d04_d05_probe_test.go:24: explicit nil policy silently accepted
+    --- FAIL: TestD05PublicGateMisconfigurationProbe/missing-budget (0.00s)
+        d04_d05_probe_test.go:30: invalid budget dispatched: calls=1 error=<nil>
+    --- FAIL: TestD05PublicGateMisconfigurationProbe/typed-nil-budget (0.00s)
+        d04_d05_probe_test.go:30: invalid budget dispatched: calls=1 error=<nil>
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.509s
+FAIL

@@ -41,6 +41,9 @@ type RegistryView struct {
 
 // View creates a durable capability view with its own policy layered over the root registry policy.
 func (r *Registry) View(spec RegistryViewSpec) (*RegistryView, error) {
+	if spec.Policy != nil && isNilValue(spec.Policy) {
+		return nil, fmt.Errorf("%w: nil view policy", ErrPolicyConfiguration)
+	}
 	if spec.Policy != nil && spec.PolicyID == "" {
 		return nil, NewValidationError("registry view policy id is required")
 	}
@@ -78,6 +81,9 @@ func (r *Registry) RestoreView(
 	policy Policy,
 	policyID ...string,
 ) (*RegistryView, error) {
+	if policy != nil && isNilValue(policy) {
+		return nil, fmt.Errorf("%w: nil restore policy", ErrPolicyConfiguration)
+	}
 	if snapshot.ID == "" {
 		return nil, newRegistryViewSnapshotMismatchError("missing id", "id")
 	}

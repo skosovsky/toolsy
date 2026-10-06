@@ -1,3 +1,5 @@
+> Historical migration: task41 replaces the authorization APIs below. Use the [current policy gate contract](policy-gates.md) and [task41 migration](migration-task41.md).
+
 # Migration Task31: Typed execution boundary
 
 Task31 moves production host integration from string-keyed runtime glue to typed execution contracts.

@@ -54,8 +54,8 @@ func (b *RegistryBuilder) WithOptions(opts ...RegistryOption) *RegistryBuilder {
 // Build creates an immutable runtime registry.
 // Rejects tools with more than one [AsAsyncTool] layer anywhere in the chain (see [ChainUnwrapper]).
 func (b *RegistryBuilder) Build() (*Registry, error) {
-	if b.opts.policyIDMissing || (b.opts.policy != nil && b.opts.policyDigest == "") {
-		return nil, errors.New("toolsy: registry policy id is required")
+	if err := validateRegistryPolicy(b.opts); err != nil {
+		return nil, err
 	}
 	tools := make(map[string]Tool, len(b.tools))
 	for _, raw := range b.tools {
@@ -449,27 +449,11 @@ func (r *Registry) runToolWithValidationAndExecute(
 		summary.Error = err
 		return
 	}
-	if r.opts.authorizer != nil {
-		req := AuthorizationRequest{
-			Manifest:    cloneManifestForPolicy(manifest),
-			Input:       call.Input.Clone(),
-			CallContext: call.CallContext,
-			View:        cloneRegistryViewSnapshot(r.opts.view),
-		}
-		if aErr := r.opts.authorizer.Authorize(ctx, req); aErr != nil {
-			if _, ok := AsToolError(aErr); ok {
-				summary.Error = aErr
-			} else {
-				summary.Error = NewPolicyDeniedErrorFrom(aErr)
-			}
-			return
-		}
-	}
 	if r.opts.policy != nil {
 		req := PolicyRequest{
 			Manifest:    cloneManifestForPolicy(manifest),
 			Input:       call.Input.Clone(),
-			CallContext: call.CallContext,
+			CallContext: cloneCallContext(call.CallContext),
 			View:        cloneRegistryViewSnapshot(r.opts.view),
 		}
 		if pErr := evaluatePolicy(ctx, r.opts.policy, req); pErr != nil {
@@ -771,4 +755,14 @@ type panicError struct{ p any }
 
 func (e *panicError) Error() string {
 	return "panic: " + fmt.Sprint(e.p)
+}
+
+func validateRegistryPolicy(opts registryOptions) error {
+	if opts.policyInvalid {
+		return fmt.Errorf("%w: nil policy installed", ErrPolicyConfiguration)
+	}
+	if opts.policyIDMissing || (opts.policy != nil && opts.policyDigest == "") {
+		return errors.New("toolsy: registry policy id is required")
+	}
+	return nil
 }

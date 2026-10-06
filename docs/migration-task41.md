@@ -669,3 +669,23 @@ Payload configuration must fit core's inclusive 64KiB control budget; explicit
 limits outside 1..MaxControlBytes fail construction. Default remains16KiB with
 complete encodedJSON bounds and no text truncation. See [toolkit contract and
 executable composition](../toolkits/human/README.md).
+
+## D04 / D05 — primary policy and required gates
+
+Registry authorization uses `WithPolicy(stableID, policy)` / `Decision`.
+`WithAuthorizer`, `WithAuthorization` and `AuthorizationRequest` alias are removed;
+use the narrow `NewAuthorizerPolicy(Authorizer)` adapter with PolicyRequest and a
+stable policy ID. The adapter captures its provided authorizer; it does not resolve
+an authorization dependency from RunEnv. Typed argument policy remains after
+binding. Policy IDs must change with host authority semantics.
+
+Explicit nil/typednil/nil function policy installation fails construction instead
+of silently disabling a gate; no installed policy is an intentional optional mode.
+`WithBudget` requires a valid BudgetTracker in DepKeyBudget at execution. Use
+`WithOptionalBudget` only when missing budget enforcement is an explicit host
+choice; supplied malformed/nil dependencies still fail. Budget storage/pricing and
+physical-attempt accounting belong to host. Config failures cannot dispatch.
+
+See [current gate contracts](policy-gates.md) for composition, snapshots, callback
+lifecycle, cancellation and budget/replay accounting. No compatibility aliases
+are retained. Independent acceptance evidence is recorded separately.

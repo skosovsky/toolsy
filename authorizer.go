@@ -1,66 +1,44 @@
 package toolsy
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
-// Authorizer performs runtime authorization before tool execution.
+// Authorizer is a narrow error-returning adapter port for host authorization.
+// Use NewAuthorizerPolicy and WithPolicy with a stable host-owned policy ID.
 type Authorizer interface {
-	Authorize(ctx context.Context, req AuthorizationRequest) error
+	Authorize(context.Context, PolicyRequest) error
 }
 
-// AuthorizerFunc adapts a function to Authorizer.
-type AuthorizerFunc func(context.Context, AuthorizationRequest) error
+type AuthorizerFunc func(context.Context, PolicyRequest) error
 
-// Authorize implements Authorizer.
-func (f AuthorizerFunc) Authorize(ctx context.Context, req AuthorizationRequest) error {
+func (f AuthorizerFunc) Authorize(ctx context.Context, req PolicyRequest) error {
 	if f == nil {
 		return NewPolicyDeniedError("authorizer function is nil")
 	}
 	return f(ctx, req)
 }
 
-// WithAuthorizer configures registry-level authorization executed before tools run.
-func WithAuthorizer(a Authorizer) RegistryOption {
-	return func(o *registryOptions) {
-		o.authorizer = a
+// NewAuthorizerPolicy captures a required authorizer; nil, typed-nil and nil
+// functions fail construction. It never resolves a dependency from RunEnv.
+// All authorization failures become nonretryable, noncorrectable policy denials.
+// The original cause remains inspectable; structured argument decisions belong
+// to Policy/typed argument policy rather than this simple adapter.
+func NewAuthorizerPolicy(authorizer Authorizer) (Policy, error) {
+	if isNilValue(authorizer) {
+		return nil, fmt.Errorf("%w: authorizer is nil", ErrPolicyConfiguration)
 	}
+	return authorizerPolicy{authorizer: authorizer}, nil
 }
 
-// WithAuthorization returns middleware that delegates to Authorizer on the bound RunEnv or registry option.
-func WithAuthorization(auth Authorizer) Middleware {
-	return func(next Tool) Tool {
-		return &authorizationTool{
-			next: next,
-			auth: auth,
-		}
-	}
-}
+type authorizerPolicy struct{ authorizer Authorizer }
 
-type authorizationTool struct {
-	toolBase
-
-	auth Authorizer
-}
-
-func (t *authorizationTool) Execute(
-	ctx context.Context,
-	run *RunEnv,
-	input ToolInput,
-	yield func(Chunk) error,
-) error {
-	if t.auth == nil {
-		return t.next.Execute(ctx, run, input, yield)
+func (p authorizerPolicy) Decide(ctx context.Context, req PolicyRequest) Decision {
+	if err := p.authorizer.Authorize(ctx, clonePolicyRequest(req)); err != nil {
+		decision := DenyDecision(err.Error())
+		decision.Err = fmt.Errorf("%w: %w", ErrPolicyDenied, err)
+		return decision
 	}
-	req := AuthorizationRequest{
-		Manifest:    cloneManifestForPolicy(t.next.Manifest()),
-		Input:       input.Clone(),
-		CallContext: run.CallContext(),
-		View:        run.RegistryViewSnapshot(),
-	}
-	if err := t.auth.Authorize(ctx, req); err != nil {
-		if _, ok := AsToolError(err); ok {
-			return err
-		}
-		return NewPolicyDeniedErrorFrom(err)
-	}
-	return t.next.Execute(ctx, run, input, yield)
+	return AllowDecision()
 }

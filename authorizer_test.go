@@ -13,11 +13,11 @@ type stubAuthorizer struct {
 	err error
 }
 
-func (a stubAuthorizer) Authorize(_ context.Context, _ AuthorizationRequest) error {
+func (a stubAuthorizer) Authorize(_ context.Context, _ PolicyRequest) error {
 	return a.err
 }
 
-func TestWithAuthorizer_DenyBeforeExecute(t *testing.T) {
+func TestAuthorizerPolicy_DenyBeforeExecute(t *testing.T) {
 	// Arrange.
 	tool := newMiddlewareMinTool(
 		"secret",
@@ -29,7 +29,7 @@ func TestWithAuthorizer_DenyBeforeExecute(t *testing.T) {
 	denyErr := errors.New("denied")
 	reg, err := NewRegistryBuilder().
 		Add(tool).
-		WithOptions(WithAuthorizer(stubAuthorizer{err: denyErr})).
+		WithOptions(WithPolicy("host-authorizer", mustAuthorizerPolicy(t, stubAuthorizer{err: denyErr}))).
 		Build()
 	require.NoError(t, err)
 
@@ -46,36 +46,7 @@ func TestWithAuthorizer_DenyBeforeExecute(t *testing.T) {
 	require.Equal(t, CodePolicyDenied, te.Code)
 }
 
-func TestWithAuthorizationMiddleware_Deny(t *testing.T) {
-	// Arrange.
-	tool := newMiddlewareMinTool(
-		"secret",
-		func(_ context.Context, _ *RunEnv, _ ToolInput, _ func(Chunk) error) error {
-			t.Fatal("tool should not run when denied")
-			return nil
-		},
-	)
-	denyErr := errors.New("denied")
-	reg, err := NewRegistryBuilder().
-		Use(WithAuthorization(stubAuthorizer{err: denyErr})).
-		Add(tool).
-		Build()
-	require.NoError(t, err)
-
-	// Act.
-	err = reg.Execute(context.Background(), ToolCall{
-		ToolName: "secret",
-		Input:    ToolInput{ArgsJSON: []byte(`{}`)},
-	}, func(Chunk) error { return nil })
-
-	// Assert.
-	require.ErrorIs(t, err, denyErr)
-	te, ok := AsToolError(err)
-	require.True(t, ok)
-	require.Equal(t, CodePolicyDenied, te.Code)
-}
-
-func TestWithAuthorizationMiddleware_TrustsOnlyRegistryBoundView(t *testing.T) {
+func TestAuthorizerPolicy_TrustsOnlyRegistryBoundView(t *testing.T) {
 	t.Parallel()
 
 	// Arrange.
@@ -90,7 +61,7 @@ func TestWithAuthorizationMiddleware_TrustsOnlyRegistryBoundView(t *testing.T) {
 			return nil
 		},
 	)
-	auth := AuthorizerFunc(func(_ context.Context, req AuthorizationRequest) error {
+	auth := AuthorizerFunc(func(_ context.Context, req PolicyRequest) error {
 		if req.Input.CallID == "root" {
 			rootViewID = req.View.ID
 		}
@@ -106,7 +77,7 @@ func TestWithAuthorizationMiddleware_TrustsOnlyRegistryBoundView(t *testing.T) {
 		return nil
 	})
 	reg, err := NewRegistryBuilder().
-		Use(WithAuthorization(auth)).
+		WithOptions(WithPolicy("host-view-authorizer", mustAuthorizerPolicy(t, auth))).
 		Add(tool).
 		Build()
 	require.NoError(t, err)
@@ -135,4 +106,11 @@ func TestWithAuthorizationMiddleware_TrustsOnlyRegistryBoundView(t *testing.T) {
 	assert.Empty(t, rootViewID)
 	assert.Equal(t, view.Snapshot().ID, viewViewID)
 	assert.True(t, handlerRan)
+}
+
+func mustAuthorizerPolicy(t *testing.T, a Authorizer) Policy {
+	t.Helper()
+	policy, err := NewAuthorizerPolicy(a)
+	require.NoError(t, err)
+	return policy
 }

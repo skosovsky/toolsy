@@ -29,7 +29,7 @@ func budgetEnv(tracker BudgetTracker) *RunEnv {
 	return env
 }
 
-func TestWithBudget_NoEnvPassThrough(t *testing.T) {
+func TestWithOptionalBudget_NoDependencyPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
@@ -38,7 +38,7 @@ func TestWithBudget_NoEnvPassThrough(t *testing.T) {
 			return nil
 		},
 	)
-	wrapped := WithBudget()(inner)
+	wrapped := WithOptionalBudget()(inner)
 
 	err := wrapped.Execute(context.Background(), NewRunEnv(nil), ToolInput{ArgsJSON: []byte(`{}`)}, func(Chunk) error {
 		return nil
@@ -47,7 +47,7 @@ func TestWithBudget_NoEnvPassThrough(t *testing.T) {
 	assert.True(t, executed.Load())
 }
 
-func TestWithBudget_MissingBudgetDepPassThrough(t *testing.T) {
+func TestWithOptionalBudget_MissingBudgetDepPassThrough(t *testing.T) {
 	var executed atomic.Bool
 	inner := newMiddlewareMinTool(
 		"noop",
@@ -56,7 +56,7 @@ func TestWithBudget_MissingBudgetDepPassThrough(t *testing.T) {
 			return nil
 		},
 	)
-	wrapped := WithBudget()(inner)
+	wrapped := WithOptionalBudget()(inner)
 
 	env := NewRunEnv(nil)
 	Put(env, "other", "x")

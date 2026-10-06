@@ -435,6 +435,10 @@ Error propagation differs by execution path:
 - `Registry.ExecuteIter(...)` emits the error as iterator error.
 - `Registry.ExecuteBatchStream(...)` converts non-suspend execution failures (including pre-tool failures like missing tool, validator rejection, and shutdown, plus tool/middleware failures) to `Chunk{IsError: true, MimeType: MimeTypeToolErrorJSON}`, while `ErrStreamAborted` and context cancellation are returned as errors.
 
+Every call using `WithBudget()` must supply a valid host `BudgetTracker` with
+`Put(env, DepKeyBudget, tracker)`. Missing or malformed dependencies fail closed.
+`WithOptionalBudget()` permits intentional absence only. See [gate contracts](docs/policy-gates.md).
+
 Recommended stack for enterprise policies (outer -> inner):
 
 ```go
@@ -476,7 +480,7 @@ toolsy.WithCompletionPolicy(toolsy.CompletionSilentYield) // or CompletionContin
 
 ## Authorization and idempotency
 
-- Registry-level: prefer `WithPolicy`; `WithAuthorizer` and `WithAuthorization` accept `AuthorizationRequest` with manifest, input, call context, and view identity.
+- Registry-level: install `WithPolicy(stableID, policy)` using `PolicyRequest` and `Decision`. For an error-returning host port, construct `NewAuthorizerPolicy(authorizer)` first and install the returned policy with its stable ID. Explicit nil policies fail construction; omission intentionally installs no optional policy. See [policy and budget gates](docs/policy-gates.md).
 - Result cache: supply a per-attempt host `CacheEligibility` predicate and create `NewResultCache(store, eligibility, partition, codec, maxBytes)` and install it with `WithExecutionProfile`. Binding and current typed policy run before replay; the host provides a trusted freshness partition and complete outcome codec. Idempotent/ReadOnly hints alone never enable reuse. This cache does not guarantee atomic duplicate dispatch. See [execution contract](docs/execution-contract.md).
 
 ### Typed result representations

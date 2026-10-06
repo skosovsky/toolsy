@@ -129,7 +129,7 @@ type registryOptions struct {
 	policy           Policy
 	policyDigest     string
 	policyIDMissing  bool
-	authorizer       Authorizer
+	policyInvalid    bool
 	view             RegistryViewSnapshot
 	onBefore         func(context.Context, ToolCall)
 	onAfter          func(context.Context, ToolCall, ExecutionSummary, time.Duration)
@@ -154,10 +154,12 @@ func WithValidator(v Validator) RegistryOption {
 }
 
 // WithPolicy configures fail-closed policy/capability enforcement before tool handlers run.
+// Explicit nil/typed-nil/nil-function policies fail Build; omission installs no gate.
 // policyID is part of session/checkpoint binding and must change when policy semantics change.
 func WithPolicy(policyID string, p Policy) RegistryOption {
 	return func(o *registryOptions) {
-		if p == nil {
+		if isNilValue(p) {
+			o.policyInvalid = true
 			return
 		}
 		if policyID == "" {
@@ -174,6 +176,9 @@ func WithRequirementsPolicy[TSubject, TScope any](
 	policyID string,
 	fn RequirementsDecisionFunc[TSubject, TScope],
 ) RegistryOption {
+	if fn == nil {
+		return WithPolicy(policyID, nil)
+	}
 	return WithPolicy(policyID, NewRequirementsPolicy(fn))
 }
 

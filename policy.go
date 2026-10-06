@@ -9,6 +9,9 @@ import (
 // ErrPolicyDenied is the sentinel for fail-closed policy/capability denial.
 var ErrPolicyDenied = errors.New("policy denied")
 
+// ErrPolicyConfiguration identifies an explicitly installed invalid policy gate.
+var ErrPolicyConfiguration = errors.New("toolsy: invalid policy configuration")
+
 // ErrCapabilityDenied is the sentinel for view/capability denial.
 var ErrCapabilityDenied = errors.New("capability denied")
 
@@ -72,9 +75,6 @@ func (f PolicyFunc) Decide(ctx context.Context, req PolicyRequest) Decision {
 	}
 	return f(ctx, req)
 }
-
-// AuthorizationRequest is the request passed to legacy-compatible authorizers.
-type AuthorizationRequest = PolicyRequest
 
 // NewPolicyDeniedError creates a structured ToolError for policy/capability denial.
 func NewPolicyDeniedError(reason string, fixableArgs ...string) *ToolError {
@@ -173,7 +173,7 @@ type compositePolicy struct {
 }
 
 func (p compositePolicy) Decide(ctx context.Context, req PolicyRequest) Decision {
-	if err := evaluatePolicy(ctx, p.first, req); err != nil {
+	if err := evaluatePolicy(ctx, p.first, clonePolicyRequest(req)); err != nil {
 		if te, ok := AsToolError(err); ok {
 			return Decision{
 				Allow:       false,
@@ -187,7 +187,7 @@ func (p compositePolicy) Decide(ctx context.Context, req PolicyRequest) Decision
 		}
 		return DenyDecision(err.Error())
 	}
-	return p.second.Decide(ctx, req)
+	return p.second.Decide(ctx, clonePolicyRequest(req))
 }
 
 func (p compositePolicy) enforcesRequirements() bool {
@@ -202,4 +202,11 @@ func composePolicies(first, second Policy) Policy {
 		return first
 	}
 	return compositePolicy{first: first, second: second}
+}
+
+// Framework-owned request containers are copied; referenced BYOT values remain
+// immutable/synchronized host contracts, not universally deep-copied identities.
+func clonePolicyRequest(req PolicyRequest) PolicyRequest {
+	return PolicyRequest{Manifest: cloneManifestForPolicy(req.Manifest), Input: req.Input.Clone(),
+		CallContext: cloneCallContext(req.CallContext), View: cloneRegistryViewSnapshot(req.View)}
 }

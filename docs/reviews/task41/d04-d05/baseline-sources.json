@@ -1,0 +1,11 @@
+{
+  "commit": "f5824b1b64f00341411c99a72f319cdf99c1ab9f",
+  "sha256": {
+    "authorizer.go": "b49c4195ea5f052bc86af51170f473411acb096ca2ba8712874a6f73ae0da90b",
+    "policy.go": "78c52621d56bc6a1da96e387fe7651a771f5daa5dbd623f187e3746e8f11a175",
+    "middleware_budget.go": "0f37b7a102859fd9e68088366f366778de5b9cfc99f00fadb51995430c727799",
+    "options.go": "f11e767b5a9e524dc692b4a60d730310f72b5d1aa4bafd8ed98a60e2cf96b52e",
+    "registry.go": "9e186bd5ced2b9ff2661e8e52a382839b571dc36166b530a339b944ae1b5fcd7",
+    "registry_view.go": "46e40834300110497ea9a4da14192e29d2af38e4a378a91e1d6b28290ba035c0"
+  }
+}

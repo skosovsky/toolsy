@@ -2,26 +2,37 @@ package toolsy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
 
-// BudgetTracker authorizes each physical tool execution attempt.
+// BudgetTracker admits each wrapped call, including calls that later replay.
+// Input is a raw-call snapshot before binding; host owns pricing and accounting.
 type BudgetTracker interface {
 	Allow(ctx context.Context, manifest ToolManifest, input ToolInput) (allowed bool, reason string, err error)
 }
 
-// WithBudget enforces optional budget checks via [DepKeyBudget] on [RunEnv].
+// ErrBudgetConfiguration identifies a missing or malformed required budget gate.
+var ErrBudgetConfiguration = errors.New("toolsy: invalid budget configuration")
+
+// WithBudget requires a valid [BudgetTracker] at [DepKeyBudget] on [RunEnv].
 func WithBudget() Middleware {
-	return func(next Tool) Tool {
-		return &budgetTool{
-			next: next,
-		}
-	}
+	return budgetMiddleware(false)
+}
+
+// WithOptionalBudget bypasses only an absent dependency. A supplied invalid
+// tracker still fails closed. Use only for an intentional host no-budget mode.
+func WithOptionalBudget() Middleware { return budgetMiddleware(true) }
+
+func budgetMiddleware(optional bool) Middleware {
+	return func(next Tool) Tool { return &budgetTool{next: next, optional: optional} }
 }
 
 type budgetTool struct {
 	toolBase
+
+	optional bool
 }
 
 func (t *budgetTool) Execute(
@@ -30,12 +41,23 @@ func (t *budgetTool) Execute(
 	input ToolInput,
 	yield func(Chunk) error,
 ) error {
-	budgetTracker, ok := Lookup[BudgetTracker](env, DepKeyBudget)
-	if !ok || budgetTracker == nil {
-		return t.next.Execute(ctx, env, input, yield)
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-
-	allowed, reason, err := budgetTracker.Allow(ctx, t.next.Manifest(), input)
+	budgetTracker, present, lookupErr := lookupBudgetTracker(env)
+	if lookupErr != nil {
+		return NewInternalError(lookupErr)
+	}
+	if !present {
+		if t.optional {
+			return t.next.Execute(ctx, env, input, yield)
+		}
+		return NewInternalError(fmt.Errorf("%w: tracker is missing", ErrBudgetConfiguration))
+	}
+	allowed, reason, err := budgetTracker.Allow(ctx, cloneManifestForPolicy(t.next.Manifest()), input.Clone())
+	if canceled := ctx.Err(); canceled != nil {
+		return canceled
+	}
 	if err != nil {
 		return NewInternalError(fmt.Errorf("toolsy: budget allow check failed: %w", err))
 	}
@@ -56,4 +78,23 @@ func (t *budgetTool) Execute(
 		return wrapYieldError(yieldErr)
 	}
 	return nil
+}
+
+// Capture only under the store lock; host callback runs outside it. A nil value
+// deliberately supplied under the key is different from an absent dependency.
+func lookupBudgetTracker(env *RunEnv) (BudgetTracker, bool, error) {
+	if env == nil || env.store == nil {
+		return nil, false, nil
+	}
+	env.store.mu.RLock()
+	raw, present := env.store.deps[DepKeyBudget]
+	env.store.mu.RUnlock()
+	if !present {
+		return nil, false, nil
+	}
+	tracker, ok := raw.(BudgetTracker)
+	if !ok || isNilValue(tracker) {
+		return nil, true, fmt.Errorf("%w: tracker has invalid type or nil value", ErrBudgetConfiguration)
+	}
+	return tracker, true, nil
 }

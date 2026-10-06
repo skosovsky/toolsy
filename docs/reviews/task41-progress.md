@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted; rows 25–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted (commit pending); rows 26–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -877,3 +877,65 @@ adversarialcount10PASS2.988s. Evidence docs/reviews/task41/d03/.
 Trusted-local fixture checks operation binding; no live user authentication/UI,
 remote grant persistence or durable scheduling/hardpreemption proof claimed.
 Commit: refactor: review intent.
+
+### 25 — D04 / D05 (accepted)
+
+Criteria for each independent reviewer (20% each):
+1. Primary registry Policy/Decision path with stable binding ID; remove
+   AuthorizationRequest alias, WithAuthorizer, WithAuthorization and separate
+   registry authorizer field/path. Retain narrow Authorizer(PolicyRequest) adapter
+   NewAuthorizerPolicy with explicit nil rejection and cause-preserving denial.
+2. Explicit WithPolicy nil/typednil/nilfunc fails Build (sticky misconfiguration),
+   view/restore typednil rejected; absent policy remains intentional no-gate mode,
+   required manifest guards retained; typed argument policy stays after binding.
+3. WithBudget requires dependency; absent/wrongtype/nil/typednil fails INTERNAL
+   with inspectable configuration cause and no handler/replay. WithOptionalBudget
+   bypasses only absent dependency, not malformed supplied dependency. Host owns
+   accounting/pricing, concurrency and lifecycle; no built-in quota platform.
+4. AAA baseline/current public misconfiguration probes, composed policy defensive
+   snapshots/trusted view and identity, adapter cause/no argument repair, budget
+   allow/deny/error/cancel/async/replay tests; root/affected race/lint/examples pass.
+5. Migration/current docs/examples use primary policy and explicit optional gate,
+   correct captured dependency/RunEnv contract, no legacy aliases/path; both100%,
+   no unresolved detected defects. Non-JSON referenced BYOT identity remains host-owned.
+
+Spec-first decision: consolidate authorization before validators/handler/profile
+under registry Policy/Decision, including narrow authorizer adapter. Adapter
+requires a host-selected stable WithPolicy ID and maps any authorization error to
+nonretryable/noncorrectable policy denial while retaining original cause. Explicit
+nil installation is configuration error; omission means no optional gate installed.
+Budget WithBudget becomes mandatory at execution; WithOptionalBudget deliberately
+permits absence only, and supplied invalid dependency fails. Dependency snapshot
+is captured under RunEnv store lock and callback runs outside it, with cloned
+manifest/input and cooperative cancellation checkpoints. Composed policies receive
+independent framework-owned request snapshots (not arbitrary BYOT deep copies).
+
+D04/D05 baseline probe at f5824b1 (production bytes unchanged) reproduces three
+behavioral failures: explicitnilpolicy accepted, absentbudget dispatches1, typednil
+budget dispatches1. Evidence docs/reviews/task41/d04-d05/ includes public fixture,
+raw FAIL log, commit and production source SHA256. Implementation/review pending;
+no acceptance or commit claim for row25.
+
+D04/D05 implementation now consolidates the policy path and requires valid budget
+admission by default. New AAA gate tests cover sticky nil configuration, view and
+restore typed nil, authorizer cause/no-repair, required/optional dependency matrix,
+callback snapshot/reentrant dependency update/cancellation, backend cause,
+cache replay admission and async completion rejection. The executable
+ExampleNewAuthorizerPolicy passes. The same three baseline public probes now PASS
+on the current tree; targeted race PASS and root lint reports 0 issues. A full
+root race run passed before the latest added test/example files; final current
+root/affected-module runs and independent acceptance remain pending.
+
+Final current root race PASS (including gate/async/cache tests and executable
+example), root lint 0 issues; MCP/human/OTel race PASS. Two fresh independent
+reviewers d04_d05_acceptance_a and d04_d05_acceptance_b started against current
+diff; their verdicts and module lint are pending. No row25 acceptance/commit yet.
+
+MCP/human/OTel pinned module lint completed: 0 issues in each module.
+Independent acceptance is the remaining row25 gate.
+
+Row25 independent final acceptance: A 100% (five20/20), B 100% (five20/20), no
+unresolved detected defects. Reviewer reports and B independent full-root raw
+race/lint retained in docs/reviews/task41/d04-d05/. Both independently assessed
+current diff and did not read peer verdicts. All affected checks pass. Commit:
+`fix: required gates` (hash recorded after successful signed commit).
