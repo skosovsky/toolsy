@@ -1,0 +1,107 @@
+?   	github.com/skosovsky/toolsy/examples/host_dispatch	[no test files]
+=== RUN   TestAC1IdentityAndReplay
+--- PASS: TestAC1IdentityAndReplay (0.01s)
+=== RUN   TestAC1Admission
+=== RUN   TestAC1Admission/call
+=== RUN   TestAC1Admission/operation
+=== RUN   TestAC1Admission/attempt
+=== RUN   TestAC1Admission/activity
+=== RUN   TestAC1Admission/missing
+=== RUN   TestAC1Admission/hidden
+=== RUN   TestAC1Admission/json
+=== RUN   TestAC1Admission/concurrent
+--- PASS: TestAC1Admission (0.05s)
+    --- PASS: TestAC1Admission/call (0.01s)
+    --- PASS: TestAC1Admission/operation (0.01s)
+    --- PASS: TestAC1Admission/attempt (0.00s)
+    --- PASS: TestAC1Admission/activity (0.00s)
+    --- PASS: TestAC1Admission/missing (0.01s)
+    --- PASS: TestAC1Admission/hidden (0.01s)
+    --- PASS: TestAC1Admission/json (0.01s)
+    --- PASS: TestAC1Admission/concurrent (0.00s)
+=== RUN   TestAC2Barriers
+=== RUN   TestAC2Barriers/approval
+=== RUN   TestAC2Barriers/unknown
+=== RUN   TestAC2Barriers/pause
+=== RUN   TestAC2Barriers/yield
+=== RUN   TestAC2Barriers/halt
+=== RUN   TestAC2Barriers/completion_halt
+=== RUN   TestAC2Barriers/completion_yield
+--- PASS: TestAC2Barriers (0.07s)
+    --- PASS: TestAC2Barriers/approval (0.01s)
+    --- PASS: TestAC2Barriers/unknown (0.01s)
+    --- PASS: TestAC2Barriers/pause (0.01s)
+    --- PASS: TestAC2Barriers/yield (0.01s)
+    --- PASS: TestAC2Barriers/halt (0.01s)
+    --- PASS: TestAC2Barriers/completion_halt (0.02s)
+    --- PASS: TestAC2Barriers/completion_yield (0.01s)
+=== RUN   TestAC3BusinessCorrectionEmptyNoop
+=== RUN   TestAC3BusinessCorrectionEmptyNoop/noop
+=== RUN   TestAC3BusinessCorrectionEmptyNoop/business
+=== RUN   TestAC3BusinessCorrectionEmptyNoop/correction
+=== RUN   TestAC3BusinessCorrectionEmptyNoop/empty
+--- PASS: TestAC3BusinessCorrectionEmptyNoop (0.02s)
+    --- PASS: TestAC3BusinessCorrectionEmptyNoop/noop (0.01s)
+    --- PASS: TestAC3BusinessCorrectionEmptyNoop/business (0.00s)
+    --- PASS: TestAC3BusinessCorrectionEmptyNoop/correction (0.00s)
+    --- PASS: TestAC3BusinessCorrectionEmptyNoop/empty (0.01s)
+=== RUN   TestAC4AudienceAndProjection
+=== RUN   TestAC4AudienceAndProjection/internal
+=== RUN   TestAC4AudienceAndProjection/user
+--- PASS: TestAC4AudienceAndProjection (0.01s)
+    --- PASS: TestAC4AudienceAndProjection/internal (0.01s)
+    --- PASS: TestAC4AudienceAndProjection/user (0.01s)
+=== RUN   TestAC5SchemaAndCanonicalSnapshot
+--- PASS: TestAC5SchemaAndCanonicalSnapshot (0.01s)
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/args
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/attachment
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/subject
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/scope
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/policy
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/dependency
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/activity
+=== RUN   TestAC6BindingEditsAndCurrentAuthorization/revoke
+--- PASS: TestAC6BindingEditsAndCurrentAuthorization (0.08s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/args (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/attachment (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/subject (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/scope (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/policy (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/dependency (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/activity (0.01s)
+    --- PASS: TestAC6BindingEditsAndCurrentAuthorization/revoke (0.01s)
+=== RUN   TestAC6RejectedExpiredAndConcurrentResume
+=== RUN   TestAC6RejectedExpiredAndConcurrentResume/rejected
+=== RUN   TestAC6RejectedExpiredAndConcurrentResume/expired
+--- PASS: TestAC6RejectedExpiredAndConcurrentResume (0.02s)
+    --- PASS: TestAC6RejectedExpiredAndConcurrentResume/rejected (0.01s)
+    --- PASS: TestAC6RejectedExpiredAndConcurrentResume/expired (0.01s)
+=== RUN   TestAC7DurableLostDeliveryReopen
+--- PASS: TestAC7DurableLostDeliveryReopen (0.07s)
+=== RUN   TestAC7UnknownNeverBlindlyRedispatches
+--- PASS: TestAC7UnknownNeverBlindlyRedispatches (0.01s)
+=== RUN   TestAC6ToolManifestViewSchemaChanges
+=== RUN   TestAC6ToolManifestViewSchemaChanges/tool
+=== RUN   TestAC6ToolManifestViewSchemaChanges/manifest
+=== RUN   TestAC6ToolManifestViewSchemaChanges/view
+=== RUN   TestAC6ToolManifestViewSchemaChanges/schema
+--- PASS: TestAC6ToolManifestViewSchemaChanges (0.05s)
+    --- PASS: TestAC6ToolManifestViewSchemaChanges/tool (0.01s)
+    --- PASS: TestAC6ToolManifestViewSchemaChanges/manifest (0.02s)
+    --- PASS: TestAC6ToolManifestViewSchemaChanges/view (0.01s)
+    --- PASS: TestAC6ToolManifestViewSchemaChanges/schema (0.01s)
+=== RUN   TestAC2InProgressStopsNextEffect
+--- PASS: TestAC2InProgressStopsNextEffect (0.01s)
+=== RUN   TestAC7PersistenceFailureAndTrustedReconciliation
+--- PASS: TestAC7PersistenceFailureAndTrustedReconciliation (0.01s)
+=== RUN   TestAC3PartialOutcomeAndControlError
+--- PASS: TestAC3PartialOutcomeAndControlError (0.00s)
+=== RUN   TestMIMEAndControlPrecedenceRegressions
+--- PASS: TestMIMEAndControlPrecedenceRegressions (0.00s)
+=== RUN   TestAC3TextMIMEProjection
+--- PASS: TestAC3TextMIMEProjection (0.01s)
+=== RUN   TestAC4CacheReplayEffects
+--- PASS: TestAC4CacheReplayEffects (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch/recipe	2.044s

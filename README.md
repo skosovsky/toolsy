@@ -135,6 +135,11 @@ Output schemas are executable contracts for successful JSON result bytes. Builde
 - Policy-aware generic tools require an `ArgsBinder` that returns canonical raw bytes for the wrapped raw handler.
 - Low-level constructors: `NewTool`, `NewStreamTool`, `NewDynamicToolFromSpec`, `NewProxyTool`.
 
+For full native call identity, control barriers and host-owned approval/recovery,
+see [host dispatch](examples/host_dispatch), its [contract](docs/host-dispatch-contract.md)
+and [migration](docs/host-dispatch-migration.md). Real consumer fixtures live in
+the [optional integration module](examples/host_dispatch_integration).
+
 ## Architecture
 
 Core is a **stateless tool execution engine**: typed manifests, middleware, streaming chunks, call context, registry views, and session policies. External orchestrators own the agent loop, chat persistence, and routing after `CompletionPolicy`. `toolsy` executes tools, enforces its configured policy/capability boundary, and emits typed results, effects, and control signals.

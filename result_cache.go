@@ -268,6 +268,7 @@ func replayResult(
 	}
 	envelope.Metadata[ReplaySourceMetadata] = source
 	chunk.Envelope = &envelope
+	chunk = markReplayChunk(chunk)
 	return yield(chunk)
 }
 

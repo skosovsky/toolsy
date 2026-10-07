@@ -118,7 +118,7 @@ func executePreparedResult(
 			if prior != nil {
 				return prior
 			}
-			prepared, validationErr := prepareResultChunk(c, validator)
+			prepared, validationErr := prepareFreshResultChunk(c, validator)
 			if validationErr != nil {
 				mu.Lock()
 				if rejected == nil {
@@ -137,4 +137,42 @@ func executePreparedResult(
 		return err
 	}
 	return ExecutePrepared(ctx, env, manifest, input, args, produce, deliver)
+}
+
+// Replay provenance belongs to execution profiles. A producer cannot label a new
+// effect as replay; profiles replay through the separately validated deliver path.
+func prepareFreshResultChunk(c Chunk, validator schemaValidator) (Chunk, error) {
+	if c.Envelope != nil {
+		if _, reserved := c.Envelope.Metadata[ReplaySourceMetadata]; reserved && !validReplayProof(c) {
+			return Chunk{}, NewInternalError(&ResultContractError{
+				Kind: "reserved_replay_metadata", Cause: nil,
+			})
+		}
+	}
+	return prepareResultChunk(c, validator)
+}
+
+// Correlation may be rebound by a scoped forwarding executor. The result payload,
+// effects, controls and envelope must still equal the library-issued snapshot.
+func markReplayChunk(c Chunk) Chunk {
+	c.replayProof = nil
+	proof := cloneResultChunk(c)
+	proof.CallID, proof.ToolName = "", ""
+	c.replayProof = &proof
+	return c
+}
+
+//nolint:govet // Structural equality checks a successful immutable replay payload, not error semantics.
+func validReplayProof(c Chunk) bool {
+	if c.replayProof == nil {
+		return false
+	}
+	proof := c.replayProof
+	c = cloneResultChunk(c)
+	c.replayProof = nil
+	c.CallID, c.ToolName = "", ""
+	return reflect.DeepEqual(
+		c,
+		*proof,
+	)
 }

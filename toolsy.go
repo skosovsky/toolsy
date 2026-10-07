@@ -129,12 +129,14 @@ type ProgressInfo struct {
 // Chunk is a single stream event from a tool execution.
 // Data-plane payloads use Data/MimeType. Control-plane signals use EventControl + Control.
 type Chunk struct {
-	CallID   string
-	ToolName string
-	Event    EventType
-	Data     []byte
-	MimeType string
-	IsError  bool
+	// replayProof is an invocation-local immutable snapshot issued only by a replay profile.
+	replayProof *Chunk
+	CallID      string
+	ToolName    string
+	Event       EventType
+	Data        []byte
+	MimeType    string
+	IsError     bool
 	// TypedResult carries the host-typed result for in-process outcome aggregation.
 	TypedResult any
 	// EmptyResult marks an intentional successful no-op/empty result.

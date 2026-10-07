@@ -1,0 +1,3 @@
+ok  	github.com/skosovsky/toolsy/mcp	1.173s
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	0.500s
+task34 preflight: MCP 2026-07-28 clear-break contract passed

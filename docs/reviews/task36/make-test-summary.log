@@ -1,0 +1,131 @@
+Command: make test
+Terminal exit: 0
+test - .
+PASS
+ok  	github.com/skosovsky/toolsy	3.220s
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	3.321s
+PASS
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.544s
+?   	github.com/skosovsky/toolsy/cmd/toolsy-release	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	1.755s
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.570s
+PASS
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	1.856s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_dispatch	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch/recipe	1.923s
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.540s
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/exectool	1.754s
+PASS
+ok  	github.com/skosovsky/toolsy/historycodec	1.527s
+PASS
+ok  	github.com/skosovsky/toolsy/internal/format	1.947s
+PASS
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	(cached)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	37.846s
+PASS
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	(cached)
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+PASS
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	27.734s
+PASS
+ok  	github.com/skosovsky/toolsy/testutil	1.456s
+PASS
+ok  	github.com/skosovsky/toolsy/textprocessor	(cached)
+test - ./contracts/grpc
+PASS
+ok  	github.com/skosovsky/toolsy/contracts/grpc	3.076s
+test - ./contracts/openapi
+PASS
+ok  	github.com/skosovsky/toolsy/contracts/openapi	2.876s
+test - ./contracts/graphql
+PASS
+ok  	github.com/skosovsky/toolsy/contracts/graphql	1.657s
+test - ./ext/toolsyotel
+PASS
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	1.509s
+test - ./agents
+PASS
+ok  	github.com/skosovsky/toolsy/agents	3.371s
+test - ./toolkits/memory
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/memory	1.726s
+test - ./toolkits/mail
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/mail	1.644s
+test - ./toolkits/web
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/web	2.175s
+test - ./toolkits/document
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/document	2.855s
+test - ./toolkits/rag
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/rag	1.514s
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/rag/examples/host	(cached)
+test - ./toolkits/timetool
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/timetool	1.696s
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/timetool/examples/host	1.631s
+test - ./toolkits/prompts
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/prompts	1.542s
+test - ./toolkits/httptool
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/httptool	2.351s
+test - ./toolkits/fstool
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/fstool	1.863s
+test - ./toolkits/human
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/human	1.526s
+test - ./toolkits/sqltool
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.803s
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool/examples/host	1.558s
+test - ./mcp
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	19.534s
+?   	github.com/skosovsky/toolsy/mcp/examples/stdio	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/streamable_http	[no test files]
+test - ./adapters/sandbox/wazero
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/wazero	68.772s
+test - ./adapters/sandbox/docker
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/docker	2.327s
+test - ./adapters/sandbox/host
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	11.843s
+test - ./adapters/sandbox/starlark
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark	3.797s
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark/examples/policy	1.536s
+test - ./adapters/sandbox/e2b
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/e2b	6.683s
+test - ./examples/resiliency
+PASS
+ok  	github.com/skosovsky/toolsy/examples/resiliency	1.480s
+test - ./examples/host_dispatch_integration
+PASS
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch_integration	1.706s

@@ -217,6 +217,7 @@ func applyPolicyToolEnvelope(
 	if c.Event != EventResult || (deliveryClass == "" && audience == "" && len(metadata) == 0) {
 		return c
 	}
+	trustedReplay := validReplayProof(c)
 	envelope := c.ToolEnvelope()
 	if deliveryClass != "" {
 		envelope.DeliveryClass = deliveryClass
@@ -243,5 +244,8 @@ func applyPolicyToolEnvelope(
 		envelope.Metadata = merged
 	}
 	c.Envelope = &envelope
+	if trustedReplay {
+		c = markReplayChunk(c)
+	}
 	return c
 }

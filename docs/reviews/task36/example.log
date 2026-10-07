@@ -1,0 +1,4 @@
+host decision: approval
+fresh effects: [recorded]
+{"call_id":"provider-resume","tool":"record","mime":"application/json","value":{"id":9007199254740993},"is_error":false}
+{"call_id":"provider-redelivery","tool":"record","mime":"application/json","value":{"id":9007199254740993},"is_error":false}

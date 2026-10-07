@@ -11,6 +11,7 @@ use (
 	./contracts/graphql
 	./contracts/grpc
 	./contracts/openapi
+	./examples/host_dispatch_integration
 	./examples/resiliency
 	./ext/toolsyotel
 	./mcp

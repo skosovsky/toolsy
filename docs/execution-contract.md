@@ -107,3 +107,17 @@ Even context/lease/approval checks failing before invoke leave the claimed attem
 unknown under the existing fenced recovery contract. Typed post-handler contract
 errors retain ResultContractError phase/cause and never authorize input repair.
 A completed persisted result remains completed after delivery failure.
+
+## Host dispatch composition
+
+The [host dispatch contract](host-dispatch-contract.md) and
+[runnable recipe](../examples/host_dispatch) show one host scheduling owner, native
+call correlation, full outcome classification and audience-safe model projection.
+The [migration guide](host-dispatch-migration.md) describes caller glue changes;
+[optional semantic fixtures](../examples/host_dispatch_integration) exercise actual
+consumer APIs without importing them into core.
+
+Fresh built-in result producers now reject `toolsy.replay_source` in envelope
+metadata with `ResultContractError.Kind == "reserved_replay_metadata"`. Only the
+execution profile replay path may attach this reserved key. Remove it from handler
+results; an external effect preceding rejection still requires reconciliation.

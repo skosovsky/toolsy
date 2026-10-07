@@ -1,0 +1,11 @@
+=== RUN   TestRealNativeCallsSourceSchemaAndExactNumbers
+--- PASS: TestRealNativeCallsSourceSchemaAndExactNumbers (0.01s)
+=== RUN   TestRealApprovalBarrierAndResume
+--- PASS: TestRealApprovalBarrierAndResume (0.00s)
+=== RUN   TestRealGuardDecisionsAndNoAutomaticRetry
+--- PASS: TestRealGuardDecisionsAndNoAutomaticRetry (0.00s)
+=== RUN   TestRealDurableActivityReconcilesDeliveryLossViaAuthorizedReplay
+--- PASS: TestRealDurableActivityReconcilesDeliveryLossViaAuthorizedReplay (0.06s)
+PASS
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch_integration	1.705s
+?   	github.com/skosovsky/toolsy/examples/host_dispatch_integration/recipe	[no test files]

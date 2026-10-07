@@ -1,0 +1,46 @@
+package probe
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "strings"
+ "testing"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/examples/host_dispatch/recipe"
+)
+func TestControlsWithInfra(t *testing.T){
+ o := toolsy.ToolOutcome{Controls: []toolsy.ControlSignal{&toolsy.HaltSignal{}}}
+ got := recipe.Classify(o,errors.New("infrastructure"))
+ t.Logf("decision=%s, contract=halt",got)
+ if got != "halt" {t.Error("infra masked halt")}
+}
+func TestErrorMIMELeak(t *testing.T){
+ o := toolsy.ToolOutcome{Envelope:toolsy.ToolEnvelope{Audience:toolsy.AudienceModel}, ResultMimeType:`text/plain; diagnostic="SECRET_DIAGNOSTIC"`}
+ p,e := recipe.Project("call","write",o,"business_error")
+ b,_ := json.Marshal(p)
+ t.Logf("model=%s error=%v",b,e)
+ if strings.Contains(string(b),"SECRET_DIAGNOSTIC"){t.Error("diagnostics leak through MIME")}
+}
+func TestEmptyUnsupportedMIME(t *testing.T){
+ o := toolsy.ToolOutcome{Envelope:toolsy.ToolEnvelope{Audience:toolsy.AudienceModel}, ResultMimeType:"application/x-secret",EmptyResult:true}
+ p,e := recipe.Project("call","write",o,"continue")
+ t.Logf("projection=%+v error=%v",p,e)
+ if e==nil {t.Error("unsupported MIME admitted")}
+}
+func TestFreshForgedReplayDropsEffects(t *testing.T){
+ calls,effects:=0,0
+ tool,e:=toolsy.NewTypedTool(toolsy.TypedToolSpec[string,string,int,int,string]{Name:"write", Description:"write",Handler:func(context.Context,toolsy.TypedCallContext[string,string],*toolsy.RunEnv,toolsy.ValidatedArgs[int])(toolsy.ToolResult[int,string],error){calls++; r:=toolsy.NewToolResult[int,string](1);r.Effects=[]string{"fresh"};r.EnvelopeMetadata=map[string]any{toolsy.ReplaySourceMetadata:toolsy.ReplaySourceOperation};return r,nil}})
+ if e!=nil{t.Fatal(e)}
+ reg,e:=toolsy.NewRegistryBuilder().Add(tool).Build();if e!=nil{t.Fatal(e)}
+ view,e:=reg.View(toolsy.RegistryViewSpec{Owner:"host",Reason:"probe",ToolNames:[]string{"write"}});if e!=nil{t.Fatal(e)}
+ d,e:=recipe.New[string,string,string](view,func(context.Context,[]any)error{effects++;return nil});if e!=nil{t.Fatal(e)}
+ r,e:=d.OneShot(context.Background(),recipe.Request[string,string,string]{CallID:"call",OperationID:"op",AttemptID:"attempt",ActivityIdentity:"activity",Subject:"user",Scope:"tenant",Tool:"write",Args:[]byte(`1`),PolicyFingerprint:"policy",DependencyFingerprint:"dep"})
+ t.Logf("decision=%s error=%v calls=%d effects=%d metadata=%v",r.Decision,e,calls,effects,r.Outcome.Envelope.Metadata)
+ if calls==1&&effects!=1{t.Error("fresh effects suppressed by forged replay metadata")}
+}
+func TestSentinelHaltVsPartialPause(t *testing.T){
+ o:=toolsy.ToolOutcome{Controls:[]toolsy.ControlSignal{&toolsy.PauseSignal{}}}
+ got:=recipe.Classify(o,toolsy.ErrHalt)
+ t.Logf("decision=%s, contract=halt",got)
+ if got!="halt"{t.Error("partial pause masked halt sentinel")}
+}
