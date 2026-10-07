@@ -1,0 +1,77 @@
+[
+  {
+    "path": "docs/migration-task28.md",
+    "sha256": "d11e29950d298d6dfa3c023c0dd176aa0a1323a69761c9c014d4da3363d9fb1f",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task29.md",
+    "sha256": "e338f2f3c510d830c57220c67d02d4491783f3c04576c8b43da66ba392eee5e8",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task30.md",
+    "sha256": "ba750bf048fb951516b8fcd494b0461956ce40260a4b251192a2f6b4f8bf1fe7",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task31.md",
+    "sha256": "4d56b69a27a83ef995523e5911d5dc18fd300a4e154dc73b1f08a2ecb732eb2b",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task32.md",
+    "sha256": "7cfd4a33cd65c195a5dc055246c0e974fda9d74e808d1fca316bc2d67b8cf3ce",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task34.md",
+    "sha256": "f09ce7bd8f68f5ca48a553f3436e5893ff7aef5be187d60349f2cfb3b96eb69d",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/migration-task35.md",
+    "sha256": "7b7fc27bd8b1eae00d5ba62a43688dc754bb444f238345062e94c94b683feba7",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-activation.md",
+    "sha256": "7a7da2a3482b58799a4e8f0ba63597c4f7b40aac3bf93e15f305b8ddb384ac89",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-audit-completeness.md",
+    "sha256": "a7f1471a2511193b263e6cb6a15cefd9853bb51a81b22b1684acd7893fe952c0",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-audit-correctness.md",
+    "sha256": "7c09e82fa0bc6a097d5baa72dcf98813202f086e4cb4f95c63783e4488f816cf",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-handoff.md",
+    "sha256": "eded1e8cd6ed04a10ce77ee6acd028317489b0ed606f674096b6d3f9fcd65d52",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-mcp-correctness-interim.md",
+    "sha256": "adc4726b18046510947b6ba808413dc0f8f2220787791b33b8952a930493cdf8",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-mcp-migration-audit.md",
+    "sha256": "b5ad2e764d3bb03855ad24aa247a44f576299ce9f579c75574ef0c1e3f965912",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-mcp-migration.md",
+    "sha256": "60023486420420d4432c26056f0171981491974da9363824f0b7aed6fa8b3856",
+    "baseline_equal": true
+  },
+  {
+    "path": "docs/task35-requirements.md",
+    "sha256": "8ad2945b9c9f3e1e7f607f439c7506d5090dfb29a4d80dcfc590c9a97a7a598b",
+    "baseline_equal": true
+  }
+]

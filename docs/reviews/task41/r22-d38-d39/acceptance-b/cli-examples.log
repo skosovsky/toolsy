@@ -1,0 +1,79 @@
+CLI presence exit=0
+generated 1 file(s)
+/tmp/toolsy-task41/r22-d38-d39-acceptance-b/cli-presence/presence_gen.go
+
+presence_gen.go byte-identical
+
+CLI stream exit=0
+generated 1 file(s)
+/tmp/toolsy-task41/r22-d38-d39-acceptance-b/cli-stream/progress_gen.go
+
+progress_gen.go byte-identical
+
+['go', 'run', './examples/run_call'] exit=0
+double(21) = 42
+validation error routed via outcome.ExecutionError (not err)
+
+['go', 'run', './examples/calculator'] exit=0
+3 + 5 = 8
+
+['go', 'run', './examples/session_snapshot'] exit=0
+snapshot bytes: 369
+restored prefs: locale=ru count=3
+
+['go', 'run', './examples/contract_recovery'] exit=0
+reconcile: phase=result_validator effects=1
+
+['go', 'run', './examples/host_event'] exit=0
+host routed panel request: settings
+host received event; scheduling remains host-owned
+
+['go', 'run', './examples/stream_terminal'] exit=0
+progress: exporting
+result: {"rows":3}
+
+['go', 'run', './examples/streaming'] exit=0
+chunk 1: n=1
+chunk 2: n=2
+chunk 3: n=3
+
+['go', 'run', './examples/full_agent'] exit=0
+result[0] add: sum=30
+result[1] add: sum=3
+result[2] mul: product=12
+2026/10/07 02:41:07 CallParser demo: args={"a":1,"b":2}
+2026/10/07 02:41:07 INFO tool start tool=add
+2026/10/07 02:41:07 INFO tool end tool=add duration=153.583µs chunks=1 bytes=10
+2026/10/07 02:41:07 INFO tool start tool=add
+2026/10/07 02:41:07 INFO tool end tool=add duration=28.25µs chunks=1 bytes=9
+2026/10/07 02:41:07 INFO tool start tool=mul
+2026/10/07 02:41:07 INFO tool end tool=mul duration=34µs chunks=1 bytes=14
+
+['go', 'run', './examples/nested_contract'] exit=0
+{"count":2}
+
+['go', 'run', './examples/generated_presence'] exit=0
+text="" integer=9007199254740993 active=false tags=0 optionalTextOmitted=true nullable=null
+
+['go', 'run', './examples/generated_stream'] exit=0
+scheduled 65c9d97860205a028ec88c297bc34b0b
+65c9d97860205a028ec88c297bc34b0b: progress part 1
+65c9d97860205a028ec88c297bc34b0b: progress part 2
+65c9d97860205a028ec88c297bc34b0b: result part 3
+
+['go', 'run', './examples/approval_journal', '-directory', '/tmp/toolsy-task41/r22-d38-d39-acceptance-b/approval', '-operation', 'first-intent'] exit=0
+pending action={"note":"example"}
+
+['go', '-C', 'examples/resiliency', 'run', '.'] exit=0
+status=200 body={"message":"ok"}
+
+['go', '-C', 'toolkits/rag', 'run', './examples/host'] exit=0
+{"documents":[{"id":"chunk-a","content":"answer","source_uri":"doc://manual"},{"id":"chunk-b","content":"detail","source_uri":"doc://manual"}]}
+
+['go', '-C', 'toolkits/sqltool', 'run', './examples/host'] exit=0
+{"result":"id | label\n--- | ---\n1 | local","row_count":1,"truncated":false}
+database rejects INSERT
+
+['go', '-C', 'toolkits/timetool', 'run', './examples/host'] exit=0
+{"result":"2026-03-08T12:00:00-04:00","weekday":"Sunday"}
+{"result":"2026-03-08T13:00:00-04:00","weekday":"Sunday"}

@@ -1,0 +1,336 @@
+diff --git a/README.md b/README.md
+index 6232b71..434adec 100644
+--- a/README.md
++++ b/README.md
+@@ -261,25 +261,14 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
+ - Nested objects and nested arrays are unsupported.
+ - Unknown or inapplicable JSON Schema keywords are rejected, including references and composition.
+ 
+-**Supported schema subset:**
++**DTO types and presence:** the [normative mapping table](docs/generator-contract.md#normative-dto-mapping-and-presence)
++covers required/optional fields, nullable unions, root objects and array items.
++The [complete runnable manifest/CLI/handler example](examples/generated_presence/README.md)
++shows exact integers, missing versus empty fields and raw nullable values.
+ 
+-- Root `parameters.type` must be `object`.
+-- Type mapping:
+-  - `string` -> `string`
+-  - `string` + `format: date-time` -> `string` (schema annotation)
+-  - `integer` -> `*json.Number` (top-level; exact integer and presence)
+-  - `boolean` -> `*bool` (top-level)
+-  - `array` -> `[]T` (single level only; no nested arrays)
+-  - nullable top-level union -> `json.RawMessage` (omitted/null/value)
+-
+-Every DTO includes `RawJSON` with the complete accepted arguments, including
+-undeclared keys when the source schema permits them. See the full
+-[generator contract](docs/generator-contract.md) for constraints and limits.
+-
+-**Complex payloads (nested objects):**
+-
+-- Nested `type: object` inside `properties` is rejected.
+-- For structured payloads, split into multiple flat tools or model a single `string` field that carries JSON text validated in handler code.
++Nested objects/arrays are outside this generator subset. Use typed/dynamic
++constructors with executable nested schemas; see the
++[nested input contract](docs/generator-contract.md#schema-subset-and-nested-inputs).
+ 
+ **Schema validation:**
+ 
+@@ -605,33 +594,16 @@ The separate [agents bridge](agents/README.md) reports confirmed terminal outcom
+ and accepted background task references. Hosts own persistence and continuation;
+ see the [remote bridge contract](docs/remote-bridge-contract.md).
+ 
+-## Historical Migration Notes
+-
+-- Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
+-- Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
+-- Replace runtime `reg.Register(...)` / `reg.Use(...)` with `RegistryBuilder`.
+-- Replace `ToolManifest`-based logic with `tool.Manifest()` and `ToolRequirements`.
+-- Replace `NewClient + Initialize` in `mcp` with `Connect`.
+-- Replace MCP `2025-11-25`, roots/session/GET-resume assumptions with the strict `2026-07-28` contract in [docs/migration-task34.md](docs/migration-task34.md).
+-- Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
+-- `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
+-
+-**Breaking changes:**
+-
+-- `Chunk.Metadata` removed — use `Progress` for data-plane progress and `Control` for orchestrator signals.
+-- System manifest flags moved out of `Metadata`: use `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`, `CompletionPolicy`.
+-- Human-in-the-loop tools yield `EventControl` + `ErrPause`.
+-- `EventSuspend` / `ErrSuspend` / `ServiceProvider` removed.
+-- `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
+-- `RunContext` → `*RunEnv` on `ToolCall.Env`; `BindEnv` → `Put` / `Require` / `Lookup`.
+-- `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
+-- `ToolCall.CallContext` carries typed subject/scope; `RunEnv` string keys are only an escape hatch for DI/session state.
+-- `WithPolicy`, typed tool policy, and `Registry.View` are the primary policy/capability path; policy denial returns `CodePolicyDenied`, while calls outside a view return `CodeCapabilityDenied`.
+-- `NewTypedTool` uses `TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect]`; handlers receive `ValidatedArgs[TArgs]` and return `ToolResult[TResult, TEffect]`.
+-- `ToolOutcome` carries `Status`, `TypedResult`, `EmptyResult`, `Noop`, and `Effects`.
+-- See [docs/migration-task28.md](docs/migration-task28.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
+-- See [docs/migration-task31.md](docs/migration-task31.md) for typed call context, registry views, policy, effects, and streaming continuation normalization.
+-- See [docs/migration-task32.md](docs/migration-task32.md) for args binders, session checkpoints, snapshot slot policy, delivery envelopes, and policy-aware generic tools.
++## API and migration reference
++
++Use the [current documentation index](docs/README.md) for execution, result,
++control, policy, generator and adapter contracts, installation/module alignment,
++and the [task41 migration](docs/migration-task41.md). Runnable host recipes are
++listed in the [examples index](examples/README.md).
++
++Earlier task28–35 migration/audit reports are retained in the separate
++[historical evidence index](docs/history/README.md). Their verdicts describe
++specific older candidates and do not certify the current implementation.
+ 
+ ## Zero-resiliency core
+ 
+diff --git a/docs/generator-contract.md b/docs/generator-contract.md
+index cc1a56f..cacdc54 100644
+--- a/docs/generator-contract.md
++++ b/docs/generator-contract.md
+@@ -19,13 +19,66 @@ array minItems/maxItems/uniqueItems and root minProperties/maxProperties.
+ Keywords must occur at their applicable schema locations. Defaults are metadata;
+ they are never inserted into omitted arguments.
+ 
+-Integers use `json.Number` to preserve the original integer without int64 overflow.
+-Date-time uses string: its annotation does not add an independent Go decoder
+-constraint. Optional primitives use pointers, arrays preserve nil versus empty.
+-Every generated input includes `RawJSON` (excluded from JSON encoding) retaining
++## Normative DTO mapping and presence
++
++This table describes the current generator. Required/optional refers to membership
++in the root `required` list. The source schema validates presence and nullability
++before a generated handler receives the DTO; Go pointer/slice shapes do not
++replace that validation. Empty/zero values are accepted unless source constraints
++reject them. Date-time remains a schema annotation on string, with no separate Go
++decoder constraint. Defaults are never applied.
++
++| Schema location/type | Required top-level field | Optional top-level field | Accepted value/presence |
++| --- | --- | --- | --- |
++| Root `object` | Named `<Name>Input` struct | Not applicable | Object required; no nullable/scalar/array root; includes `RawJSON` |
++| `string`, also `format: date-time` | `string` | `*string` | Required omission rejected; optional omitted is nil; present string retained; nonnullable null rejected |
++| `integer` | `*json.Number` | `*json.Number` | Required omission rejected; optional omitted is nil; present zero/nonzero number is nonnil and exact lexeme retained; null rejected |
++| `boolean` | `*bool` | `*bool` | Required omission rejected; optional omitted is nil; present false is nonnil; null rejected |
++| `array` of supported primitives | `*[]T` | `[]T` | Required omission rejected; present `[]` gives nonnil pointer/empty slice; optional omitted slice nil, present `[]` nonnil empty; null rejected |
++| Top-level `[supported type, null]` union, including arrays | `json.RawMessage` | `json.RawMessage` | Required omission rejected; optional omission nil; explicit null is bytes `null`; concrete value retains JSON value and numeric lexemes |
++| Array item `string`/date-time | `T = string` | Same | Value items; nullable items unsupported |
++| Array item `integer` | `T = json.Number` | Same | Exact numeric lexeme; null rejected |
++| Array item `boolean` | `T = bool` | Same | Value false retained; null rejected |
++| Nested object/array, nullable array item, standalone null or other unions | Unsupported | Unsupported | Generation fails before output installation |
++
++Both union orders are accepted (`["null", "string"]` or `["string", "null"]`);
++exactly one supported concrete type plus null is allowed, at top-level properties
++only. Integer JSON values must be mathematically integral according to the shared
++schema validator (for example `1.0` can validate); `json.Number` retains the source
++lexeme without promising `Int64` conversion for arbitrarily large values. Hosts
++choose their domain conversion and handle conversion errors.
++
++Every generated input includes `RawJSON` (excluded from JSON encoding), retaining
+ the complete accepted argument, including undeclared properties when allowed.
+-Generated field name `RawJSON` is reserved. Property names must be representable exactly by Go JSON tags: commas, quotes, backticks, backslashes, control characters and other unsupported tag symbols are rejected. Nullable fields and raw arguments
+-permit the host to inspect exact presence without conversion loss.
++Nullable fields preserve omission/null/value and numeric lexemes; whitespace
++inside decoded nullable values can normalize. `RawJSON` also permits complete
++presence inspection. DTO re-encoding is not an authoritative argument snapshot:
++optional slices with `omitempty` can omit a present empty array, and optional raw
++nullable fields have no `omitempty` and can encode omitted nil as null. Use the
++validated original `RawJSON` when exact argument presence matters.
++
++Generated field name `RawJSON` is reserved. Property names must be representable
++exactly by Go JSON tags: commas, quotes, backticks, backslashes, control characters
++and other unsupported tag symbols are rejected. Unknown input properties follow
++the source `additionalProperties` policy and are not added as DTO fields.
++
++The checked-in [presence manifest](../examples/generated_presence/presence.json),
++[generated DTO/factory](../examples/generated_presence/presence_gen.go) and
++[public execution fixtures](../examples/generated_presence/main_test.go) compile
++all table mappings and exercise omission/null/empty/zero/items/exact numbers.
++See [the complete CLI/handler example](../examples/generated_presence/README.md).
++
++## Schema subset and nested inputs
++
++Nested executable schemas belong in `NewTool`/`NewTypedTool` with BYO nested Go
++types, or `NewDynamicToolFromSpec` with an explicit supported schema. Keep the object in
++its input contract so validation occurs before handler dispatch. Do not turn a
++structured object into JSON text inside a string to bypass generator limits;
++that changes the visible schema and shifts validation past the input boundary.
++The bounded flat generator subset remains unchanged. The runnable
++[nested typed example](../examples/nested_contract/main.go) and its public tests
++show an actual nested object and rejection before dispatch; run
++`go run ./examples/nested_contract` from the checkout root.
+ 
+ Normative acceptance fixtures: required `""`, `[]`, `0`, `false` are accepted;
+ omitted required keys and nonnullable null are rejected; nullable explicit null
+diff --git a/docs/migration-task41.md b/docs/migration-task41.md
+index 0fd924c..0e1b74d 100644
+--- a/docs/migration-task41.md
++++ b/docs/migration-task41.md
+@@ -1,5 +1,10 @@
+ # Task 41 API migration
+ 
++Current API references and installation/module alignment are indexed in
++[docs/README](README.md); runnable host recipes in [examples](../examples/README.md).
++Earlier task28–35 audits/migrations are retained in the
++[historical evidence index](history/README.md), not a substitute for current contracts.
++
+ ## HTTP redirects (R01)
+ 
+ Agents, OpenAPI and GraphQL no longer transparently reroute RPCs. Configure the
+@@ -1003,3 +1008,27 @@ memory are not isolated. Host execution retains host filesystem/network/process
+ rights. The sandbox verification matrix now distinguishes optional live Docker
+ fixtures from ordinary unit mocks and unverified E2B service behavior. A skipped
+ live test is not proof of isolation. See [evidence scope](../adapters/sandbox/README.md#evidence-scope).
++
++
++## R22 / D38 / D39 — generated DTO reference and documentation navigation
++
++Use the single [normative generator mapping/presence table](generator-contract.md#normative-dto-mapping-and-presence).
++Required/optional strings, arrays and nullable properties have different Go
++representations. Schema required means presence, not nonempty/true/nonzero;
++defaults remain metadata. Top-level integer/bool pointers and exact number lexemes
++are retained. Nullable properties preserve omitted/null/value; original RawJSON
++is authoritative for complete argument presence, not DTO re-encoding.
++
++The complete [presence manifest/CLI/handler](../examples/generated_presence/README.md)
++and compiled public fixtures cover mappings and pre-dispatch rejection. The
++[nested typed example](../examples/nested_contract/main.go) keeps structured input
++in an executable schema. Replace advice to put JSON inside a string with typed
++constructors or NewDynamicToolFromSpec for nested supported schemas; toolsy-gen's
++bounded flat subset is unchanged. [Generated streaming](../examples/generated_stream/README.md)
++remains synchronous until explicit host async composition.
++
++Current API/contracts, source module map and version alignment are in the
++[documentation index](README.md); [examples](../examples/README.md) list actual
++invocations, including nested modules. Old audit paths and bytes are preserved;
++current navigation separates them in [history](history/README.md). This row does
++not certify a published release or whole task41 completion.
+diff --git a/docs/reviews/task41-progress.md b/docs/reviews/task41-progress.md
+index 00989e5..ec59722 100644
+--- a/docs/reviews/task41-progress.md
++++ b/docs/reviews/task41-progress.md
+@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
+ 
+ ## Sequential checklist
+ 
+-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted, signed commit pending; rows 38–40 are pending. Associated D decisions are recorded in their row's
++Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; rows 38–40 are pending. Associated D decisions are recorded in their row's
+ evidence; a retained design needs specific justification and accurate contracts.
+ Unresolved D work cannot be silently deferred.
+ 
+@@ -1595,3 +1595,52 @@ Both16-file production identity checks exact to6907b80. Docker explicitly SKIP;
+ E2B live, privileged mounts, all-platform behavior and crash durability unverified.
+ Reports/probes/logs archived task41/d40/acceptance-a/b excluding runtime caches.
+ Accepted for separate signed `docs: isolation limits`.
++
++
++### 38 — R22 / D38 / D39 (in progress)
++
++Independent acceptance criteria, five at20% each:
++1. One normative generator table covers required/optional/nonnullable/nullable,
++   root objects and array item types/presence. README links it without wrong
++   shorthand; schema presence is distinct from zero/empty values and defaults.
++2. Generated compiling public fixtures exercise every table mapping and actual
++   absent/null/zero/empty/array item/large exact number semantics. Source manifest
++   regenerates byte-identical checked-in output; no generator behavior expansion.
++3. Complete runnable manifest→CLI→handler example and stream/explicit async
++   example indexed with exact invocation and ownership semantics; nested schemas
++   use executable typed/dynamic constructors, not hidden JSON-string workaround.
++4. Current API/migration/install/module alignment and runnable examples indexed;
++   task28–35 audit/review evidence clearly historical and separately navigated,
++   without deleting evidence or claiming task41 final acceptance before row40.
++5. Root/examples/generator race checks, pinned lint, CLI regeneration/run and
++   documentation links pass; migration/evidence synchronized; both independent
++   reviewers100%, no unresolved detected errors. No production publish/push.
++
++Spec-first: retain bounded generator schema subset and emitted representation.
++Required string/date-time use string; optional string/date-time use *string.
++Top-level integer/bool use pointers regardless required; required arrays use
++pointer-to-slice, optional arrays slice. Array primitive items are values,
++nullable items/nested arrays/objects unsupported. Nullable top-level properties
++use json.RawMessage irrespective required, with raw omission/null/value fidelity.
++Root object becomes named Input struct with RawJSON; schema authorizes required
++presence and nulls before handler. Defaults remain annotations. Full nested input
++belongs in typed/dynamic constructors with executable schema, not JSON in string.
++
++
++R22/D38/D39 implementation complete. README refers one normative table for root,
++required/optional/nullable and primitive items; no wrong string/array shorthand.
++Source generator/CLI unchanged; historical19 source/doc identities retained.
++Generated presence fixture compiles all types, required/null before dispatch,
++optional omission/zero/empty, nullable values and number/item lexemes. Required
++string/date-time value and requiredarray pointer distinction explicit. Defaults
++metadata verified; nullable whitespace may normalize, complete RawJSON authoritative.
++Nested typed object stays executable schema; JSON-string workaround removed.
++CLI generation matches checked output; unsupported shape installation rejected.
++Current API/module alignment index and historical separate navigation preserve
++old paths/bytes; examples index all13 root/nested host commands, ownership and
++required approval parameters. Pending/approve/replay produces one disposable receipt.
++Parent full root race pass (unchanged cached packages identified), final affected
++race3 presence2.615s/nested1.255s/generator79.510s/CLI1.243s, final pinnedlint0.
++CLI and13 runnable host recipes pass;160 local Markdown target paths verified.
++Initial index invocation missing approval params corrected; Markdown regex code
++block false positive corrected. Evidence task41/r22-d38-d39, both reviews pending.
+diff --git a/examples/README.md b/examples/README.md
+index b226bfe..6bc9903 100644
+--- a/examples/README.md
++++ b/examples/README.md
+@@ -1,17 +1,52 @@
+-# toolsy examples
++# Runnable host examples
+ 
+-Run from the repository root (module `github.com/skosovsky/toolsy`):
++Commands below run from the repository root on the source checkout. Root examples
++use the core module; nested-module examples are marked separately. Add host policy,
++identity and approval where external effects require them; examples do not grant
++authority or promise production infrastructure guarantees.
+ 
+-```bash
+-go run ./examples/run_call
+-go run ./examples/session_snapshot
+-go run ./examples/resiliency
+-go run ./examples/calculator
++| Example | Command | Purpose |
++| --- | --- | --- |
++| [run_call](run_call/main.go) | `go run ./examples/run_call` | Typed RunCall/ToolOutcome and validation errors |
++| [calculator](calculator/main.go) | `go run ./examples/calculator` | Minimal typed result decoding |
++| [session_snapshot](session_snapshot/main.go) | `go run ./examples/session_snapshot` | State codecs and state+binding snapshot, not workflow continuation |
++| [approval_journal](approval_journal/README.md) | `go run ./examples/approval_journal -directory "$fixtureDir" -operation first-intent` | Bound operation approval, completed replay and unknown outcome |
++| [contract_recovery](contract_recovery/main.go) | `go run ./examples/contract_recovery` | Post-handler contract failure is not argument repair authority |
++| [host_event](host_event/main.go) | `go run ./examples/host_event` | Generic trusted host event with pause semantics |
++| [stream_terminal](stream_terminal/main.go) | `go run ./examples/stream_terminal` | Progress versus terminal/error buffering |
++| [streaming](streaming/main.go) | `go run ./examples/streaming` | Low-level synchronous chunk consumption |
++| [full_agent](full_agent/main.go) | `go run ./examples/full_agent` | Local catalog, call parsing and batch chunk delivery |
++| [nested_contract](nested_contract/main.go) | `go run ./examples/nested_contract` | Executable nested typed schema without JSON-string workaround |
++| [generated_presence](generated_presence/README.md) | `go run ./examples/generated_presence` | Complete manifest/CLI/DTO/handler and presence semantics |
++| [generated_stream](generated_stream/README.md) | `go run ./examples/generated_stream` | Generated synchronous stream plus explicit host async/callback/shutdown |
++| [resiliency](resiliency/main.go) | `go -C examples/resiliency run .` | Nested module: external routery wrapper and host retry decisions |
++
++The approval example needs an existing absolute directory owned by the host.
++For a disposable local demonstration, set `fixtureDir="$(mktemp -d)"`, then use
++the command above. It reports pending approval without an external receipt;
++follow [the approval recipe](approval_journal/README.md) for explicit local approval
++and replay. Never use a shared or untrusted directory.
++
++Generate the two public examples before running them:
++
++```sh
++go run ./cmd/toolsy-gen ./examples/generated_presence/presence.json
++go run ./cmd/toolsy-gen ./examples/generated_stream/progress.yaml
+ ```
+ 
+-- **`run_call`** — `RunCall`, `ToolOutcome`, `DecodeOutcomeAs`, validation via `ExecutionError`
+-- **`session_snapshot`** — `ExportSnapshot` → JSON → `ImportSnapshot` with `StateCodecRegistry` and strict codecs
+-- **`resiliency`** — host retry loop with `Session.RunCall` and `NewTypedTool`
+-- **`calculator`** — minimal `RunCall` + `DecodeOutcomeAs` with two tools
++Use [generated_presence](generated_presence/README.md) for complete ordinary
++manifest/CLI/handler setup, and [generated_stream](generated_stream/README.md) for
++synchronous versus async ownership. Run `go test -race ./examples/...` for root
++example fixtures; the nested resiliency module needs its own `go test` or `make test`.
++
++## Nested toolkit recipes
++
++| Recipe | Command | Host boundary |
++| --- | --- | --- |
++| [RAG routing/fallback](../toolkits/rag/examples/host/main.go) | `go -C toolkits/rag run ./examples/host` | Host strategy, no hidden retries |
++| [SQL authority](../toolkits/sqltool/examples/host/main.go) | `go -C toolkits/sqltool run ./examples/host` | Restricted SQLite connection, lexical filter not authorization |
++| [Timezone store](../toolkits/timetool/examples/host/main.go) | `go -C toolkits/timetool run ./examples/host` | Explicit bounded host StateStore resolver |
+ 
+-Other examples (`streaming`, `full_agent`) demonstrate intentionally low-level chunk APIs. They are useful for adapter work, but `run_call` is the primary typed path.
++Current contracts, module installation/alignment and migration links are in the
++[documentation index](../docs/README.md). Old task audit reports are indexed
++[separately](../docs/history/README.md).

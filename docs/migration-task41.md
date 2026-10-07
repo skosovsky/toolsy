@@ -1,5 +1,10 @@
 # Task 41 API migration
 
+Current API references and installation/module alignment are indexed in
+[docs/README](README.md); runnable host recipes in [examples](../examples/README.md).
+Earlier task28–35 audits/migrations are retained in the
+[historical evidence index](history/README.md), not a substitute for current contracts.
+
 ## HTTP redirects (R01)
 
 Agents, OpenAPI and GraphQL no longer transparently reroute RPCs. Configure the
@@ -1003,3 +1008,27 @@ memory are not isolated. Host execution retains host filesystem/network/process
 rights. The sandbox verification matrix now distinguishes optional live Docker
 fixtures from ordinary unit mocks and unverified E2B service behavior. A skipped
 live test is not proof of isolation. See [evidence scope](../adapters/sandbox/README.md#evidence-scope).
+
+
+## R22 / D38 / D39 — generated DTO reference and documentation navigation
+
+Use the single [normative generator mapping/presence table](generator-contract.md#normative-dto-mapping-and-presence).
+Required/optional strings, arrays and nullable properties have different Go
+representations. Schema required means presence, not nonempty/true/nonzero;
+defaults remain metadata. Top-level integer/bool pointers and exact number lexemes
+are retained. Nullable properties preserve omitted/null/value; original RawJSON
+is authoritative for complete argument presence, not DTO re-encoding.
+
+The complete [presence manifest/CLI/handler](../examples/generated_presence/README.md)
+and compiled public fixtures cover mappings and pre-dispatch rejection. The
+[nested typed example](../examples/nested_contract/main.go) keeps structured input
+in an executable schema. Replace advice to put JSON inside a string with typed
+constructors or NewDynamicToolFromSpec for nested supported schemas; toolsy-gen's
+bounded flat subset is unchanged. [Generated streaming](../examples/generated_stream/README.md)
+remains synchronous until explicit host async composition.
+
+Current API/contracts, source module map and version alignment are in the
+[documentation index](README.md); [examples](../examples/README.md) list actual
+invocations, including nested modules. Old audit paths and bytes are preserved;
+current navigation separates them in [history](history/README.md). This row does
+not certify a published release or whole task41 completion.

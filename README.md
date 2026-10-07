@@ -261,25 +261,14 @@ go run github.com/skosovsky/toolsy/cmd/toolsy-gen ./tools
 - Nested objects and nested arrays are unsupported.
 - Unknown or inapplicable JSON Schema keywords are rejected, including references and composition.
 
-**Supported schema subset:**
+**DTO types and presence:** the [normative mapping table](docs/generator-contract.md#normative-dto-mapping-and-presence)
+covers required/optional fields, nullable unions, root objects and array items.
+The [complete runnable manifest/CLI/handler example](examples/generated_presence/README.md)
+shows exact integers, missing versus empty fields and raw nullable values.
 
-- Root `parameters.type` must be `object`.
-- Type mapping:
-  - `string` -> `string`
-  - `string` + `format: date-time` -> `string` (schema annotation)
-  - `integer` -> `*json.Number` (top-level; exact integer and presence)
-  - `boolean` -> `*bool` (top-level)
-  - `array` -> `[]T` (single level only; no nested arrays)
-  - nullable top-level union -> `json.RawMessage` (omitted/null/value)
-
-Every DTO includes `RawJSON` with the complete accepted arguments, including
-undeclared keys when the source schema permits them. See the full
-[generator contract](docs/generator-contract.md) for constraints and limits.
-
-**Complex payloads (nested objects):**
-
-- Nested `type: object` inside `properties` is rejected.
-- For structured payloads, split into multiple flat tools or model a single `string` field that carries JSON text validated in handler code.
+Nested objects/arrays are outside this generator subset. Use typed/dynamic
+constructors with executable nested schemas; see the
+[nested input contract](docs/generator-contract.md#schema-subset-and-nested-inputs).
 
 **Schema validation:**
 
@@ -605,33 +594,16 @@ The separate [agents bridge](agents/README.md) reports confirmed terminal outcom
 and accepted background task references. Hosts own persistence and continuation;
 see the [remote bridge contract](docs/remote-bridge-contract.md).
 
-## Historical Migration Notes
+## API and migration reference
 
-- Replace `ToolCall.Args` with `ToolCall.Input.ArgsJSON`.
-- Replace `ToolCall.ID` with `ToolCall.Input.CallID`.
-- Replace runtime `reg.Register(...)` / `reg.Use(...)` with `RegistryBuilder`.
-- Replace `ToolManifest`-based logic with `tool.Manifest()` and `ToolRequirements`.
-- Replace `NewClient + Initialize` in `mcp` with `Connect`.
-- Replace MCP `2025-11-25`, roots/session/GET-resume assumptions with the strict `2026-07-28` contract in [docs/migration-task34.md](docs/migration-task34.md).
-- Replace all `RawData` assertions with decoding from `Chunk.Data` based on `Chunk.MimeType`.
-- `exectool.WithTimeout` and `RunRequest.Timeout` are removed; pass execution deadlines on the `context` used for `Run` / `Execute` (or use `routery.Timeout` on the tool).
+Use the [current documentation index](docs/README.md) for execution, result,
+control, policy, generator and adapter contracts, installation/module alignment,
+and the [task41 migration](docs/migration-task41.md). Runnable host recipes are
+listed in the [examples index](examples/README.md).
 
-**Breaking changes:**
-
-- `Chunk.Metadata` removed — use `Progress` for data-plane progress and `Control` for orchestrator signals.
-- System manifest flags moved out of `Metadata`: use `ReadOnly`, `RequiresConfirmation`, `Dangerous`, `Idempotent`, `CompletionPolicy`.
-- Human-in-the-loop tools yield `EventControl` + `ErrPause`.
-- `EventSuspend` / `ErrSuspend` / `ServiceProvider` removed.
-- `NewSession` returns `(*Session, error)` when `RunPolicy` is invalid.
-- `RunContext` → `*RunEnv` on `ToolCall.Env`; `BindEnv` → `Put` / `Require` / `Lookup`.
-- `ClientError` / `SystemError` → `*ToolError` with `Code` + `Retryable`.
-- `ToolCall.CallContext` carries typed subject/scope; `RunEnv` string keys are only an escape hatch for DI/session state.
-- `WithPolicy`, typed tool policy, and `Registry.View` are the primary policy/capability path; policy denial returns `CodePolicyDenied`, while calls outside a view return `CodeCapabilityDenied`.
-- `NewTypedTool` uses `TypedToolSpec[TSubject, TScope, TArgs, TResult, TEffect]`; handlers receive `ValidatedArgs[TArgs]` and return `ToolResult[TResult, TEffect]`.
-- `ToolOutcome` carries `Status`, `TypedResult`, `EmptyResult`, `Noop`, and `Effects`.
-- See [docs/migration-task28.md](docs/migration-task28.md) for CallParser, `DecodeChunkAs`, and dual-namespace RunEnv.
-- See [docs/migration-task31.md](docs/migration-task31.md) for typed call context, registry views, policy, effects, and streaming continuation normalization.
-- See [docs/migration-task32.md](docs/migration-task32.md) for args binders, session checkpoints, snapshot slot policy, delivery envelopes, and policy-aware generic tools.
+Earlier task28–35 migration/audit reports are retained in the separate
+[historical evidence index](docs/history/README.md). Their verdicts describe
+specific older candidates and do not certify the current implementation.
 
 ## Zero-resiliency core
 

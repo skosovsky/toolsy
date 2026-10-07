@@ -1,0 +1,22 @@
+[
+  {
+    "path": "cmd/toolsy-gen/main.go",
+    "baseline_equal": true,
+    "sha256": "0db80f90f6b95d2409220f5c3eac24820205f103d7f94274118f6508c32333fb"
+  },
+  {
+    "path": "internal/toolsygen/commit.go",
+    "baseline_equal": true,
+    "sha256": "7a8bee105c3d18f386ad371d8418fb75710f9f56ace553458413ee33d099e041"
+  },
+  {
+    "path": "internal/toolsygen/generator.go",
+    "baseline_equal": true,
+    "sha256": "d634ae096eab058a693018e41135a90f8f9458b1edc4f0627c0216ece7f64d66"
+  },
+  {
+    "path": "internal/toolsygen/yaml_contract.go",
+    "baseline_equal": true,
+    "sha256": "7d139f7ee1a2c29e1204e1c10b05a3dbef9066625ace2d27fae0e73071e29060"
+  }
+]

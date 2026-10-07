@@ -1,0 +1,4 @@
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	2.668s
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.244s
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	88.864s
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.251s

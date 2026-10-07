@@ -1,0 +1,17 @@
+{
+  "README.md": "addfcc93ad0a2b8861a5354a01710006aa2d01607cb5b87cb13c8a48b9d8290b",
+  "docs/README.md": "74d01fea875870d755ac9da5e5f24c8e0da496d8b6336d1b814c464217567d34",
+  "docs/history/README.md": "2aaaddff50ec74ec5fd2dcc3fa8967a84db2181242d3e5d69957a8e111a85a1d",
+  "docs/generator-contract.md": "4c8834979f9cc15863ccd4692ca008ae91d531105ff669c3e3d884473b90c4b9",
+  "docs/migration-task41.md": "d6fad9557a336fdb3943fcfee883d869001730b297a2e5b2f14ad6c44f563754",
+  "examples/README.md": "32235f6c39b245fecba006434f1412807aad238400b407a879f4a5e29507b4fd",
+  "internal/toolsygen/documentation_contract_test.go": "c42b445a9e076041f01ba226bc9df30f3e027d16b85cfe0848c4c7e62d56c59b",
+  "examples/generated_presence/presence_gen.go": "feb166e3a02916af1e13a6de26961c5bb8d34255ad76dc107025d6cbf2872db1",
+  "examples/generated_presence/presence.json": "6dfb0bd777a16852b08a9d8208e36c68e407c480cc3b2b37494046673d86a150",
+  "examples/generated_presence/README.md": "77d38da426672614a6a0655a9fac5fb2a37a1639a96923879e105efe4b795dd0",
+  "examples/generated_presence/main.go": "6ea99b34cc7aef0134d02bb0a35e5695cc690e53d415630d0f5105398acf2058",
+  "examples/generated_presence/main_test.go": "94be73df048bb162dcc30c92ce4fb96fd9afb1866cd380fc866fa24debfa9364",
+  "examples/nested_contract/main.go": "c0a915c64267ebff9833f3557245cdb62c7c6520e917c1b9d47c29629d7b57a8",
+  "examples/nested_contract/main_test.go": "61249ffbc56e327fada4ce6eb7220013249fdfb55e7cdd5c283988e091f546d1",
+  "examples/generated_stream/README.md": "b12b6986d43bdaba6428cd18d25da593349633ecaadcd369bc8e44b099823940"
+}

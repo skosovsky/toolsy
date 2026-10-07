@@ -1,0 +1,21 @@
+{
+  "internal/toolsygen/yaml_contract.go": "7d139f7ee1a2c29e1204e1c10b05a3dbef9066625ace2d27fae0e73071e29060",
+  "internal/toolsygen/commit.go": "7a8bee105c3d18f386ad371d8418fb75710f9f56ace553458413ee33d099e041",
+  "internal/toolsygen/generator.go": "d634ae096eab058a693018e41135a90f8f9458b1edc4f0627c0216ece7f64d66",
+  "cmd/toolsy-gen/main.go": "0db80f90f6b95d2409220f5c3eac24820205f103d7f94274118f6508c32333fb",
+  "docs/migration-task29.md": "e338f2f3c510d830c57220c67d02d4491783f3c04576c8b43da66ba392eee5e8",
+  "docs/task35-requirements.md": "8ad2945b9c9f3e1e7f607f439c7506d5090dfb29a4d80dcfc590c9a97a7a598b",
+  "docs/migration-task28.md": "d11e29950d298d6dfa3c023c0dd176aa0a1323a69761c9c014d4da3363d9fb1f",
+  "docs/task35-mcp-migration.md": "60023486420420d4432c26056f0171981491974da9363824f0b7aed6fa8b3856",
+  "docs/migration-task32.md": "7cfd4a33cd65c195a5dc055246c0e974fda9d74e808d1fca316bc2d67b8cf3ce",
+  "docs/task35-handoff.md": "eded1e8cd6ed04a10ce77ee6acd028317489b0ed606f674096b6d3f9fcd65d52",
+  "docs/migration-task35.md": "7b7fc27bd8b1eae00d5ba62a43688dc754bb444f238345062e94c94b683feba7",
+  "docs/migration-task31.md": "4d56b69a27a83ef995523e5911d5dc18fd300a4e154dc73b1f08a2ecb732eb2b",
+  "docs/task35-audit-correctness.md": "7c09e82fa0bc6a097d5baa72dcf98813202f086e4cb4f95c63783e4488f816cf",
+  "docs/migration-task30.md": "ba750bf048fb951516b8fcd494b0461956ce40260a4b251192a2f6b4f8bf1fe7",
+  "docs/migration-task34.md": "f09ce7bd8f68f5ca48a553f3436e5893ff7aef5be187d60349f2cfb3b96eb69d",
+  "docs/task35-mcp-migration-audit.md": "b5ad2e764d3bb03855ad24aa247a44f576299ce9f579c75574ef0c1e3f965912",
+  "docs/task35-activation.md": "7a7da2a3482b58799a4e8f0ba63597c4f7b40aac3bf93e15f305b8ddb384ac89",
+  "docs/task35-mcp-correctness-interim.md": "adc4726b18046510947b6ba808413dc0f8f2220787791b33b8952a930493cdf8",
+  "docs/task35-audit-completeness.md": "a7f1471a2511193b263e6cb6a15cefd9853bb51a81b22b1684acd7893fe952c0"
+}

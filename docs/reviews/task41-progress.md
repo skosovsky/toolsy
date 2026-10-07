@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted, signed commit pending; rows 38–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; row 38 is accepted, signed commit pending; rows 39–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1595,3 +1595,65 @@ Both16-file production identity checks exact to6907b80. Docker explicitly SKIP;
 E2B live, privileged mounts, all-platform behavior and crash durability unverified.
 Reports/probes/logs archived task41/d40/acceptance-a/b excluding runtime caches.
 Accepted for separate signed `docs: isolation limits`.
+
+
+### 38 — R22 / D38 / D39 (accepted)
+
+Independent acceptance criteria, five at20% each:
+1. One normative generator table covers required/optional/nonnullable/nullable,
+   root objects and array item types/presence. README links it without wrong
+   shorthand; schema presence is distinct from zero/empty values and defaults.
+2. Generated compiling public fixtures exercise every table mapping and actual
+   absent/null/zero/empty/array item/large exact number semantics. Source manifest
+   regenerates byte-identical checked-in output; no generator behavior expansion.
+3. Complete runnable manifest→CLI→handler example and stream/explicit async
+   example indexed with exact invocation and ownership semantics; nested schemas
+   use executable typed/dynamic constructors, not hidden JSON-string workaround.
+4. Current API/migration/install/module alignment and runnable examples indexed;
+   task28–35 audit/review evidence clearly historical and separately navigated,
+   without deleting evidence or claiming task41 final acceptance before row40.
+5. Root/examples/generator race checks, pinned lint, CLI regeneration/run and
+   documentation links pass; migration/evidence synchronized; both independent
+   reviewers100%, no unresolved detected errors. No production publish/push.
+
+Spec-first: retain bounded generator schema subset and emitted representation.
+Required string/date-time use string; optional string/date-time use *string.
+Top-level integer/bool use pointers regardless required; required arrays use
+pointer-to-slice, optional arrays slice. Array primitive items are values,
+nullable items/nested arrays/objects unsupported. Nullable top-level properties
+use json.RawMessage irrespective required, with raw omission/null/value fidelity.
+Root object becomes named Input struct with RawJSON; schema authorizes required
+presence and nulls before handler. Defaults remain annotations. Full nested input
+belongs in typed/dynamic constructors with executable schema, not JSON in string.
+
+
+R22/D38/D39 implementation complete. README refers one normative table for root,
+required/optional/nullable and primitive items; no wrong string/array shorthand.
+Source generator/CLI unchanged; historical19 source/doc identities retained.
+Generated presence fixture compiles all types, required/null before dispatch,
+optional omission/zero/empty, nullable values and number/item lexemes. Required
+string/date-time value and requiredarray pointer distinction explicit. Defaults
+metadata verified; nullable whitespace may normalize, complete RawJSON authoritative.
+Nested typed object stays executable schema; JSON-string workaround removed.
+CLI generation matches checked output; unsupported shape installation rejected.
+Current API/module alignment index and historical separate navigation preserve
+old paths/bytes; examples index all13 root/nested host commands, ownership and
+required approval parameters. Pending/approve/replay produces one disposable receipt.
+Parent full root race pass (unchanged cached packages identified), final affected
+race3 presence2.615s/nested1.255s/generator79.510s/CLI1.243s, final pinnedlint0.
+CLI and13 runnable host recipes pass;160 local Markdown target paths verified.
+Initial index invocation missing approval params corrected; Markdown regex code
+block false positive corrected. Evidence task41/r22-d38-d39, both reviews pending.
+
+
+Final row38 A and B independently accepted100%, five20/20 each, no unresolved
+ detected defects. A root race/affected race3 overlay/pinnedlint0, exact CLI
+regeneration/module graph/24modules/15history/navigation+anchors pass. B uncached
+full root race exit0 generator41.566s/core5.288s/release48.735s, adversarial presence/
+nested/CLI plus wrong-type/nonintegral/item probes pass, pinnedlint0. B all13 host
+and3 toolkit examples execute0; both independent original generator/CLI/history
+identity and fresh generated bytes exact. Date-time remains annotation (not Go
+constraint), nullable/root/item/presence/exponent numbers/RawJSON/DTO reserialization
+truth verified. Reports/probes/logs task41/r22-d38-d39/acceptance-a/b; initial cache/
+harness faults retained, no published/live/all-task guarantee. Accepted for separate
+signed `docs: generator contracts`.

@@ -1,0 +1,108 @@
+{
+  "run_call": {
+    "command": [
+      "go",
+      "run",
+      "./examples/run_call"
+    ],
+    "exit": 0
+  },
+  "calculator": {
+    "command": [
+      "go",
+      "run",
+      "./examples/calculator"
+    ],
+    "exit": 0
+  },
+  "session_snapshot": {
+    "command": [
+      "go",
+      "run",
+      "./examples/session_snapshot"
+    ],
+    "exit": 0
+  },
+  "approval_journal": {
+    "command": [
+      "go",
+      "run",
+      "./examples/approval_journal"
+    ],
+    "exit": 1
+  },
+  "contract_recovery": {
+    "command": [
+      "go",
+      "run",
+      "./examples/contract_recovery"
+    ],
+    "exit": 0
+  },
+  "host_event": {
+    "command": [
+      "go",
+      "run",
+      "./examples/host_event"
+    ],
+    "exit": 0
+  },
+  "stream_terminal": {
+    "command": [
+      "go",
+      "run",
+      "./examples/stream_terminal"
+    ],
+    "exit": 0
+  },
+  "streaming": {
+    "command": [
+      "go",
+      "run",
+      "./examples/streaming"
+    ],
+    "exit": 0
+  },
+  "full_agent": {
+    "command": [
+      "go",
+      "run",
+      "./examples/full_agent"
+    ],
+    "exit": 0
+  },
+  "generated_presence": {
+    "command": [
+      "go",
+      "run",
+      "./examples/generated_presence"
+    ],
+    "exit": 0
+  },
+  "generated_stream": {
+    "command": [
+      "go",
+      "run",
+      "./examples/generated_stream"
+    ],
+    "exit": 0
+  },
+  "nested_contract": {
+    "command": [
+      "go",
+      "run",
+      "./examples/nested_contract"
+    ],
+    "exit": 0
+  },
+  "resiliency": {
+    "command": [
+      "go",
+      "-C",
+      "examples/resiliency",
+      "run",
+      "."
+    ],
+    "exit": 0
+  }
+}

@@ -19,13 +19,66 @@ array minItems/maxItems/uniqueItems and root minProperties/maxProperties.
 Keywords must occur at their applicable schema locations. Defaults are metadata;
 they are never inserted into omitted arguments.
 
-Integers use `json.Number` to preserve the original integer without int64 overflow.
-Date-time uses string: its annotation does not add an independent Go decoder
-constraint. Optional primitives use pointers, arrays preserve nil versus empty.
-Every generated input includes `RawJSON` (excluded from JSON encoding) retaining
+## Normative DTO mapping and presence
+
+This table describes the current generator. Required/optional refers to membership
+in the root `required` list. The source schema validates presence and nullability
+before a generated handler receives the DTO; Go pointer/slice shapes do not
+replace that validation. Empty/zero values are accepted unless source constraints
+reject them. Date-time remains a schema annotation on string, with no separate Go
+decoder constraint. Defaults are never applied.
+
+| Schema location/type | Required top-level field | Optional top-level field | Accepted value/presence |
+| --- | --- | --- | --- |
+| Root `object` | Named `<Name>Input` struct | Not applicable | Object required; no nullable/scalar/array root; includes `RawJSON` |
+| `string`, also `format: date-time` | `string` | `*string` | Required omission rejected; optional omitted is nil; present string retained; nonnullable null rejected |
+| `integer` | `*json.Number` | `*json.Number` | Required omission rejected; optional omitted is nil; present zero/nonzero number is nonnil and exact lexeme retained; null rejected |
+| `boolean` | `*bool` | `*bool` | Required omission rejected; optional omitted is nil; present false is nonnil; null rejected |
+| `array` of supported primitives | `*[]T` | `[]T` | Required omission rejected; present `[]` gives nonnil pointer/empty slice; optional omitted slice nil, present `[]` nonnil empty; null rejected |
+| Top-level `[supported type, null]` union, including arrays | `json.RawMessage` | `json.RawMessage` | Required omission rejected; optional omission nil; explicit null is bytes `null`; concrete value retains JSON value and numeric lexemes |
+| Array item `string`/date-time | `T = string` | Same | Value items; nullable items unsupported |
+| Array item `integer` | `T = json.Number` | Same | Exact numeric lexeme; null rejected |
+| Array item `boolean` | `T = bool` | Same | Value false retained; null rejected |
+| Nested object/array, nullable array item, standalone null or other unions | Unsupported | Unsupported | Generation fails before output installation |
+
+Both union orders are accepted (`["null", "string"]` or `["string", "null"]`);
+exactly one supported concrete type plus null is allowed, at top-level properties
+only. Integer JSON values must be mathematically integral according to the shared
+schema validator (for example `1.0` can validate); `json.Number` retains the source
+lexeme without promising `Int64` conversion for arbitrarily large values. Hosts
+choose their domain conversion and handle conversion errors.
+
+Every generated input includes `RawJSON` (excluded from JSON encoding), retaining
 the complete accepted argument, including undeclared properties when allowed.
-Generated field name `RawJSON` is reserved. Property names must be representable exactly by Go JSON tags: commas, quotes, backticks, backslashes, control characters and other unsupported tag symbols are rejected. Nullable fields and raw arguments
-permit the host to inspect exact presence without conversion loss.
+Nullable fields preserve omission/null/value and numeric lexemes; whitespace
+inside decoded nullable values can normalize. `RawJSON` also permits complete
+presence inspection. DTO re-encoding is not an authoritative argument snapshot:
+optional slices with `omitempty` can omit a present empty array, and optional raw
+nullable fields have no `omitempty` and can encode omitted nil as null. Use the
+validated original `RawJSON` when exact argument presence matters.
+
+Generated field name `RawJSON` is reserved. Property names must be representable
+exactly by Go JSON tags: commas, quotes, backticks, backslashes, control characters
+and other unsupported tag symbols are rejected. Unknown input properties follow
+the source `additionalProperties` policy and are not added as DTO fields.
+
+The checked-in [presence manifest](../examples/generated_presence/presence.json),
+[generated DTO/factory](../examples/generated_presence/presence_gen.go) and
+[public execution fixtures](../examples/generated_presence/main_test.go) compile
+all table mappings and exercise omission/null/empty/zero/items/exact numbers.
+See [the complete CLI/handler example](../examples/generated_presence/README.md).
+
+## Schema subset and nested inputs
+
+Nested executable schemas belong in `NewTool`/`NewTypedTool` with BYO nested Go
+types, or `NewDynamicToolFromSpec` with an explicit supported schema. Keep the object in
+its input contract so validation occurs before handler dispatch. Do not turn a
+structured object into JSON text inside a string to bypass generator limits;
+that changes the visible schema and shifts validation past the input boundary.
+The bounded flat generator subset remains unchanged. The runnable
+[nested typed example](../examples/nested_contract/main.go) and its public tests
+show an actual nested object and rejection before dispatch; run
+`go run ./examples/nested_contract` from the checkout root.
 
 Normative acceptance fixtures: required `""`, `[]`, `0`, `false` are accepted;
 omitted required keys and nonnullable null are rejected; nullable explicit null

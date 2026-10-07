@@ -1,0 +1,221 @@
+{
+  "name": "presence",
+  "description": "Demonstrate generated DTO presence without external effects",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "r_string": {
+        "description": "r_string presence fixture",
+        "type": "string"
+      },
+      "o_string": {
+        "description": "o_string presence fixture",
+        "type": "string",
+        "default": "annotation only"
+      },
+      "r_integer": {
+        "description": "r_integer presence fixture",
+        "type": "integer"
+      },
+      "o_integer": {
+        "description": "o_integer presence fixture",
+        "type": "integer"
+      },
+      "r_boolean": {
+        "description": "r_boolean presence fixture",
+        "type": "boolean"
+      },
+      "o_boolean": {
+        "description": "o_boolean presence fixture",
+        "type": "boolean"
+      },
+      "r_datetime": {
+        "description": "r_datetime presence fixture",
+        "type": "string",
+        "format": "date-time"
+      },
+      "o_datetime": {
+        "description": "o_datetime presence fixture",
+        "type": "string",
+        "format": "date-time"
+      },
+      "r_strings": {
+        "description": "r_strings presence fixture",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "o_strings": {
+        "description": "o_strings presence fixture",
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "r_integers": {
+        "description": "r_integers presence fixture",
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "o_integers": {
+        "description": "o_integers presence fixture",
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "r_booleans": {
+        "description": "r_booleans presence fixture",
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "o_booleans": {
+        "description": "o_booleans presence fixture",
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "r_nullable_string": {
+        "description": "r_nullable_string nullable fixture",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "o_nullable_string": {
+        "description": "o_nullable_string nullable fixture",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "r_nullable_integer": {
+        "description": "r_nullable_integer nullable fixture",
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "o_nullable_integer": {
+        "description": "o_nullable_integer nullable fixture",
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "r_nullable_boolean": {
+        "description": "r_nullable_boolean nullable fixture",
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "o_nullable_boolean": {
+        "description": "o_nullable_boolean nullable fixture",
+        "type": [
+          "null",
+          "boolean"
+        ]
+      },
+      "r_nullable_strings": {
+        "description": "r_nullable_strings nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      },
+      "o_nullable_strings": {
+        "description": "o_nullable_strings nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        }
+      },
+      "r_nullable_integers": {
+        "description": "r_nullable_integers nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "integer"
+        }
+      },
+      "o_nullable_integers": {
+        "description": "o_nullable_integers nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "integer"
+        }
+      },
+      "r_nullable_booleans": {
+        "description": "r_nullable_booleans nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "o_nullable_booleans": {
+        "description": "o_nullable_booleans nullable fixture",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "r_datetimes": {
+        "description": "r_datetimes item annotation fixture",
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "o_datetimes": {
+        "description": "o_datetimes item annotation fixture",
+        "type": "array",
+        "items": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "required": [
+      "r_string",
+      "r_integer",
+      "r_boolean",
+      "r_datetime",
+      "r_strings",
+      "r_integers",
+      "r_booleans",
+      "r_nullable_string",
+      "r_nullable_integer",
+      "r_nullable_boolean",
+      "r_nullable_strings",
+      "r_nullable_integers",
+      "r_nullable_booleans",
+      "r_datetimes"
+    ],
+    "additionalProperties": true
+  }
+}

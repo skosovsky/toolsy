@@ -1,0 +1,10 @@
+2026/10/07 02:37:51 CallParser demo: args={"a":1,"b":2}
+2026/10/07 02:37:51 INFO tool start tool=add
+2026/10/07 02:37:51 INFO tool start tool=add
+result[0] add: sum=30
+2026/10/07 02:37:51 INFO tool end tool=add duration=201.125µs chunks=1 bytes=10
+result[1] add: sum=3
+2026/10/07 02:37:51 INFO tool end tool=add duration=169.125µs chunks=1 bytes=9
+2026/10/07 02:37:51 INFO tool start tool=mul
+result[2] mul: product=12
+2026/10/07 02:37:51 INFO tool end tool=mul duration=77.25µs chunks=1 bytes=14

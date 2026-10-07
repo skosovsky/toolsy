@@ -1,0 +1,1 @@
+Initial link regex matched Go code block syntax as Markdown; corrected by removing fenced code blocks before checking actual links. No broken link inferred. Initial root tests/lint started before final date-time array fixture expansion; final targeted generator/examples checks and final lint rerun on complete candidate.

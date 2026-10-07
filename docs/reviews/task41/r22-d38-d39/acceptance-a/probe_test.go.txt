@@ -1,0 +1,18 @@
+package main
+import("testing";"encoding/json";"github.com/stretchr/testify/require";"github.com/skosovsky/toolsy")
+func TestAcceptanceADateItemsAndExactLexemes(t *testing.T){
+// Arrange.
+h:=&captureHandler{}; obj:=baseObject(t); obj["r_datetimes"]=json.RawMessage(`["2026-10-07T00:00:00Z"]`); obj["o_datetimes"]=json.RawMessage(`[]`); obj["r_integer"]=json.RawMessage(`1.0`)
+// Act.
+err:=executeObject(t,h,obj)
+// Assert.
+require.NoError(t,err);require.Equal(t,[]string{"2026-10-07T00:00:00Z"},*h.input.RDatetimes);require.NotNil(t,h.input.ODatetimes);require.Equal(t,"1.0",h.input.RInteger.String())
+for _,key:=range []string{"r_datetimes","o_datetimes"}{for _,raw:=range []string{`[null]`,`[1]`}{
+// Arrange.
+bad:=baseObject(t);bad[key]=json.RawMessage(raw);capture:=&captureHandler{}
+// Act.
+err=executeObject(t,capture,bad)
+// Assert.
+require.ErrorIs(t,err,toolsy.ErrValidation);require.Zero(t,capture.calls)
+}}
+}
