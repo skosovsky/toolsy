@@ -3,8 +3,8 @@ module github.com/skosovsky/toolsy/mcp
 go 1.27.1
 
 require (
-	github.com/skosovsky/toolsy v0.0.0
-	github.com/skosovsky/toolsy/toolkits/httptool v0.0.0
+	github.com/skosovsky/toolsy v0.18.0
+	github.com/skosovsky/toolsy/toolkits/httptool v0.18.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sys v0.48.0
 )
@@ -14,9 +14,4 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/text v0.42.0 // indirect
-)
-
-replace (
-	github.com/skosovsky/toolsy => ../
-	github.com/skosovsky/toolsy/toolkits/httptool => ../toolkits/httptool
 )

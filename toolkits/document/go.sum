@@ -8,6 +8,10 @@ github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0 h1:7Q+xNAZFmnfYOMwe
 github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0/go.mod h1:1fEHWurg7pvf5SG6XNE5Q8UZmOwex51Mkx3SLhrW5B4=
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28=
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.3/go.mod h1:JXeL+ps8p7/KNMjDQk3TCwPpBy0wYklyWTfbkIzdIFU=
+github.com/skosovsky/toolsy v0.18.0 h1:rACKNjeam9FcsHamimEXHcnRXgTHGYDUTNdUsEBTFQY=
+github.com/skosovsky/toolsy v0.18.0/go.mod h1:yulTCBBI4vdEzyjJA/LUqhpIWMdHlRrsJ9kd/KuWeKY=
+github.com/skosovsky/toolsy/toolkits/httptool v0.18.0 h1:Vccmvfc5fC/Wm47mf0e4vyqB0c7feB5tdfb4K7xXnhI=
+github.com/skosovsky/toolsy/toolkits/httptool v0.18.0/go.mod h1:oXgdmzv6lc1ksqaYcuT4ngcwbQYCr0hzMbIrdWFNjz4=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
