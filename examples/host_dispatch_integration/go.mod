@@ -6,7 +6,7 @@ require (
 	github.com/skosovsky/flowy v0.13.0
 	github.com/skosovsky/guardy v0.13.0
 	github.com/skosovsky/prompty v0.15.0
-	github.com/skosovsky/toolsy v0.18.0
+	github.com/skosovsky/toolsy v0.19.0
 )
 
 require (
