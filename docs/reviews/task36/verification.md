@@ -71,5 +71,15 @@ actual published recipe and is mandatory after publication.
 Use `make release-break`: fresh producer rejection of reserved replay metadata is
 a behavior break. Function signatures remain; consumers must remove manually set
 provenance and use the real replay boundary. See host-dispatch-migration.md for
-full caller glue changes. Publication, post-release consumer verification and
-issue closeout are still pending until their evidence is recorded here.
+full caller glue changes. Publication and closeout are complete:
+
+- `make release-break`: PASS, exit 0 after artifact verification, full candidate lint/test and clear-break preflight. Published root and optional integration tags both point to `095e2db7368021babfc6769e4319271db57b9304`; see release.log.
+- Published root: `v0.19.0`, prepared from implementation commit `70371962f35132870bcc866c85c68f24e9ba3576`.
+- `scripts/task36-integration.sh released v0.19.0`: PASS, all four semantic tests with `-race -count=1`, `GOWORK=off`, no replace and no copied recipe. See integration-released-race.log.
+- Independent public adversarial probes against the actual published root: PASS, seven tests including nine forwarding cases, with `-race -count=1`, `GOWORK=off` and no replace. See correctness-released-race.log and correctness-final-probe_test.go.txt.
+- Concrete author migration notification: https://github.com/skosovsky/toolsy/issues/4#issuecomment-6035235399 . It names the changed calls/fields, approval/recovery ownership and fresh provenance behavior.
+- Issue state independently read back as CLOSED at `2026-10-07T09:38:43Z`.
+
+SSH remote discovery did not respond and that first attempt was cancelled before publication. The successful invocation used a temporary HTTPS transport rewrite and existing `gh` credentials; source remote/config remained unchanged. No checks were skipped and checksum verification remained enabled.
+
+The published tag preserves evidence as it existed before publication. This final verification update records the subsequent consumer checks and closeout.

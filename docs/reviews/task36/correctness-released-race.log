@@ -1,0 +1,40 @@
+=== RUN   TestControlsWithInfra
+    probe_test.go:15: decision=halt, contract=halt
+--- PASS: TestControlsWithInfra (0.00s)
+=== RUN   TestErrorMIMELeak
+    probe_test.go:22: model={"call_id":"call","tool":"write","mime":"application/json","value":{"status":"business_error"},"is_error":true} error=<nil>
+--- PASS: TestErrorMIMELeak (0.00s)
+=== RUN   TestEmptyUnsupportedMIME
+    probe_test.go:28: projection=<nil> error=host dispatch: unsupported model MIME "application/x-secret"
+--- PASS: TestEmptyUnsupportedMIME (0.00s)
+=== RUN   TestFreshForgedReplayDropsEffects
+    probe_test.go:39: decision=fault error=<nil> calls=1 effects=0 metadata=map[]
+--- PASS: TestFreshForgedReplayDropsEffects (0.00s)
+=== RUN   TestSentinelHaltVsPartialPause
+    probe_test.go:46: decision=halt, contract=halt
+--- PASS: TestSentinelHaltVsPartialPause (0.00s)
+=== RUN   TestProfileForgeryBecomesUncertain
+    probe_test.go:62: first=uncertain second=uncertain calls=1
+--- PASS: TestProfileForgeryBecomesUncertain (0.00s)
+=== RUN   TestPublicForwardedReplaySnapshot
+=== RUN   TestPublicForwardedReplaySnapshot/exact
+=== RUN   TestPublicForwardedReplaySnapshot/correlation
+=== RUN   TestPublicForwardedReplaySnapshot/effects
+=== RUN   TestPublicForwardedReplaySnapshot/wire
+=== RUN   TestPublicForwardedReplaySnapshot/typed
+=== RUN   TestPublicForwardedReplaySnapshot/audience
+=== RUN   TestPublicForwardedReplaySnapshot/metadata
+=== RUN   TestPublicForwardedReplaySnapshot/control
+=== RUN   TestPublicForwardedReplaySnapshot/empty
+--- PASS: TestPublicForwardedReplaySnapshot (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/exact (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/correlation (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/effects (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/wire (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/typed (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/audience (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/metadata (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/control (0.00s)
+    --- PASS: TestPublicForwardedReplaySnapshot/empty (0.00s)
+PASS
+ok  	task36-released-probe	1.608s
