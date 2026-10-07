@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; row 38 is accepted, signed commit pending; rows 39–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; row 38 is accepted and committed as `0600e12`; rows 39–40 are pending. Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1657,3 +1657,65 @@ constraint), nullable/root/item/presence/exponent numbers/RawJSON/DTO reserializ
 truth verified. Reports/probes/logs task41/r22-d38-d39/acceptance-a/b; initial cache/
 harness faults retained, no published/live/all-task guarantee. Accepted for separate
 signed `docs: generator contracts`.
+
+
+### 39 — R23 / documentation checklist (accepted)
+
+Five independent acceptance criteria20% each:
+1. Generic exectool package/README/root docs distinguish caller execution context,
+   backend-owned collection/cleanup bounds and computational/resource policy;
+   no only-caller deadline promise and no model-controlled timeout field.
+2. Capability references and runnable host policy recipe accurately demonstrate
+   positive caller deadline plus explicit Starlark step budget; Docker LogTimeout
+   setup/default/phase/error classification explained without live proof.
+3. Source checklist items1–2 map current public execution input/result/authority/
+   audience/control/error/retry/lifecycle and session/checkpoint/config/Rebind/
+   codec/BYOT ownership contracts to actual APIs and executable fixtures.
+4. Source checklist items3–7 map HTTP/MCP/sandbox/generator/release current contracts
+   and exact regression evidence with scope limits; no old review percentages
+   substitute implementation/current proof; docs checklist remains distinct
+   from row40 final all24modules/adversarial/bench/artifact/full-scope acceptance.
+5. Relevant root/module race/lint and policy example pass; current source/API/doc
+   links and migration/evidence synchronize; both reviewers100%, no unresolved
+   detected errors. Real limits retained, no runtime policy regression. The audit
+   must resolve bootstrap exit141 with a baseline-failing archive-padding fixture
+   and preserve prepare-only checkout/artifact/publication guarantees.
+
+Spec-first: exectool passes caller context and has no RunRequest.Timeout/schema
+field. Backends retain separate owned bounds: Docker LogTimeout (default5s) starts
+log acquisition/follow after container start, can end ongoing execution and closes
+owned body/cancels wait; absent parent interrupt it is collection infrastructure
+failure, not ErrTimeout. Cleanup uses fresh independent contexts with cooperative
+filesystem IO; total return is not universally hard bounded. Starlark finite
+instruction budget is neither seconds nor process memory quota. Host selects
+capabilities, credentials and policy, no downgrade of mandatory bounds.
+
+
+Row39 complete: caller execution context and backend-owned collection/cleanup/
+resource budgets accurately documented; public host Starlark policy recipe with
+positive steps/caller deadline passes. Public entry families and all seven source
+docs checklist items map current contracts to executable fixtures; live/custom
+port/platform limits remain explicit, row40 final gate separate.
+
+Initial Docker fixtures expired before resource acquisition on a busy machine;
+phase-triggered deadline/cancellation fixtures now assert resources actually
+owned, distinct from unchanged actual LogTimeout clock test. Docker full race5/
+phase race30/pinnedlint0 pass. No backend production Go policy changed;231 tracked
+production Go files except exectool/doc comments identical, manifests unchanged.
+
+Documentation audit also found release bootstrap exit141 outside sandbox. Shell
+trace isolates git archive|tar: tar may close before producer drains valid padding.
+Bootstrap now writes entire archive to private temporary file, extracts then
+removes it; committed-input/preflight/cleanup/explicit refs unchanged. New AAA
+prepare-only padding fixture fails141 with exact0600e12 script via overlay and
+passes corrected, source unchanged and no new remote tag. Initial failures retained.
+Parent final root race1 PASS release58.459s/generator60.564s, rootlint0; policy run
+PASS,240 local links and20 named fixture declarations verified.
+
+Both fresh independent acceptance A/B100%, five20/20 each, no unresolved detected
+defects. A own root/module race + lint/public recipe and baselinepadding FAIL141;
+B own rootrace release52.651s/generator49.299s, three module race3/four lint0,
+236 links/anchors and public schema/context probe; independent baselinepadding
+FAIL141/currentpadding+untracked PASS. Reports/logs/probes archived task41/r23-docs
+without caches, Go artifacts renamed.txt. Accepted for separate signed commit
+`docs: execution bounds`. Row40 still required; no production publish/push.

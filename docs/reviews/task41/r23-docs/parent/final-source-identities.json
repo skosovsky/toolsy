@@ -1,0 +1,30 @@
+[
+  {
+    "file": "scripts/release.sh",
+    "sha256": "0215f5c8d90af7202bcc640f716dbcd9149b750ad0362b13499d9652385614ca"
+  },
+  {
+    "file": "internal/release/bootstrap_archive_test.go",
+    "sha256": "161624aa170f5c0cc9510de346604abc032a2a5742c34f4d4beb4381b39c37e7"
+  },
+  {
+    "file": "adapters/sandbox/docker/docker_test.go",
+    "sha256": "a9222b4280cdffc7b355482323362e4a03ceb3fde7949b82f6b5957237bc130c"
+  },
+  {
+    "file": "adapters/sandbox/docker/policy_test.go",
+    "sha256": "ecc974eab04e4c3d30336fa36c14fdc9384867e4a3d4bccc5bf5d566b750ad02"
+  },
+  {
+    "file": "adapters/sandbox/docker/deadline_fixture_test.go",
+    "sha256": "f312ffaf511fa1f07c9019a613b8e1fba4ab6b07eff76f00d6e8b1c5951bab5b"
+  },
+  {
+    "file": "adapters/sandbox/starlark/examples/policy/main.go",
+    "sha256": "bdf1149c6b8ce413dfe35291cff00ca95a3f04ffd6a76177e460c97f8d5d04de"
+  },
+  {
+    "file": "adapters/sandbox/starlark/examples/policy/main_test.go",
+    "sha256": "c72d8872cad3f85a053286e7cade207a9ca9da55f9f6ea956e13b00692f61e7f"
+  }
+]

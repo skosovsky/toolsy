@@ -54,7 +54,11 @@ GIT_OPTIONAL_LOCKS=0 git -C "$script_root" ls-tree -r -z --name-only HEAD |
         fi
     done
 mkdir "$runner_dir/source"
-GIT_OPTIONAL_LOCKS=0 git -C "$script_root" -c core.autocrlf=input -c core.eol=lf archive HEAD | tar -x -C "$runner_dir/source"
+# Drain the complete archive before extraction: some tar implementations stop at
+# the end marker before consuming padding, giving git SIGPIPE under pipefail.
+GIT_OPTIONAL_LOCKS=0 git -C "$script_root" -c core.autocrlf=input -c core.eol=lf archive --output="$runner_dir/source.tar" HEAD
+tar -xf "$runner_dir/source.tar" -C "$runner_dir/source"
+rm -- "$runner_dir/source.tar"
 GOWORK=off go build -C "$runner_dir/source" -mod=readonly -buildvcs=false -o "$runner_dir/toolsy-release" ./cmd/toolsy-release &
 child_pid=$!
 child_phase=build

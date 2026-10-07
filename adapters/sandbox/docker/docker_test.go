@@ -162,16 +162,19 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
 }
 
 func TestRunKillsContainerOnTimeout(t *testing.T) {
-	client := &timeoutClient{}
+	// Arrange.
+	ctx, expire := newTriggeredDeadlineContext()
+	client := &timeoutClient{expire: expire}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
+	defer expire()
+	// Act.
 	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
 	})
+	// Assert.
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
 	require.True(t, client.killed)
@@ -179,16 +182,18 @@ func TestRunKillsContainerOnTimeout(t *testing.T) {
 }
 
 func TestRunMapsErrChTimeoutToErrTimeout(t *testing.T) {
+	// Arrange.
 	client := &timeoutErrClient{}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-	defer cancel()
+	ctx := context.Background()
+	// Act.
 	_, err = sb.Run(ctx, exectool.RunRequest{
 		Language: "python",
 		Code:     "while True: pass",
 	})
+	// Assert.
 	require.Error(t, err)
 	require.ErrorIs(t, err, exectool.ErrTimeout)
 	require.True(t, client.killed)
@@ -209,16 +214,19 @@ func TestRunReturnsTimeoutDuringSetup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			client := &setupTimeoutClient{stage: tc.stage, viaCtx: tc.viaCtx}
+			// Arrange.
+			ctx, expire := newTriggeredDeadlineContext()
+			defer expire()
+			client := &setupTimeoutClient{stage: tc.stage, viaCtx: tc.viaCtx, expire: expire}
 			sb, err := New(WithClient(client))
 			require.NoError(t, err)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
-			defer cancel()
+			// Act.
 			_, err = sb.Run(ctx, exectool.RunRequest{
 				Language: "python",
 				Code:     "print(1)",
 			})
+			// Assert.
 			require.Error(t, err)
 			require.ErrorIs(t, err, exectool.ErrTimeout)
 			if tc.stage != "create" {
@@ -349,18 +357,20 @@ func TestClassifySetupError_CancelOverReadLimit(t *testing.T) {
 
 type timeoutClient struct {
 	mockClient
+
+	expire func()
 }
 
 func (m *timeoutClient) ContainerWait(
-	ctx context.Context,
+	_ context.Context,
 	_ string,
 	_ container.WaitCondition,
 ) (<-chan container.WaitResponse, <-chan error) {
 	statusCh := make(chan container.WaitResponse)
 	errCh := make(chan error)
-	go func() {
-		<-ctx.Done()
-	}()
+	if m.expire != nil {
+		m.expire()
+	}
 	return statusCh, errCh
 }
 
@@ -369,16 +379,13 @@ type timeoutErrClient struct {
 }
 
 func (m *timeoutErrClient) ContainerWait(
-	ctx context.Context,
+	_ context.Context,
 	_ string,
 	_ container.WaitCondition,
 ) (<-chan container.WaitResponse, <-chan error) {
 	statusCh := make(chan container.WaitResponse)
 	errCh := make(chan error, 1)
-	go func() {
-		<-ctx.Done()
-		errCh <- ctx.Err()
-	}()
+	errCh <- context.DeadlineExceeded
 	return statusCh, errCh
 }
 
@@ -451,10 +458,12 @@ type setupTimeoutClient struct {
 
 	stage  string
 	viaCtx bool
+	expire func()
 }
 
 func (m *setupTimeoutClient) timeoutErr(ctx context.Context) error {
 	if m.viaCtx {
+		m.expire()
 		<-ctx.Done()
 		return ctx.Err()
 	}

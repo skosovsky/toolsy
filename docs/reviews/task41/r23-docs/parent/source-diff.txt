@@ -1,0 +1,203 @@
+diff --git a/adapters/sandbox/docker/docker_test.go b/adapters/sandbox/docker/docker_test.go
+index 8b1d282..636df5f 100644
+--- a/adapters/sandbox/docker/docker_test.go
++++ b/adapters/sandbox/docker/docker_test.go
+@@ -162,16 +162,19 @@ func TestRunRejectsReservedScriptNames(t *testing.T) {
+ }
+ 
+ func TestRunKillsContainerOnTimeout(t *testing.T) {
+-	client := &timeoutClient{}
++	// Arrange.
++	ctx, expire := newTriggeredDeadlineContext()
++	client := &timeoutClient{expire: expire}
+ 	sb, err := New(WithClient(client))
+ 	require.NoError(t, err)
+ 
+-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+-	defer cancel()
++	defer expire()
++	// Act.
+ 	_, err = sb.Run(ctx, exectool.RunRequest{
+ 		Language: "python",
+ 		Code:     "while True: pass",
+ 	})
++	// Assert.
+ 	require.Error(t, err)
+ 	require.ErrorIs(t, err, exectool.ErrTimeout)
+ 	require.True(t, client.killed)
+@@ -179,16 +182,18 @@ func TestRunKillsContainerOnTimeout(t *testing.T) {
+ }
+ 
+ func TestRunMapsErrChTimeoutToErrTimeout(t *testing.T) {
++	// Arrange.
+ 	client := &timeoutErrClient{}
+ 	sb, err := New(WithClient(client))
+ 	require.NoError(t, err)
+ 
+-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+-	defer cancel()
++	ctx := context.Background()
++	// Act.
+ 	_, err = sb.Run(ctx, exectool.RunRequest{
+ 		Language: "python",
+ 		Code:     "while True: pass",
+ 	})
++	// Assert.
+ 	require.Error(t, err)
+ 	require.ErrorIs(t, err, exectool.ErrTimeout)
+ 	require.True(t, client.killed)
+@@ -209,16 +214,19 @@ func TestRunReturnsTimeoutDuringSetup(t *testing.T) {
+ 
+ 	for _, tc := range testCases {
+ 		t.Run(tc.name, func(t *testing.T) {
+-			client := &setupTimeoutClient{stage: tc.stage, viaCtx: tc.viaCtx}
++			// Arrange.
++			ctx, expire := newTriggeredDeadlineContext()
++			defer expire()
++			client := &setupTimeoutClient{stage: tc.stage, viaCtx: tc.viaCtx, expire: expire}
+ 			sb, err := New(WithClient(client))
+ 			require.NoError(t, err)
+ 
+-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+-			defer cancel()
++			// Act.
+ 			_, err = sb.Run(ctx, exectool.RunRequest{
+ 				Language: "python",
+ 				Code:     "print(1)",
+ 			})
++			// Assert.
+ 			require.Error(t, err)
+ 			require.ErrorIs(t, err, exectool.ErrTimeout)
+ 			if tc.stage != "create" {
+@@ -349,18 +357,20 @@ func TestClassifySetupError_CancelOverReadLimit(t *testing.T) {
+ 
+ type timeoutClient struct {
+ 	mockClient
++
++	expire func()
+ }
+ 
+ func (m *timeoutClient) ContainerWait(
+-	ctx context.Context,
++	_ context.Context,
+ 	_ string,
+ 	_ container.WaitCondition,
+ ) (<-chan container.WaitResponse, <-chan error) {
+ 	statusCh := make(chan container.WaitResponse)
+ 	errCh := make(chan error)
+-	go func() {
+-		<-ctx.Done()
+-	}()
++	if m.expire != nil {
++		m.expire()
++	}
+ 	return statusCh, errCh
+ }
+ 
+@@ -369,16 +379,13 @@ type timeoutErrClient struct {
+ }
+ 
+ func (m *timeoutErrClient) ContainerWait(
+-	ctx context.Context,
++	_ context.Context,
+ 	_ string,
+ 	_ container.WaitCondition,
+ ) (<-chan container.WaitResponse, <-chan error) {
+ 	statusCh := make(chan container.WaitResponse)
+ 	errCh := make(chan error, 1)
+-	go func() {
+-		<-ctx.Done()
+-		errCh <- ctx.Err()
+-	}()
++	errCh <- context.DeadlineExceeded
+ 	return statusCh, errCh
+ }
+ 
+@@ -451,10 +458,12 @@ type setupTimeoutClient struct {
+ 
+ 	stage  string
+ 	viaCtx bool
++	expire func()
+ }
+ 
+ func (m *setupTimeoutClient) timeoutErr(ctx context.Context) error {
+ 	if m.viaCtx {
++		m.expire()
+ 		<-ctx.Done()
+ 		return ctx.Err()
+ 	}
+diff --git a/adapters/sandbox/docker/policy_test.go b/adapters/sandbox/docker/policy_test.go
+index 795f983..3759d8b 100644
+--- a/adapters/sandbox/docker/policy_test.go
++++ b/adapters/sandbox/docker/policy_test.go
+@@ -125,15 +125,15 @@ func (*cleanupFailureClient) ContainerRemove(context.Context, string, container.
+ func TestOwnedLogBodyClosedOnCancellation(t *testing.T) {
+ 	// Arrange.
+ 	body := &blockedLogBody{done: make(chan struct{})}
+-	client := &blockingLogClient{body: body}
++	ctx, cancel := context.WithCancel(context.Background())
++	client := &blockingLogClient{body: body, acquired: cancel}
+ 	sb, err := New(WithClient(client))
+ 	require.NoError(t, err)
+-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+ 	defer cancel()
+ 	// Act.
+ 	_, err = sb.Run(ctx, exectool.RunRequest{Language: "python"})
+ 	// Assert.
+-	require.ErrorIs(t, err, exectool.ErrTimeout)
++	require.ErrorIs(t, err, context.Canceled)
+ 	select {
+ 	case <-body.done:
+ 	default:
+@@ -152,10 +152,14 @@ func (b *blockedLogBody) Close() error             { b.once.Do(func() { close(b.
+ type blockingLogClient struct {
+ 	mockClient
+ 
+-	body *blockedLogBody
++	body     *blockedLogBody
++	acquired func()
+ }
+ 
+ func (c *blockingLogClient) ContainerLogs(context.Context, string, container.LogsOptions) (io.ReadCloser, error) {
++	if c.acquired != nil {
++		c.acquired()
++	}
+ 	return c.body, nil
+ }
+ 
+diff --git a/exectool/doc.go b/exectool/doc.go
+index b56b218..b5c837d 100644
+--- a/exectool/doc.go
++++ b/exectool/doc.go
+@@ -3,9 +3,11 @@
+ //
+ // The generic tool created by New exposes one tool, typically named
+ // "exec_code", with a dynamic JSON Schema derived from the sandbox's supported
+-// languages. Execution time limits come only from the [context.Context] passed to
+-// [Sandbox.Run] (e.g. caller deadlines or wrappers such as routery.Timeout).
+-// Time limits are never exposed to the LLM-facing schema.
++// languages. Caller cancellation/deadlines use the [context.Context] passed to
++// [Sandbox.Run]. Backends can additionally enforce owned collection/cleanup
++// deadlines and computation/resource budgets; see each backend's capability policy.
++// RunRequest and the LLM-facing schema have no timeout field. A caller deadline
++// is not a universal hard bound on cleanup or synchronous host operations.
+ //
+ // Low-level sandbox adapters exchange only strings, bytes, and durations via
+ // RunRequest and RunResult.
+diff --git a/scripts/release.sh b/scripts/release.sh
+index fb543f8..6a4367f 100755
+--- a/scripts/release.sh
++++ b/scripts/release.sh
+@@ -54,7 +54,11 @@ GIT_OPTIONAL_LOCKS=0 git -C "$script_root" ls-tree -r -z --name-only HEAD |
+         fi
+     done
+ mkdir "$runner_dir/source"
+-GIT_OPTIONAL_LOCKS=0 git -C "$script_root" -c core.autocrlf=input -c core.eol=lf archive HEAD | tar -x -C "$runner_dir/source"
++# Drain the complete archive before extraction: some tar implementations stop at
++# the end marker before consuming padding, giving git SIGPIPE under pipefail.
++GIT_OPTIONAL_LOCKS=0 git -C "$script_root" -c core.autocrlf=input -c core.eol=lf archive --output="$runner_dir/source.tar" HEAD
++tar -xf "$runner_dir/source.tar" -C "$runner_dir/source"
++rm -- "$runner_dir/source.tar"
+ GOWORK=off go build -C "$runner_dir/source" -mod=readonly -buildvcs=false -o "$runner_dir/toolsy-release" ./cmd/toolsy-release &
+ child_pid=$!
+ child_phase=build

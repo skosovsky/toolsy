@@ -1,0 +1,160 @@
+package release
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func fixtureGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(commandEnvironment(false), "GIT_CONFIG_COUNT=0")
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, raw)
+	}
+	return string(bytes.TrimSpace(raw))
+}
+
+func writeFixture(t *testing.T, path, text string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func releaseFixture(t *testing.T) (string, string) {
+	t.Helper()
+	parent := t.TempDir()
+	source := filepath.Join(parent, "source")
+	remote := filepath.Join(parent, "remote.git")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fixtureGit(t, parent, "init", "--bare", remote)
+	fixtureGit(t, source, "init", "-b", "main")
+	fixtureGit(t, source, "config", "user.name", "Release fixture")
+	fixtureGit(t, source, "config", "user.email", "fixture@example.invalid")
+	fixtureGit(t, source, "config", "commit.gpgsign", "false")
+	writeFixture(t, filepath.Join(source, "go.mod"), "module example.invalid/fixture\n\ngo 1.27.1\n")
+	writeFixture(t, filepath.Join(source, "value.go"), "package fixture\nconst Value = 1\n")
+	writeFixture(
+		t,
+		filepath.Join(source, "sub/go.mod"),
+		"module example.invalid/fixture/sub\n\ngo 1.27.1\n\nrequire example.invalid/fixture v0.0.0\nreplace example.invalid/fixture => ../\n",
+	)
+	writeFixture(
+		t,
+		filepath.Join(source, "sub/value.go"),
+		"package sub\nimport root \"example.invalid/fixture\"\nconst Value = root.Value\n",
+	)
+	fixtureGit(t, source, "add", "go.mod", "value.go", "sub/go.mod", "sub/value.go")
+	fixtureGit(t, source, "commit", "-m", "fixture")
+	fixtureGit(t, source, "tag", "v0.1.0")
+	fixtureGit(t, source, "remote", "add", "origin", remote)
+	fixtureGit(t, source, "push", "origin", "main", "--tags")
+	return source, remote
+}
+
+func releaseScript(t *testing.T) string {
+	t.Helper()
+	if path := os.Getenv("TOOLSY_RELEASE_SCRIPT"); path != "" {
+		return path
+	}
+	// Commit the current runner into a disposable bootstrap repository. The
+	// working repository has intentionally uncommitted implementation changes.
+	root, rootErr := filepath.Abs("../..")
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
+	bootstrap := t.TempDir()
+	for _, dir := range []string{"cmd/toolsy-release", "internal/release", "scripts"} {
+		entries, err := os.ReadDir(filepath.Join(root, dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() || strings.HasSuffix(name, "_test.go") || (dir == "scripts" && name != "release.sh") {
+				continue
+			}
+			data, readErr := os.ReadFile(filepath.Join(root, dir, name))
+			if dir == "scripts" && name == "release.sh" { data, readErr = os.ReadFile("/tmp/toolsy-task41/r23-docs/baseline-release.sh.txt") }
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			writeFixture(t, filepath.Join(bootstrap, dir, name), string(data))
+		}
+	}
+	writeFixture(
+		t,
+		filepath.Join(bootstrap, "go.mod"),
+		"module github.com/skosovsky/toolsy\n\ngo 1.27.1\n\nrequire golang.org/x/mod v0.41.0\n",
+	)
+	sum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, filepath.Join(bootstrap, "go.sum"), string(sum))
+	fixtureGit(t, bootstrap, "init", "-b", "main")
+	fixtureGit(t, bootstrap, "config", "commit.gpgsign", "false")
+	fixtureGit(t, bootstrap, "config", "user.name", "Fixture")
+	fixtureGit(t, bootstrap, "config", "user.email", "fixture@example.invalid")
+	fixtureGit(t, bootstrap, "add", ".")
+	fixtureGit(t, bootstrap, "commit", "-m", "bootstrap fixture")
+	// A source-working-tree build would fail on this untracked file.
+	writeFixture(t, filepath.Join(bootstrap, "cmd/toolsy-release/untracked.go"), "INVALID_UNTRACKED_GO\n")
+	return filepath.Join(bootstrap, "scripts/release.sh")
+}
+
+func TestReleasePreservesUntrackedSource(t *testing.T) {
+	// Arrange: only committed files may become release inputs.
+	source, remote := releaseFixture(t)
+	note := filepath.Join(source, "private-note.txt")
+	writeFixture(t, note, "FAKE_LOCAL_MARKER\n")
+	beforeIndex, err := os.ReadFile(filepath.Join(source, ".git/index"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeHead := fixtureGit(t, source, "rev-parse", "HEAD")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", releaseScript(t), "patch", ". ./sub")
+	cmd.Dir = source
+	cmd.Env = append(commandEnvironment(false), "GIT_CONFIG_COUNT=0")
+	cmd.Stdin = bytes.NewBufferString("y\n")
+	// Act.
+	output, runErr := cmd.CombinedOutput()
+	// Assert.
+	if runErr != nil {
+		t.Fatalf("release: %v\n%s", runErr, output)
+	}
+	content, noteErr := os.ReadFile(note)
+	if noteErr != nil || string(content) != "FAKE_LOCAL_MARKER\n" {
+		t.Errorf("source note lost/changed: %v %q", noteErr, content)
+	}
+	if head := fixtureGit(t, source, "rev-parse", "HEAD"); head != beforeHead {
+		t.Errorf("source HEAD changed: %s", head)
+	}
+	if branch := fixtureGit(t, source, "branch", "--show-current"); branch != "main" {
+		t.Errorf("source branch changed: %q", branch)
+	}
+	afterIndex, indexErr := os.ReadFile(filepath.Join(source, ".git/index"))
+	if indexErr != nil || !bytes.Equal(beforeIndex, afterIndex) {
+		t.Error("source index changed")
+	}
+	show := exec.Command("git", "--git-dir", remote, "show", "v0.1.1:private-note.txt")
+	if raw, showErr := show.CombinedOutput(); showErr == nil {
+		t.Errorf("private note published: %s", raw)
+	}
+}

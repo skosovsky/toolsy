@@ -1,0 +1,6 @@
+=== RUN   TestReleaseBootstrapDrainsArchivePadding
+    bootstrap_archive_test.go:60: bootstrap padded archive: exit status 141
+--- FAIL: TestReleaseBootstrapDrainsArchivePadding (1.28s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	1.743s
+FAIL

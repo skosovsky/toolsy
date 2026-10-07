@@ -1,0 +1,5 @@
+--- FAIL: TestReleaseBootstrapDrainsArchivePadding (1.17s)
+    bootstrap_archive_test.go:60: bootstrap padded archive: exit status 141
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	1.614s
+FAIL

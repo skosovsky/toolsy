@@ -1,0 +1,67 @@
+=== RUN   TestPreparedArtifactsMatchCommittedVCS
+--- PASS: TestPreparedArtifactsMatchCommittedVCS (1.42s)
+=== RUN   TestReleasePrepareOnlyPreservesSource
+--- PASS: TestReleasePrepareOnlyPreservesSource (1.47s)
+=== RUN   TestReleaseRejectsTransformingAttributes
+=== RUN   TestReleaseRejectsTransformingAttributes/export-ignore
+=== RUN   TestReleaseRejectsTransformingAttributes/export-subst
+=== RUN   TestReleaseRejectsTransformingAttributes/filter=fixture
+=== RUN   TestReleaseRejectsTransformingAttributes/working-tree-encoding=UTF-8
+=== RUN   TestReleaseRejectsTransformingAttributes/ident
+=== RUN   TestReleaseRejectsTransformingAttributes/text
+=== RUN   TestReleaseRejectsTransformingAttributes/eol=crlf
+--- PASS: TestReleaseRejectsTransformingAttributes (5.28s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/export-ignore (0.77s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/export-subst (0.71s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/filter=fixture (0.81s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/working-tree-encoding=UTF-8 (0.81s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/ident (0.77s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/text (0.69s)
+    --- PASS: TestReleaseRejectsTransformingAttributes/eol=crlf (0.72s)
+=== RUN   TestReleaseRejectsGlobalTransformingAttributes
+--- PASS: TestReleaseRejectsGlobalTransformingAttributes (0.65s)
+=== RUN   TestReleaseAllowsMetadataAttributes
+--- PASS: TestReleaseAllowsMetadataAttributes (1.33s)
+=== RUN   TestCommandCancellationBoundsIgnoringProcessGroup
+--- PASS: TestCommandCancellationBoundsIgnoringProcessGroup (2.10s)
+=== RUN   TestPrivateConfigurationPreservesAuthAndDropsSelectors
+--- PASS: TestPrivateConfigurationPreservesAuthAndDropsSelectors (0.00s)
+=== RUN   TestSourceCRLFCheckoutIsPreserved
+--- PASS: TestSourceCRLFCheckoutIsPreserved (1.46s)
+=== RUN   TestReleaseFailurePreservesSource
+=== RUN   TestReleaseFailurePreservesSource/verify
+=== RUN   TestReleaseFailurePreservesSource/publish
+=== RUN   TestReleaseFailurePreservesSource/tracked-dirty
+=== RUN   TestReleaseFailurePreservesSource/incomplete-modules
+--- PASS: TestReleaseFailurePreservesSource (3.95s)
+    --- PASS: TestReleaseFailurePreservesSource/verify (1.27s)
+    --- PASS: TestReleaseFailurePreservesSource/publish (1.78s)
+    --- PASS: TestReleaseFailurePreservesSource/tracked-dirty (0.46s)
+    --- PASS: TestReleaseFailurePreservesSource/incomplete-modules (0.44s)
+=== RUN   TestReleaseCancelAtConfirmationPreservesSource
+--- PASS: TestReleaseCancelAtConfirmationPreservesSource (1.44s)
+=== RUN   TestReleaseExactArtifactGraph
+--- PASS: TestReleaseExactArtifactGraph (2.03s)
+=== RUN   TestPublicationScope
+--- PASS: TestPublicationScope (1.63s)
+=== RUN   TestPublicationFailures
+=== RUN   TestPublicationFailures/local_collision
+=== RUN   TestPublicationFailures/push_collision
+=== RUN   TestPublicationFailures/reject_child
+=== RUN   TestPublicationFailures/no_atomic
+=== RUN   TestPublicationFailures/multiple_destinations
+--- PASS: TestPublicationFailures (5.77s)
+    --- PASS: TestPublicationFailures/local_collision (1.00s)
+    --- PASS: TestPublicationFailures/push_collision (1.04s)
+    --- PASS: TestPublicationFailures/reject_child (1.73s)
+    --- PASS: TestPublicationFailures/no_atomic (1.52s)
+    --- PASS: TestPublicationFailures/multiple_destinations (0.49s)
+=== RUN   TestPublicationRechecksAfterPreparation
+--- PASS: TestPublicationRechecksAfterPreparation (1.56s)
+=== RUN   TestReleasePreservesUntrackedSource
+    release_fixture_test.go:139: release: exit status 141
+        /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2829062312/002/scripts/release.sh: child setpgid (45182 to 45182): Operation not permitted
+--- FAIL: TestReleasePreservesUntrackedSource (0.60s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	31.577s
+FAIL

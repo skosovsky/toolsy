@@ -1,0 +1,14 @@
+panic: runtime error: invalid memory address or nil pointer dereference
+[signal SIGSEGV: segmentation violation code=0x2 addr=0x0 pc=0x104d53f8c]
+
+goroutine 64 [running]:
+github.com/skosovsky/toolsy/adapters/sandbox/docker.(*timeoutClient).ContainerWait(0xc0001b85b0, {0x1052e4510, 0xc0001881e0}, {0xc000442008?, 0x0?}, {0x0?, 0xc000089db8?})
+	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:361 +0x6c
+github.com/skosovsky/toolsy/adapters/sandbox/docker.(*Sandbox).waitForContainer(0xc00019e100, {0x1052e4510, 0xc0001881e0}, {0x104deda15, 0x6})
+	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker.go:346 +0x78
+github.com/skosovsky/toolsy/adapters/sandbox/docker.(*Sandbox).collectExecution.func1()
+	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker.go:225 +0x68
+created by github.com/skosovsky/toolsy/adapters/sandbox/docker.(*Sandbox).collectExecution in goroutine 63
+	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker.go:224 +0x1d0
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/docker	0.765s
+FAIL

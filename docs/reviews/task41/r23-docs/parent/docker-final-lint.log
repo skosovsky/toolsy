@@ -1,0 +1,5 @@
+adapters/sandbox/docker/docker_test.go:350:2: there must be an empty line separating embedded fields from regular fields (embeddedstructfieldcheck)
+	mockClient
+	^
+1 issues:
+* embeddedstructfieldcheck: 1

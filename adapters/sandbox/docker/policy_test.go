@@ -125,15 +125,15 @@ func (*cleanupFailureClient) ContainerRemove(context.Context, string, container.
 func TestOwnedLogBodyClosedOnCancellation(t *testing.T) {
 	// Arrange.
 	body := &blockedLogBody{done: make(chan struct{})}
-	client := &blockingLogClient{body: body}
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &blockingLogClient{body: body, acquired: cancel}
 	sb, err := New(WithClient(client))
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	// Act.
 	_, err = sb.Run(ctx, exectool.RunRequest{Language: "python"})
 	// Assert.
-	require.ErrorIs(t, err, exectool.ErrTimeout)
+	require.ErrorIs(t, err, context.Canceled)
 	select {
 	case <-body.done:
 	default:
@@ -152,10 +152,14 @@ func (b *blockedLogBody) Close() error             { b.once.Do(func() { close(b.
 type blockingLogClient struct {
 	mockClient
 
-	body *blockedLogBody
+	body     *blockedLogBody
+	acquired func()
 }
 
 func (c *blockingLogClient) ContainerLogs(context.Context, string, container.LogsOptions) (io.ReadCloser, error) {
+	if c.acquired != nil {
+		c.acquired()
+	}
 	return c.body, nil
 }
 

@@ -45,6 +45,7 @@ example fixtures; the nested resiliency module needs its own `go test` or `make 
 | --- | --- | --- |
 | [RAG routing/fallback](../toolkits/rag/examples/host/main.go) | `go -C toolkits/rag run ./examples/host` | Host strategy, no hidden retries |
 | [SQL authority](../toolkits/sqltool/examples/host/main.go) | `go -C toolkits/sqltool run ./examples/host` | Restricted SQLite connection, lexical filter not authorization |
+| [Starlark host policy](../adapters/sandbox/starlark/examples/policy/main.go) | `go -C adapters/sandbox/starlark run ./examples/policy` | Caller deadline plus finite interpreted steps, no hard memory/preemption |
 | [Timezone store](../toolkits/timetool/examples/host/main.go) | `go -C toolkits/timetool run ./examples/host` | Explicit bounded host StateStore resolver |
 
 Current contracts, module installation/alignment and migration links are in the

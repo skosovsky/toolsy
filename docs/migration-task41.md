@@ -1032,3 +1032,28 @@ Current API/contracts, source module map and version alignment are in the
 invocations, including nested modules. Old audit paths and bytes are preserved;
 current navigation separates them in [history](history/README.md). This row does
 not certify a published release or whole task41 completion.
+
+
+## R23 — caller deadlines and backend-owned bounds
+
+Generic exec_code/RunRequest still has no model-controlled timeout field. Caller
+execution cancellation/deadlines use context; backends additionally retain owned
+collection/cleanup and resource/computation policy. Docker's5s default LogTimeout
+is a collection deadline that starts after container start and can end a still
+running guest; absent parent interruption it is infrastructure failure, not
+ErrTimeout. Cleanup can outlive caller deadline and filesystem IO remains
+cooperative. Starlark steps are not seconds/memory. No actual runtime bound is
+removed or weakened. See [deadline/capability policy](sandbox-deadlines.md) and
+[runnable explicit host policy](../adapters/sandbox/starlark/examples/policy/main.go).
+
+The [public API map](public-api-contracts.md) and [seven-item source checklist
+audit](task41-documentation-checklist.md) connect current contracts to executable
+fixtures. They do not substitute individual or historical review percentages for
+current proof; final all-module/benchmark/artifact/full-scope acceptance remains
+row40. No live Docker/E2B or published release is claimed.
+
+The documentation audit also caught an intermittent release bootstrap failure
+(`git archive | tar`, exit141 on early tar completion). Bootstrap now drains the
+committed archive to a temporary file before extracting it. Artifact verification,
+source checkout ownership and explicit publication scope are unchanged; valid
+trailing padding is covered by a prepare-only disposable regression.

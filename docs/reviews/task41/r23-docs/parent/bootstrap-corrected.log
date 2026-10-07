@@ -1,0 +1,6 @@
+=== RUN   TestReleaseBootstrapDrainsArchivePadding
+--- PASS: TestReleaseBootstrapDrainsArchivePadding (3.28s)
+=== RUN   TestReleasePreservesUntrackedSource
+--- PASS: TestReleasePreservesUntrackedSource (2.33s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/release	7.045s

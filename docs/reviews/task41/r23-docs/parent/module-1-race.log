@@ -1,0 +1,52 @@
+--- FAIL: TestRunMapsErrChTimeoutToErrTimeout (0.06s)
+    docker_test.go:194: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:194
+        	Error:      	Should be true
+        	Test:       	TestRunMapsErrChTimeoutToErrTimeout
+--- FAIL: TestRunReturnsTimeoutDuringSetup (0.23s)
+    --- FAIL: TestRunReturnsTimeoutDuringSetup/start_direct_deadline (0.04s)
+        docker_test.go:225: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:225
+            	Error:      	Should be true
+            	Test:       	TestRunReturnsTimeoutDuringSetup/start_direct_deadline
+    --- FAIL: TestRunReturnsTimeoutDuringSetup/start_expired_ctx (0.06s)
+        docker_test.go:225: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:225
+            	Error:      	Should be true
+            	Test:       	TestRunReturnsTimeoutDuringSetup/start_expired_ctx
+--- FAIL: TestOwnedLogBodyClosedOnCancellation (0.05s)
+    policy_test.go:140: owned body was not closed
+--- FAIL: TestRunKillsContainerOnTimeout (0.08s)
+    docker_test.go:177: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:177
+        	Error:      	Should be true
+        	Test:       	TestRunKillsContainerOnTimeout
+--- FAIL: TestRunReturnsTimeoutDuringSetup (0.26s)
+    --- FAIL: TestRunReturnsTimeoutDuringSetup/start_direct_deadline (0.10s)
+        docker_test.go:225: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:225
+            	Error:      	Should be true
+            	Test:       	TestRunReturnsTimeoutDuringSetup/start_direct_deadline
+    --- FAIL: TestRunReturnsTimeoutDuringSetup/start_expired_ctx (0.06s)
+        docker_test.go:225: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:225
+            	Error:      	Should be true
+            	Test:       	TestRunReturnsTimeoutDuringSetup/start_expired_ctx
+--- FAIL: TestOwnedLogBodyClosedOnCancellation (0.05s)
+    policy_test.go:140: owned body was not closed
+--- FAIL: TestRunMapsErrChTimeoutToErrTimeout (0.03s)
+    docker_test.go:194: 
+        	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:194
+        	Error:      	Should be true
+        	Test:       	TestRunMapsErrChTimeoutToErrTimeout
+--- FAIL: TestRunReturnsTimeoutDuringSetup (0.22s)
+    --- FAIL: TestRunReturnsTimeoutDuringSetup/start_expired_ctx (0.07s)
+        docker_test.go:225: 
+            	Error Trace:	/Users/skosovsky/Library/Mobile Documents/com~apple~CloudDocs/Загрузки/Projects/ai/toolsy/adapters/sandbox/docker/docker_test.go:225
+            	Error:      	Should be true
+            	Test:       	TestRunReturnsTimeoutDuringSetup/start_expired_ctx
+--- FAIL: TestOwnedLogBodyClosedOnCancellation (0.05s)
+    policy_test.go:140: owned body was not closed
+FAIL
+FAIL	github.com/skosovsky/toolsy/adapters/sandbox/docker	6.095s
+FAIL

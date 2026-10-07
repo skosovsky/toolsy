@@ -1,0 +1,31 @@
+ok  	github.com/skosovsky/toolsy	3.326s
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	6.434s
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	3.031s
+?   	github.com/skosovsky/toolsy/cmd/toolsy-release	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	3.907s
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.518s
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	1.922s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.586s
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	3.872s
+ok  	github.com/skosovsky/toolsy/historycodec	1.389s
+ok  	github.com/skosovsky/toolsy/internal/format	1.458s
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.381s
+--- FAIL: TestReleasePreservesUntrackedSource (0.92s)
+    release_fixture_test.go:139: release: exit status 141
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	64.458s
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	2.219s
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	88.631s
+ok  	github.com/skosovsky/toolsy/testutil	1.487s
+ok  	github.com/skosovsky/toolsy/textprocessor	1.547s
+FAIL

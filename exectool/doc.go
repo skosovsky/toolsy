@@ -3,9 +3,11 @@
 //
 // The generic tool created by New exposes one tool, typically named
 // "exec_code", with a dynamic JSON Schema derived from the sandbox's supported
-// languages. Execution time limits come only from the [context.Context] passed to
-// [Sandbox.Run] (e.g. caller deadlines or wrappers such as routery.Timeout).
-// Time limits are never exposed to the LLM-facing schema.
+// languages. Caller cancellation/deadlines use the [context.Context] passed to
+// [Sandbox.Run]. Backends can additionally enforce owned collection/cleanup
+// deadlines and computation/resource budgets; see each backend's capability policy.
+// RunRequest and the LLM-facing schema have no timeout field. A caller deadline
+// is not a universal hard bound on cleanup or synchronous host operations.
 //
 // Low-level sandbox adapters exchange only strings, bytes, and durations via
 // RunRequest and RunResult.

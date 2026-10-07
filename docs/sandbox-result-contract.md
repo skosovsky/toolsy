@@ -35,3 +35,8 @@ presentation trim flag. Starlark print's newline is retained on success and gues
 failure. Consumers may explicitly trim for display. Starlark fs.read failures,
 including its file cap, are guest evaluation errors; missing complete collected
 stdout/stderr instead returns an infrastructure/output error.
+
+Caller execution deadlines and backend-owned collection/cleanup/computation bounds
+are separate; see [deadline/capability policy](sandbox-deadlines.md). In particular
+Docker's LogTimeout can stop collection during a running guest even with an
+unexpired parent; that is collection infrastructure failure, not caller timeout.

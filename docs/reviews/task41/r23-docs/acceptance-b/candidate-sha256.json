@@ -1,0 +1,21 @@
+{
+  "README.md": "ac462862236d8f6f8aa626d4cfb6f16b61803e60cbf297f6faf1de0d3e688336",
+  "adapters/sandbox/docker/docker_test.go": "a9222b4280cdffc7b355482323362e4a03ceb3fde7949b82f6b5957237bc130c",
+  "adapters/sandbox/docker/policy_test.go": "ecc974eab04e4c3d30336fa36c14fdc9384867e4a3d4bccc5bf5d566b750ad02",
+  "docs/README.md": "7dbd6d643d0020d03e91d24b42ec400396cdf43994d2c6c1a6f26ff9f379921c",
+  "docs/execution-contract.md": "a6092b919d27b39014377f0b9a36fc9057231b2b4f4754ee89cd9433df530978",
+  "docs/migration-task41.md": "0000afc55058e4b289fb3bb703852f8588f889506e29138d9f68134a37a4889a",
+  "docs/reviews/task41-progress.md": "d34c2f34853075d8fd99227d0b1c6d6ddd355e06ef4131e701290d23493530ae",
+  "docs/sandbox-result-contract.md": "8a46b51983a8ac25d2552c15751ba3deef44d466df0c493213f7264ca2f36fb4",
+  "examples/README.md": "44d7b4b9194983c95ffc5c9f273b0cb7d10275b9609a76c1fc2962699900ac56",
+  "exectool/README.md": "994c4d33362e44339741af4ac530f5fd10a37d49f82343e8707ead28dbbadf6d",
+  "exectool/doc.go": "4f6df7f1c1db7db7af85b1ef138a8d1fdbf656d7927d0af417e34fd75278454f",
+  "scripts/release.sh": "0215f5c8d90af7202bcc640f716dbcd9149b750ad0362b13499d9652385614ca",
+  "internal/release/bootstrap_archive_test.go": "161624aa170f5c0cc9510de346604abc032a2a5742c34f4d4beb4381b39c37e7",
+  "adapters/sandbox/docker/deadline_fixture_test.go": "f312ffaf511fa1f07c9019a613b8e1fba4ab6b07eff76f00d6e8b1c5951bab5b",
+  "docs/public-api-contracts.md": "b53b084c577b92f0399bef3253214373abccf23b35c1f3b15a02dcce1efb2f80",
+  "docs/task41-documentation-checklist.md": "b7d7ae6c8ab3e8f082760325b307032aa4365e476aa154241b9ea1726a97834a",
+  "docs/sandbox-deadlines.md": "f0a7a35d1dcf4578235302c6062d185b38c0781f266777d48aba33836301effc",
+  "adapters/sandbox/starlark/examples/policy/main.go": "bdf1149c6b8ce413dfe35291cff00ca95a3f04ffd6a76177e460c97f8d5d04de",
+  "adapters/sandbox/starlark/examples/policy/main_test.go": "c72d8872cad3f85a053286e7cade207a9ca9da55f9f6ea956e13b00692f61e7f"
+}

@@ -1,0 +1,710 @@
+=== RUN   TestReleasePreservesUntrackedSource
+    release_fixture_test.go:139: release: exit status 141
+        + set -euo pipefail
+        + set -m
+        + unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE
+        + '[' -n '' ']'
+        + '[' 0 '!=' 0 ']'
+        +++ dirname -- /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002/scripts/release.sh
+        ++ CDPATH=
+        ++ cd -- /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002/scripts/..
+        ++ pwd
+        + script_root=/var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002
+        ++ mktemp -d /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T//toolsy-release-runner.XXXXXX
+        + runner_dir=/var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T//toolsy-release-runner.LDhokz
+        + child_pid=
+        + child_phase=
+        + trap cleanup EXIT
+        + trap 'exit 130' INT
+        + trap 'exit 143' TERM HUP
+        ++ GIT_OPTIONAL_LOCKS=0
+        ++ git -C /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002 -c core.fsmonitor=false status --porcelain --untracked-files=no
+        + '[' -n '' ']'
+        + GIT_OPTIONAL_LOCKS=0
+        + git -C /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002 ls-tree -r -z --name-only HEAD
+        + git -C /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002 check-attr --cached -z --stdin filter working-tree-encoding export-ignore export-subst ident crlf text eol
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + IFS=
+        + read -r -d '' attribute_name
+        + IFS=
+        + read -r -d '' attribute_value
+        + '[' unspecified '!=' unspecified ']'
+        + IFS=
+        + read -r -d '' attribute_path
+        + mkdir /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T//toolsy-release-runner.LDhokz/source
+        + GIT_OPTIONAL_LOCKS=0
+        + git -C /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/TestReleasePreservesUntrackedSource2614637251/002 -c core.autocrlf=input -c core.eol=lf archive HEAD
+        + tar -x -C /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T//toolsy-release-runner.LDhokz/source
+        + cleanup
+        + '[' -n '' ']'
+        + rm -rf -- /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T//toolsy-release-runner.LDhokz
+--- FAIL: TestReleasePreservesUntrackedSource (0.69s)
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	1.092s
+FAIL

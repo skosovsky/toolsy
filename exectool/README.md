@@ -10,9 +10,13 @@ The LLM-facing schema includes:
 - optional `env`
 - optional UTF-8 text `files`
 
-Time limits come only from the [`context.Context`] passed into `Sandbox.Run`
-(e.g. `context.WithTimeout`, or a wrapper like `routery.Timeout` around the
-tool). Sandboxes do not apply a separate duration from `RunRequest`.
+The caller supplies execution cancellation/deadlines through `context.Context`
+passed to `Sandbox.Run` (for example `context.WithTimeout` or an external host
+wrapper). `RunRequest` and the model-facing schema have no timeout field.
+Backends also enforce their own collection, cleanup and resource bounds; these
+are distinct from the caller's execution deadline. See
+[deadline and capability policy](../docs/sandbox-deadlines.md) and the
+[runnable host policy example](../adapters/sandbox/starlark/examples/policy/main.go).
 
 ## Manifest policy
 

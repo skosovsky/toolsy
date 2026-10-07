@@ -1,0 +1,4 @@
+Local Markdown target/anchor checks: 161 failures: []
+Changed tracked production Go: ['exectool/doc.go']
+Named executable fixtures: ['TestPostHandlerFailureNeverRepairsArguments', 'TestPostHandlerJournalOutcome', 'TestConcurrentSessionRebindExecutionAndCheckpoint', 'TestSnapshotCallbacksReenterWithoutLocks', 'TestIncompatibleRebindPreservesConfigurationAndState', 'TestCatalogRequirementsValidateBeforeCodecFreeze', 'TestFullToolDiscoveryBudgetsPreserveExistingAuthority', 'TestCustomPendingConsumerAbortCleansInvocationWithoutClosingTransport', 'TestStdioWriteQueueByteBudgetReleasesAcrossSixtyFourCancellationRaces', 'TestReleaseExactArtifactGraph', 'TestReleasePreservesUntrackedSource', 'TestPublicationScope', 'TestActualLogDeadlineClosesBodyAndRemainsInfrastructure', 'TestRunKillsContainerOnTimeout'] missing: []
+PASS; initial audit regex counted prose Tests as fixture; corrected matcher excludes prose (no product failure).

@@ -1,0 +1,39 @@
+ok  	github.com/skosovsky/toolsy	21.855s
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	12.100s
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.554s
+?   	github.com/skosovsky/toolsy/cmd/toolsy-release	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	2.884s
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.299s
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	7.061s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.353s
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	2.307s
+ok  	github.com/skosovsky/toolsy/historycodec	1.299s
+ok  	github.com/skosovsky/toolsy/internal/format	1.235s
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.427s
+--- FAIL: TestReleasePreservesUntrackedSource (0.69s)
+    release_fixture_test.go:139: release: exit status 141
+--- FAIL: TestReleasePreservesUntrackedSource (0.85s)
+    release_fixture_test.go:139: release: exit status 141
+--- FAIL: TestReleasePreservesUntrackedSource (0.89s)
+    release_fixture_test.go:139: release: exit status 141
+--- FAIL: TestReleasePreservesUntrackedSource (0.83s)
+    release_fixture_test.go:139: release: exit status 141
+--- FAIL: TestReleasePreservesUntrackedSource (0.98s)
+    release_fixture_test.go:139: release: exit status 141
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	236.912s
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.747s
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	260.618s
+ok  	github.com/skosovsky/toolsy/testutil	1.306s
+ok  	github.com/skosovsky/toolsy/textprocessor	3.680s
+FAIL

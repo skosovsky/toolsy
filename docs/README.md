@@ -11,6 +11,9 @@ or the final task41 acceptance.
 | Successful output, effects, controls, delivery, failure phase | [Result contract](result-contract.md), [control contract](control-contract.md) |
 | Required host policy/budget gates | [Policy gates](policy-gates.md) |
 | Generator types, presence, flat subset, rollback, stream/async | [Generator contract](generator-contract.md) |
+| Public execution entry-point boundaries | [API contract map](public-api-contracts.md) |
+| Source task41 documentation checklist | [Seven-item evidence audit](task41-documentation-checklist.md) |
+| Sandbox deadlines and host policy | [Deadline/capability reference](sandbox-deadlines.md) |
 | Sandbox outcomes, cleanup and capability limits | [Result/cleanup contract](sandbox-result-contract.md), [backend matrix](../adapters/sandbox/README.md) |
 | Remote bridge extension and task references | [Remote bridge contract](remote-bridge-contract.md), [agents module](../agents/README.md) |
 | MCP transport, discovery and ownership | [MCP module](../mcp/README.md) |

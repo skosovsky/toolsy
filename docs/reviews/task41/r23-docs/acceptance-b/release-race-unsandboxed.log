@@ -1,0 +1,5 @@
+--- FAIL: TestReleasePreservesUntrackedSource (0.67s)
+    release_fixture_test.go:139: release: exit status 141
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	56.718s
+FAIL

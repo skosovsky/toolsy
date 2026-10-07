@@ -1,0 +1,28 @@
+package main
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "fmt"
+ "reflect"
+ "time"
+ "github.com/skosovsky/toolsy"
+ "github.com/skosovsky/toolsy/exectool"
+ "github.com/skosovsky/toolsy/adapters/sandbox/starlark"
+)
+type spy struct { seen context.Context; calls int }
+func (*spy) SupportedLanguages() []string { return []string{"probe"} }
+func (s *spy) Run(ctx context.Context, r exectool.RunRequest) (exectool.RunResult,error) { s.seen=ctx; s.calls++; return exectool.RunResult{Stdout:r.Code},nil }
+func must(ok bool,msg string) { if !ok { panic(msg) } }
+func main(){
+ _,exists:=reflect.TypeFor[exectool.RunRequest]().FieldByName("Timeout"); must(!exists,"RunRequest timeout")
+ sb:=new(spy); tool,err:=exectool.New(sb); must(err==nil,"construct")
+ ctx,cancel:=context.WithTimeout(context.Background(),time.Second); defer cancel()
+ invoke:=func(input string)error { return tool.Execute(ctx, toolsy.NewRunEnv(nil),toolsy.ToolInput{ArgsJSON:json.RawMessage(input)},func(toolsy.Chunk)error{return nil}) }
+ must(invoke(`{"language":"probe","code":"unchanged"}`)==nil,"execute")
+ want,ok:=ctx.Deadline(); got,ok2:=sb.seen.Deadline(); must(ok&&ok2&&want.Equal(got),"caller deadline changed")
+ err=invoke(`{"language":"probe","code":"x","timeout":99999}`); must(err!=nil&&sb.calls==1,"model timeout dispatch")
+ err=invoke(`{"language":"wrong","code":"x"}`); must(err!=nil&&sb.calls==1,"unallowed language dispatch")
+ _,err=starlark.New(starlark.Config{MaxExecutionSteps:0}); must(errors.Is(err,exectool.ErrSandboxFailure),"step-zero accepted")
+ fmt.Println("PASS RunRequest/schema deny timeout, caller deadline, language authority, positive mandatory steps")
+}

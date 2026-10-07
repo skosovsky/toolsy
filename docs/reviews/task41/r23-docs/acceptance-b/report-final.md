@@ -1,0 +1,33 @@
+# Independent acceptance B — final row39 R23 / seven-item documentation checklist
+
+**Accepted100%: all five criteria20/20. No unresolved detected defect in this scope.** Reviewed final working tree against `0600e12`, original task41 R23/seven source checklist items and final row39criteria. Reviewer A report/results were not read. No implementation edits, commits, push or signatures. Earlier80% report/raw failures remain preserved, superseded by this final acceptance.
+
+| Criterion | Score | Independent evidence |
+| --- | --- | --- |
+| 1. Generic execution context vs backend-owned bounds | 20/20 | exectool package/README/root docs consistently separate caller context, collection/cleanup and computation/resource bounds, reject universal hard return bound. Current public RunRequest has no Timeout. Public spy probe proves schema timeout injection is rejected before Sandbox.Run, allowed-language authority cannot be expanded by input, positive caller deadline is forwarded unchanged. Runtime execution sources remain unchanged, only exectool/doc.go comment differs. |
+| 2. Runnable explicit host policy / Docker classification | 20/20 | Public Starlark recipe uses positive2s caller deadline and explicit1000step budget; exact bounded newline/exit0. Own recipe race3 verifies pre-cancel, exact output and step exhaustion as ErrStepLimit+ErrSandboxFailure, neither ErrTimeout nor context deadline. Docker DefaultPolicy5s LogTimeout begins acquisition/follow after start, can terminate running execution; parent interruption has precedence, collection timeout loses context timeout authority, cleanup uses fresh independent contexts. Phase-triggered setup/wait fixtures are explicitly synthetic; actual20ms LogTimeout/body-close clock fixture retained and own targeted phase race20 PASS. No live Docker/E2B proof claim. |
+| 3. Checklist1–2 public API/session ownership | 20/20 | Public API map constructors/entry points verified against actual symbols and referenced schema/result/prepared/policy/control contracts. Current input/wire/typed authority, audience, effect phase, correction/retry boundaries and cooperative lifecycle agree. Immutable captured Rebind config, validated constructor codec freeze, snapshot callbacks outside lock, shallow BYOT synchronization, StateStore vs session map/checkpoint supported by actual source/named executable fixtures and final root race. |
+| 4. Checklist3–7 current evidence and scope | 20/20 | All seven original source items mapped to HTTP origin/pinnedDNS/deny/encoding/pool contracts, MCP authority/cancellation/aggregate bounds, sandbox exact bytes/outcome/descendant/live limits, generator DTO/subset/rollback/stream vs async runnable consumers, release isolated tracked artifacts/exact graph/explicit atomic refs. Historical percentages are separated from current proof; row40 whole24module/adversarial/bench/artifact acceptance stays mandatory. Current references and15 named fixtures resolve. New release padding regression and migration text accurately describe actual discovered bootstrap defect; no false environment-only dismissal. |
+| 5. Final checks, links/migration, release anomaly resolved | 20/20 | Own corrected full root race1 exit0; relevant Docker/Starlark/exectool race3 PASS, four pinned module lint0, public probe and policy example PASS;236 current local targets/anchors PASS. Padding regression independently FAIL141 on exact baseline script through read-only overlay, current padding+untracked race PASS. New archive temp is owned by mktemp runner/trap, producer fully completes before extraction, preserving committed-input/transform rejection/build/artifact/publication contracts. AAA prepare-only regression verifies source HEAD/index/files unchanged and no new tag. |
+
+## Final commands/results
+
+Go env: `GOWORK=off GOCACHE=/tmp/toolsy-review-gocache`. Lint `/opt/homebrew/bin/golangci-lint` v2.14.0, module cwd (no lint -C), `run --allow-serial-runners ./...` with `GOLANGCI_LINT_CACHE=/tmp/toolsy-r23-b-lint-cache`.
+
+- `go test -race -count=1 ./...` outside sandbox: root-race-final.log **exit0**; complete root including core4.846s, filejournal3.601s, generator49.299s and release52.651s.
+- `go test -race -count=1 -run 'TestRelease(BootstrapDrainsArchivePadding|PreservesUntrackedSource)$' -v ./internal/release` outside sandbox: bootstrap-current.log **PASS11.021s**; padding and source untracked preservation both executed.
+- Exact `git show 0600e12:scripts/release.sh` bytes read into owned `/tmp` file, overlay only releaseScript fixture copying, `go test -race -count=1 -overlay baseline-overlay.json -run '^TestReleaseBootstrapDrainsArchivePadding$' -v ./internal/release`: bootstrap-baseline-independent.log **expected FAIL141**,1.743s. Actual valid16MiB padding, prepare-only; no workspace edits. Other current release code unchanged in overlay.
+- Docker `go test -race -count=3 ./...`: docker-race-final.log **PASS2.551s**; initial phase race20 also PASS2.215s.
+- Starlark module and recipe race3: starlark-race-final.log **PASS9.538s /1.462s**.
+- exectool race3: exectool-race-final.log **PASS1.674s**.
+- root/docker/starlark/exectool lint-corrected logs **0issues each**.
+- public_probe.go through Starlark module `go run -race`: public-probe-final.log **PASS** schema timeout denial, same caller deadline, language and mandatory positive steps.
+- `go -C adapters/sandbox/starlark run ./examples/policy`: policy-example-final.log exact `bounded\n`, empty stderr, exit0.
+- `bash -n scripts/release.sh`: PASS.
+- docs-source-audit-final.log: **236 local targets/anchors, zero missing;15 exact named fixtures found**. candidate-sha256.json records candidate files. Changed tracked production sources: exectool/doc.go and scripts/release.sh only; sandbox runtime policy implementations unchanged.
+
+## Retained failures and limits
+
+Earlier root64.458s and escalated release56.718s each failed untracked fixture141; not classified as environment-only. The new independent baseline padded-archive FAIL141 confirms the underlying pipefail producer issue. The corrected current full root and targeted release now pass. Original lint cache warnings and documentation matcher treating prose `Tests` as a fixture are retained as corrected harness faults; final lint/doc audits are clean.
+
+Release regression uses disposable repositories/local bare remotes; prepare-only padding test verifies actual rewritten consumer graph, no publish. No production push, real published graph, all24module campaign, benchmark campaign, Windows/all-platform checks or live Docker/E2B certification. Docker live remains SKIP. Step count is neither seconds nor process-memory isolation; synchronous foreign IO cancellation remains cooperative. Row40 acceptance is separate.
