@@ -1,0 +1,14 @@
+{
+  "receipt_source": "/tmp/toolsy-task41/final/release/artifact-parity.json",
+  "all24checksum_pairs_equal": true,
+  "candidate": "7f17f4000a9735533cdd632ce4189b2c1efd670b",
+  "keys": [
+    "candidate_commit",
+    "count",
+    "implementation_commit",
+    "modules",
+    "publication",
+    "session_ast_equal",
+    "source_snapshot"
+  ]
+}

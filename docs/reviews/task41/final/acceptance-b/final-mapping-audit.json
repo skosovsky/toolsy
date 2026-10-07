@@ -1,0 +1,287 @@
+{
+  "rows": [
+    [
+      "01",
+      "R01",
+      "4dec511",
+      "task41/r01-acceptance.md",
+      "task41/r01-acceptance.md"
+    ],
+    [
+      "02",
+      "R02, D17",
+      "d1619e8",
+      "task41/r02-acceptance.md",
+      "task41/r02-acceptance.md"
+    ],
+    [
+      "03",
+      "R03",
+      "322ec4a",
+      "task41/r03-acceptance.md",
+      "task41/r03-acceptance.md"
+    ],
+    [
+      "04",
+      "R04, D12",
+      "4f372b2",
+      "task41/r04-acceptance.md",
+      "task41/r04-acceptance.md"
+    ],
+    [
+      "05",
+      "R05, D37 (checkout/artifacts)",
+      "5f80c9e",
+      "task41/r05-acceptance.md",
+      "task41/r05-acceptance.md"
+    ],
+    [
+      "06",
+      "R06, D37 (refs)",
+      "4ddcb4f",
+      "task41/r06-acceptance.md",
+      "task41/r06-acceptance.md"
+    ],
+    [
+      "07",
+      "R07, D18, D19",
+      "d1102f6",
+      "task41/r07-acceptance.md",
+      "task41/r07-acceptance.md"
+    ],
+    [
+      "08",
+      "R08",
+      "df733dd",
+      "task41/r08-acceptance.md",
+      "task41/r08-acceptance.md"
+    ],
+    [
+      "09",
+      "R09, D07, D08",
+      "9a9062a",
+      "task41/r09-acceptance.md",
+      "task41/r09-acceptance.md"
+    ],
+    [
+      "10",
+      "R10, D06",
+      "4c36832",
+      "task41/r10-acceptance.md",
+      "task41/r10-acceptance.md"
+    ],
+    [
+      "11",
+      "R11, D16",
+      "a492d5f",
+      "task41/r11-acceptance.md",
+      "task41/r11-acceptance.md"
+    ],
+    [
+      "12",
+      "R12, D13, D15",
+      "22782ff",
+      "task41/r12-acceptance.md",
+      "task41/r12-acceptance.md"
+    ],
+    [
+      "13",
+      "R13, D20, D21, D22",
+      "1180b3a",
+      "task41/r13/a-verdict.md",
+      "task41/r13/b-verdict.md"
+    ],
+    [
+      "14",
+      "R14, D28",
+      "6f6365b",
+      "task41/r14/a-verdict.md",
+      "task41/r14/b-review-final.md"
+    ],
+    [
+      "15",
+      "R15, D29",
+      "e3fc1f9",
+      "task41/r15/a-verdict.md",
+      "task41/r15/b-verdict.md"
+    ],
+    [
+      "16",
+      "R16",
+      "64a40e5",
+      "task41/r16/r16-acceptance-a.md",
+      "task41/r16/r16-acceptance-b.md"
+    ],
+    [
+      "17",
+      "R17, D33",
+      "a8bf9fb",
+      "task41/r17/r17-acceptance-a.md",
+      "task41/r17/r17-acceptance-b.md"
+    ],
+    [
+      "18",
+      "R18, D31",
+      "71b49fa",
+      "task41/r18/r18-acceptance-a.md",
+      "task41/r18/r18-acceptance-b.md"
+    ],
+    [
+      "19",
+      "R19, D35 (scraper)",
+      "f63179a",
+      "task41/r19/r19-acceptance-a.md",
+      "task41/r19/r19-acceptance-b.md"
+    ],
+    [
+      "20",
+      "R20, D35 (DOCX)",
+      "0700cc5",
+      "task41/r20/r20-acceptance-a.md",
+      "task41/r20/r20-acceptance-b.md"
+    ],
+    [
+      "21",
+      "R21, D26",
+      "e9d80b4",
+      "task41/r21/r21-acceptance-a.md",
+      "task41/r21/r21-acceptance-b.md"
+    ],
+    [
+      "22",
+      "D01",
+      "8ffd009",
+      "task41/d01/d01-acceptance-a.md",
+      "task41/d01/d01-acceptance-b.md"
+    ],
+    [
+      "23",
+      "D02",
+      "c682e30",
+      "task41/d02/d02-acceptance-a.md",
+      "task41/d02/d02-acceptance-b.md"
+    ],
+    [
+      "24",
+      "D03",
+      "f5824b1",
+      "task41/d03/d03-acceptance-a.md",
+      "task41/d03/d03-acceptance-b.md"
+    ],
+    [
+      "25",
+      "D04, D05",
+      "4b76f5f",
+      "task41/d04-d05/acceptance-a.md",
+      "task41/d04-d05/acceptance-b.md"
+    ],
+    [
+      "26",
+      "D09",
+      "38314b4",
+      "task41/d09/acceptance-a.md",
+      "task41/d09/acceptance-b.md"
+    ],
+    [
+      "27",
+      "D10, D11",
+      "77d3a10",
+      "task41/d10-d11/acceptance-a.md",
+      "task41/d10-d11/acceptance-b.md"
+    ],
+    [
+      "28",
+      "D14",
+      "c7eb470",
+      "task41/d14/acceptance-a.md",
+      "task41/d14/acceptance-b.md"
+    ],
+    [
+      "29",
+      "D23",
+      "d9170c1",
+      "task41/d23/acceptance-a.md",
+      "task41/d23/acceptance-b.md"
+    ],
+    [
+      "30",
+      "D24",
+      "7331736",
+      "task41/d24/acceptance-a.md",
+      "task41/d24/acceptance-b.md"
+    ],
+    [
+      "31",
+      "D25",
+      "fb7a2bf",
+      "task41/d25/acceptance-a/report.md",
+      "task41/d25/acceptance-b/report.md"
+    ],
+    [
+      "32",
+      "D27",
+      "fe241b0",
+      "task41/d27/acceptance-a/report.md",
+      "task41/d27/acceptance-b/report.md"
+    ],
+    [
+      "33",
+      "D30, D36 (RAG)",
+      "ad4afe2",
+      "task41/d30-d36-rag/acceptance-a/report.md",
+      "task41/d30-d36-rag/acceptance-b/report.md"
+    ],
+    [
+      "34",
+      "D32",
+      "9b7ac3f",
+      "task41/d32/acceptance-a/report.md",
+      "task41/d32/acceptance-b/REPORT.md"
+    ],
+    [
+      "35",
+      "D34",
+      "9ac37e3",
+      "task41/d34/acceptance-a/report.md",
+      "task41/d34/acceptance-b/report.md"
+    ],
+    [
+      "36",
+      "D36 (time/state)",
+      "6907b80",
+      "task41/d36-time/acceptance-a/REPORT.md",
+      "task41/d36-time/acceptance-b/REPORT.md"
+    ],
+    [
+      "37",
+      "D40",
+      "a87f5ea",
+      "task41/d40/acceptance-a/report.md",
+      "task41/d40/acceptance-b/report.md"
+    ],
+    [
+      "38",
+      "R22, D38, D39",
+      "0600e12",
+      "task41/r22-d38-d39/acceptance-a/report.md",
+      "task41/r22-d38-d39/acceptance-b/report.md"
+    ],
+    [
+      "39",
+      "R23, docs checklist",
+      "efd446d",
+      "task41/r23-docs/acceptance-a/report-final.md",
+      "task41/r23-docs/acceptance-b/report-final.md"
+    ]
+  ],
+  "exact_commits": true,
+  "all_acceptance_paths_exist": true,
+  "current_corrections": [
+    "redirects. Adapters use explicit `httptool.ClientSettings` for timeout and supported TLS",
+    "`httptool.ClientSettings{Timeout: ..., TLSConfig: ...}` through",
+    "Put, SetState and SetSessionState return error. Check or propagate that result.",
+    "but cannot SetState. Nil values may be stored deliberately; Lookup/Get retain their",
+    "if err := toolsy.SetState(env, \"counter\", count); err != nil { return err }",
+    "SetState needs a bound session, while SetSessionState directly targets that session."
+  ]
+}

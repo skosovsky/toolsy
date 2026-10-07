@@ -1,0 +1,422 @@
+=== RUN   TestPublicToolRedirectRefusalClassification
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/301
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/301
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/302
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/302
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/303
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/303
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/307
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/307
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/308
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/308
+--- PASS: TestPublicToolRedirectRefusalClassification (0.03s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/301 (0.01s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/301 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/308 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/308 (0.00s)
+=== RUN   TestRemoteRedirectOriginAndMethod
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-get
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-head
+=== RUN   TestRemoteRedirectOriginAndMethod/default-port
+=== RUN   TestRemoteRedirectOriginAndMethod/changed-port
+=== RUN   TestRemoteRedirectOriginAndMethod/subdomain
+=== RUN   TestRemoteRedirectOriginAndMethod/downgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/upgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/post-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/post-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/put-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/patch-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/delete-replay
+--- PASS: TestRemoteRedirectOriginAndMethod (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-get (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-head (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/default-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/changed-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/subdomain (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/downgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/upgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/put-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/patch-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/delete-replay (0.00s)
+=== RUN   TestAllowedRedirectCredentialsAndMethod
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/http://example.com/next
+--- PASS: TestAllowedRedirectCredentialsAndMethod (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/http://example.com/next (0.00s)
+=== RUN   TestRedirectSafetyGuards
+--- PASS: TestRedirectSafetyGuards (0.00s)
+=== RUN   TestRedirectRefusalClassification
+=== RUN   TestRedirectRefusalClassification/userinfo
+=== RUN   TestRedirectRefusalClassification/private-IP
+=== RUN   TestRedirectRefusalClassification/blocked-host
+=== RUN   TestRedirectRefusalClassification/not-allowed
+--- PASS: TestRedirectRefusalClassification (0.00s)
+    --- PASS: TestRedirectRefusalClassification/userinfo (0.00s)
+    --- PASS: TestRedirectRefusalClassification/private-IP (0.00s)
+    --- PASS: TestRedirectRefusalClassification/blocked-host (0.00s)
+    --- PASS: TestRedirectRefusalClassification/not-allowed (0.00s)
+=== RUN   TestHostPolicyDenyPrecedence
+=== RUN   TestHostPolicyDenyPrecedence/identical-exact
+=== RUN   TestHostPolicyDenyPrecedence/identical-suffix
+=== RUN   TestHostPolicyDenyPrecedence/broad-allow-narrow-deny
+=== RUN   TestHostPolicyDenyPrecedence/allowed-sibling
+=== RUN   TestHostPolicyDenyPrecedence/apex-not-in-suffix
+=== RUN   TestHostPolicyDenyPrecedence/exact-not-descendants
+=== RUN   TestHostPolicyDenyPrecedence/deny-suffix-not-apex
+=== RUN   TestHostPolicyDenyPrecedence/exact-allow-suffix-deny
+=== RUN   TestHostPolicyDenyPrecedence/normalization
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact-sibling
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-suffix
+=== RUN   TestHostPolicyDenyPrecedence/blank-allow-is-deny
+=== RUN   TestHostPolicyDenyPrecedence/repeated-root-dot
+=== RUN   TestHostPolicyDenyPrecedence/empty-label
+--- PASS: TestHostPolicyDenyPrecedence (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/broad-allow-narrow-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/allowed-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/apex-not-in-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-not-descendants (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/deny-suffix-not-apex (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-allow-suffix-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/normalization (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blank-allow-is-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/repeated-root-dot (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/empty-label (0.00s)
+=== RUN   TestSafeTransportRejectsOverlapBeforeDNS
+--- PASS: TestSafeTransportRejectsOverlapBeforeDNS (0.00s)
+=== RUN   TestHostSyntaxSharedAcrossHelpers
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_
+=== RUN   TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._
+=== RUN   TestHostSyntaxSharedAcrossHelpers//
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com../example.com..
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com
+--- PASS: TestHostSyntaxSharedAcrossHelpers (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers// (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com../example.com.. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com (0.00s)
+=== RUN   TestBlacklistURLAndRedirectRejectBeforeDNS
+--- PASS: TestBlacklistURLAndRedirectRejectBeforeDNS (0.00s)
+=== RUN   TestPinnedDialAttemptsCheckedAddresses
+--- PASS: TestPinnedDialAttemptsCheckedAddresses (0.00s)
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/timeout
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/canceled
+--- PASS: TestPinnedDialTotalTimeoutAndCancellation (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/timeout (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/canceled (0.00s)
+=== RUN   TestResponseFailureCancellationPrecedesWireResult
+--- PASS: TestResponseFailureCancellationPrecedesWireResult (0.00s)
+=== RUN   TestPublicToolRedirectRefusalClassification
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/301
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/301
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/302
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/302
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/303
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/303
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/307
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/307
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/308
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/308
+--- PASS: TestPublicToolRedirectRefusalClassification (0.03s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/301 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/301 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/308 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/308 (0.00s)
+=== RUN   TestRemoteRedirectOriginAndMethod
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-get
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-head
+=== RUN   TestRemoteRedirectOriginAndMethod/default-port
+=== RUN   TestRemoteRedirectOriginAndMethod/changed-port
+=== RUN   TestRemoteRedirectOriginAndMethod/subdomain
+=== RUN   TestRemoteRedirectOriginAndMethod/downgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/upgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/post-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/post-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/put-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/patch-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/delete-replay
+--- PASS: TestRemoteRedirectOriginAndMethod (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-get (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-head (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/default-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/changed-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/subdomain (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/downgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/upgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/put-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/patch-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/delete-replay (0.00s)
+=== RUN   TestAllowedRedirectCredentialsAndMethod
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/http://example.com/next
+--- PASS: TestAllowedRedirectCredentialsAndMethod (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/http://example.com/next (0.00s)
+=== RUN   TestRedirectSafetyGuards
+--- PASS: TestRedirectSafetyGuards (0.00s)
+=== RUN   TestRedirectRefusalClassification
+=== RUN   TestRedirectRefusalClassification/userinfo
+=== RUN   TestRedirectRefusalClassification/private-IP
+=== RUN   TestRedirectRefusalClassification/blocked-host
+=== RUN   TestRedirectRefusalClassification/not-allowed
+--- PASS: TestRedirectRefusalClassification (0.00s)
+    --- PASS: TestRedirectRefusalClassification/userinfo (0.00s)
+    --- PASS: TestRedirectRefusalClassification/private-IP (0.00s)
+    --- PASS: TestRedirectRefusalClassification/blocked-host (0.00s)
+    --- PASS: TestRedirectRefusalClassification/not-allowed (0.00s)
+=== RUN   TestHostPolicyDenyPrecedence
+=== RUN   TestHostPolicyDenyPrecedence/identical-exact
+=== RUN   TestHostPolicyDenyPrecedence/identical-suffix
+=== RUN   TestHostPolicyDenyPrecedence/broad-allow-narrow-deny
+=== RUN   TestHostPolicyDenyPrecedence/allowed-sibling
+=== RUN   TestHostPolicyDenyPrecedence/apex-not-in-suffix
+=== RUN   TestHostPolicyDenyPrecedence/exact-not-descendants
+=== RUN   TestHostPolicyDenyPrecedence/deny-suffix-not-apex
+=== RUN   TestHostPolicyDenyPrecedence/exact-allow-suffix-deny
+=== RUN   TestHostPolicyDenyPrecedence/normalization
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact-sibling
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-suffix
+=== RUN   TestHostPolicyDenyPrecedence/blank-allow-is-deny
+=== RUN   TestHostPolicyDenyPrecedence/repeated-root-dot
+=== RUN   TestHostPolicyDenyPrecedence/empty-label
+--- PASS: TestHostPolicyDenyPrecedence (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/broad-allow-narrow-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/allowed-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/apex-not-in-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-not-descendants (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/deny-suffix-not-apex (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-allow-suffix-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/normalization (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blank-allow-is-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/repeated-root-dot (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/empty-label (0.00s)
+=== RUN   TestSafeTransportRejectsOverlapBeforeDNS
+--- PASS: TestSafeTransportRejectsOverlapBeforeDNS (0.00s)
+=== RUN   TestHostSyntaxSharedAcrossHelpers
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_
+=== RUN   TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._
+=== RUN   TestHostSyntaxSharedAcrossHelpers//
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com../example.com..
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com
+--- PASS: TestHostSyntaxSharedAcrossHelpers (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers// (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com../example.com.. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com (0.00s)
+=== RUN   TestBlacklistURLAndRedirectRejectBeforeDNS
+--- PASS: TestBlacklistURLAndRedirectRejectBeforeDNS (0.00s)
+=== RUN   TestPinnedDialAttemptsCheckedAddresses
+--- PASS: TestPinnedDialAttemptsCheckedAddresses (0.00s)
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/timeout
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/canceled
+--- PASS: TestPinnedDialTotalTimeoutAndCancellation (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/timeout (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/canceled (0.00s)
+=== RUN   TestResponseFailureCancellationPrecedesWireResult
+--- PASS: TestResponseFailureCancellationPrecedesWireResult (0.00s)
+=== RUN   TestPublicToolRedirectRefusalClassification
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/301
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/301
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/302
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/302
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/303
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/303
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/307
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/307
+=== RUN   TestPublicToolRedirectRefusalClassification/GET/308
+=== RUN   TestPublicToolRedirectRefusalClassification/POST/308
+--- PASS: TestPublicToolRedirectRefusalClassification (0.03s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/301 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/301 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/302 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/303 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/307 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/GET/308 (0.00s)
+    --- PASS: TestPublicToolRedirectRefusalClassification/POST/308 (0.00s)
+=== RUN   TestRemoteRedirectOriginAndMethod
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-get
+=== RUN   TestRemoteRedirectOriginAndMethod/same-origin-head
+=== RUN   TestRemoteRedirectOriginAndMethod/default-port
+=== RUN   TestRemoteRedirectOriginAndMethod/changed-port
+=== RUN   TestRemoteRedirectOriginAndMethod/subdomain
+=== RUN   TestRemoteRedirectOriginAndMethod/downgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/upgrade
+=== RUN   TestRemoteRedirectOriginAndMethod/post-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/post-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/put-rewritten
+=== RUN   TestRemoteRedirectOriginAndMethod/patch-replay
+=== RUN   TestRemoteRedirectOriginAndMethod/delete-replay
+--- PASS: TestRemoteRedirectOriginAndMethod (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-get (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/same-origin-head (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/default-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/changed-port (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/subdomain (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/downgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/upgrade (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/post-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/put-rewritten (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/patch-replay (0.00s)
+    --- PASS: TestRemoteRedirectOriginAndMethod/delete-replay (0.00s)
+=== RUN   TestAllowedRedirectCredentialsAndMethod
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next
+=== RUN   TestAllowedRedirectCredentialsAndMethod/http://example.com/next
+--- PASS: TestAllowedRedirectCredentialsAndMethod (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://example.com:8443/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/https://api.example.com/next (0.00s)
+    --- PASS: TestAllowedRedirectCredentialsAndMethod/http://example.com/next (0.00s)
+=== RUN   TestRedirectSafetyGuards
+--- PASS: TestRedirectSafetyGuards (0.00s)
+=== RUN   TestRedirectRefusalClassification
+=== RUN   TestRedirectRefusalClassification/userinfo
+=== RUN   TestRedirectRefusalClassification/private-IP
+=== RUN   TestRedirectRefusalClassification/blocked-host
+=== RUN   TestRedirectRefusalClassification/not-allowed
+--- PASS: TestRedirectRefusalClassification (0.00s)
+    --- PASS: TestRedirectRefusalClassification/userinfo (0.00s)
+    --- PASS: TestRedirectRefusalClassification/private-IP (0.00s)
+    --- PASS: TestRedirectRefusalClassification/blocked-host (0.00s)
+    --- PASS: TestRedirectRefusalClassification/not-allowed (0.00s)
+=== RUN   TestHostPolicyDenyPrecedence
+=== RUN   TestHostPolicyDenyPrecedence/identical-exact
+=== RUN   TestHostPolicyDenyPrecedence/identical-suffix
+=== RUN   TestHostPolicyDenyPrecedence/broad-allow-narrow-deny
+=== RUN   TestHostPolicyDenyPrecedence/allowed-sibling
+=== RUN   TestHostPolicyDenyPrecedence/apex-not-in-suffix
+=== RUN   TestHostPolicyDenyPrecedence/exact-not-descendants
+=== RUN   TestHostPolicyDenyPrecedence/deny-suffix-not-apex
+=== RUN   TestHostPolicyDenyPrecedence/exact-allow-suffix-deny
+=== RUN   TestHostPolicyDenyPrecedence/normalization
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-exact-sibling
+=== RUN   TestHostPolicyDenyPrecedence/blacklist-suffix
+=== RUN   TestHostPolicyDenyPrecedence/blank-allow-is-deny
+=== RUN   TestHostPolicyDenyPrecedence/repeated-root-dot
+=== RUN   TestHostPolicyDenyPrecedence/empty-label
+--- PASS: TestHostPolicyDenyPrecedence (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/identical-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/broad-allow-narrow-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/allowed-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/apex-not-in-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-not-descendants (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/deny-suffix-not-apex (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/exact-allow-suffix-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/normalization (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-exact-sibling (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blacklist-suffix (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/blank-allow-is-deny (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/repeated-root-dot (0.00s)
+    --- PASS: TestHostPolicyDenyPrecedence/empty-label (0.00s)
+=== RUN   TestSafeTransportRejectsOverlapBeforeDNS
+--- PASS: TestSafeTransportRejectsOverlapBeforeDNS (0.00s)
+=== RUN   TestHostSyntaxSharedAcrossHelpers
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com
+=== RUN   TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_
+=== RUN   TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._
+=== RUN   TestHostSyntaxSharedAcrossHelpers//
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com/.
+=== RUN   TestHostSyntaxSharedAcrossHelpers/example.com../example.com..
+=== RUN   TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com
+--- PASS: TestHostSyntaxSharedAcrossHelpers (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/evil-example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/a.b.example.com/.example.com (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/_API.Example.COM._/_api.example.com_ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/API.Example.COM./_.example.com._ (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers// (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com/. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/example.com../example.com.. (0.00s)
+    --- PASS: TestHostSyntaxSharedAcrossHelpers/api..example.com/.example.com (0.00s)
+=== RUN   TestBlacklistURLAndRedirectRejectBeforeDNS
+--- PASS: TestBlacklistURLAndRedirectRejectBeforeDNS (0.00s)
+=== RUN   TestPinnedDialAttemptsCheckedAddresses
+--- PASS: TestPinnedDialAttemptsCheckedAddresses (0.00s)
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/timeout
+=== RUN   TestPinnedDialTotalTimeoutAndCancellation/canceled
+--- PASS: TestPinnedDialTotalTimeoutAndCancellation (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/timeout (0.04s)
+    --- PASS: TestPinnedDialTotalTimeoutAndCancellation/canceled (0.00s)
+=== RUN   TestResponseFailureCancellationPrecedesWireResult
+--- PASS: TestResponseFailureCancellationPrecedesWireResult (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/httptool	1.525s

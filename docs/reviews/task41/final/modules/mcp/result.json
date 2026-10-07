@@ -1,0 +1,39 @@
+{
+  "module": "mcp",
+  "results": [
+    {
+      "stage": "tests",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 8.086
+    },
+    {
+      "stage": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 53.756
+    },
+    {
+      "stage": "lint",
+      "command": [
+        "/opt/homebrew/bin/golangci-lint",
+        "run",
+        "--allow-parallel-runners",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 10.523
+    }
+  ]
+}

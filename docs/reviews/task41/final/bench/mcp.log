@@ -1,0 +1,9 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/mcp
+cpu: Apple M1 Max
+BenchmarkTask41SSEFrameLifecycle-10    	   18345	     20104 ns/op	   13332 B/op	     235 allocs/op
+BenchmarkTask41SSEFrameLifecycle-10    	   14923	     25083 ns/op	   13330 B/op	     235 allocs/op
+BenchmarkTask41SSEFrameLifecycle-10    	   16848	     21430 ns/op	   13329 B/op	     235 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	1.569s

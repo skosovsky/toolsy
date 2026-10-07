@@ -1,0 +1,56 @@
+=== RUN   TestScratchpadCancellationAfterLoadPreventsSave
+--- PASS: TestScratchpadCancellationAfterLoadPreventsSave (0.00s)
+=== RUN   TestScratchpadStructuredEscapingAndWireBoundary
+--- PASS: TestScratchpadStructuredEscapingAndWireBoundary (0.00s)
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue
+--- PASS: TestR18PublicCanceledWaiterNeverCallsStore (0.13s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue (0.02s)
+=== RUN   TestScratchpadCancellationAfterLoadPreventsSave
+--- PASS: TestScratchpadCancellationAfterLoadPreventsSave (0.00s)
+=== RUN   TestScratchpadStructuredEscapingAndWireBoundary
+--- PASS: TestScratchpadStructuredEscapingAndWireBoundary (0.00s)
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue
+--- PASS: TestR18PublicCanceledWaiterNeverCallsStore (0.12s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue (0.02s)
+=== RUN   TestScratchpadCancellationAfterLoadPreventsSave
+--- PASS: TestScratchpadCancellationAfterLoadPreventsSave (0.00s)
+=== RUN   TestScratchpadStructuredEscapingAndWireBoundary
+--- PASS: TestScratchpadStructuredEscapingAndWireBoundary (0.00s)
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse
+=== RUN   TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue
+--- PASS: TestR18PublicCanceledWaiterNeverCallsStore (0.13s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool0/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool1/manualtrue (0.02s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualfalse (0.03s)
+    --- PASS: TestR18PublicCanceledWaiterNeverCallsStore/tool2/manualtrue (0.02s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/memory	1.687s

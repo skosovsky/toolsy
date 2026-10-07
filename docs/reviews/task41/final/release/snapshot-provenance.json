@@ -1,0 +1,13 @@
+{
+  "implementation": "efd446d",
+  "disposable_source": "6f13a8d98768d24d4cbe74acbbfae1b06c3e1704",
+  "release_candidate": "7f17f4000a9735533cdd632ce4189b2c1efd670b",
+  "source_delta": [
+    "docs/migration-task41.md",
+    "docs/reviews/task41-final.md",
+    "docs/reviews/task41-progress.md",
+    "session.go"
+  ],
+  "manifests_identical": true,
+  "session_ast_identical": true
+}

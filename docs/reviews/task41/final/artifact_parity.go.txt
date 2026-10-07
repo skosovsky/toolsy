@@ -1,0 +1,50 @@
+package main
+
+import (
+ "bytes"
+ "crypto/sha256"
+ "encoding/hex"
+ "encoding/json"
+ "fmt"
+ "go/parser"
+ "go/printer"
+ "go/token"
+ "os"
+ "os/exec"
+ "path/filepath"
+ "strings"
+ "golang.org/x/mod/module"
+ "golang.org/x/mod/modfile"
+ "golang.org/x/mod/sumdb/dirhash"
+ modzip "golang.org/x/mod/zip"
+)
+
+func must(err error) { if err!=nil { panic(err) } }
+func git(dir string,args ...string) []byte {c:=exec.Command("git",append([]string{"-C",dir},args...)...);b,e:=c.Output();must(e);return b}
+func main() {
+ checkout:=os.Args[1];source:=os.Args[2];out:=os.Args[3]
+ current,e:=os.ReadFile(filepath.Join(source,"session.go"));must(e)
+ baseline:=git(source,"show","efd446d:session.go")
+ syntax:=func(data []byte) string {f,e:=parser.ParseFile(token.NewFileSet(),"session.go",data,0);must(e);var b bytes.Buffer;must(printer.Fprint(&b,token.NewFileSet(),f));return b.String()}
+ if syntax(current)!=syntax(baseline) {panic("runtime AST changed")}
+ manifests:=strings.Fields(string(git(checkout,"ls-files","*go.mod")));if len(manifests)!=24 {panic("module inventory")}
+ rows:=make([]map[string]string,0,24)
+ for _,name:=range manifests {
+  dir:=filepath.Dir(name);data,e:=os.ReadFile(filepath.Join(checkout,name));must(e);mf,e:=modfile.Parse(name,data,nil);must(e)
+  version:="v0.18.0"
+  for _,r:=range mf.Require { if strings.HasPrefix(r.Mod.Path,"github.com/skosovsky/toolsy") && r.Mod.Version!=version {panic("unaligned graph")} }
+  for _,r:=range mf.Replace {if strings.HasPrefix(r.Old.Path,"github.com/skosovsky/toolsy"){panic("development replacement")}}
+  escaped,e:=module.EscapePath(mf.Module.Mod.Path);must(e)
+  archive:=filepath.Join(filepath.Dir(checkout),"proxy",filepath.FromSlash(escaped),"@v",version+".zip")
+  subdir:=dir;if dir=="." {subdir=""}
+  var vcs bytes.Buffer;must(modzip.CreateFromVCS(&vcs,module.Version{Path:mf.Module.Mod.Path,Version:version},checkout,"HEAD",subdir))
+  comparison:=filepath.Join(out,"parity.zip");must(os.WriteFile(comparison,vcs.Bytes(),0600))
+  want,e:=dirhash.HashZip(comparison,dirhash.Hash1);must(e);got,e:=dirhash.HashZip(archive,dirhash.Hash1);must(e)
+  if want!=got {panic(fmt.Sprintf("VCS artifact mismatch%s",mf.Module.Mod.Path))}
+  raw,e:=os.ReadFile(archive);must(e);h:=sha256.Sum256(raw)
+  rows=append(rows,map[string]string{"module":mf.Module.Mod.Path,"version":version,"vcs_checksum":want,"artifact_checksum":got,"zip_sha256":hex.EncodeToString(h[:])})
+ }
+ must(os.Remove(filepath.Join(out,"parity.zip")))
+ receipt:=map[string]any{"modules":rows,"count":len(rows),"candidate_commit":strings.TrimSpace(string(git(checkout,"rev-parse","HEAD"))),"source_snapshot":strings.TrimSpace(string(git(source,"rev-parse","HEAD"))),"implementation_commit":"efd446d","session_ast_equal":true,"publication":"none; read-only local VCS/artifacts"}
+ data,e:=json.MarshalIndent(receipt,"","  ");must(e);must(os.WriteFile(filepath.Join(out,"artifact-parity.json"),append(data,'\n'),0600));fmt.Println("PASS24 actual VCS/artifact checksum pairs; aligned graph; session AST unchanged")
+}

@@ -1,0 +1,12 @@
+{
+  "snapshot": "6f13a8d98768d24d4cbe74acbbfae1b06c3e1704",
+  "implementation": "efd446d19283b640f32650a1402f950038ebd7bf",
+  "only_changed": [
+    "docs/migration-task41.md",
+    "docs/reviews/task41-final.md",
+    "docs/reviews/task41-progress.md",
+    "session.go"
+  ],
+  "go_delta_comments_only": true,
+  "all_manifests_same": true
+}

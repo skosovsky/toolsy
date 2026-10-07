@@ -1,0 +1,353 @@
+[
+  {
+    "row": 1,
+    "scope": "R01",
+    "commit": "4dec5112a0365dd88ec6ced740a33b3719c05cd3",
+    "title": "fix: redirect credentials",
+    "signature": "G",
+    "acceptance_a": "r01-acceptance.md",
+    "acceptance_b": "r01-acceptance.md"
+  },
+  {
+    "row": 2,
+    "scope": "R02, D17",
+    "commit": "d1619e81baf390c36e37220dcad71c9716dd5781",
+    "title": "fix: host policy",
+    "signature": "G",
+    "acceptance_a": "r02-acceptance.md",
+    "acceptance_b": "r02-acceptance.md"
+  },
+  {
+    "row": 3,
+    "scope": "R03",
+    "commit": "322ec4a4bb6efd71bae173d2763647451d1a9153",
+    "title": "fix: input precision",
+    "signature": "G",
+    "acceptance_a": "r03-acceptance.md",
+    "acceptance_b": "r03-acceptance.md"
+  },
+  {
+    "row": 4,
+    "scope": "R04, D12",
+    "commit": "4f372b2c725a6c4cbb7a94be26cf6e4236624a33",
+    "title": "fix: result validation",
+    "signature": "G",
+    "acceptance_a": "r04-acceptance.md",
+    "acceptance_b": "r04-acceptance.md"
+  },
+  {
+    "row": 5,
+    "scope": "R05, D37 (checkout/artifacts)",
+    "commit": "5f80c9ef411d53e56d3591b587e337f325e2ffe7",
+    "title": "fix: isolated release",
+    "signature": "G",
+    "acceptance_a": "r05-acceptance.md",
+    "acceptance_b": "r05-acceptance.md"
+  },
+  {
+    "row": 6,
+    "scope": "R06, D37 (refs)",
+    "commit": "4ddcb4f20a18413ad710d65358152412efe1a016",
+    "title": "fix: release tags",
+    "signature": "G",
+    "acceptance_a": "r06-acceptance.md",
+    "acceptance_b": "r06-acceptance.md"
+  },
+  {
+    "row": 7,
+    "scope": "R07, D18, D19",
+    "commit": "d1102f62bea4843d7ee468844b508428b164277f",
+    "title": "fix: http pools",
+    "signature": "G",
+    "acceptance_a": "r07-acceptance.md",
+    "acceptance_b": "r07-acceptance.md"
+  },
+  {
+    "row": 8,
+    "scope": "R08",
+    "commit": "df733dd2bfe15dc12c3f9264bd23fb8711fbea4d",
+    "title": "fix: session binding",
+    "signature": "G",
+    "acceptance_a": "r08-acceptance.md",
+    "acceptance_b": "r08-acceptance.md"
+  },
+  {
+    "row": 9,
+    "scope": "R09, D07, D08",
+    "commit": "9a9062ac2329bbda3e0fceea6ee639fb2604e8e4",
+    "title": "fix: codec lifecycle",
+    "signature": "G",
+    "acceptance_a": "r09-acceptance.md",
+    "acceptance_b": "r09-acceptance.md"
+  },
+  {
+    "row": 10,
+    "scope": "R10, D06",
+    "commit": "4c368324e286fffd8c3a9fb40f482bbbf56b7555",
+    "title": "fix: run policy",
+    "signature": "G",
+    "acceptance_a": "r10-acceptance.md",
+    "acceptance_b": "r10-acceptance.md"
+  },
+  {
+    "row": 11,
+    "scope": "R11, D16",
+    "commit": "a492d5faa84e8a57b3a10f1626067523a938046f",
+    "title": "fix: empty results",
+    "signature": "G",
+    "acceptance_a": "r11-acceptance.md",
+    "acceptance_b": "r11-acceptance.md"
+  },
+  {
+    "row": 12,
+    "scope": "R12, D13, D15",
+    "commit": "22782ff060b81b2e5b1532e0f8caac2734cb2934",
+    "title": "fix: cache delivery",
+    "signature": "G",
+    "acceptance_a": "r12-acceptance.md",
+    "acceptance_b": "r12-acceptance.md"
+  },
+  {
+    "row": 13,
+    "scope": "R13, D20, D21, D22",
+    "commit": "1180b3a4e8f2eee29208789de3e6d7ed89f933ea",
+    "title": "fix: mcp lifetimes",
+    "signature": "G",
+    "acceptance_a": "r13/a-verdict.md",
+    "acceptance_b": "r13/b-verdict.md"
+  },
+  {
+    "row": 14,
+    "scope": "R14, D28",
+    "commit": "6f6365b676c3903ed8db8602ddc6ef011d2247a9",
+    "title": "fix: host descendants",
+    "signature": "G",
+    "acceptance_a": "r14/a-verdict.md",
+    "acceptance_b": "r14/b-review-final.md"
+  },
+  {
+    "row": 15,
+    "scope": "R15, D29",
+    "commit": "e3fc1f9813fd31a5db7e14236cd02e0b8f795941",
+    "title": "fix: sandbox output",
+    "signature": "G",
+    "acceptance_a": "r15/a-verdict.md",
+    "acceptance_b": "r15/b-verdict.md"
+  },
+  {
+    "row": 16,
+    "scope": "R16",
+    "commit": "64a40e5498fc6f87313ee1e94268bc72b568b75c",
+    "title": "fix: http encoding",
+    "signature": "G",
+    "acceptance_a": "r16/r16-acceptance-a.md",
+    "acceptance_b": "r16/r16-acceptance-b.md"
+  },
+  {
+    "row": 17,
+    "scope": "R17, D33",
+    "commit": "a8bf9fb193014d29d0aa071848e802465d8362bf",
+    "title": "fix: mail representation",
+    "signature": "G",
+    "acceptance_a": "r17/r17-acceptance-a.md",
+    "acceptance_b": "r17/r17-acceptance-b.md"
+  },
+  {
+    "row": 18,
+    "scope": "R18, D31",
+    "commit": "71b49fa74de86cf424c8e493a95000d839a39f26",
+    "title": "fix: scratchpad admission",
+    "signature": "G",
+    "acceptance_a": "r18/r18-acceptance-a.md",
+    "acceptance_b": "r18/r18-acceptance-b.md"
+  },
+  {
+    "row": 19,
+    "scope": "R19, D35 (scraper)",
+    "commit": "f63179a5af2b22337d7a0d5c916f4d2a5c820549",
+    "title": "fix: markdown causes",
+    "signature": "G",
+    "acceptance_a": "r19/r19-acceptance-a.md",
+    "acceptance_b": "r19/r19-acceptance-b.md"
+  },
+  {
+    "row": 20,
+    "scope": "R20, D35 (DOCX)",
+    "commit": "0700cc526f693b93865393ef9bb3acd16ab9ca4c",
+    "title": "fix: docx whitespace",
+    "signature": "G",
+    "acceptance_a": "r20/r20-acceptance-a.md",
+    "acceptance_b": "r20/r20-acceptance-b.md"
+  },
+  {
+    "row": 21,
+    "scope": "R21, D26",
+    "commit": "e9d80b4ddc37f07c272f2d87da2ce89f447f771c",
+    "title": "fix: generator recovery",
+    "signature": "G",
+    "acceptance_a": "r21/r21-acceptance-a.md",
+    "acceptance_b": "r21/r21-acceptance-b.md"
+  },
+  {
+    "row": 22,
+    "scope": "D01",
+    "commit": "8ffd009389bf5d099e87d39616f4b17b075c8ed8",
+    "title": "refactor: history boundary",
+    "signature": "G",
+    "acceptance_a": "d01/d01-acceptance-a.md",
+    "acceptance_b": "d01/d01-acceptance-b.md"
+  },
+  {
+    "row": 23,
+    "scope": "D02",
+    "commit": "c682e306c0238ddcf4a80a7c9c69236461bd851a",
+    "title": "refactor: host events",
+    "signature": "G",
+    "acceptance_a": "d02/d02-acceptance-a.md",
+    "acceptance_b": "d02/d02-acceptance-b.md"
+  },
+  {
+    "row": 24,
+    "scope": "D03",
+    "commit": "f5824b1b64f00341411c99a72f319cdf99c1ab9f",
+    "title": "refactor: review intent",
+    "signature": "G",
+    "acceptance_a": "d03/d03-acceptance-a.md",
+    "acceptance_b": "d03/d03-acceptance-b.md"
+  },
+  {
+    "row": 25,
+    "scope": "D04, D05",
+    "commit": "4b76f5f6f923802d378c332ddaee3c8f9a0bf28b",
+    "title": "fix: required gates",
+    "signature": "G",
+    "acceptance_a": "d04-d05/acceptance-a.md",
+    "acceptance_b": "d04-d05/acceptance-b.md"
+  },
+  {
+    "row": 26,
+    "scope": "D09",
+    "commit": "38314b41d1b164f3537b2603177c310c404578da",
+    "title": "fix: required mutations",
+    "signature": "G",
+    "acceptance_a": "d09/acceptance-a.md",
+    "acceptance_b": "d09/acceptance-b.md"
+  },
+  {
+    "row": 27,
+    "scope": "D10, D11",
+    "commit": "77d3a10b9deeef34f125b5c893415d23cdec7fe5",
+    "title": "refactor: operation config",
+    "signature": "G",
+    "acceptance_a": "d10-d11/acceptance-a.md",
+    "acceptance_b": "d10-d11/acceptance-b.md"
+  },
+  {
+    "row": 28,
+    "scope": "D14",
+    "commit": "c7eb470fb2d62f31e9072e487ec5beba578b3e88",
+    "title": "fix: journal consistency",
+    "signature": "G",
+    "acceptance_a": "d14/acceptance-a.md",
+    "acceptance_b": "d14/acceptance-b.md"
+  },
+  {
+    "row": 29,
+    "scope": "D23",
+    "commit": "d9170c1bad1e5268b834924d2f031593f6d9b38e",
+    "title": "fix: reflection discovery",
+    "signature": "G",
+    "acceptance_a": "d23/acceptance-a.md",
+    "acceptance_b": "d23/acceptance-b.md"
+  },
+  {
+    "row": 30,
+    "scope": "D24",
+    "commit": "7331736ac925527fe5efe2711eb59c292a172ffc",
+    "title": "feat: cancellation diagnostics",
+    "signature": "G",
+    "acceptance_a": "d24/acceptance-a.md",
+    "acceptance_b": "d24/acceptance-b.md"
+  },
+  {
+    "row": 31,
+    "scope": "D25",
+    "commit": "fb7a2bfbf89a889c74e6c9285c59d0d5a2a74a05",
+    "title": "refactor: telemetry mapping",
+    "signature": "G",
+    "acceptance_a": "d25/acceptance-a/report.md",
+    "acceptance_b": "d25/acceptance-b/report.md"
+  },
+  {
+    "row": 32,
+    "scope": "D27",
+    "commit": "fe241b0f4f1ecacacd0842107410ab56f30601ea",
+    "title": "refactor: e2b argv",
+    "signature": "G",
+    "acceptance_a": "d27/acceptance-a/report.md",
+    "acceptance_b": "d27/acceptance-b/report.md"
+  },
+  {
+    "row": 33,
+    "scope": "D30, D36 (RAG)",
+    "commit": "ad4afe26a4ce637282f197be138f63d60ef9206b",
+    "title": "refactor: retrieval boundary",
+    "signature": "G",
+    "acceptance_a": "d30-d36-rag/acceptance-a/report.md",
+    "acceptance_b": "d30-d36-rag/acceptance-b/report.md"
+  },
+  {
+    "row": 34,
+    "scope": "D32",
+    "commit": "9b7ac3fda391f6330e80c512078924a38ef0c3b6",
+    "title": "fix: toolkit options",
+    "signature": "G",
+    "acceptance_a": "d32/acceptance-a/report.md",
+    "acceptance_b": "d32/acceptance-b/REPORT.md"
+  },
+  {
+    "row": 35,
+    "scope": "D34",
+    "commit": "9ac37e39e208611acded6b13949e3e6cdff51655",
+    "title": "refactor: sql subset",
+    "signature": "G",
+    "acceptance_a": "d34/acceptance-a/report.md",
+    "acceptance_b": "d34/acceptance-b/report.md"
+  },
+  {
+    "row": 36,
+    "scope": "D36 (time/state)",
+    "commit": "6907b805e0298d7b4e5f5535c8fb68fbbd29d00f",
+    "title": "docs: time semantics",
+    "signature": "G",
+    "acceptance_a": "d36-time/acceptance-a/REPORT.md",
+    "acceptance_b": "d36-time/acceptance-b/REPORT.md"
+  },
+  {
+    "row": 37,
+    "scope": "D40",
+    "commit": "a87f5ea72929f9e229a701d39645d3164f70e9e1",
+    "title": "docs: isolation limits",
+    "signature": "G",
+    "acceptance_a": "d40/acceptance-a/report.md",
+    "acceptance_b": "d40/acceptance-b/report.md"
+  },
+  {
+    "row": 38,
+    "scope": "R22, D38, D39",
+    "commit": "0600e12dd7cd73ae3cfe2036932aafb50dadcd74",
+    "title": "docs: generator contracts",
+    "signature": "G",
+    "acceptance_a": "r22-d38-d39/acceptance-a/report.md",
+    "acceptance_b": "r22-d38-d39/acceptance-b/report.md"
+  },
+  {
+    "row": 39,
+    "scope": "R23, docs checklist",
+    "commit": "efd446d19283b640f32650a1402f950038ebd7bf",
+    "title": "docs: execution bounds",
+    "signature": "G",
+    "acceptance_a": "r23-docs/acceptance-a/report-final.md",
+    "acceptance_b": "r23-docs/acceptance-b/report-final.md"
+  }
+]

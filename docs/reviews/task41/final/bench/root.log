@@ -1,0 +1,24 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkExecute-10                     	   25728	     16492 ns/op	   14631 B/op	     236 allocs/op
+BenchmarkExecute-10                     	   17782	     22123 ns/op	   14627 B/op	     236 allocs/op
+BenchmarkExecute-10                     	   25881	     13957 ns/op	   14633 B/op	     236 allocs/op
+BenchmarkSessionConcurrentExecute-10    	   58548	     11553 ns/op	   15390 B/op	     200 allocs/op
+BenchmarkSessionConcurrentExecute-10    	   22893	     16511 ns/op	   15451 B/op	     200 allocs/op
+BenchmarkSessionConcurrentExecute-10    	   21619	     22626 ns/op	   15421 B/op	     200 allocs/op
+BenchmarkSessionExportSnapshot-10       	   14584	     21659 ns/op	    6745 B/op	     108 allocs/op
+BenchmarkSessionExportSnapshot-10       	   32092	     11844 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkSessionExportSnapshot-10       	   30277	     11605 ns/op	    6744 B/op	     108 allocs/op
+BenchmarkTask41StreamLifecycle/independent-10         	   27142	     14064 ns/op	   13001 B/op	     167 allocs/op
+BenchmarkTask41StreamLifecycle/independent-10         	   29805	     12274 ns/op	   13003 B/op	     167 allocs/op
+BenchmarkTask41StreamLifecycle/independent-10         	   30199	     11824 ns/op	   13005 B/op	     167 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-10            	   21267	     16491 ns/op	   16608 B/op	     216 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-10            	   24194	     14702 ns/op	   16612 B/op	     216 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-10            	   24508	     14528 ns/op	   16614 B/op	     216 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-sink-stop-10  	   92976	      4775 ns/op	    4606 B/op	      57 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-sink-stop-10  	   53976	      6102 ns/op	    4606 B/op	      57 allocs/op
+BenchmarkTask41StreamLifecycle/terminal-sink-stop-10  	   88236	      4262 ns/op	    4606 B/op	      57 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	8.831s

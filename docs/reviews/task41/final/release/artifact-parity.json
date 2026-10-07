@@ -1,0 +1,178 @@
+{
+  "candidate_commit": "7f17f4000a9735533cdd632ce4189b2c1efd670b",
+  "count": 24,
+  "implementation_commit": "efd446d",
+  "modules": [
+    {
+      "artifact_checksum": "h1:RoFXB+u8A4VUnRFJ25LSpUYQzWSk7tpndHZWPRvqers=",
+      "module": "github.com/skosovsky/toolsy/adapters/sandbox/docker",
+      "vcs_checksum": "h1:RoFXB+u8A4VUnRFJ25LSpUYQzWSk7tpndHZWPRvqers=",
+      "version": "v0.18.0",
+      "zip_sha256": "1642cfe56ba88366e1a57dc5d6fa23d48fbe464b92f8a9f4b50222549674f038"
+    },
+    {
+      "artifact_checksum": "h1:TLqc651MZpn67n5VrIDthNTBfkD2vglllxzRlDvxPI4=",
+      "module": "github.com/skosovsky/toolsy/adapters/sandbox/e2b",
+      "vcs_checksum": "h1:TLqc651MZpn67n5VrIDthNTBfkD2vglllxzRlDvxPI4=",
+      "version": "v0.18.0",
+      "zip_sha256": "6eacf669d3aed528e36760822a9637e7b9955d39d3425bc288f13ee1adae48aa"
+    },
+    {
+      "artifact_checksum": "h1:q4v2mUGRP8vA3aImkSaPc0VCqSon0RWhi98g39XLT3w=",
+      "module": "github.com/skosovsky/toolsy/adapters/sandbox/host",
+      "vcs_checksum": "h1:q4v2mUGRP8vA3aImkSaPc0VCqSon0RWhi98g39XLT3w=",
+      "version": "v0.18.0",
+      "zip_sha256": "4a650aa3544be04ff501e6a877d2a22acffe8bd4df2ae8521d2f17d37a204b86"
+    },
+    {
+      "artifact_checksum": "h1:e6sbgubAktTzD4CX/4Csx0EmBpiOpYjgBygdvizjoFM=",
+      "module": "github.com/skosovsky/toolsy/adapters/sandbox/starlark",
+      "vcs_checksum": "h1:e6sbgubAktTzD4CX/4Csx0EmBpiOpYjgBygdvizjoFM=",
+      "version": "v0.18.0",
+      "zip_sha256": "bd1e83f472d047832b741facff8214a33a898ab653e69a618ababb4350799ad6"
+    },
+    {
+      "artifact_checksum": "h1:59qj/hpmwpn2uLLPZagWbB24cqV5dMu5fBL6BDqBxRw=",
+      "module": "github.com/skosovsky/toolsy/adapters/sandbox/wazero",
+      "vcs_checksum": "h1:59qj/hpmwpn2uLLPZagWbB24cqV5dMu5fBL6BDqBxRw=",
+      "version": "v0.18.0",
+      "zip_sha256": "1f1742b528851dfc6f08f84f2cf7df571257ed8524c68a9a1671d33a98132bae"
+    },
+    {
+      "artifact_checksum": "h1:adWrKxFAu0B09J/XayeqHa6PNA4oxqXQFPUlTj/cveQ=",
+      "module": "github.com/skosovsky/toolsy/agents",
+      "vcs_checksum": "h1:adWrKxFAu0B09J/XayeqHa6PNA4oxqXQFPUlTj/cveQ=",
+      "version": "v0.18.0",
+      "zip_sha256": "fa91b2994f1cc294e43f16ef2470ee878f89bace7341079fd550e78e789625e6"
+    },
+    {
+      "artifact_checksum": "h1:jcnE8an1LvRD9K3qk+Pcvg3hIhfhL5Ol4pzSI7uWjp0=",
+      "module": "github.com/skosovsky/toolsy/contracts/graphql",
+      "vcs_checksum": "h1:jcnE8an1LvRD9K3qk+Pcvg3hIhfhL5Ol4pzSI7uWjp0=",
+      "version": "v0.18.0",
+      "zip_sha256": "1eddb08982b325c65c28ea691bb21ecdf59073d43d79fd5b67269043064b7a1f"
+    },
+    {
+      "artifact_checksum": "h1:U7vCeTPBZCyb/A6zCfb/jHlveSKKt3CJp+9v8jaP49M=",
+      "module": "github.com/skosovsky/toolsy/contracts/grpc",
+      "vcs_checksum": "h1:U7vCeTPBZCyb/A6zCfb/jHlveSKKt3CJp+9v8jaP49M=",
+      "version": "v0.18.0",
+      "zip_sha256": "e180d7c6a7e0122ba853bbf3f122fb14f5f33193bb327b13e29d6fd393cf9df9"
+    },
+    {
+      "artifact_checksum": "h1:CKzLmQ9pSXZdqAYzVkYSO75/uxDhO8Og1mn+y3M8XGE=",
+      "module": "github.com/skosovsky/toolsy/contracts/openapi",
+      "vcs_checksum": "h1:CKzLmQ9pSXZdqAYzVkYSO75/uxDhO8Og1mn+y3M8XGE=",
+      "version": "v0.18.0",
+      "zip_sha256": "424557453a57371d2b79ff5d69f7b2419fa8ed4f440a8ac9c501b5e9378f2b13"
+    },
+    {
+      "artifact_checksum": "h1:4xGqfyH8IMuH2FayWxaTB4H5idD5iV9LOhkLFfSAg4U=",
+      "module": "github.com/skosovsky/toolsy/examples/resiliency",
+      "vcs_checksum": "h1:4xGqfyH8IMuH2FayWxaTB4H5idD5iV9LOhkLFfSAg4U=",
+      "version": "v0.18.0",
+      "zip_sha256": "494d06fe375a08d15ba6feb00a72d06fd5db6ab6ba82aef62148987fe8485675"
+    },
+    {
+      "artifact_checksum": "h1:aUtRcE+/vw5GZOmDUGAqpexBWNvVwIj3YeaCOH6Qzkk=",
+      "module": "github.com/skosovsky/toolsy/ext/toolsyotel",
+      "vcs_checksum": "h1:aUtRcE+/vw5GZOmDUGAqpexBWNvVwIj3YeaCOH6Qzkk=",
+      "version": "v0.18.0",
+      "zip_sha256": "d318b1dca1717c03fab2fff38169275ec3a92bf3681dca8c5784f0ebd9dd7599"
+    },
+    {
+      "artifact_checksum": "h1:UXm/M/9Gxuaj2i+GUes027D/ebM8yG5dEcUbwlvDRp0=",
+      "module": "github.com/skosovsky/toolsy",
+      "vcs_checksum": "h1:UXm/M/9Gxuaj2i+GUes027D/ebM8yG5dEcUbwlvDRp0=",
+      "version": "v0.18.0",
+      "zip_sha256": "5b32050b2b512d6aa168248a5209092bab5f7b9332f70dfa31a6bec0864079d0"
+    },
+    {
+      "artifact_checksum": "h1:heiMnJJ4OoZ/lPIYqc2OB/GoiSUvgS9jTkOwnHcfg0E=",
+      "module": "github.com/skosovsky/toolsy/mcp",
+      "vcs_checksum": "h1:heiMnJJ4OoZ/lPIYqc2OB/GoiSUvgS9jTkOwnHcfg0E=",
+      "version": "v0.18.0",
+      "zip_sha256": "4fbde86bfc72b6c6d259e7164e26661988d2e05f32fe1f9be6820f125e8720cf"
+    },
+    {
+      "artifact_checksum": "h1:IHaNDFn+PkL/kZcEYsCWrTu1RjqYVQUAdERYac402wQ=",
+      "module": "github.com/skosovsky/toolsy/toolkits/document",
+      "vcs_checksum": "h1:IHaNDFn+PkL/kZcEYsCWrTu1RjqYVQUAdERYac402wQ=",
+      "version": "v0.18.0",
+      "zip_sha256": "2d44427631d9dd39114e53d0461c8bcd7ba6a5aa11a50bc1353bbb2d13002483"
+    },
+    {
+      "artifact_checksum": "h1:mNsV0bcCEP5bT9XUEiEEiKM56NhUe7pSIrAC1AeYCYE=",
+      "module": "github.com/skosovsky/toolsy/toolkits/fstool",
+      "vcs_checksum": "h1:mNsV0bcCEP5bT9XUEiEEiKM56NhUe7pSIrAC1AeYCYE=",
+      "version": "v0.18.0",
+      "zip_sha256": "212c2a999978a3b2155ca5efcd37ab652298fadab58ee4dfd84be5e4d7c362ef"
+    },
+    {
+      "artifact_checksum": "h1:8LMv9G7tb3Ksg34I2DR35pyaFJwl+zN49mk6rkVK/0I=",
+      "module": "github.com/skosovsky/toolsy/toolkits/httptool",
+      "vcs_checksum": "h1:8LMv9G7tb3Ksg34I2DR35pyaFJwl+zN49mk6rkVK/0I=",
+      "version": "v0.18.0",
+      "zip_sha256": "8a0b59eef0727f12830c69e3197eef66b36ce3d1e112221d8269317b058667df"
+    },
+    {
+      "artifact_checksum": "h1:abuwcVzh6g9foT0LI7q6ymBkL3m8aGbFse4xaXg/ccA=",
+      "module": "github.com/skosovsky/toolsy/toolkits/human",
+      "vcs_checksum": "h1:abuwcVzh6g9foT0LI7q6ymBkL3m8aGbFse4xaXg/ccA=",
+      "version": "v0.18.0",
+      "zip_sha256": "0177c52db9d8423b7cc35f9e5bf38698210662ae4e4f2103d682767b6fed07b3"
+    },
+    {
+      "artifact_checksum": "h1:MTg+nzIyk6tLN7yz6e3VjsJMEyE4UCQW4rLVYq8ZHuc=",
+      "module": "github.com/skosovsky/toolsy/toolkits/mail",
+      "vcs_checksum": "h1:MTg+nzIyk6tLN7yz6e3VjsJMEyE4UCQW4rLVYq8ZHuc=",
+      "version": "v0.18.0",
+      "zip_sha256": "49d121e09fe240e02cd83c2aa1e4861c6ff01362b4b245b79f511f847cc978db"
+    },
+    {
+      "artifact_checksum": "h1:rneZfhBZ9HkUPbqBN3FURixtV5kE1ZG2eOifyhg6hCA=",
+      "module": "github.com/skosovsky/toolsy/toolkits/memory",
+      "vcs_checksum": "h1:rneZfhBZ9HkUPbqBN3FURixtV5kE1ZG2eOifyhg6hCA=",
+      "version": "v0.18.0",
+      "zip_sha256": "d4176d4dbf2be42b0e7ef7d4349bda6fd3752480356d99c10ba5799217c75010"
+    },
+    {
+      "artifact_checksum": "h1:9UVObUJp2L1q3CaJlpETuv5YtnlF8pVn9L1OpFKHXeI=",
+      "module": "github.com/skosovsky/toolsy/toolkits/prompts",
+      "vcs_checksum": "h1:9UVObUJp2L1q3CaJlpETuv5YtnlF8pVn9L1OpFKHXeI=",
+      "version": "v0.18.0",
+      "zip_sha256": "fd72bdc036b11bb2303eb07a94b464f694c6a602ab283d9e6870a8d15ff7d0eb"
+    },
+    {
+      "artifact_checksum": "h1:lE9bZQm7/rLPxSlj06bhJVaI6u38p4Ynccgxu81sZ8U=",
+      "module": "github.com/skosovsky/toolsy/toolkits/rag",
+      "vcs_checksum": "h1:lE9bZQm7/rLPxSlj06bhJVaI6u38p4Ynccgxu81sZ8U=",
+      "version": "v0.18.0",
+      "zip_sha256": "21d1be04fb088c505649f2e534ee512b1763245843f73347de85e8957b5a9fa9"
+    },
+    {
+      "artifact_checksum": "h1:5ROOgsMeotk/zwUR+TEQOqoQkNudKhLWiBt/BQuVTts=",
+      "module": "github.com/skosovsky/toolsy/toolkits/sqltool",
+      "vcs_checksum": "h1:5ROOgsMeotk/zwUR+TEQOqoQkNudKhLWiBt/BQuVTts=",
+      "version": "v0.18.0",
+      "zip_sha256": "50d0fdd6597bd927f971311fe57dcc4e1afbd7598147fa62a8d68c7deaca52d6"
+    },
+    {
+      "artifact_checksum": "h1:JpxvUKfrxoOSPCu689SrRDOghGr/jD3PpeF/siIvtYI=",
+      "module": "github.com/skosovsky/toolsy/toolkits/timetool",
+      "vcs_checksum": "h1:JpxvUKfrxoOSPCu689SrRDOghGr/jD3PpeF/siIvtYI=",
+      "version": "v0.18.0",
+      "zip_sha256": "050e29b04fe2ec220fe5e032ffe0d3601e172b3dd7f9bfb111c05fc11eb175a2"
+    },
+    {
+      "artifact_checksum": "h1:j3e97prdtzhrb7ulhzXGYiemH6Qgjgu3N3taVrxCP5I=",
+      "module": "github.com/skosovsky/toolsy/toolkits/web",
+      "vcs_checksum": "h1:j3e97prdtzhrb7ulhzXGYiemH6Qgjgu3N3taVrxCP5I=",
+      "version": "v0.18.0",
+      "zip_sha256": "02463eeaaa768a692149d49d8106bed5cdbd0076f94349ee18894bfc583cc07d"
+    }
+  ],
+  "publication": "none; read-only local VCS/artifacts",
+  "session_ast_equal": true,
+  "source_snapshot": "6f13a8d98768d24d4cbe74acbbfae1b06c3e1704"
+}

@@ -1,0 +1,938 @@
+[
+  {
+    "module": ".",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 50.282
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 83.57
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 14.963
+      }
+    ]
+  },
+  {
+    "module": "adapters/sandbox/docker",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.614
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.05
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 5.697
+      }
+    ]
+  },
+  {
+    "module": "adapters/sandbox/e2b",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 6.788
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 7.807
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 6.476
+      }
+    ]
+  },
+  {
+    "module": "adapters/sandbox/host",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.496
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 12.982
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 8.653
+      }
+    ]
+  },
+  {
+    "module": "adapters/sandbox/starlark",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.131
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 4.528
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 9.583
+      }
+    ]
+  },
+  {
+    "module": "adapters/sandbox/wazero",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 16.144
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 187.74
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.805
+      }
+    ]
+  },
+  {
+    "module": "agents",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.114
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 5.696
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 7.255
+      }
+    ]
+  },
+  {
+    "module": "contracts/graphql",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.361
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.912
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 7.217
+      }
+    ]
+  },
+  {
+    "module": "contracts/grpc",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.998
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 4.254
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 12.035
+      }
+    ]
+  },
+  {
+    "module": "contracts/openapi",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.463
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 4.718
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 13.379
+      }
+    ]
+  },
+  {
+    "module": "examples/resiliency",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.169
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.874
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 12.763
+      }
+    ]
+  },
+  {
+    "module": "ext/toolsyotel",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.244
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.324
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 14.051
+      }
+    ]
+  },
+  {
+    "module": "mcp",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 8.086
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 53.756
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 10.523
+      }
+    ]
+  },
+  {
+    "module": "toolkits/document",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.513
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 8.219
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 9.027
+      }
+    ]
+  },
+  {
+    "module": "toolkits/fstool",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.704
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 4.327
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 9.701
+      }
+    ]
+  },
+  {
+    "module": "toolkits/httptool",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.753
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 5.366
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 6.384
+      }
+    ]
+  },
+  {
+    "module": "toolkits/human",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.117
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.395
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 5.16
+      }
+    ]
+  },
+  {
+    "module": "toolkits/mail",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.37
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.72
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 6.475
+      }
+    ]
+  },
+  {
+    "module": "toolkits/memory",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.203
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.382
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 5.489
+      }
+    ]
+  },
+  {
+    "module": "toolkits/prompts",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.044
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.72
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 7.321
+      }
+    ]
+  },
+  {
+    "module": "toolkits/rag",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.036
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.663
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 7.406
+      }
+    ]
+  },
+  {
+    "module": "toolkits/sqltool",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.489
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.736
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 12.611
+      }
+    ]
+  },
+  {
+    "module": "toolkits/timetool",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.435
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 2.463
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 9.127
+      }
+    ]
+  },
+  {
+    "module": "toolkits/web",
+    "results": [
+      {
+        "stage": "tests",
+        "command": [
+          "go",
+          "test",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 1.924
+      },
+      {
+        "stage": "race",
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-count=1",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 3.189
+      },
+      {
+        "stage": "lint",
+        "command": [
+          "/opt/homebrew/bin/golangci-lint",
+          "run",
+          "--allow-parallel-runners",
+          "./..."
+        ],
+        "exit": 0,
+        "seconds": 8.614
+      }
+    ]
+  }
+]

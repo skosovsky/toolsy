@@ -1,0 +1,582 @@
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.01s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRecoveryCannotReplaceOriginalGrant
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/valid_original
+=== RUN   TestRecoveryCannotReplaceOriginalGrant/expired_original
+--- PASS: TestRecoveryCannotReplaceOriginalGrant (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/valid_original (0.00s)
+    --- PASS: TestRecoveryCannotReplaceOriginalGrant/expired_original (0.00s)
+=== RUN   TestRestoreOperationSnapshotReverseLinks
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation
+=== RUN   TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry
+=== RUN   TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key
+--- PASS: TestRestoreOperationSnapshotReverseLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/missing_grant_and_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grant_binding_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/expiry_mismatch_without_reservation (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/grantless_approval_expiry (0.00s)
+    --- PASS: TestRestoreOperationSnapshotReverseLinks/reservation_wrong_key (0.00s)
+=== RUN   TestRestoreOperationSnapshotValidLinks
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved
+=== RUN   TestRestoreOperationSnapshotValidLinks/in_progress/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/completed/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/rejected/approved
+=== RUN   TestRestoreOperationSnapshotValidLinks/retry_authorized/approved
+--- PASS: TestRestoreOperationSnapshotValidLinks (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/unapproved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/in_progress/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/unknown_outcome/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/completed/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/rejected/approved (0.00s)
+    --- PASS: TestRestoreOperationSnapshotValidLinks/retry_authorized/approved (0.00s)
+=== RUN   TestOperationClaimRejectsInconsistentApprovalMode
+--- PASS: TestOperationClaimRejectsInconsistentApprovalMode (0.00s)
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/nil
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/missing
+=== RUN   TestCatalogRequirementsValidateBeforeCodecFreeze/view
+--- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/nil (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/missing (0.00s)
+    --- PASS: TestCatalogRequirementsValidateBeforeCodecFreeze/view (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.03s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	3.895s

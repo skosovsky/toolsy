@@ -1,0 +1,16 @@
+{
+  "native_cli": [
+    "/tmp/toolsy-task41/final/release/toolsy-release",
+    "-prepare-only",
+    "break"
+  ],
+  "cli_config": "FullChecks=true (committed cmd/toolsy-release/main.go)",
+  "observed_cli_pid": 8627,
+  "observed_child_make_pid": 13268,
+  "observed_make_command": "make lint test",
+  "observed_make_test_command": "go test -v -race ./...",
+  "observed_later_module": "adapters/sandbox/wazero",
+  "candidate_inventory": 24,
+  "artifact_checksums_verified": 24,
+  "note": "Observations prove specific live phases only. Completion requires terminal CLI exit0 + unchanged source/remote receipt."
+}

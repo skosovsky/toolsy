@@ -41,8 +41,10 @@ continues to wrap the error in its unknown-outcome envelope.
 
 `NewSafeHTTPClient` accepts an explicit host redirect callback; hosts supplying
 their own callback own its method/origin/header/body semantics. Nil disables
-redirects. Consumer custom clients continue to merge timeout only; they cannot
-override these adapter policies.
+redirects. Adapters use explicit `httptool.ClientSettings` for timeout and supported TLS
+settings on an owned safe transport; they preserve the adapter redirect policy.
+Custom clients/Do implementations are no longer accepted; see R07 / D18 / D19
+below for migration and borrowed TLS-reference ownership.
 
 ## Host allow/deny patterns (R02 / D17)
 

@@ -1,0 +1,39 @@
+{
+  "module": "toolkits/memory",
+  "results": [
+    {
+      "stage": "tests",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 1.203
+    },
+    {
+      "stage": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 2.382
+    },
+    {
+      "stage": "lint",
+      "command": [
+        "/opt/homebrew/bin/golangci-lint",
+        "run",
+        "--allow-parallel-runners",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 5.489
+    }
+  ]
+}

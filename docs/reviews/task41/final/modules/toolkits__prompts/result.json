@@ -1,0 +1,39 @@
+{
+  "module": "toolkits/prompts",
+  "results": [
+    {
+      "stage": "tests",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 1.044
+    },
+    {
+      "stage": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 2.72
+    },
+    {
+      "stage": "lint",
+      "command": [
+        "/opt/homebrew/bin/golangci-lint",
+        "run",
+        "--allow-parallel-runners",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 7.321
+    }
+  ]
+}

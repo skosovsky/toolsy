@@ -1,0 +1,4 @@
+FAIL	github.com/skosovsky/toolsy/mcp [build failed]
+FAIL	github.com/skosovsky/toolsy/mcp/examples/stdio [build failed]
+FAIL	github.com/skosovsky/toolsy/mcp/examples/streamable_http [build failed]
+FAIL

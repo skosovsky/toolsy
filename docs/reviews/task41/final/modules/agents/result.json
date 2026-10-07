@@ -1,0 +1,39 @@
+{
+  "module": "agents",
+  "results": [
+    {
+      "stage": "tests",
+      "command": [
+        "go",
+        "test",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 3.114
+    },
+    {
+      "stage": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-count=1",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 5.696
+    },
+    {
+      "stage": "lint",
+      "command": [
+        "/opt/homebrew/bin/golangci-lint",
+        "run",
+        "--allow-parallel-runners",
+        "./..."
+      ],
+      "exit": 0,
+      "seconds": 7.255
+    }
+  ]
+}

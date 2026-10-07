@@ -1,0 +1,32 @@
+[
+  {
+    "name": "generated_presence",
+    "exit": 0,
+    "seconds": 0.14
+  },
+  {
+    "name": "generated_stream",
+    "exit": 0,
+    "seconds": 0.134
+  },
+  {
+    "name": "nested_contract",
+    "exit": 0,
+    "seconds": 0.138
+  },
+  {
+    "name": "contract_recovery",
+    "exit": 0,
+    "seconds": 0.139
+  },
+  {
+    "name": "host_event",
+    "exit": 0,
+    "seconds": 0.126
+  },
+  {
+    "name": "session_snapshot",
+    "exit": 0,
+    "seconds": 0.128
+  }
+]

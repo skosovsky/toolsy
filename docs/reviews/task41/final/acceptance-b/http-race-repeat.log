@@ -1,0 +1,3 @@
+Independent tool receipt: GOWORK=off GOCACHE=/tmp/toolsy-goal-gocache go test -race -count=3 -run Test(RemoteRedirect|AllowedRedirect|RedirectSafety|HostPolicy|SafeDial|.*Encoding|.*UTF8|.*Pool|.*Constructor) ./...
+exit0
+ok github.com/skosovsky/toolsy/toolkits/httptool 1.753s

@@ -1,0 +1,1172 @@
+=== RUN   TestRequiredMutationConfiguration
+=== RUN   TestRequiredMutationConfiguration/put_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_empty_key
+=== RUN   TestRequiredMutationConfiguration/state_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_zero_env
+=== RUN   TestRequiredMutationConfiguration/state_DI_only
+=== RUN   TestRequiredMutationConfiguration/state_empty_key
+=== RUN   TestRequiredMutationConfiguration/session_nil
+=== RUN   TestRequiredMutationConfiguration/session_empty_key
+=== RUN   TestRequiredMutationConfiguration/put_nil_env
+--- PASS: TestRequiredMutationConfiguration (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_DI_only (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_nil (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_nil_env (0.00s)
+=== RUN   TestRequiredMutationsKeepOptionalReadAndReferenceSemantics
+--- PASS: TestRequiredMutationsKeepOptionalReadAndReferenceSemantics (0.00s)
+=== RUN   TestLosslessDynamicInputIdentity
+--- PASS: TestLosslessDynamicInputIdentity (0.00s)
+=== RUN   TestLosslessNumericSchemaConstraints
+=== RUN   TestLosslessNumericSchemaConstraints/minimum
+=== RUN   TestLosslessNumericSchemaConstraints/maximum
+=== RUN   TestLosslessNumericSchemaConstraints/enum
+=== RUN   TestLosslessNumericSchemaConstraints/fractional
+=== RUN   TestLosslessNumericSchemaConstraints/int64
+--- PASS: TestLosslessNumericSchemaConstraints (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/enum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/fractional (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+=== RUN   TestLosslessTypedExtractorValidation
+--- PASS: TestLosslessTypedExtractorValidation (0.00s)
+=== RUN   TestLosslessInputStructurePolicy
+=== RUN   TestLosslessInputStructurePolicy/case-15
+=== RUN   TestLosslessInputStructurePolicy/case-26
+=== RUN   TestLosslessInputStructurePolicy/case-11
+=== RUN   TestLosslessInputStructurePolicy/case-272
+--- PASS: TestLosslessInputStructurePolicy (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-15 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-26 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-11 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-272 (0.00s)
+=== RUN   TestLosslessTypedInterfaceNumbers
+--- PASS: TestLosslessTypedInterfaceNumbers (0.00s)
+=== RUN   TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals
+--- PASS: TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals (0.00s)
+=== RUN   TestLosslessInputStructureLimits
+=== RUN   TestLosslessInputStructureLimits/depth-at-limit
+=== RUN   TestLosslessInputStructureLimits/depth-over-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-at-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-over-limit
+=== RUN   TestLosslessInputStructureLimits/escaped-duplicate
+--- PASS: TestLosslessInputStructureLimits (0.59s)
+    --- PASS: TestLosslessInputStructureLimits/depth-at-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/depth-over-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-at-limit (0.53s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-over-limit (0.07s)
+    --- PASS: TestLosslessInputStructureLimits/escaped-duplicate (0.00s)
+=== RUN   TestRequiredPolicyConfiguration
+=== RUN   TestRequiredPolicyConfiguration/nil
+=== RUN   TestRequiredPolicyConfiguration/pointer
+=== RUN   TestRequiredPolicyConfiguration/function
+--- PASS: TestRequiredPolicyConfiguration (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/nil (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/pointer (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/function (0.00s)
+=== RUN   TestPostHandlerFailureNeverRepairsArguments
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+--- PASS: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+=== RUN   TestPostHandlerJournalOutcome
+=== RUN   TestPostHandlerJournalOutcome/result_validator
+=== RUN   TestPostHandlerJournalOutcome/effect_validator
+=== RUN   TestPostHandlerJournalOutcome/postcondition
+=== RUN   TestPostHandlerJournalOutcome/success-delivery-failure
+--- PASS: TestPostHandlerJournalOutcome (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/result_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/effect_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/postcondition (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/success-delivery-failure (0.00s)
+=== RUN   TestPostHandlerArgumentFailuresRemainCorrectable
+--- PASS: TestPostHandlerArgumentFailuresRemainCorrectable (0.00s)
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/canceled
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/expired
+--- PASS: TestAfterClaimPreDispatchFailureIsTruthful (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/canceled (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/expired (0.00s)
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/result_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/postcondition
+--- PASS: TestPostHandlerDeadlineCauseStaysNonretryable (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/result_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/postcondition (0.00s)
+=== RUN   TestPostHandlerFormatterPreservesRecovery
+--- PASS: TestPostHandlerFormatterPreservesRecovery (0.00s)
+=== RUN   TestPostHandlerFormatterBypassAndNestedHandler
+--- PASS: TestPostHandlerFormatterBypassAndNestedHandler (0.00s)
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded
+--- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting (0.01s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded (0.00s)
+=== RUN   TestResultCacheIgnoredConsumerAbortCannotPersistSuccess
+--- PASS: TestResultCacheIgnoredConsumerAbortCannotPersistSuccess (0.00s)
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true
+--- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true (0.00s)
+=== RUN   TestResultCacheBusinessErrorDelivery
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/eligible
+--- PASS: TestResultCacheBusinessErrorDelivery (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/eligible (0.00s)
+=== RUN   TestResultCacheEligibilityIsIndependentOfManifestHints
+--- PASS: TestResultCacheEligibilityIsIndependentOfManifestHints (0.00s)
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/partition
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/get
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/put
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/decode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/missing
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored
+--- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/partition (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/get (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/put (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/decode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/missing (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored (0.00s)
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/eligibility
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/partition
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-miss
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-hit
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/decode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/encode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/put
+--- PASS: TestResultCacheCallbackCancellationStopsFurtherWork (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/eligibility (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/partition (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-miss (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-hit (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/decode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/encode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/put (0.00s)
+=== RUN   TestResultCacheFailureTerminalAbortIsSticky
+--- PASS: TestResultCacheFailureTerminalAbortIsSticky (0.00s)
+=== RUN   TestResultCacheAuthorizesEveryReplay
+=== RUN   TestResultCacheAuthorizesEveryReplay/false
+=== RUN   TestResultCacheAuthorizesEveryReplay/true
+--- PASS: TestResultCacheAuthorizesEveryReplay (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/false (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/true (0.00s)
+=== RUN   TestResultCachePreservesCompleteTypedOutcome
+--- PASS: TestResultCachePreservesCompleteTypedOutcome (0.00s)
+=== RUN   TestResultCacheUsesCanonicalArgsAndAttachments
+--- PASS: TestResultCacheUsesCanonicalArgsAndAttachments (0.00s)
+=== RUN   TestResultCacheFailsClosedOnMissingPartition
+--- PASS: TestResultCacheFailsClosedOnMissingPartition (0.00s)
+=== RUN   TestResultCacheAsyncPolicyAndPrivacy
+--- PASS: TestResultCacheAsyncPolicyAndPrivacy (0.00s)
+=== RUN   TestResultCacheDoesNotCompleteFailedProducer
+--- PASS: TestResultCacheDoesNotCompleteFailedProducer (0.00s)
+=== RUN   TestResultCacheIsolatesAllowedScopes
+--- PASS: TestResultCacheIsolatesAllowedScopes (0.00s)
+=== RUN   TestResultCacheUnsupportedCodecFailsExplicitly
+--- PASS: TestResultCacheUnsupportedCodecFailsExplicitly (0.00s)
+=== RUN   TestResultCacheReplayDoesNotReapplyHostEffects
+--- PASS: TestResultCacheReplayDoesNotReapplyHostEffects (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRequiredSlotMissingCannotExportCheckpoint
+--- PASS: TestRequiredSlotMissingCannotExportCheckpoint (0.00s)
+=== RUN   TestRequiredNullableStateCheckpoint
+=== RUN   TestRequiredNullableStateCheckpoint/false
+=== RUN   TestRequiredNullableStateCheckpoint/true
+--- PASS: TestRequiredNullableStateCheckpoint (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/false (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/true (0.00s)
+=== RUN   TestRequiredMutationConfiguration
+=== RUN   TestRequiredMutationConfiguration/session_nil
+=== RUN   TestRequiredMutationConfiguration/session_empty_key
+=== RUN   TestRequiredMutationConfiguration/put_nil_env
+=== RUN   TestRequiredMutationConfiguration/put_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_empty_key
+=== RUN   TestRequiredMutationConfiguration/state_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_zero_env
+=== RUN   TestRequiredMutationConfiguration/state_DI_only
+=== RUN   TestRequiredMutationConfiguration/state_empty_key
+--- PASS: TestRequiredMutationConfiguration (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_nil (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_DI_only (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_empty_key (0.00s)
+=== RUN   TestRequiredMutationsKeepOptionalReadAndReferenceSemantics
+--- PASS: TestRequiredMutationsKeepOptionalReadAndReferenceSemantics (0.00s)
+=== RUN   TestLosslessDynamicInputIdentity
+--- PASS: TestLosslessDynamicInputIdentity (0.00s)
+=== RUN   TestLosslessNumericSchemaConstraints
+=== RUN   TestLosslessNumericSchemaConstraints/minimum
+=== RUN   TestLosslessNumericSchemaConstraints/maximum
+=== RUN   TestLosslessNumericSchemaConstraints/enum
+=== RUN   TestLosslessNumericSchemaConstraints/fractional
+=== RUN   TestLosslessNumericSchemaConstraints/int64
+--- PASS: TestLosslessNumericSchemaConstraints (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/enum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/fractional (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+=== RUN   TestLosslessTypedExtractorValidation
+--- PASS: TestLosslessTypedExtractorValidation (0.00s)
+=== RUN   TestLosslessInputStructurePolicy
+=== RUN   TestLosslessInputStructurePolicy/case-15
+=== RUN   TestLosslessInputStructurePolicy/case-26
+=== RUN   TestLosslessInputStructurePolicy/case-11
+=== RUN   TestLosslessInputStructurePolicy/case-272
+--- PASS: TestLosslessInputStructurePolicy (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-15 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-26 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-11 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-272 (0.00s)
+=== RUN   TestLosslessTypedInterfaceNumbers
+--- PASS: TestLosslessTypedInterfaceNumbers (0.00s)
+=== RUN   TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals
+--- PASS: TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals (0.00s)
+=== RUN   TestLosslessInputStructureLimits
+=== RUN   TestLosslessInputStructureLimits/depth-at-limit
+=== RUN   TestLosslessInputStructureLimits/depth-over-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-at-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-over-limit
+=== RUN   TestLosslessInputStructureLimits/escaped-duplicate
+--- PASS: TestLosslessInputStructureLimits (0.60s)
+    --- PASS: TestLosslessInputStructureLimits/depth-at-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/depth-over-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-at-limit (0.53s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-over-limit (0.07s)
+    --- PASS: TestLosslessInputStructureLimits/escaped-duplicate (0.00s)
+=== RUN   TestRequiredPolicyConfiguration
+=== RUN   TestRequiredPolicyConfiguration/nil
+=== RUN   TestRequiredPolicyConfiguration/pointer
+=== RUN   TestRequiredPolicyConfiguration/function
+--- PASS: TestRequiredPolicyConfiguration (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/nil (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/pointer (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/function (0.00s)
+=== RUN   TestPostHandlerFailureNeverRepairsArguments
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+--- PASS: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+=== RUN   TestPostHandlerJournalOutcome
+=== RUN   TestPostHandlerJournalOutcome/result_validator
+=== RUN   TestPostHandlerJournalOutcome/effect_validator
+=== RUN   TestPostHandlerJournalOutcome/postcondition
+=== RUN   TestPostHandlerJournalOutcome/success-delivery-failure
+--- PASS: TestPostHandlerJournalOutcome (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/result_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/effect_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/postcondition (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/success-delivery-failure (0.00s)
+=== RUN   TestPostHandlerArgumentFailuresRemainCorrectable
+--- PASS: TestPostHandlerArgumentFailuresRemainCorrectable (0.00s)
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/canceled
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/expired
+--- PASS: TestAfterClaimPreDispatchFailureIsTruthful (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/canceled (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/expired (0.00s)
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/result_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/postcondition
+--- PASS: TestPostHandlerDeadlineCauseStaysNonretryable (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/result_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/postcondition (0.00s)
+=== RUN   TestPostHandlerFormatterPreservesRecovery
+--- PASS: TestPostHandlerFormatterPreservesRecovery (0.00s)
+=== RUN   TestPostHandlerFormatterBypassAndNestedHandler
+--- PASS: TestPostHandlerFormatterBypassAndNestedHandler (0.00s)
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded
+--- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting (0.01s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded (0.00s)
+=== RUN   TestResultCacheIgnoredConsumerAbortCannotPersistSuccess
+--- PASS: TestResultCacheIgnoredConsumerAbortCannotPersistSuccess (0.00s)
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true
+--- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true (0.00s)
+=== RUN   TestResultCacheBusinessErrorDelivery
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/eligible
+--- PASS: TestResultCacheBusinessErrorDelivery (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/eligible (0.00s)
+=== RUN   TestResultCacheEligibilityIsIndependentOfManifestHints
+--- PASS: TestResultCacheEligibilityIsIndependentOfManifestHints (0.00s)
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/partition
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/get
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/put
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/decode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/missing
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored
+--- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/partition (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/get (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/put (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/decode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/missing (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored (0.00s)
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/eligibility
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/partition
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-miss
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-hit
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/decode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/encode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/put
+--- PASS: TestResultCacheCallbackCancellationStopsFurtherWork (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/eligibility (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/partition (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-miss (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-hit (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/decode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/encode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/put (0.00s)
+=== RUN   TestResultCacheFailureTerminalAbortIsSticky
+--- PASS: TestResultCacheFailureTerminalAbortIsSticky (0.00s)
+=== RUN   TestResultCacheAuthorizesEveryReplay
+=== RUN   TestResultCacheAuthorizesEveryReplay/false
+=== RUN   TestResultCacheAuthorizesEveryReplay/true
+--- PASS: TestResultCacheAuthorizesEveryReplay (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/false (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/true (0.00s)
+=== RUN   TestResultCachePreservesCompleteTypedOutcome
+--- PASS: TestResultCachePreservesCompleteTypedOutcome (0.00s)
+=== RUN   TestResultCacheUsesCanonicalArgsAndAttachments
+--- PASS: TestResultCacheUsesCanonicalArgsAndAttachments (0.00s)
+=== RUN   TestResultCacheFailsClosedOnMissingPartition
+--- PASS: TestResultCacheFailsClosedOnMissingPartition (0.00s)
+=== RUN   TestResultCacheAsyncPolicyAndPrivacy
+--- PASS: TestResultCacheAsyncPolicyAndPrivacy (0.00s)
+=== RUN   TestResultCacheDoesNotCompleteFailedProducer
+--- PASS: TestResultCacheDoesNotCompleteFailedProducer (0.00s)
+=== RUN   TestResultCacheIsolatesAllowedScopes
+--- PASS: TestResultCacheIsolatesAllowedScopes (0.00s)
+=== RUN   TestResultCacheUnsupportedCodecFailsExplicitly
+--- PASS: TestResultCacheUnsupportedCodecFailsExplicitly (0.00s)
+=== RUN   TestResultCacheReplayDoesNotReapplyHostEffects
+--- PASS: TestResultCacheReplayDoesNotReapplyHostEffects (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRequiredSlotMissingCannotExportCheckpoint
+--- PASS: TestRequiredSlotMissingCannotExportCheckpoint (0.00s)
+=== RUN   TestRequiredNullableStateCheckpoint
+=== RUN   TestRequiredNullableStateCheckpoint/false
+=== RUN   TestRequiredNullableStateCheckpoint/true
+--- PASS: TestRequiredNullableStateCheckpoint (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/false (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/true (0.00s)
+=== RUN   TestRequiredMutationConfiguration
+=== RUN   TestRequiredMutationConfiguration/session_empty_key
+=== RUN   TestRequiredMutationConfiguration/put_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_empty_key
+=== RUN   TestRequiredMutationConfiguration/state_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_DI_only
+=== RUN   TestRequiredMutationConfiguration/state_empty_key
+=== RUN   TestRequiredMutationConfiguration/session_nil
+--- PASS: TestRequiredMutationConfiguration (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_DI_only (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_nil (0.00s)
+=== RUN   TestRequiredMutationsKeepOptionalReadAndReferenceSemantics
+--- PASS: TestRequiredMutationsKeepOptionalReadAndReferenceSemantics (0.00s)
+=== RUN   TestLosslessDynamicInputIdentity
+--- PASS: TestLosslessDynamicInputIdentity (0.00s)
+=== RUN   TestLosslessNumericSchemaConstraints
+=== RUN   TestLosslessNumericSchemaConstraints/minimum
+=== RUN   TestLosslessNumericSchemaConstraints/maximum
+=== RUN   TestLosslessNumericSchemaConstraints/enum
+=== RUN   TestLosslessNumericSchemaConstraints/fractional
+=== RUN   TestLosslessNumericSchemaConstraints/int64
+--- PASS: TestLosslessNumericSchemaConstraints (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/enum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/fractional (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+=== RUN   TestLosslessTypedExtractorValidation
+--- PASS: TestLosslessTypedExtractorValidation (0.00s)
+=== RUN   TestLosslessInputStructurePolicy
+=== RUN   TestLosslessInputStructurePolicy/case-15
+=== RUN   TestLosslessInputStructurePolicy/case-26
+=== RUN   TestLosslessInputStructurePolicy/case-11
+=== RUN   TestLosslessInputStructurePolicy/case-272
+--- PASS: TestLosslessInputStructurePolicy (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-15 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-26 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-11 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-272 (0.00s)
+=== RUN   TestLosslessTypedInterfaceNumbers
+--- PASS: TestLosslessTypedInterfaceNumbers (0.00s)
+=== RUN   TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals
+--- PASS: TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals (0.00s)
+=== RUN   TestLosslessInputStructureLimits
+=== RUN   TestLosslessInputStructureLimits/depth-at-limit
+=== RUN   TestLosslessInputStructureLimits/depth-over-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-at-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-over-limit
+=== RUN   TestLosslessInputStructureLimits/escaped-duplicate
+--- PASS: TestLosslessInputStructureLimits (0.60s)
+    --- PASS: TestLosslessInputStructureLimits/depth-at-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/depth-over-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-at-limit (0.53s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-over-limit (0.07s)
+    --- PASS: TestLosslessInputStructureLimits/escaped-duplicate (0.00s)
+=== RUN   TestRequiredPolicyConfiguration
+=== RUN   TestRequiredPolicyConfiguration/nil
+=== RUN   TestRequiredPolicyConfiguration/pointer
+=== RUN   TestRequiredPolicyConfiguration/function
+--- PASS: TestRequiredPolicyConfiguration (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/nil (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/pointer (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/function (0.00s)
+=== RUN   TestPostHandlerFailureNeverRepairsArguments
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+--- PASS: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+=== RUN   TestPostHandlerJournalOutcome
+=== RUN   TestPostHandlerJournalOutcome/result_validator
+=== RUN   TestPostHandlerJournalOutcome/effect_validator
+=== RUN   TestPostHandlerJournalOutcome/postcondition
+=== RUN   TestPostHandlerJournalOutcome/success-delivery-failure
+--- PASS: TestPostHandlerJournalOutcome (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/result_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/effect_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/postcondition (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/success-delivery-failure (0.00s)
+=== RUN   TestPostHandlerArgumentFailuresRemainCorrectable
+--- PASS: TestPostHandlerArgumentFailuresRemainCorrectable (0.00s)
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/canceled
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/expired
+--- PASS: TestAfterClaimPreDispatchFailureIsTruthful (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/canceled (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/expired (0.00s)
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/result_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/postcondition
+--- PASS: TestPostHandlerDeadlineCauseStaysNonretryable (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/result_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/postcondition (0.00s)
+=== RUN   TestPostHandlerFormatterPreservesRecovery
+--- PASS: TestPostHandlerFormatterPreservesRecovery (0.00s)
+=== RUN   TestPostHandlerFormatterBypassAndNestedHandler
+--- PASS: TestPostHandlerFormatterBypassAndNestedHandler (0.00s)
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded
+--- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting (0.01s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded (0.00s)
+=== RUN   TestResultCacheIgnoredConsumerAbortCannotPersistSuccess
+--- PASS: TestResultCacheIgnoredConsumerAbortCannotPersistSuccess (0.00s)
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true
+--- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true (0.00s)
+=== RUN   TestResultCacheBusinessErrorDelivery
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/eligible
+--- PASS: TestResultCacheBusinessErrorDelivery (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/eligible (0.00s)
+=== RUN   TestResultCacheEligibilityIsIndependentOfManifestHints
+--- PASS: TestResultCacheEligibilityIsIndependentOfManifestHints (0.00s)
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/partition
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/get
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/put
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/decode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/missing
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored
+--- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/partition (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/get (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/put (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/decode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/missing (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored (0.00s)
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/eligibility
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/partition
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-miss
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-hit
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/decode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/encode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/put
+--- PASS: TestResultCacheCallbackCancellationStopsFurtherWork (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/eligibility (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/partition (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-miss (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-hit (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/decode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/encode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/put (0.00s)
+=== RUN   TestResultCacheFailureTerminalAbortIsSticky
+--- PASS: TestResultCacheFailureTerminalAbortIsSticky (0.00s)
+=== RUN   TestResultCacheAuthorizesEveryReplay
+=== RUN   TestResultCacheAuthorizesEveryReplay/false
+=== RUN   TestResultCacheAuthorizesEveryReplay/true
+--- PASS: TestResultCacheAuthorizesEveryReplay (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/false (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/true (0.00s)
+=== RUN   TestResultCachePreservesCompleteTypedOutcome
+--- PASS: TestResultCachePreservesCompleteTypedOutcome (0.00s)
+=== RUN   TestResultCacheUsesCanonicalArgsAndAttachments
+--- PASS: TestResultCacheUsesCanonicalArgsAndAttachments (0.00s)
+=== RUN   TestResultCacheFailsClosedOnMissingPartition
+--- PASS: TestResultCacheFailsClosedOnMissingPartition (0.00s)
+=== RUN   TestResultCacheAsyncPolicyAndPrivacy
+--- PASS: TestResultCacheAsyncPolicyAndPrivacy (0.00s)
+=== RUN   TestResultCacheDoesNotCompleteFailedProducer
+--- PASS: TestResultCacheDoesNotCompleteFailedProducer (0.00s)
+=== RUN   TestResultCacheIsolatesAllowedScopes
+--- PASS: TestResultCacheIsolatesAllowedScopes (0.00s)
+=== RUN   TestResultCacheUnsupportedCodecFailsExplicitly
+--- PASS: TestResultCacheUnsupportedCodecFailsExplicitly (0.00s)
+=== RUN   TestResultCacheReplayDoesNotReapplyHostEffects
+--- PASS: TestResultCacheReplayDoesNotReapplyHostEffects (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRequiredSlotMissingCannotExportCheckpoint
+--- PASS: TestRequiredSlotMissingCannotExportCheckpoint (0.00s)
+=== RUN   TestRequiredNullableStateCheckpoint
+=== RUN   TestRequiredNullableStateCheckpoint/false
+=== RUN   TestRequiredNullableStateCheckpoint/true
+--- PASS: TestRequiredNullableStateCheckpoint (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/false (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/true (0.00s)
+=== RUN   TestRequiredMutationConfiguration
+=== RUN   TestRequiredMutationConfiguration/put_nil_env
+=== RUN   TestRequiredMutationConfiguration/put_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_empty_key
+=== RUN   TestRequiredMutationConfiguration/state_zero_env
+=== RUN   TestRequiredMutationConfiguration/state_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_DI_only
+=== RUN   TestRequiredMutationConfiguration/state_empty_key
+=== RUN   TestRequiredMutationConfiguration/session_nil
+=== RUN   TestRequiredMutationConfiguration/session_empty_key
+--- PASS: TestRequiredMutationConfiguration (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_DI_only (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_nil (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_empty_key (0.00s)
+=== RUN   TestRequiredMutationsKeepOptionalReadAndReferenceSemantics
+--- PASS: TestRequiredMutationsKeepOptionalReadAndReferenceSemantics (0.00s)
+=== RUN   TestLosslessDynamicInputIdentity
+--- PASS: TestLosslessDynamicInputIdentity (0.00s)
+=== RUN   TestLosslessNumericSchemaConstraints
+=== RUN   TestLosslessNumericSchemaConstraints/minimum
+=== RUN   TestLosslessNumericSchemaConstraints/maximum
+=== RUN   TestLosslessNumericSchemaConstraints/enum
+=== RUN   TestLosslessNumericSchemaConstraints/fractional
+=== RUN   TestLosslessNumericSchemaConstraints/int64
+--- PASS: TestLosslessNumericSchemaConstraints (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/enum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/fractional (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+=== RUN   TestLosslessTypedExtractorValidation
+--- PASS: TestLosslessTypedExtractorValidation (0.00s)
+=== RUN   TestLosslessInputStructurePolicy
+=== RUN   TestLosslessInputStructurePolicy/case-15
+=== RUN   TestLosslessInputStructurePolicy/case-26
+=== RUN   TestLosslessInputStructurePolicy/case-11
+=== RUN   TestLosslessInputStructurePolicy/case-272
+--- PASS: TestLosslessInputStructurePolicy (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-15 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-26 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-11 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-272 (0.00s)
+=== RUN   TestLosslessTypedInterfaceNumbers
+--- PASS: TestLosslessTypedInterfaceNumbers (0.00s)
+=== RUN   TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals
+--- PASS: TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals (0.00s)
+=== RUN   TestLosslessInputStructureLimits
+=== RUN   TestLosslessInputStructureLimits/depth-at-limit
+=== RUN   TestLosslessInputStructureLimits/depth-over-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-at-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-over-limit
+=== RUN   TestLosslessInputStructureLimits/escaped-duplicate
+--- PASS: TestLosslessInputStructureLimits (0.60s)
+    --- PASS: TestLosslessInputStructureLimits/depth-at-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/depth-over-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-at-limit (0.53s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-over-limit (0.07s)
+    --- PASS: TestLosslessInputStructureLimits/escaped-duplicate (0.00s)
+=== RUN   TestRequiredPolicyConfiguration
+=== RUN   TestRequiredPolicyConfiguration/nil
+=== RUN   TestRequiredPolicyConfiguration/pointer
+=== RUN   TestRequiredPolicyConfiguration/function
+--- PASS: TestRequiredPolicyConfiguration (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/nil (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/pointer (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/function (0.00s)
+=== RUN   TestPostHandlerFailureNeverRepairsArguments
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+--- PASS: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+=== RUN   TestPostHandlerJournalOutcome
+=== RUN   TestPostHandlerJournalOutcome/result_validator
+=== RUN   TestPostHandlerJournalOutcome/effect_validator
+=== RUN   TestPostHandlerJournalOutcome/postcondition
+=== RUN   TestPostHandlerJournalOutcome/success-delivery-failure
+--- PASS: TestPostHandlerJournalOutcome (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/result_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/effect_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/postcondition (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/success-delivery-failure (0.00s)
+=== RUN   TestPostHandlerArgumentFailuresRemainCorrectable
+--- PASS: TestPostHandlerArgumentFailuresRemainCorrectable (0.00s)
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/canceled
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/expired
+--- PASS: TestAfterClaimPreDispatchFailureIsTruthful (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/canceled (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/expired (0.00s)
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/result_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/postcondition
+--- PASS: TestPostHandlerDeadlineCauseStaysNonretryable (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/result_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/postcondition (0.00s)
+=== RUN   TestPostHandlerFormatterPreservesRecovery
+--- PASS: TestPostHandlerFormatterPreservesRecovery (0.00s)
+=== RUN   TestPostHandlerFormatterBypassAndNestedHandler
+--- PASS: TestPostHandlerFormatterBypassAndNestedHandler (0.00s)
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded
+--- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting (0.01s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded (0.00s)
+=== RUN   TestResultCacheIgnoredConsumerAbortCannotPersistSuccess
+--- PASS: TestResultCacheIgnoredConsumerAbortCannotPersistSuccess (0.00s)
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true
+--- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true (0.00s)
+=== RUN   TestResultCacheBusinessErrorDelivery
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/eligible
+--- PASS: TestResultCacheBusinessErrorDelivery (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/eligible (0.00s)
+=== RUN   TestResultCacheEligibilityIsIndependentOfManifestHints
+--- PASS: TestResultCacheEligibilityIsIndependentOfManifestHints (0.00s)
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/partition
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/get
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/put
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/decode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/missing
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored
+--- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/partition (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/get (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/put (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/decode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/missing (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored (0.00s)
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/eligibility
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/partition
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-miss
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-hit
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/decode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/encode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/put
+--- PASS: TestResultCacheCallbackCancellationStopsFurtherWork (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/eligibility (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/partition (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-miss (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-hit (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/decode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/encode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/put (0.00s)
+=== RUN   TestResultCacheFailureTerminalAbortIsSticky
+--- PASS: TestResultCacheFailureTerminalAbortIsSticky (0.00s)
+=== RUN   TestResultCacheAuthorizesEveryReplay
+=== RUN   TestResultCacheAuthorizesEveryReplay/false
+=== RUN   TestResultCacheAuthorizesEveryReplay/true
+--- PASS: TestResultCacheAuthorizesEveryReplay (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/false (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/true (0.00s)
+=== RUN   TestResultCachePreservesCompleteTypedOutcome
+--- PASS: TestResultCachePreservesCompleteTypedOutcome (0.00s)
+=== RUN   TestResultCacheUsesCanonicalArgsAndAttachments
+--- PASS: TestResultCacheUsesCanonicalArgsAndAttachments (0.00s)
+=== RUN   TestResultCacheFailsClosedOnMissingPartition
+--- PASS: TestResultCacheFailsClosedOnMissingPartition (0.00s)
+=== RUN   TestResultCacheAsyncPolicyAndPrivacy
+--- PASS: TestResultCacheAsyncPolicyAndPrivacy (0.00s)
+=== RUN   TestResultCacheDoesNotCompleteFailedProducer
+--- PASS: TestResultCacheDoesNotCompleteFailedProducer (0.00s)
+=== RUN   TestResultCacheIsolatesAllowedScopes
+--- PASS: TestResultCacheIsolatesAllowedScopes (0.00s)
+=== RUN   TestResultCacheUnsupportedCodecFailsExplicitly
+--- PASS: TestResultCacheUnsupportedCodecFailsExplicitly (0.00s)
+=== RUN   TestResultCacheReplayDoesNotReapplyHostEffects
+--- PASS: TestResultCacheReplayDoesNotReapplyHostEffects (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRequiredSlotMissingCannotExportCheckpoint
+--- PASS: TestRequiredSlotMissingCannotExportCheckpoint (0.00s)
+=== RUN   TestRequiredNullableStateCheckpoint
+=== RUN   TestRequiredNullableStateCheckpoint/false
+=== RUN   TestRequiredNullableStateCheckpoint/true
+--- PASS: TestRequiredNullableStateCheckpoint (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/false (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/true (0.00s)
+=== RUN   TestRequiredMutationConfiguration
+=== RUN   TestRequiredMutationConfiguration/state_zero_env
+=== RUN   TestRequiredMutationConfiguration/session_empty_key
+=== RUN   TestRequiredMutationConfiguration/put_zero_env
+=== RUN   TestRequiredMutationConfiguration/put_empty_key
+=== RUN   TestRequiredMutationConfiguration/state_nil_env
+=== RUN   TestRequiredMutationConfiguration/state_DI_only
+=== RUN   TestRequiredMutationConfiguration/state_empty_key
+=== RUN   TestRequiredMutationConfiguration/session_nil
+=== RUN   TestRequiredMutationConfiguration/put_nil_env
+--- PASS: TestRequiredMutationConfiguration (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_zero_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_nil_env (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_DI_only (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/state_empty_key (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/session_nil (0.00s)
+    --- PASS: TestRequiredMutationConfiguration/put_nil_env (0.00s)
+=== RUN   TestRequiredMutationsKeepOptionalReadAndReferenceSemantics
+--- PASS: TestRequiredMutationsKeepOptionalReadAndReferenceSemantics (0.00s)
+=== RUN   TestLosslessDynamicInputIdentity
+--- PASS: TestLosslessDynamicInputIdentity (0.00s)
+=== RUN   TestLosslessNumericSchemaConstraints
+=== RUN   TestLosslessNumericSchemaConstraints/minimum
+=== RUN   TestLosslessNumericSchemaConstraints/maximum
+=== RUN   TestLosslessNumericSchemaConstraints/enum
+=== RUN   TestLosslessNumericSchemaConstraints/fractional
+=== RUN   TestLosslessNumericSchemaConstraints/int64
+--- PASS: TestLosslessNumericSchemaConstraints (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/minimum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/maximum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/enum (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/fractional (0.00s)
+    --- PASS: TestLosslessNumericSchemaConstraints/int64 (0.00s)
+=== RUN   TestLosslessTypedExtractorValidation
+--- PASS: TestLosslessTypedExtractorValidation (0.00s)
+=== RUN   TestLosslessInputStructurePolicy
+=== RUN   TestLosslessInputStructurePolicy/case-15
+=== RUN   TestLosslessInputStructurePolicy/case-26
+=== RUN   TestLosslessInputStructurePolicy/case-11
+=== RUN   TestLosslessInputStructurePolicy/case-272
+--- PASS: TestLosslessInputStructurePolicy (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-15 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-26 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-11 (0.00s)
+    --- PASS: TestLosslessInputStructurePolicy/case-272 (0.00s)
+=== RUN   TestLosslessTypedInterfaceNumbers
+--- PASS: TestLosslessTypedInterfaceNumbers (0.00s)
+=== RUN   TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals
+--- PASS: TestLosslessSchemaTransformPreservesNamedPropertiesAndLiterals (0.00s)
+=== RUN   TestLosslessInputStructureLimits
+=== RUN   TestLosslessInputStructureLimits/depth-at-limit
+=== RUN   TestLosslessInputStructureLimits/depth-over-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-at-limit
+=== RUN   TestLosslessInputStructureLimits/nodes-over-limit
+=== RUN   TestLosslessInputStructureLimits/escaped-duplicate
+--- PASS: TestLosslessInputStructureLimits (0.60s)
+    --- PASS: TestLosslessInputStructureLimits/depth-at-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/depth-over-limit (0.00s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-at-limit (0.53s)
+    --- PASS: TestLosslessInputStructureLimits/nodes-over-limit (0.07s)
+    --- PASS: TestLosslessInputStructureLimits/escaped-duplicate (0.00s)
+=== RUN   TestRequiredPolicyConfiguration
+=== RUN   TestRequiredPolicyConfiguration/pointer
+=== RUN   TestRequiredPolicyConfiguration/function
+=== RUN   TestRequiredPolicyConfiguration/nil
+--- PASS: TestRequiredPolicyConfiguration (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/pointer (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/function (0.00s)
+    --- PASS: TestRequiredPolicyConfiguration/nil (0.00s)
+=== RUN   TestPostHandlerFailureNeverRepairsArguments
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/plain
+=== RUN   TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error
+--- PASS: TestPostHandlerFailureNeverRepairsArguments (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/result_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/effect_validator/tool-error (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/plain (0.00s)
+    --- PASS: TestPostHandlerFailureNeverRepairsArguments/postcondition/tool-error (0.00s)
+=== RUN   TestPostHandlerJournalOutcome
+=== RUN   TestPostHandlerJournalOutcome/result_validator
+=== RUN   TestPostHandlerJournalOutcome/effect_validator
+=== RUN   TestPostHandlerJournalOutcome/postcondition
+=== RUN   TestPostHandlerJournalOutcome/success-delivery-failure
+--- PASS: TestPostHandlerJournalOutcome (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/result_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/effect_validator (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/postcondition (0.00s)
+    --- PASS: TestPostHandlerJournalOutcome/success-delivery-failure (0.00s)
+=== RUN   TestPostHandlerArgumentFailuresRemainCorrectable
+--- PASS: TestPostHandlerArgumentFailuresRemainCorrectable (0.00s)
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/canceled
+=== RUN   TestAfterClaimPreDispatchFailureIsTruthful/expired
+--- PASS: TestAfterClaimPreDispatchFailureIsTruthful (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/canceled (0.00s)
+    --- PASS: TestAfterClaimPreDispatchFailureIsTruthful/expired (0.00s)
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/result_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator
+=== RUN   TestPostHandlerDeadlineCauseStaysNonretryable/postcondition
+--- PASS: TestPostHandlerDeadlineCauseStaysNonretryable (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/result_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/effect_validator (0.00s)
+    --- PASS: TestPostHandlerDeadlineCauseStaysNonretryable/postcondition (0.00s)
+=== RUN   TestPostHandlerFormatterPreservesRecovery
+--- PASS: TestPostHandlerFormatterPreservesRecovery (0.00s)
+=== RUN   TestPostHandlerFormatterBypassAndNestedHandler
+--- PASS: TestPostHandlerFormatterBypassAndNestedHandler (0.00s)
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller
+=== RUN   TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded
+--- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting (0.01s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_pause (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_yield (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_halt (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/toolsy:_control_host_event (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/stream_aborted_by_caller (0.00s)
+    --- PASS: TestPostHandlerDiagnosticCausesDoNotControlRouting/context_deadline_exceeded (0.00s)
+=== RUN   TestResultCacheIgnoredConsumerAbortCannotPersistSuccess
+--- PASS: TestResultCacheIgnoredConsumerAbortCannotPersistSuccess (0.00s)
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false
+=== RUN   TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true
+--- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/false (0.00s)
+    --- PASS: TestResultCacheIgnoredPauseOrCancellationCannotPersistSuccess/true (0.00s)
+=== RUN   TestResultCacheBusinessErrorDelivery
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/direct/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/registry/eligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/ineligible
+=== RUN   TestResultCacheBusinessErrorDelivery/run-call/eligible
+--- PASS: TestResultCacheBusinessErrorDelivery (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/direct/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/registry/eligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/ineligible (0.00s)
+    --- PASS: TestResultCacheBusinessErrorDelivery/run-call/eligible (0.00s)
+=== RUN   TestResultCacheEligibilityIsIndependentOfManifestHints
+--- PASS: TestResultCacheEligibilityIsIndependentOfManifestHints (0.00s)
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/partition
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/get
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/put
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/decode
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/missing
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit
+=== RUN   TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored
+--- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/eligibility (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/partition (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/get (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/put (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/decode (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/missing (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/multiple (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/wire-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/encoded-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/stored-limit (0.00s)
+    --- PASS: TestResultCacheInfrastructureFailuresAreNotInputRepair/invalid-stored (0.00s)
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/eligibility
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/partition
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-miss
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/get-hit
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/decode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/encode
+=== RUN   TestResultCacheCallbackCancellationStopsFurtherWork/put
+--- PASS: TestResultCacheCallbackCancellationStopsFurtherWork (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/eligibility (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/partition (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-miss (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/get-hit (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/decode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/encode (0.00s)
+    --- PASS: TestResultCacheCallbackCancellationStopsFurtherWork/put (0.00s)
+=== RUN   TestResultCacheFailureTerminalAbortIsSticky
+--- PASS: TestResultCacheFailureTerminalAbortIsSticky (0.00s)
+=== RUN   TestResultCacheAuthorizesEveryReplay
+=== RUN   TestResultCacheAuthorizesEveryReplay/false
+=== RUN   TestResultCacheAuthorizesEveryReplay/true
+--- PASS: TestResultCacheAuthorizesEveryReplay (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/false (0.00s)
+    --- PASS: TestResultCacheAuthorizesEveryReplay/true (0.00s)
+=== RUN   TestResultCachePreservesCompleteTypedOutcome
+--- PASS: TestResultCachePreservesCompleteTypedOutcome (0.00s)
+=== RUN   TestResultCacheUsesCanonicalArgsAndAttachments
+--- PASS: TestResultCacheUsesCanonicalArgsAndAttachments (0.00s)
+=== RUN   TestResultCacheFailsClosedOnMissingPartition
+--- PASS: TestResultCacheFailsClosedOnMissingPartition (0.00s)
+=== RUN   TestResultCacheAsyncPolicyAndPrivacy
+--- PASS: TestResultCacheAsyncPolicyAndPrivacy (0.00s)
+=== RUN   TestResultCacheDoesNotCompleteFailedProducer
+--- PASS: TestResultCacheDoesNotCompleteFailedProducer (0.00s)
+=== RUN   TestResultCacheIsolatesAllowedScopes
+--- PASS: TestResultCacheIsolatesAllowedScopes (0.00s)
+=== RUN   TestResultCacheUnsupportedCodecFailsExplicitly
+--- PASS: TestResultCacheUnsupportedCodecFailsExplicitly (0.00s)
+=== RUN   TestResultCacheReplayDoesNotReapplyHostEffects
+--- PASS: TestResultCacheReplayDoesNotReapplyHostEffects (0.00s)
+=== RUN   TestConcurrentSessionRebindExecutionAndCheckpoint
+--- PASS: TestConcurrentSessionRebindExecutionAndCheckpoint (0.02s)
+=== RUN   TestSnapshotCallbacksReenterWithoutLocks
+--- PASS: TestSnapshotCallbacksReenterWithoutLocks (0.00s)
+=== RUN   TestIncompatibleRebindPreservesConfigurationAndState
+--- PASS: TestIncompatibleRebindPreservesConfigurationAndState (0.00s)
+=== RUN   TestRequiredSlotMissingCannotExportCheckpoint
+--- PASS: TestRequiredSlotMissingCannotExportCheckpoint (0.00s)
+=== RUN   TestRequiredNullableStateCheckpoint
+=== RUN   TestRequiredNullableStateCheckpoint/false
+=== RUN   TestRequiredNullableStateCheckpoint/true
+--- PASS: TestRequiredNullableStateCheckpoint (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/false (0.00s)
+    --- PASS: TestRequiredNullableStateCheckpoint/true (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	4.614s

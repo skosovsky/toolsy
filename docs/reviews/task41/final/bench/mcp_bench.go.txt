@@ -1,0 +1,25 @@
+package mcp
+
+import (
+ "context"
+ "fmt"
+ "strings"
+ "testing"
+)
+
+// Measures in-memory bounded frame/response completion and peer disposal, not network conformance.
+func BenchmarkTask41SSEFrameLifecycle(b *testing.B) {
+ b.ReportAllocs()
+ for b.Loop() {
+  peer:=newRPCPeer(b.Context(),nil,func(context.Context,[]byte)error{return nil})
+  pending,_,err:=peer.beginRequest("bench",struct{}{})
+  if err!=nil { b.Fatal(err) }
+  transport:=&StreamableHTTPTransport{peer:peer,maxFrameBytes:512,limits:TransportLimits{MaxLifetimeBytes:4096}}
+  stream:=strings.Repeat(":bounded heartbeat\n\n",16)+fmt.Sprintf("data: {\"jsonrpc\":\"2.0\",\"id\":%s,\"result\":{}}\n\n",pending.ID())
+  err=transport.consumeRequestSSE(b.Context(),strings.NewReader(stream),&sseRequestProvenance{requestID:pending.ID(),method:"bench"})
+  if err!=nil {peer.close(err);b.Fatal(err)}
+  result,err:=pending.Await(b.Context())
+  peer.close(ErrTransportClosed)
+  if err!=nil || string(result)!="{}" {b.Fatalf("response %s: %v",result,err)}
+ }
+}

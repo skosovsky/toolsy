@@ -1,0 +1,274 @@
+[
+  {
+    "commit": "4dec5112a0365dd88ec6ced740a33b3719c05cd3",
+    "evidence": [
+      "docs/reviews/task41/r01-acceptance.md"
+    ]
+  },
+  {
+    "commit": "d1619e81baf390c36e37220dcad71c9716dd5781",
+    "evidence": [
+      "docs/reviews/task41/r02-acceptance.md"
+    ]
+  },
+  {
+    "commit": "322ec4a4bb6efd71bae173d2763647451d1a9153",
+    "evidence": [
+      "docs/reviews/task41/r03-acceptance.md"
+    ]
+  },
+  {
+    "commit": "4f372b2c725a6c4cbb7a94be26cf6e4236624a33",
+    "evidence": [
+      "docs/reviews/task41/r04-acceptance.md"
+    ]
+  },
+  {
+    "commit": "5f80c9ef411d53e56d3591b587e337f325e2ffe7",
+    "evidence": [
+      "docs/reviews/task41/r05-acceptance.md"
+    ]
+  },
+  {
+    "commit": "4ddcb4f20a18413ad710d65358152412efe1a016",
+    "evidence": [
+      "docs/reviews/task41/r06-acceptance.md"
+    ]
+  },
+  {
+    "commit": "d1102f62bea4843d7ee468844b508428b164277f",
+    "evidence": [
+      "docs/reviews/task41/r07-acceptance.md",
+      "docs/reviews/task41/r07/review-a-acceptance.md"
+    ]
+  },
+  {
+    "commit": "df733dd2bfe15dc12c3f9264bd23fb8711fbea4d",
+    "evidence": [
+      "docs/reviews/task41/r08-acceptance.md"
+    ]
+  },
+  {
+    "commit": "9a9062ac2329bbda3e0fceea6ee639fb2604e8e4",
+    "evidence": [
+      "docs/reviews/task41/r09-acceptance.md"
+    ]
+  },
+  {
+    "commit": "4c368324e286fffd8c3a9fb40f482bbbf56b7555",
+    "evidence": [
+      "docs/reviews/task41/r10-acceptance.md"
+    ]
+  },
+  {
+    "commit": "a492d5faa84e8a57b3a10f1626067523a938046f",
+    "evidence": [
+      "docs/reviews/task41/r11-acceptance.md"
+    ]
+  },
+  {
+    "commit": "22782ff060b81b2e5b1532e0f8caac2734cb2934",
+    "evidence": [
+      "docs/reviews/task41/r12-acceptance.md"
+    ]
+  },
+  {
+    "commit": "1180b3a4e8f2eee29208789de3e6d7ed89f933ea",
+    "evidence": []
+  },
+  {
+    "commit": "6f6365b676c3903ed8db8602ddc6ef011d2247a9",
+    "evidence": []
+  },
+  {
+    "commit": "e3fc1f9813fd31a5db7e14236cd02e0b8f795941",
+    "evidence": []
+  },
+  {
+    "commit": "64a40e5498fc6f87313ee1e94268bc72b568b75c",
+    "evidence": [
+      "docs/reviews/task41/r16/r16-acceptance-a.md",
+      "docs/reviews/task41/r16/r16-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "a8bf9fb193014d29d0aa071848e802465d8362bf",
+    "evidence": [
+      "docs/reviews/task41/r17/r17-acceptance-a.md",
+      "docs/reviews/task41/r17/r17-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "71b49fa74de86cf424c8e493a95000d839a39f26",
+    "evidence": [
+      "docs/reviews/task41/r18/r18-acceptance-a.md",
+      "docs/reviews/task41/r18/r18-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "f63179a5af2b22337d7a0d5c916f4d2a5c820549",
+    "evidence": [
+      "docs/reviews/task41/r19/r19-acceptance-a.md",
+      "docs/reviews/task41/r19/r19-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "0700cc526f693b93865393ef9bb3acd16ab9ca4c",
+    "evidence": [
+      "docs/reviews/task41/r20/r20-acceptance-a.md",
+      "docs/reviews/task41/r20/r20-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "e9d80b4ddc37f07c272f2d87da2ce89f447f771c",
+    "evidence": [
+      "docs/reviews/task41/r21/r21-acceptance-a.md",
+      "docs/reviews/task41/r21/r21-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "8ffd009389bf5d099e87d39616f4b17b075c8ed8",
+    "evidence": [
+      "docs/reviews/task41/d01/d01-acceptance-a.md",
+      "docs/reviews/task41/d01/d01-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "c682e306c0238ddcf4a80a7c9c69236461bd851a",
+    "evidence": [
+      "docs/reviews/task41/d02/d02-acceptance-a.md",
+      "docs/reviews/task41/d02/d02-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "f5824b1b64f00341411c99a72f319cdf99c1ab9f",
+    "evidence": [
+      "docs/reviews/task41/d03/d03-acceptance-a.md",
+      "docs/reviews/task41/d03/d03-acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "4b76f5f6f923802d378c332ddaee3c8f9a0bf28b",
+    "evidence": [
+      "docs/reviews/task41/d04-d05/acceptance-a.md",
+      "docs/reviews/task41/d04-d05/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "38314b41d1b164f3537b2603177c310c404578da",
+    "evidence": [
+      "docs/reviews/task41/d09/acceptance-a.md",
+      "docs/reviews/task41/d09/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "77d3a10b9deeef34f125b5c893415d23cdec7fe5",
+    "evidence": [
+      "docs/reviews/task41/d10-d11/acceptance-a.md",
+      "docs/reviews/task41/d10-d11/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "c7eb470fb2d62f31e9072e487ec5beba578b3e88",
+    "evidence": [
+      "docs/reviews/task41/d14/acceptance-a.md",
+      "docs/reviews/task41/d14/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "d9170c1bad1e5268b834924d2f031593f6d9b38e",
+    "evidence": [
+      "docs/reviews/task41/d23/acceptance-a.md",
+      "docs/reviews/task41/d23/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "7331736ac925527fe5efe2711eb59c292a172ffc",
+    "evidence": [
+      "docs/reviews/task41/d24/acceptance-a.md",
+      "docs/reviews/task41/d24/acceptance-b.md"
+    ]
+  },
+  {
+    "commit": "fb7a2bfbf89a889c74e6c9285c59d0d5a2a74a05",
+    "evidence": [
+      "docs/reviews/task41/d25/acceptance-a-initial.md",
+      "docs/reviews/task41/d25/acceptance-a/report-initial-superseded.md",
+      "docs/reviews/task41/d25/acceptance-a/report.md",
+      "docs/reviews/task41/d25/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "fe241b0f4f1ecacacd0842107410ab56f30601ea",
+    "evidence": [
+      "docs/reviews/task41/d27/acceptance-a/report.md",
+      "docs/reviews/task41/d27/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "ad4afe26a4ce637282f197be138f63d60ef9206b",
+    "evidence": [
+      "docs/reviews/task41/d30-d36-rag/acceptance-a/report.md",
+      "docs/reviews/task41/d30-d36-rag/acceptance-b/report-initial.md",
+      "docs/reviews/task41/d30-d36-rag/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "9b7ac3fda391f6330e80c512078924a38ef0c3b6",
+    "evidence": [
+      "docs/reviews/task41/d32/README.md",
+      "docs/reviews/task41/d32/acceptance-a/report.md",
+      "docs/reviews/task41/d32/acceptance-b/REPORT.md"
+    ]
+  },
+  {
+    "commit": "9ac37e39e208611acded6b13949e3e6cdff51655",
+    "evidence": [
+      "docs/reviews/task41/d34/README.md",
+      "docs/reviews/task41/d34/acceptance-a/harness-notes.md",
+      "docs/reviews/task41/d34/acceptance-a/report.md",
+      "docs/reviews/task41/d34/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "6907b805e0298d7b4e5f5535c8fb68fbbd29d00f",
+    "evidence": [
+      "docs/reviews/task41/d36-time/README.md",
+      "docs/reviews/task41/d36-time/acceptance-a/REPORT.md",
+      "docs/reviews/task41/d36-time/acceptance-a/baseline/docs/migration-task41.md",
+      "docs/reviews/task41/d36-time/acceptance-a/baseline/toolkits/memory/README.md",
+      "docs/reviews/task41/d36-time/acceptance-a/baseline/toolkits/timetool/README.md",
+      "docs/reviews/task41/d36-time/acceptance-b/REPORT.md",
+      "docs/reviews/task41/d36-time/acceptance-b/snapshots/docs/migration-task41.md",
+      "docs/reviews/task41/d36-time/acceptance-b/snapshots/toolkits/memory/README.md",
+      "docs/reviews/task41/d36-time/acceptance-b/snapshots/toolkits/timetool/README.md"
+    ]
+  },
+  {
+    "commit": "a87f5ea72929f9e229a701d39645d3164f70e9e1",
+    "evidence": [
+      "docs/reviews/task41/d40/README.md",
+      "docs/reviews/task41/d40/acceptance-a/report.md",
+      "docs/reviews/task41/d40/acceptance-a/scope.md",
+      "docs/reviews/task41/d40/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "0600e12dd7cd73ae3cfe2036932aafb50dadcd74",
+    "evidence": [
+      "docs/reviews/task41/r22-d38-d39/README.md",
+      "docs/reviews/task41/r22-d38-d39/acceptance-a/report.md",
+      "docs/reviews/task41/r22-d38-d39/acceptance-b/report.md"
+    ]
+  },
+  {
+    "commit": "efd446d19283b640f32650a1402f950038ebd7bf",
+    "evidence": [
+      "docs/reviews/task41/r23-docs/README.md",
+      "docs/reviews/task41/r23-docs/acceptance-a/report-final.md",
+      "docs/reviews/task41/r23-docs/acceptance-a/report-initial.md",
+      "docs/reviews/task41/r23-docs/acceptance-b/report-final.md",
+      "docs/reviews/task41/r23-docs/acceptance-b/report.md"
+    ]
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "candidate": "efd446d19283b640f32650a1402f950038ebd7bf",
+  "go": "go version go1.27.1 darwin/arm64",
+  "lint": "golangci-lint has version 2.14.0 built with go1.27.1 from 114493f on 2026-09-24T10:54:53Z",
+  "modules": [
+    ".",
+    "adapters/sandbox/docker",
+    "adapters/sandbox/e2b",
+    "adapters/sandbox/host",
+    "adapters/sandbox/starlark",
+    "adapters/sandbox/wazero",
+    "agents",
+    "contracts/graphql",
+    "contracts/grpc",
+    "contracts/openapi",
+    "examples/resiliency",
+    "ext/toolsyotel",
+    "mcp",
+    "toolkits/document",
+    "toolkits/fstool",
+    "toolkits/httptool",
+    "toolkits/human",
+    "toolkits/mail",
+    "toolkits/memory",
+    "toolkits/prompts",
+    "toolkits/rag",
+    "toolkits/sqltool",
+    "toolkits/timetool",
+    "toolkits/web"
+  ],
+  "worker_count": 4
+}

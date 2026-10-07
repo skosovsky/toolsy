@@ -1,0 +1,31 @@
+package toolsy
+
+import (
+ "context"
+ "errors"
+ "testing"
+)
+
+// Measures bounded synchronous stream delivery and terminal validation; no remote IO.
+func BenchmarkTask41StreamLifecycle(b *testing.B) {
+ for _, mode := range []string{"independent", "terminal", "terminal-sink-stop"} {
+  b.Run(mode, func(b *testing.B) {
+   stop := errors.New("consumer stopped")
+   options := []ToolOption{WithIndependentStream()}
+   if mode != "independent" { options = []ToolOption{WithTerminalStream(4096), WithOutputSchema(map[string]any{"type":"object", "properties":map[string]any{"done":map[string]any{"type":"boolean"}}, "required":[]string{"done"}})} }
+   tool, err := NewStreamTool("bench_stream", "bounded stream", func(_ context.Context, _ *RunEnv, _ struct{}, yield func(Chunk) error) error {
+    for range 4 { if err := yield(Chunk{Event:EventProgress, MimeType:MimeTypeText, Data:[]byte("bounded progress")}); err != nil { return err } }
+    return yield(Chunk{Event:EventResult, MimeType:MimeTypeJSON, Data:[]byte(`{"done":true}`)})
+   }, options...)
+   if err != nil { b.Fatal(err) }
+   input := ToolInput{ArgsJSON:[]byte(`{}`)}
+   env := NewRunEnv(nil)
+   b.ReportAllocs()
+   for b.Loop() {
+    delivered := 0
+    err := tool.Execute(b.Context(), env, input, func(Chunk) error { delivered++; if mode=="terminal-sink-stop" && delivered==2 { return stop }; return nil })
+    if mode=="terminal-sink-stop" { if !errors.Is(err,stop) || delivered!=2 { b.Fatalf("stop contract: %v, delivered%d",err,delivered) } } else if err!=nil || delivered!=5 { b.Fatalf("completion: %v, delivered%d",err,delivered) }
+   }
+  })
+ }
+}

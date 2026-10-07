@@ -1,0 +1,50 @@
+=== RUN   TestRunRejectsOversizedRemoteOutputStreaming
+--- PASS: TestRunRejectsOversizedRemoteOutputStreaming (0.00s)
+=== RUN   TestRunRejectsOversizedRemoteOutput
+--- PASS: TestRunRejectsOversizedRemoteOutput (0.00s)
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/<nil>
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed
+--- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/<nil> (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed (0.00s)
+=== RUN   TestRuntimeLiteralArgvCanonicalScriptAndOwnership
+--- PASS: TestRuntimeLiteralArgvCanonicalScriptAndOwnership (0.00s)
+=== RUN   TestRuntimeRejectsMalformedArgv
+--- PASS: TestRuntimeRejectsMalformedArgv (0.00s)
+=== RUN   TestRunRejectsOversizedRemoteOutputStreaming
+--- PASS: TestRunRejectsOversizedRemoteOutputStreaming (0.00s)
+=== RUN   TestRunRejectsOversizedRemoteOutput
+--- PASS: TestRunRejectsOversizedRemoteOutput (0.00s)
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/<nil>
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed
+--- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/<nil> (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed (0.00s)
+=== RUN   TestRuntimeLiteralArgvCanonicalScriptAndOwnership
+--- PASS: TestRuntimeLiteralArgvCanonicalScriptAndOwnership (0.00s)
+=== RUN   TestRuntimeRejectsMalformedArgv
+--- PASS: TestRuntimeRejectsMalformedArgv (0.00s)
+=== RUN   TestRunRejectsOversizedRemoteOutputStreaming
+--- PASS: TestRunRejectsOversizedRemoteOutputStreaming (0.00s)
+=== RUN   TestRunRejectsOversizedRemoteOutput
+--- PASS: TestRunRejectsOversizedRemoteOutput (0.00s)
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/<nil>
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled
+=== RUN   TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed
+--- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/<nil> (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/context_canceled (0.00s)
+    --- PASS: TestRunCleanupFailurePreservesResultAndPrimaryError/transport_failed (0.00s)
+=== RUN   TestRuntimeLiteralArgvCanonicalScriptAndOwnership
+--- PASS: TestRuntimeLiteralArgvCanonicalScriptAndOwnership (0.00s)
+=== RUN   TestRuntimeRejectsMalformedArgv
+--- PASS: TestRuntimeRejectsMalformedArgv (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/e2b	1.464s

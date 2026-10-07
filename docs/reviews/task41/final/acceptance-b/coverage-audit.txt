@@ -1,0 +1,1 @@
+R01-R23 and D01-D40 mapped; 39 G signatures; 72 exact module checks exit0.

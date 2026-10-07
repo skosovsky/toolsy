@@ -1,0 +1,43 @@
+{
+  "checked_receipt": {
+    "candidate": "6f13a8d98768d24d4cbe74acbbfae1b06c3e1704",
+    "implementation_commit": "efd446d",
+    "snapshot_delta": "session godoc + final documentation only; source runtime unchanged",
+    "exit": 0,
+    "seconds": 568.272,
+    "verified_modules": [
+      "Verify github.com/skosovsky/toolsy@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/adapters/sandbox/docker@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/adapters/sandbox/e2b@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/adapters/sandbox/host@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/adapters/sandbox/starlark@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/adapters/sandbox/wazero@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/httptool@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/agents@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/contracts/graphql@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/contracts/grpc@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/contracts/openapi@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/examples/resiliency@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/ext/toolsyotel@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/mcp@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/document@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/fstool@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/human@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/mail@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/memory@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/prompts@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/rag@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/sqltool@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/timetool@v0.18.0 (GOWORK=off)",
+      "Verify github.com/skosovsky/toolsy/toolkits/web@v0.18.0 (GOWORK=off)"
+    ],
+    "module_count": 24,
+    "source_unchanged": true,
+    "remote_unchanged": true,
+    "mode": "native CLI -prepare-only break; FullChecks=true",
+    "publication": "none; only local bare remote configured"
+  },
+  "before_equals_after": true,
+  "files": 2326,
+  "remote_empty": true
+}

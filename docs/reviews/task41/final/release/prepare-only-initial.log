@@ -1,0 +1,28 @@
+Verify github.com/skosovsky/toolsy@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/adapters/sandbox/docker@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/adapters/sandbox/e2b@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/adapters/sandbox/host@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/adapters/sandbox/starlark@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/adapters/sandbox/wazero@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/httptool@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/agents@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/contracts/graphql@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/contracts/grpc@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/contracts/openapi@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/examples/resiliency@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/ext/toolsyotel@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/mcp@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/document@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/fstool@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/human@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/mail@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/memory@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/prompts@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/rag@v0.18.0 (GOWORK=off)
+Verify github.com/skosovsky/toolsy/toolkits/sqltool@v0.18.0 (GOWORK=off)
+go mod tidy: exit status 1
+go: downloading modernc.org/sqlite v1.60.1
+-> unzip /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/toolsy-release-4132942216/modcache/cache/download/modernc.org/sqlite/@v/v1.60.1.zip: write /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/toolsy-release-4132942216/modcache/modernc.org/sqlite@v1.60.1/lib/sqlite_g_0000000000000014.go: no space left on device
+go: github.com/skosovsky/toolsy/toolkits/sqltool/examples/host imports
+	modernc.org/sqlite: unzip /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/toolsy-release-4132942216/modcache/cache/download/modernc.org/sqlite/@v/v1.60.1.zip: write /var/folders/46/5ywmz5gj26n7mnky51gd60g00000gn/T/toolsy-release-4132942216/modcache/modernc.org/sqlite@v1.60.1/lib/sqlite_g_0000000000000014.go: no space left on device
+

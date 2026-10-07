@@ -1,0 +1,62 @@
+=== RUN   TestJournalRestartDoesNotRedispatchConsumedClaim
+--- PASS: TestJournalRestartDoesNotRedispatchConsumedClaim (0.09s)
+=== RUN   TestJournalConcurrentWorkers
+--- PASS: TestJournalConcurrentWorkers (0.45s)
+=== RUN   TestJournalInterprocessClaim
+--- PASS: TestJournalInterprocessClaim (1.13s)
+=== RUN   TestJournalChild
+    store_test.go:130: subprocess helper
+--- SKIP: TestJournalChild (0.00s)
+=== RUN   TestJournalLimitFailsBeforeClaimPersistence
+--- PASS: TestJournalLimitFailsBeforeClaimPersistence (0.07s)
+=== RUN   TestJournalRemoteCommitCrashRecovery
+--- PASS: TestJournalRemoteCommitCrashRecovery (0.15s)
+=== RUN   TestJournalCrashChild
+    store_test.go:263: abrupt-process-loss helper
+--- SKIP: TestJournalCrashChild (0.00s)
+=== RUN   TestJournalCorruptReverseLinkFailsBeforeDispatch
+--- PASS: TestJournalCorruptReverseLinkFailsBeforeDispatch (0.03s)
+=== RUN   TestJournalRejectsUnusedGrantBeforeDispatch
+--- PASS: TestJournalRejectsUnusedGrantBeforeDispatch (0.05s)
+=== RUN   TestJournalRestartDoesNotRedispatchConsumedClaim
+--- PASS: TestJournalRestartDoesNotRedispatchConsumedClaim (0.05s)
+=== RUN   TestJournalConcurrentWorkers
+--- PASS: TestJournalConcurrentWorkers (0.38s)
+=== RUN   TestJournalInterprocessClaim
+--- PASS: TestJournalInterprocessClaim (1.10s)
+=== RUN   TestJournalChild
+    store_test.go:130: subprocess helper
+--- SKIP: TestJournalChild (0.00s)
+=== RUN   TestJournalLimitFailsBeforeClaimPersistence
+--- PASS: TestJournalLimitFailsBeforeClaimPersistence (0.08s)
+=== RUN   TestJournalRemoteCommitCrashRecovery
+--- PASS: TestJournalRemoteCommitCrashRecovery (0.14s)
+=== RUN   TestJournalCrashChild
+    store_test.go:263: abrupt-process-loss helper
+--- SKIP: TestJournalCrashChild (0.00s)
+=== RUN   TestJournalCorruptReverseLinkFailsBeforeDispatch
+--- PASS: TestJournalCorruptReverseLinkFailsBeforeDispatch (0.04s)
+=== RUN   TestJournalRejectsUnusedGrantBeforeDispatch
+--- PASS: TestJournalRejectsUnusedGrantBeforeDispatch (0.05s)
+=== RUN   TestJournalRestartDoesNotRedispatchConsumedClaim
+--- PASS: TestJournalRestartDoesNotRedispatchConsumedClaim (0.05s)
+=== RUN   TestJournalConcurrentWorkers
+--- PASS: TestJournalConcurrentWorkers (0.45s)
+=== RUN   TestJournalInterprocessClaim
+--- PASS: TestJournalInterprocessClaim (1.11s)
+=== RUN   TestJournalChild
+    store_test.go:130: subprocess helper
+--- SKIP: TestJournalChild (0.00s)
+=== RUN   TestJournalLimitFailsBeforeClaimPersistence
+--- PASS: TestJournalLimitFailsBeforeClaimPersistence (0.07s)
+=== RUN   TestJournalRemoteCommitCrashRecovery
+--- PASS: TestJournalRemoteCommitCrashRecovery (0.13s)
+=== RUN   TestJournalCrashChild
+    store_test.go:263: abrupt-process-loss helper
+--- SKIP: TestJournalCrashChild (0.00s)
+=== RUN   TestJournalCorruptReverseLinkFailsBeforeDispatch
+--- PASS: TestJournalCorruptReverseLinkFailsBeforeDispatch (0.03s)
+=== RUN   TestJournalRejectsUnusedGrantBeforeDispatch
+--- PASS: TestJournalRejectsUnusedGrantBeforeDispatch (0.05s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	7.159s

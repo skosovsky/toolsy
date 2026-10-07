@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "command": [
+    "go",
+    "test",
+    "-race",
+    "-v",
+    "-count=5",
+    "-overlay",
+    "/tmp/toolsy-task41/final-acceptance-a/overlay.json",
+    "-run",
+    "TestFinalA",
+    "."
+  ],
+  "initial_empty_log_failure": "Retained in notes; preceding firstshellreturnedexit1/nooutputwhilefilesystemnearfull, immediate directretryPASS; no productcauseattributed."
+}

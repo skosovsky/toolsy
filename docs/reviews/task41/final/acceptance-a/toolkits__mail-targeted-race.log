@@ -1,0 +1,86 @@
+=== RUN   TestDeclaredBodyRepresentation
+=== RUN   TestDeclaredBodyRepresentation/default_address
+=== RUN   TestDeclaredBodyRepresentation/plain_placeholder
+=== RUN   TestDeclaredBodyRepresentation/default_xml
+=== RUN   TestDeclaredBodyRepresentation/html_looking_plain
+=== RUN   TestDeclaredBodyRepresentation/empty_plain
+=== RUN   TestDeclaredBodyRepresentation/html
+=== RUN   TestDeclaredBodyRepresentation/markdown_input
+=== RUN   TestDeclaredBodyRepresentation/mime_not_parsed
+=== RUN   TestDeclaredBodyRepresentation/invalid_encoding
+--- PASS: TestDeclaredBodyRepresentation (0.03s)
+    --- PASS: TestDeclaredBodyRepresentation/default_address (0.01s)
+    --- PASS: TestDeclaredBodyRepresentation/plain_placeholder (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/default_xml (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html_looking_plain (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/empty_plain (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/markdown_input (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/mime_not_parsed (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/invalid_encoding (0.00s)
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/failure
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/cancellation
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output
+--- PASS: TestHTMLConversionFailureAndCancellationNeverFallback (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/failure (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/cancellation (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output (0.00s)
+=== RUN   TestDeclaredBodyRepresentation
+=== RUN   TestDeclaredBodyRepresentation/default_address
+=== RUN   TestDeclaredBodyRepresentation/plain_placeholder
+=== RUN   TestDeclaredBodyRepresentation/default_xml
+=== RUN   TestDeclaredBodyRepresentation/html_looking_plain
+=== RUN   TestDeclaredBodyRepresentation/empty_plain
+=== RUN   TestDeclaredBodyRepresentation/html
+=== RUN   TestDeclaredBodyRepresentation/markdown_input
+=== RUN   TestDeclaredBodyRepresentation/mime_not_parsed
+=== RUN   TestDeclaredBodyRepresentation/invalid_encoding
+--- PASS: TestDeclaredBodyRepresentation (0.04s)
+    --- PASS: TestDeclaredBodyRepresentation/default_address (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/plain_placeholder (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/default_xml (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html_looking_plain (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/empty_plain (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/markdown_input (0.01s)
+    --- PASS: TestDeclaredBodyRepresentation/mime_not_parsed (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/invalid_encoding (0.00s)
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/failure
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/cancellation
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output
+--- PASS: TestHTMLConversionFailureAndCancellationNeverFallback (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/failure (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/cancellation (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output (0.00s)
+=== RUN   TestDeclaredBodyRepresentation
+=== RUN   TestDeclaredBodyRepresentation/default_address
+=== RUN   TestDeclaredBodyRepresentation/plain_placeholder
+=== RUN   TestDeclaredBodyRepresentation/default_xml
+=== RUN   TestDeclaredBodyRepresentation/html_looking_plain
+=== RUN   TestDeclaredBodyRepresentation/empty_plain
+=== RUN   TestDeclaredBodyRepresentation/html
+=== RUN   TestDeclaredBodyRepresentation/markdown_input
+=== RUN   TestDeclaredBodyRepresentation/mime_not_parsed
+=== RUN   TestDeclaredBodyRepresentation/invalid_encoding
+--- PASS: TestDeclaredBodyRepresentation (0.03s)
+    --- PASS: TestDeclaredBodyRepresentation/default_address (0.01s)
+    --- PASS: TestDeclaredBodyRepresentation/plain_placeholder (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/default_xml (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html_looking_plain (0.01s)
+    --- PASS: TestDeclaredBodyRepresentation/empty_plain (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/html (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/markdown_input (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/mime_not_parsed (0.00s)
+    --- PASS: TestDeclaredBodyRepresentation/invalid_encoding (0.00s)
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/failure
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/cancellation
+=== RUN   TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output
+--- PASS: TestHTMLConversionFailureAndCancellationNeverFallback (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/failure (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/cancellation (0.00s)
+    --- PASS: TestHTMLConversionFailureAndCancellationNeverFallback/invalid_output (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/toolkits/mail	1.368s

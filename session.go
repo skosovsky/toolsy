@@ -109,7 +109,9 @@ func (s *Session) Track() *SessionTrack {
 
 // Execute runs one tool call through the session budget tracker.
 // When call.Env is non-nil, it must be created with NewRunEnv(s) for this session (see ValidateRunEnvSession).
-// call.Env may be nil for DI-only paths; SetState/GetState in tools are then no-ops — prefer NewRunEnv(s) for stateful tracks.
+// call.Env may be nil for DI-only paths. Optional state reads report a missing
+// value; required SetState writes return an error without a usable session.
+// Use NewRunEnv(s) when tools require session state.
 func (s *Session) Execute(ctx context.Context, call ToolCall, yield func(Chunk) error) error {
 	if s == nil {
 		return NewToolNotFoundError()

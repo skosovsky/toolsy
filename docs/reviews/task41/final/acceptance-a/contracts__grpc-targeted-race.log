@@ -1,0 +1,62 @@
+=== RUN   TestReflectFiltersBeforeDescriptorRequests
+--- PASS: TestReflectFiltersBeforeDescriptorRequests (0.02s)
+=== RUN   TestReflectInclusiveDiscoveryLimits
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/over
+--- PASS: TestReflectInclusiveDiscoveryLimits (0.04s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/over (0.00s)
+=== RUN   TestReflectRejectsNegativeLimitsBeforeRPC
+--- PASS: TestReflectRejectsNegativeLimitsBeforeRPC (0.00s)
+=== RUN   TestReflectCancellationAndPerMessageBound
+--- PASS: TestReflectCancellationAndPerMessageBound (0.01s)
+=== RUN   TestReflectFiltersBeforeDescriptorRequests
+--- PASS: TestReflectFiltersBeforeDescriptorRequests (0.01s)
+=== RUN   TestReflectInclusiveDiscoveryLimits
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/over
+--- PASS: TestReflectInclusiveDiscoveryLimits (0.03s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/over (0.00s)
+=== RUN   TestReflectRejectsNegativeLimitsBeforeRPC
+--- PASS: TestReflectRejectsNegativeLimitsBeforeRPC (0.00s)
+=== RUN   TestReflectCancellationAndPerMessageBound
+--- PASS: TestReflectCancellationAndPerMessageBound (0.01s)
+=== RUN   TestReflectFiltersBeforeDescriptorRequests
+--- PASS: TestReflectFiltersBeforeDescriptorRequests (0.01s)
+=== RUN   TestReflectInclusiveDiscoveryLimits
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/services/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/files/over
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/exact
+=== RUN   TestReflectInclusiveDiscoveryLimits/bytes/over
+--- PASS: TestReflectInclusiveDiscoveryLimits (0.04s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/services/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/files/over (0.00s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/exact (0.01s)
+    --- PASS: TestReflectInclusiveDiscoveryLimits/bytes/over (0.00s)
+=== RUN   TestReflectRejectsNegativeLimitsBeforeRPC
+--- PASS: TestReflectRejectsNegativeLimitsBeforeRPC (0.00s)
+=== RUN   TestReflectCancellationAndPerMessageBound
+--- PASS: TestReflectCancellationAndPerMessageBound (0.01s)
+PASS
+ok  	github.com/skosovsky/toolsy/contracts/grpc	1.709s

@@ -1,0 +1,278 @@
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/result
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/soft
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/hard
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/panic
+--- PASS: TestContentPolicy_RedactionPrecedesExactCap (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/result (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/soft (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/hard (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/panic (0.00s)
+=== RUN   TestContentPolicy_RedactorPanicFailsClosed
+--- PASS: TestContentPolicy_RedactorPanicFailsClosed (0.00s)
+=== RUN   TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry
+--- PASS: TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault_ErrorPath
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault_ErrorPath (0.00s)
+=== RUN   TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk
+--- PASS: TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault (0.00s)
+=== RUN   TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs
+--- PASS: TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Enabled
+--- PASS: TestMiddleware_ContentCapture_Enabled (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Truncation
+--- PASS: TestMiddleware_ContentCapture_Truncation (0.00s)
+=== RUN   TestMiddleware_ContentCapture_ErrorOutput
+--- PASS: TestMiddleware_ContentCapture_ErrorOutput (0.00s)
+=== RUN   TestD25DefaultHasNoVendorAttributes
+--- PASS: TestD25DefaultHasNoVendorAttributes (0.00s)
+=== RUN   TestVendorMappingContentMatrix
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=true
+--- PASS: TestVendorMappingContentMatrix (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=true (0.00s)
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true
+--- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true (0.00s)
+=== RUN   TestVendorMappingInvalidUTF8Redactor
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=true
+--- PASS: TestVendorMappingInvalidUTF8Redactor (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=true (0.00s)
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/result
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/soft
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/hard
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/panic
+--- PASS: TestContentPolicy_RedactionPrecedesExactCap (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/result (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/soft (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/hard (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/panic (0.00s)
+=== RUN   TestContentPolicy_RedactorPanicFailsClosed
+--- PASS: TestContentPolicy_RedactorPanicFailsClosed (0.00s)
+=== RUN   TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry
+--- PASS: TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault_ErrorPath
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault_ErrorPath (0.00s)
+=== RUN   TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk
+--- PASS: TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault (0.00s)
+=== RUN   TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs
+--- PASS: TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Enabled
+--- PASS: TestMiddleware_ContentCapture_Enabled (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Truncation
+--- PASS: TestMiddleware_ContentCapture_Truncation (0.00s)
+=== RUN   TestMiddleware_ContentCapture_ErrorOutput
+--- PASS: TestMiddleware_ContentCapture_ErrorOutput (0.00s)
+=== RUN   TestD25DefaultHasNoVendorAttributes
+--- PASS: TestD25DefaultHasNoVendorAttributes (0.00s)
+=== RUN   TestVendorMappingContentMatrix
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=true
+--- PASS: TestVendorMappingContentMatrix (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=true (0.00s)
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true
+--- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true (0.00s)
+=== RUN   TestVendorMappingInvalidUTF8Redactor
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=true
+--- PASS: TestVendorMappingInvalidUTF8Redactor (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=true (0.00s)
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/result
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/soft
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/hard
+=== RUN   TestContentPolicy_RedactionPrecedesExactCap/panic
+--- PASS: TestContentPolicy_RedactionPrecedesExactCap (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/result (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/soft (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/hard (0.00s)
+    --- PASS: TestContentPolicy_RedactionPrecedesExactCap/panic (0.00s)
+=== RUN   TestContentPolicy_RedactorPanicFailsClosed
+--- PASS: TestContentPolicy_RedactorPanicFailsClosed (0.00s)
+=== RUN   TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry
+--- PASS: TestMiddleware_ContentCapture_SoftErrorLegacyTextViaRegistry (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault_ErrorPath
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault_ErrorPath (0.00s)
+=== RUN   TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk
+--- PASS: TestMiddleware_ContentCapture_YieldErrorSkipsUndeliveredChunk (0.00s)
+=== RUN   TestMiddleware_ContentCapture_DisabledDefault
+--- PASS: TestMiddleware_ContentCapture_DisabledDefault (0.00s)
+=== RUN   TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs
+--- PASS: TestMiddleware_ContentCapture_AlwaysSetsOperationAttrs (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Enabled
+--- PASS: TestMiddleware_ContentCapture_Enabled (0.00s)
+=== RUN   TestMiddleware_ContentCapture_Truncation
+--- PASS: TestMiddleware_ContentCapture_Truncation (0.00s)
+=== RUN   TestMiddleware_ContentCapture_ErrorOutput
+--- PASS: TestMiddleware_ContentCapture_ErrorOutput (0.00s)
+=== RUN   TestD25DefaultHasNoVendorAttributes
+--- PASS: TestD25DefaultHasNoVendorAttributes (0.00s)
+=== RUN   TestVendorMappingContentMatrix
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/result/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/soft/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/hard/vendor=true/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=false/capture=true
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=false
+=== RUN   TestVendorMappingContentMatrix/panic/vendor=true/capture=true
+--- PASS: TestVendorMappingContentMatrix (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/result/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/soft/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/hard/vendor=true/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=false/capture=true (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=false (0.00s)
+    --- PASS: TestVendorMappingContentMatrix/panic/vendor=true/capture=true (0.00s)
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false
+=== RUN   TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true
+--- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=false/vendor=true (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=false (0.00s)
+    --- PASS: TestChunkRedactionBoundaryIsNotWholeSecretSanitation/whole=true/vendor=true (0.00s)
+=== RUN   TestVendorMappingInvalidUTF8Redactor
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=false
+=== RUN   TestVendorMappingInvalidUTF8Redactor/result/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/soft/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/hard/vendor=true
+=== RUN   TestVendorMappingInvalidUTF8Redactor/panic/vendor=true
+--- PASS: TestVendorMappingInvalidUTF8Redactor (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=false (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/result/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/soft/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/hard/vendor=true (0.00s)
+    --- PASS: TestVendorMappingInvalidUTF8Redactor/panic/vendor=true (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	1.496s

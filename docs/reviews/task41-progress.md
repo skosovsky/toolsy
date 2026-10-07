@@ -18,7 +18,7 @@ its own hash). Percentages measure these criteria, not universal bug freedom.
 
 ## Sequential checklist
 
-Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; row 38 is accepted and committed as `0600e12`; rows 39–40 are pending. Associated D decisions are recorded in their row's
+Row 01 is accepted and committed as `4dec511`; row 02 is accepted and committed as `d1619e8`; row 03 is accepted and committed as `322ec4a`; row 04 is accepted and committed as `4f372b2`; row 05 is accepted and committed as `5f80c9e`; row 06 is accepted and committed as `4ddcb4f`; row 07 is accepted and committed as `d1102f6`; row 08 is accepted and committed as `df733dd`; row 09 is accepted and committed as `9a9062a`; row 10 is accepted and committed as `4c36832`; row 11 is accepted and committed as `a492d5f`; row 12 is accepted and committed as `22782ff`; row 13 is accepted and committed as `1180b3a`; row 14 is accepted and committed as `6f6365b`; row 15 is accepted and committed as `e3fc1f9`; row 16 is accepted and committed as `64a40e5`; row 17 is accepted and committed as `a8bf9fb`; row 18 is accepted and committed as `71b49fa`; row 19 is accepted and committed as `f63179a`; row 20 is accepted and committed as `0700cc5`; row 21 is accepted and committed as `e9d80b4`; row 22 is accepted and committed as `8ffd009`; row 23 is accepted and committed as `c682e30`; row 24 is accepted and committed as `f5824b1`; row 25 is accepted and committed as `4b76f5f`; row 26 is accepted and committed as `38314b4`; row 27 is accepted and committed as `77d3a10`; row 28 is accepted and committed as `c7eb470`; row 29 is accepted and committed as `d9170c1`; row 30 is accepted and committed as `7331736`; row 31 is accepted and committed as `fb7a2bf`; row 32 is accepted and committed as `fe241b0`; row 33 is accepted and committed as `ad4afe2`; row 34 is accepted and committed as `9b7ac3f`; row 35 is accepted and committed as `9ac37e3`; row 36 is accepted and committed as `6907b80`; row 37 is accepted and committed as `a87f5ea`; row 38 is accepted and committed as `0600e12`; row 39 is accepted and committed as `efd446d`; row 40 is accepted at 100% by both independent final reviewers; its separate signed commit is `docs: final verification` (resolve its identity from Git history). Associated D decisions are recorded in their row's
 evidence; a retained design needs specific justification and accurate contracts.
 Unresolved D work cannot be silently deferred.
 
@@ -1719,3 +1719,59 @@ B own rootrace release52.651s/generator49.299s, three module race3/four lint0,
 FAIL141/currentpadding+untracked PASS. Reports/logs/probes archived task41/r23-docs
 without caches, Go artifacts renamed.txt. Accepted for separate signed commit
 `docs: execution bounds`. Row40 still required; no production publish/push.
+
+
+### 40 — Final verification (accepted)
+
+Row39 accepted and signed as efd446d (`docs: execution bounds`). Candidate
+production baseline for final verification is this committed tree; task41 source
+review baseline remains58085005dc7e4a0747b2a57af2ef2f62ba2c3750.
+
+Five explicit final acceptance criteria,20% each:
+1. Coverage audit accounts for R01–R23 and every D01–D40, preserves BYOT/core
+   independence and clear-break migrations,39 separate signed task commits and
+   two independent100% per-row verdicts; P1 baseline failures have actual evidence.
+2. Fresh tests/race/pinnedlint pass all24 committed modules with exact inventory,
+   GOWORK=off and explicit exit codes. Skips and environment/fixture faults are
+   disclosed and cannot substitute passing verification.
+3. Targeted adversarial regressions rerun changed authority/numeric/effect/cache/
+   session/transport/sandbox/generator/toolkit boundaries. Necessary hotpath/lock/
+   stream lifecycle benchmarks run with scope/allocation/timing limits documented.
+4. Actual committed all-module release candidate artifacts and consumer graph are
+   verified in disposable repositories/local bare remotes; original checkout/index/
+   files/refs preserved, no production publication/push. Workspace tests alone
+   are not artifact verification.
+5. Current documentation/final report contain task→commit→two verdicts, exact
+   D decisions/check evidence/limitations; two fresh independent whole-task
+   reviewers accept100% with no unresolved detected errors.
+
+Mandatory post-acceptance gate: only after both100% verdicts, commit row40
+separately and verify its signature/clean tree before whole-goal completion.
+This preserves the required acceptance→commit order; it is not a waived gate.
+
+
+Row40 final parent checks complete: exact24tracked modules match go.work; each
+fresh tests/race/pinnedlint2.14.0 exits0 (72/72). Targeted core race5 + MCP/host
+race3 pass named execution receipts; required/state/numeric/posteffect/cache/
+Rebind/cancellation/descendant bounds exercised.36benchmark samples cover Execute/
+session lock/snapshot/stream/MCP/OTel/RAG, allocations recorded without speedclaim.
+
+Native all24module release CLI prepare-only break/FullChecks=true exits0 after
+568.272s. Disposable source6f13a8d contains only finalgodoc/migration/ledger/report
+changes from signedefd446d; manifests identical, sessionAST equal. Release candidate
+7f17f4 aligns24module graph tov0.18.0, own artifact consumers compile GOWORKoff,
+fullcandidate lint/race/preflight pass.24 ZIP hashes match actualVCS checksums,
+including LICENSE inheritance. Source HEAD/branch/index/files/refs and localbareremote
+unchanged after cleanup; no productionpublication. First22module attempt failed
+no-space; retained as failure;150oldownedlintcaches removed, fullretry provedpass.
+
+Finalreport docs/reviews/task41-final.md maps all39implementationtasks→signed
+commit→twoindependent100%verdicts, covers23R/40D and P1behavioralbaselinefailure
+evidence. Finalscopeaudit corrected stale customHTTPclientmerge and statewrite
+no-op docpromises; runtime AST unchanged, finalrootlint0. Two fresh whole-task
+reviewers independently accepted all five criteria at 20/20 each (100%).
+No uncovered requirements or unresolved detected defects remain in the audited
+scope. Final A/B reports and their independent probes/logs are archived under
+`task41/final/acceptance-a` and `task41/final/acceptance-b`; neither read the peer
+final report. Row40 accepted for separate signed `docs: final verification`.
+After that commit, verify its signature and clean tree before goal completion.

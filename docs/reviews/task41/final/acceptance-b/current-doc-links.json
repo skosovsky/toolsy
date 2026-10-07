@@ -1,0 +1,15 @@
+{
+  "files": [
+    "README.md",
+    "docs/README.md",
+    "docs/public-api-contracts.md",
+    "docs/migration-task41.md",
+    "docs/task41-documentation-checklist.md",
+    "docs/generator-contract.md",
+    "docs/sandbox-deadlines.md",
+    "docs/sandbox-result-contract.md"
+  ],
+  "local_paths_checked": 213,
+  "missing": [],
+  "harness_note": "First naive regex parsed Go generic method calls as Markdown links; corrected to exclude code fences and require link label."
+}

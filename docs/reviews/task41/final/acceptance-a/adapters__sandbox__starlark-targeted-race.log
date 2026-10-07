@@ -1,0 +1,64 @@
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty
+--- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty (0.00s)
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty
+--- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty (0.00s)
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty
+=== RUN   TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty
+--- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_blank_lines (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/success_empty (0.00s)
+    --- PASS: TestRunPreservesExactPrintedBytesForEveryGuestExit/failure_empty (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark	1.472s
+=== RUN   TestPolicyRecipeExactOutput
+--- PASS: TestPolicyRecipeExactOutput (0.00s)
+=== RUN   TestPolicyRecipeCallerCancellation
+--- PASS: TestPolicyRecipeCallerCancellation (0.00s)
+=== RUN   TestPolicyRecipeStepsAreNotCallerTimeout
+--- PASS: TestPolicyRecipeStepsAreNotCallerTimeout (0.00s)
+=== RUN   TestPolicyRecipeExactOutput
+--- PASS: TestPolicyRecipeExactOutput (0.00s)
+=== RUN   TestPolicyRecipeCallerCancellation
+--- PASS: TestPolicyRecipeCallerCancellation (0.00s)
+=== RUN   TestPolicyRecipeStepsAreNotCallerTimeout
+--- PASS: TestPolicyRecipeStepsAreNotCallerTimeout (0.00s)
+=== RUN   TestPolicyRecipeExactOutput
+--- PASS: TestPolicyRecipeExactOutput (0.00s)
+=== RUN   TestPolicyRecipeCallerCancellation
+--- PASS: TestPolicyRecipeCallerCancellation (0.00s)
+=== RUN   TestPolicyRecipeStepsAreNotCallerTimeout
+--- PASS: TestPolicyRecipeStepsAreNotCallerTimeout (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark/examples/policy	1.470s

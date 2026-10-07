@@ -1,0 +1,62 @@
+=== RUN   TestCollectionWriterFailureStopsForkingGuest
+--- PASS: TestCollectionWriterFailureStopsForkingGuest (0.01s)
+=== RUN   TestRunReportsWorkspaceCleanupFailure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit
+--- PASS: TestRunReportsWorkspaceCleanupFailure (1.09s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure (1.04s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit (0.05s)
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue
+--- PASS: TestRunStopsDescendantsAfterGuestCompletion (0.08s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue (0.03s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue (0.02s)
+=== RUN   TestOutputOverflowStopsDescendantsAndRemovesWorkspace
+--- PASS: TestOutputOverflowStopsDescendantsAndRemovesWorkspace (0.17s)
+=== RUN   TestCollectionWriterFailureStopsForkingGuest
+--- PASS: TestCollectionWriterFailureStopsForkingGuest (0.02s)
+=== RUN   TestRunReportsWorkspaceCleanupFailure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit
+--- PASS: TestRunReportsWorkspaceCleanupFailure (1.08s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure (1.04s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit (0.04s)
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue
+--- PASS: TestRunStopsDescendantsAfterGuestCompletion (0.08s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue (0.02s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue (0.02s)
+=== RUN   TestOutputOverflowStopsDescendantsAndRemovesWorkspace
+--- PASS: TestOutputOverflowStopsDescendantsAndRemovesWorkspace (0.17s)
+=== RUN   TestCollectionWriterFailureStopsForkingGuest
+--- PASS: TestCollectionWriterFailureStopsForkingGuest (0.01s)
+=== RUN   TestRunReportsWorkspaceCleanupFailure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure
+=== RUN   TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit
+--- PASS: TestRunReportsWorkspaceCleanupFailure (1.08s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure (1.04s)
+    --- PASS: TestRunReportsWorkspaceCleanupFailure/cleanup-failure-exit (0.04s)
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse
+=== RUN   TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue
+--- PASS: TestRunStopsDescendantsAfterGuestCompletion (0.08s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit0/redirectedtrue (0.03s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedfalse (0.01s)
+    --- PASS: TestRunStopsDescendantsAfterGuestCompletion/exit7/redirectedtrue (0.02s)
+=== RUN   TestOutputOverflowStopsDescendantsAndRemovesWorkspace
+--- PASS: TestOutputOverflowStopsDescendantsAndRemovesWorkspace (0.17s)
+PASS
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	5.478s

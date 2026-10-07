@@ -1,0 +1,12 @@
+package toolsy_test
+import("context";"encoding/json";"testing"; t "github.com/skosovsky/toolsy")
+func TestFinalIndependentNumericPublic(tst *testing.T){
+ // Arrange.
+ count:=0
+ tool,err:=t.NewDynamicToolFromSpec(t.DynamicToolSpec{Name:"exact",Description:"Exact",Schema:t.MapSchemaProvider{"type":"object","properties":map[string]any{"v":map[string]any{"type":"integer","enum":[]any{json.Number("9007199254740993")}}},"required":[]any{"v"}},Handler:func(_ context.Context,_ *t.RunEnv,m map[string]any,_ func(t.Chunk)error)error{count++;if _,ok:=m["v"].(json.Number);!ok{tst.Fatalf("numeric type %T",m["v"])};return nil}})
+ if err!=nil{tst.Fatal(err)}
+ // Act and Assert.
+ for _,tc:=range []struct{raw string;ok bool}{{`{"v":9007199254740993}`,true},{`{"v":900719925474099300e-2}`,true},{`{"v":9007199254740992}`,false},{`{"v":9007199254740993.1}`,false},{`{"v":9007199254740993,"\u0076":9007199254740993}`,false},{`{"v":9007199254740993} {}`,false}}{
+ e:=tool.Execute(context.Background(),t.NewRunEnv(nil),t.ToolInput{ArgsJSON:[]byte(tc.raw)},func(t.Chunk)error{return nil});if (e==nil)!=tc.ok{tst.Fatalf("%s expected%v got%v",tc.raw,tc.ok,e)}}
+ if count!=2{tst.Fatalf("handler calls%d",count)}
+}

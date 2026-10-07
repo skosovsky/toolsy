@@ -1,0 +1,362 @@
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/reserve
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/backup
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/install
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup
+--- PASS: TestFinalizeFailuresRestoreEarlierFiles (0.03s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/reserve (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/backup (0.01s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/install (0.01s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first (0.01s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup (0.00s)
+=== RUN   TestFailedRollbackPreservesRecoveryCopies
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_a
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_b
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/remove_a
+--- PASS: TestFailedRollbackPreservesRecoveryCopies (0.01s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_a (0.01s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_b (0.00s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/remove_a (0.00s)
+=== RUN   TestNewTargetsRollbackToAbsence
+--- PASS: TestNewTargetsRollbackToAbsence (0.00s)
+=== RUN   TestDocumentedPresenceFixtureRegeneratesExactly
+--- PASS: TestDocumentedPresenceFixtureRegeneratesExactly (0.03s)
+=== RUN   TestRenderManifestNonStreamNoAsyncWrapper
+=== PAUSE TestRenderManifestNonStreamNoAsyncWrapper
+=== RUN   TestCommitFilesWithRollbackOnFailure
+--- PASS: TestCommitFilesWithRollbackOnFailure (0.00s)
+=== CONT  TestRenderManifestNonStreamNoAsyncWrapper
+--- PASS: TestRenderManifestNonStreamNoAsyncWrapper (0.01s)
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/reserve
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/backup
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/install
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup
+--- PASS: TestFinalizeFailuresRestoreEarlierFiles (0.02s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/reserve (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/backup (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/install (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup (0.00s)
+=== RUN   TestFailedRollbackPreservesRecoveryCopies
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_a
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_b
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/remove_a
+--- PASS: TestFailedRollbackPreservesRecoveryCopies (0.01s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_a (0.00s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_b (0.00s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/remove_a (0.00s)
+=== RUN   TestNewTargetsRollbackToAbsence
+--- PASS: TestNewTargetsRollbackToAbsence (0.00s)
+=== RUN   TestDocumentedPresenceFixtureRegeneratesExactly
+--- PASS: TestDocumentedPresenceFixtureRegeneratesExactly (0.02s)
+=== RUN   TestRenderManifestNonStreamNoAsyncWrapper
+=== PAUSE TestRenderManifestNonStreamNoAsyncWrapper
+=== RUN   TestCommitFilesWithRollbackOnFailure
+--- PASS: TestCommitFilesWithRollbackOnFailure (0.00s)
+=== CONT  TestRenderManifestNonStreamNoAsyncWrapper
+--- PASS: TestRenderManifestNonStreamNoAsyncWrapper (0.01s)
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/reserve
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/backup
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/install
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last
+=== RUN   TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup
+--- PASS: TestFinalizeFailuresRestoreEarlierFiles (0.03s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/reserve (0.01s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/backup (0.01s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/install (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_first (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_last (0.00s)
+    --- PASS: TestFinalizeFailuresRestoreEarlierFiles/cancel_after_backup (0.00s)
+=== RUN   TestFailedRollbackPreservesRecoveryCopies
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_a
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/restore_b
+=== RUN   TestFailedRollbackPreservesRecoveryCopies/remove_a
+--- PASS: TestFailedRollbackPreservesRecoveryCopies (0.01s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_a (0.01s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/restore_b (0.00s)
+    --- PASS: TestFailedRollbackPreservesRecoveryCopies/remove_a (0.00s)
+=== RUN   TestNewTargetsRollbackToAbsence
+--- PASS: TestNewTargetsRollbackToAbsence (0.00s)
+=== RUN   TestDocumentedPresenceFixtureRegeneratesExactly
+--- PASS: TestDocumentedPresenceFixtureRegeneratesExactly (0.02s)
+=== RUN   TestRenderManifestNonStreamNoAsyncWrapper
+=== PAUSE TestRenderManifestNonStreamNoAsyncWrapper
+=== RUN   TestCommitFilesWithRollbackOnFailure
+--- PASS: TestCommitFilesWithRollbackOnFailure (0.00s)
+=== CONT  TestRenderManifestNonStreamNoAsyncWrapper
+--- PASS: TestRenderManifestNonStreamNoAsyncWrapper (0.01s)
+PASS
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	1.712s
+=== RUN   TestInvalidPresenceFailsBeforeDispatch
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans
+--- PASS: TestInvalidPresenceFailsBeforeDispatch (0.28s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans (0.01s)
+=== RUN   TestInvalidPresenceFailsBeforeDispatch
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans
+--- PASS: TestInvalidPresenceFailsBeforeDispatch (0.27s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans (0.01s)
+=== RUN   TestInvalidPresenceFailsBeforeDispatch
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetime
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_string
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_integer
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_r_boolean
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers
+=== RUN   TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans
+--- PASS: TestInvalidPresenceFailsBeforeDispatch (0.25s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/omit_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetime (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_datetimes (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_string (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_integer (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_r_boolean (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_r_nullable_booleans (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_strings (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_integers (0.01s)
+    --- PASS: TestInvalidPresenceFailsBeforeDispatch/null_item_o_nullable_booleans (0.01s)
+PASS
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	2.261s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+testing: warning: no tests to run
+PASS
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.458s [no tests to run]

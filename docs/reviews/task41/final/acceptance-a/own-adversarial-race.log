@@ -1,0 +1,22 @@
+=== RUN   TestFinalAExactAdversarial
+--- PASS: TestFinalAExactAdversarial (0.00s)
+=== RUN   TestFinalAKnownPhaseRejectsMisleadingCauses
+--- PASS: TestFinalAKnownPhaseRejectsMisleadingCauses (0.00s)
+=== RUN   TestFinalAExactAdversarial
+--- PASS: TestFinalAExactAdversarial (0.00s)
+=== RUN   TestFinalAKnownPhaseRejectsMisleadingCauses
+--- PASS: TestFinalAKnownPhaseRejectsMisleadingCauses (0.00s)
+=== RUN   TestFinalAExactAdversarial
+--- PASS: TestFinalAExactAdversarial (0.00s)
+=== RUN   TestFinalAKnownPhaseRejectsMisleadingCauses
+--- PASS: TestFinalAKnownPhaseRejectsMisleadingCauses (0.00s)
+=== RUN   TestFinalAExactAdversarial
+--- PASS: TestFinalAExactAdversarial (0.00s)
+=== RUN   TestFinalAKnownPhaseRejectsMisleadingCauses
+--- PASS: TestFinalAKnownPhaseRejectsMisleadingCauses (0.00s)
+=== RUN   TestFinalAExactAdversarial
+--- PASS: TestFinalAExactAdversarial (0.00s)
+=== RUN   TestFinalAKnownPhaseRejectsMisleadingCauses
+--- PASS: TestFinalAKnownPhaseRejectsMisleadingCauses (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.301s

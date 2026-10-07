@@ -1,0 +1,65 @@
+[
+  {
+    "module": "toolkits/httptool",
+    "pattern": "HostPolicy|SafeTransportRejects|HostSyntax|Redirect|PinnedDial|Response.*UTF|ResponseFailure",
+    "exit": 0,
+    "seconds": 2.731,
+    "passed": 210
+  },
+  {
+    "module": "mcp",
+    "pattern": "CanceledSubscription|SubscriptionRetirement|RetiredSubscription|CancelInProgress|FullToolDiscovery|ToolDiscovery|DiscoveryCancel|Frame|Queue",
+    "exit": 0,
+    "seconds": 8.442,
+    "passed": 105
+  },
+  {
+    "module": "contracts/grpc",
+    "pattern": "Reflect.*(Filter|Limit|Cancel)|Excluded",
+    "exit": 0,
+    "seconds": 2.772,
+    "passed": 30
+  },
+  {
+    "module": "toolkits/memory",
+    "pattern": "R18Public|ScratchpadCancel|Structured",
+    "exit": 0,
+    "seconds": 2.154,
+    "passed": 27
+  },
+  {
+    "module": "toolkits/mail",
+    "pattern": "Representation|HTMLConversion|Plaintext",
+    "exit": 0,
+    "seconds": 1.826,
+    "passed": 42
+  },
+  {
+    "module": "toolkits/document",
+    "pattern": "WordML|Public.*DOCX|Separator",
+    "exit": 0,
+    "seconds": 2.119,
+    "passed": 33
+  },
+  {
+    "module": "ext/toolsyotel",
+    "pattern": "Vendor|Langfuse|Capture|Redact",
+    "exit": 0,
+    "seconds": 2.11,
+    "passed": 138
+  },
+  {
+    "module": "adapters/sandbox/starlark",
+    "pattern": "Exact|Whitespace|Output|PolicyRecipe",
+    "exit": 0,
+    "seconds": 2.086,
+    "passed": 30
+  },
+  {
+    "module": "adapters/sandbox/e2b",
+    "pattern": "Argv|Output|Cleanup",
+    "exit": 0,
+    "seconds": 2.029,
+    "passed": 24
+  }
+]
