@@ -6,7 +6,7 @@ require (
 	github.com/skosovsky/flowy v0.13.0
 	github.com/skosovsky/guardy v0.13.0
 	github.com/skosovsky/prompty v0.15.0
-	github.com/skosovsky/toolsy v0.18.0
+	github.com/skosovsky/toolsy v0.19.1
 )
 
 require (
@@ -22,5 +22,3 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../..

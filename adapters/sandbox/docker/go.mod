@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/opencontainers/image-spec v1.1.1
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.19.1
 	github.com/stretchr/testify v1.12.1
 )
 
@@ -43,5 +43,3 @@ require (
 	google.golang.org/grpc v1.84.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../../..
