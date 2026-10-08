@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration_test
 
 import (
@@ -135,7 +137,7 @@ func (model) ExecuteStream(context.Context, *prompty.PromptExecution, prompty.St
 }
 
 //nolint:gocognit // Keep native correlation and exact-number assertions in the same end-to-end fixture.
-func TestRealNativeCallsSourceSchemaAndExactNumbers(t *testing.T) {
+func TestIntegrationRealNativeCallsSourceSchemaAndExactNumbers(t *testing.T) {
 	// Arrange: real prompt schema/scope and typed prepared tools; only provider is offline.
 	ctx := context.Background()
 	var calls atomic.Int32
@@ -201,7 +203,7 @@ func TestRealNativeCallsSourceSchemaAndExactNumbers(t *testing.T) {
 		}
 	}
 }
-func TestRealApprovalBarrierAndResume(t *testing.T) {
+func TestIntegrationRealApprovalBarrierAndResume(t *testing.T) {
 	// Arrange.
 	ctx := context.Background()
 	store := toolsy.NewMemoryOperationStore()
@@ -251,7 +253,7 @@ func TestRealApprovalBarrierAndResume(t *testing.T) {
 	}
 }
 
-func TestRealGuardDecisionsAndNoAutomaticRetry(t *testing.T) {
+func TestIntegrationRealGuardDecisionsAndNoAutomaticRetry(t *testing.T) {
 	// Arrange: canonical decisions preserve separate host paths.
 	cases := []struct {
 		report *guardy.Report
@@ -278,7 +280,7 @@ type state struct {
 }
 
 //nolint:gocognit // Exercise the real dispatch/reconcile state machine in one readable recovery fixture.
-func TestRealDurableActivityReconcilesDeliveryLossViaAuthorizedReplay(t *testing.T) {
+func TestIntegrationRealDurableActivityReconcilesDeliveryLossViaAuthorizedReplay(t *testing.T) {
 	// Arrange: real continuation journal plus reopened durable tool journal.
 	ctx := context.Background()
 	path := t.TempDir() + "/operations.json"

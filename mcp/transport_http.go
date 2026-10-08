@@ -911,6 +911,12 @@ func hasReservedHTTP400RPCError(fields map[string]json.RawMessage) (bool, error)
 	switch code {
 	case JSONRPCHeaderMismatch, JSONRPCMissingRequiredClientCapability, JSONRPCUnsupportedProtocolVersion:
 		return true, nil
+	case JSONRPCParseError,
+		JSONRPCInvalidRequest,
+		JSONRPCMethodNotFound,
+		JSONRPCInvalidParams,
+		JSONRPCInternalError:
+		return false, nil
 	default:
 		return false, nil
 	}

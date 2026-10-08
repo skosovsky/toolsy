@@ -48,11 +48,10 @@ func DecodeOutcomeAs[T any](o ToolOutcome) (*T, error) {
 	if o.EmptyResult || o.Noop {
 		return nil, NewSchemaError("cannot decode successful outcome without a value")
 	}
-	chunk := Chunk{
-		Event:    EventResult,
-		Data:     o.Result,
-		MimeType: o.ResultMimeType,
-	}
+	var chunk Chunk
+	chunk.Event = EventResult
+	chunk.Data = o.Result
+	chunk.MimeType = o.ResultMimeType
 	return DecodeChunkAs[T](chunk)
 }
 
@@ -225,6 +224,14 @@ func runCallInfraError(err error) bool {
 	case CodeToolNotFound, CodeShutdown, CodeMaxCallsExceeded, CodeRegistryNotReady,
 		CodeDependencyMissing, CodeToolsContractMissing, CodePolicyDenied, CodeCapabilityDenied:
 		return true
+	case CodeSchemaInvalid,
+		CodeValidationFailed,
+		CodeTimeout,
+		CodeInternal,
+		CodeBudgetExceeded,
+		CodeStateCodecMissing,
+		CodeRemoteExecution:
+		return false
 	default:
 		return false
 	}

@@ -102,10 +102,9 @@ func YieldControl(yield func(Chunk) error, sig ControlSignal) error {
 		return invalidControl("nil delivery callback")
 	}
 	ctrlErr := ControlErrorFromSignal(sig)
-	c := Chunk{
-		Event:   EventControl,
-		Control: cloneControl(sig),
-	}
+	var c Chunk
+	c.Event = EventControl
+	c.Control = cloneControl(sig)
 	if err := yield(c); err != nil {
 		return err
 	}

@@ -211,9 +211,10 @@ func (p *OperationProfile) ExecutePrepared(
 				Binding:     binding,
 				DisplayJSON: append(json.RawMessage(nil), intent.DisplayJSON...),
 			}
-			if deliveryErr := yield(
-				Chunk{Event: EventControl, Control: &PauseSignal{Reason: operationApprovalRequired}},
-			); deliveryErr != nil {
+			var chunk Chunk
+			chunk.Event = EventControl
+			chunk.Control = &PauseSignal{Reason: operationApprovalRequired}
+			if deliveryErr := yield(chunk); deliveryErr != nil {
 				return deliveryErr
 			}
 			return &PendingApprovalError{Challenge: challenge}

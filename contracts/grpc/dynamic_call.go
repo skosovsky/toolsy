@@ -42,7 +42,11 @@ func invokeRPC(
 	if err != nil {
 		return err
 	}
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: toolsy.MimeTypeJSON})
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventResult
+	chunk.Data = data
+	chunk.MimeType = toolsy.MimeTypeJSON
+	return yield(chunk)
 }
 
 func validateUnary(method protoreflect.MethodDescriptor) error {

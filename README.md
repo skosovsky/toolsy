@@ -638,3 +638,9 @@ reg, err := builder.Build()
 
 `testutil.MockTool` provides configurable `ManifestVal` and `ExecuteFn`.
 `testutil.NewTestRegistry(...)` builds a registry with test-safe defaults.
+
+## Repository verification and release
+
+See [verification commands and prerequisites](docs/verification.md) and the
+[shell release runbook](docs/release/runbook.md). Make discovers all modules and
+runs with GOWORK=off; CI uses the same lint/unit/integration/e2e commands.

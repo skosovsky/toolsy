@@ -104,7 +104,10 @@ func emitResponse(
 		if expectJSON {
 			return errors.New("openapi: empty body for declared JSON response")
 		}
-		return yield(toolsy.Chunk{Event: toolsy.EventResult, EmptyResult: true})
+		var chunk toolsy.Chunk
+		chunk.Event = toolsy.EventResult
+		chunk.EmptyResult = true
+		return yield(chunk)
 	}
 	chunkType := toolsy.MimeTypeText
 	if isJSON {
@@ -114,7 +117,11 @@ func emitResponse(
 		chunkType = toolsy.MimeTypeJSON
 	}
 
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: data, MimeType: chunkType})
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventResult
+	chunk.Data = data
+	chunk.MimeType = chunkType
+	return yield(chunk)
 }
 
 func scalarString(value any) (string, error) {

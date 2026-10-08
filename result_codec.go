@@ -105,13 +105,12 @@ func (JSONResultCodec[R, E]) DecodeResult(raw []byte) (Chunk, error) {
 	if stored.Audience == "" || stored.Delivery == "" {
 		return Chunk{}, errors.New("cached result has no delivery binding")
 	}
-	chunk := Chunk{
-		Event:       EventResult,
-		Data:        stored.Data,
-		MimeType:    stored.MIME,
-		EmptyResult: stored.Empty,
-		Noop:        stored.Noop,
-	}
+	var chunk Chunk
+	chunk.Event = EventResult
+	chunk.Data = stored.Data
+	chunk.MimeType = stored.MIME
+	chunk.EmptyResult = stored.Empty
+	chunk.Noop = stored.Noop
 	if stored.HasResult {
 		var result R
 		if stored.Result != nil {

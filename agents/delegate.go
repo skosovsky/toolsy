@@ -120,19 +120,19 @@ func AsTool(name, description string, inputSchema []byte, client *Client) (tools
 						}
 					}
 					finalData := formatStepOutput(step.Output, step.Artifacts)
-					return yield(toolsy.Chunk{
-						Event:    toolsy.EventResult,
-						Data:     []byte(finalData),
-						MimeType: toolsy.MimeTypeText,
-					})
+					var chunk toolsy.Chunk
+					chunk.Event = toolsy.EventResult
+					chunk.Data = []byte(finalData)
+					chunk.MimeType = toolsy.MimeTypeText
+					return yield(chunk)
 				}
-				if yieldErr := yield(toolsy.Chunk{
-					Event: toolsy.EventProgress,
-					Progress: &toolsy.ProgressInfo{ //nolint:exhaustruct_v5 // label/status only for sub-agent steps
-						Label:  step.Name,
-						Status: step.Status,
-					},
-				}); yieldErr != nil {
+				var chunk toolsy.Chunk
+				chunk.Event = toolsy.EventProgress
+				chunk.Progress = &toolsy.ProgressInfo{ //nolint:exhaustruct_v5 // label/status only for sub-agent steps
+					Label:  step.Name,
+					Status: step.Status,
+				}
+				if yieldErr := yield(chunk); yieldErr != nil {
 					return yieldErr
 				}
 			}
@@ -177,7 +177,11 @@ func AsBackgroundTool(name, desc string, schema []byte, client *Client) (toolsy.
 				return fmt.Errorf("agents: create task: %w", err)
 			}
 			out, _ := json.Marshal(AcceptedTaskReference{TaskID: task.TaskID, Accepted: true})
-			return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
+			var chunk toolsy.Chunk
+			chunk.Event = toolsy.EventResult
+			chunk.Data = out
+			chunk.MimeType = toolsy.MimeTypeJSON
+			return yield(chunk)
 		},
 		toolsy.WithOutputSchema(map[string]any{schemaTypeKey: "object", "properties": map[string]any{
 			taskIDKey:  map[string]any{schemaTypeKey: "string", "minLength": 1},

@@ -1,8 +1,9 @@
+//go:build integration
+
 package docker
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -11,14 +12,12 @@ import (
 	"github.com/skosovsky/toolsy/exectool"
 )
 
-// TestDockerLiveProfile requires a running local Linux Docker daemon and all
+// TestIntegrationDockerProfile requires a running local Linux Docker daemon and all
 // three default images already installed. Unit assertions do not prove isolation.
-func TestDockerLiveProfile(t *testing.T) {
-	if os.Getenv("TOOLSY_DOCKER_LIVE") != "1" {
-		t.Skip("set TOOLSY_DOCKER_LIVE=1 with local daemon and default images")
-	}
+func TestIntegrationDockerProfile(t *testing.T) {
 	// Arrange.
-	sb, err := New(WithWorkspaceRoot("/private/tmp"))
+	workspace := t.TempDir()
+	sb, err := New(WithWorkspaceRoot(workspace))
 	require.NoError(t, err)
 	for _, tc := range []struct{ language, code, stdout string }{
 		{"python", "print('python-ok')", "python-ok\n"},
@@ -86,7 +85,7 @@ print('restrictions-ok')`
 		// Arrange.
 		p := DefaultPolicy()
 		p.OutputBytes = 1024
-		limited, err := New(WithPolicy(p), WithWorkspaceRoot("/private/tmp"))
+		limited, err := New(WithPolicy(p), WithWorkspaceRoot(workspace))
 		require.NoError(t, err)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

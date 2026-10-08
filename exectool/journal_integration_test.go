@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build integration && (linux || darwin)
 
 package exectool
 
@@ -18,7 +18,7 @@ import (
 	"github.com/skosovsky/toolsy/adapters/execution/filejournal"
 )
 
-func TestCollectionFailureAfterEffectRemainsUnknownAcrossJournalRestart(t *testing.T) {
+func TestIntegrationCollectionFailureAfterEffectRemainsUnknownAcrossJournalRestart(t *testing.T) {
 	// Arrange: a real persisted receipt is committed before output collection fails.
 	ctx := context.Background()
 	directory := t.TempDir()

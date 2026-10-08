@@ -217,13 +217,13 @@ See [migration-task34.md](../docs/migration-task34.md) for the full migration ch
 
 I/O, pagination, schema composition and diagnostics remain bounded. Context cancellation takes precedence over transport/read-limit mapping. Errors do not expose authorization/cookie headers, full binary blocks or unbounded bodies.
 
-The Contract-First test anchor is the byte-exact official `2026-07-28` schema at `testdata/task34/schema/mcp-2026-07-28.schema.json`, pinned to upstream commit `271ecc9accafdd9b83a3c869fa67c22953b2af80` with SHA-256 `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203`. Its provenance manifest cites all 19 wire fixtures, and `make task34-preflight` verifies the trust anchor without network access.
+The Contract-First test anchor is the byte-exact official `2026-07-28` schema at `testdata/task34/schema/mcp-2026-07-28.schema.json`, pinned to upstream commit `271ecc9accafdd9b83a3c869fa67c22953b2af80` with SHA-256 `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203`. Its provenance manifest cites all 19 wire fixtures, and `make test` verifies the trust anchor without network access.
 
 ```text
 go test -race ./...
 make test
 make lint
-make task34-preflight
+make test
 ```
 
 `make release-break` is the actual destructive release workflow: after lint, tests and preflight it may create a release commit, create tags and push tags. Run it only when intentionally publishing the clear break.

@@ -5,23 +5,22 @@ confined to this Go module. Toolsy core has no dependency on them. The offline
 provider returns real native call parts; all tool, approval, continuation and
 recovery state machines are real public APIs, not imitations.
 
-From the repository root, with explicit sibling checkout paths:
+From the repository root:
 
 ```sh
-PROMPTY_DIR=/path/to/prompty FLOWY_DIR=/path/to/flowy GUARDY_DIR=/path/to/guardy \
-  scripts/task36-integration.sh local
-scripts/task36-integration.sh published
-scripts/task36-integration.sh released ROOT_TAG
+make test-integration
 ```
 
-Local mode creates a temporary workspace with exactly the passed checkouts, the
-candidate root and this consumer. Published mode runs with GOWORK=off and no
-replace: before the recipe is published, it copies only candidate host application
-code into the temporary consumer and imports published engine/consumer modules.
-It never copies engine code or patches external libraries. Released mode imports
-the actual published recipe from the supplied root tag and runs the same semantic
-fixtures without copying it. Dependency failures are failures, never skipped tests.
-The CI workflow runs local and published modes, plus released mode on root tags.
+Or directly from this module:
+
+```sh
+GOWORK=off go test -race -count=1 -tags=integration -run '^TestIntegration' ./...
+```
+
+The module uses pinned prompty/flowy/guardy dependencies and a local root Toolsy
+replacement. Standard release preparation removes that replacement and aligns
+internal requirements. Ordinary tests compile the example; the integration
+profile executes its semantic fixtures. Dependency failures fail the profile.
 
 `Prompt` serializes source schemas from the same restricted view; it does not infer
 or translate tags into authorization. `Requests` copies provider identity and raw

@@ -55,6 +55,8 @@ func yamlJSONValue(node *yaml.Node, depth int, nodes *int) (any, error) {
 		return out, nil
 	case yaml.ScalarNode:
 		return yamlJSONScalar(node)
+	case yaml.AliasNode:
+		return nil, fmt.Errorf("manifest YAML aliases and node kind %d are unsupported", node.Kind)
 	default:
 		return nil, fmt.Errorf("manifest YAML aliases and node kind %d are unsupported", node.Kind)
 	}

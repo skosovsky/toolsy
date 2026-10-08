@@ -4,9 +4,9 @@ These fixtures freeze the MCP `2026-07-28` contract used by task34. Files under 
 
 The byte-exact authoritative schema snapshot is [`schema/mcp-2026-07-28.schema.json`](schema/mcp-2026-07-28.schema.json). It comes from the official [`modelcontextprotocol/modelcontextprotocol`](https://github.com/modelcontextprotocol/modelcontextprotocol) repository at immutable commit [`271ecc9accafdd9b83a3c869fa67c22953b2af80`](https://github.com/modelcontextprotocol/modelcontextprotocol/commit/271ecc9accafdd9b83a3c869fa67c22953b2af80), path `schema/2026-07-28/schema.json`. Its SHA-256 is `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203` and its size is 181474 bytes. [`schema/PROVENANCE.json`](schema/PROVENANCE.json) records the source and enumerates every one of the 19 wire fixtures that cites this artifact as its contract basis.
 
-`TestTask34OfficialSchemaArtifactHasImmutableProvenance` recomputes the digest, checks the pinned revision/commit/path/size, verifies the 2020-12 dialect and revision-specific definitions, and resolves every cited fixture. `make task34-preflight` includes this test, so changing either the schema or provenance without deliberately updating the hard-coded trust anchor fails the gate.
+`TestTask34OfficialSchemaArtifactHasImmutableProvenance` recomputes the digest, checks the pinned revision/commit/path/size, verifies the 2020-12 dialect and revision-specific definitions, and resolves every cited fixture. `make test` includes this test, so changing either the schema or provenance without deliberately updating the hard-coded trust anchor fails the gate.
 
-All 19 wire fixtures plus the two provenance artifacts are inventoried; the wire fixtures are decoded or exercised by `fixture_contract_test.go`. Transport, peer, subscription and schema behavior is paired with focused AAA tests in the corresponding task34 suites. `make task34-preflight` runs this executable subset and scans production Go files before any release action.
+All 19 wire fixtures plus the two provenance artifacts are inventoried; the wire fixtures are decoded or exercised by `fixture_contract_test.go`. Transport, peer, subscription and schema behavior is paired with focused AAA tests in the corresponding task34 suites. `make test` runs this executable subset and scans production Go files before any release action.
 
 ## Cycle-1 decisions applied
 
@@ -86,4 +86,4 @@ These are executable tests, not checklist placeholders:
 5. MRTR and subscription state-machine tests.
 6. Feature mapping/content/schema/cache tests.
 7. Negative legacy compile/grep/runtime gates.
-8. `go test -race ./...`, workspace tests/lint, then non-destructive `make task34-preflight`. `make release-break` remains a separate intentional commit/tag/push action.
+8. `go test -race ./...`, workspace tests/lint, then non-destructive `make test`. `make release-break` remains a separate intentional commit/tag/push action.

@@ -51,11 +51,12 @@ never advertised as confirmed when the daemon refused removal.
 
 `go test -race ./...` covers unit/client-mock contracts, strict log framing,
 unsupported guarantees, output failures, owned reader cancellation and cleanup.
-`TOOLSY_DOCKER_LIVE=1 go test -race -run TestDockerLiveProfile -v .` runs the three
+`GOWORK=off go test -race -count=1 -tags=integration -run '^TestIntegration' -v .` runs the three
 default images plus Linux cgroup, UID/capability, readonly filesystem, disabled
 network, bounded scratch and output checks against an actual local daemon.
-The live restrictions test currently targets Linux cgroup v2. Skipped live tests
-are not evidence of isolation; reports must identify whether they ran.
+The restrictions test targets Linux cgroup v2. Missing daemon capabilities or
+runtime images fail the selected integration profile. Pull bash:5.2, node:22-alpine
+and python:3.11-alpine before running it.
 
 WithClient accepts the exported focused Client interface. It contains only daemon
 capability discovery and owned container lifecycle/log methods; the Docker SDK client

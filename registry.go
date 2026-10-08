@@ -538,7 +538,8 @@ func (r *Registry) ExecuteIter(ctx context.Context, call ToolCall) iter.Seq2[Chu
 		})
 
 		if !consumerStopped && err != nil && (!isContextInterrupt(err) || requiresOutcomeReconciliation(err)) {
-			yield(Chunk{}, err)
+			var chunk Chunk
+			yield(chunk, err)
 		}
 	}
 }

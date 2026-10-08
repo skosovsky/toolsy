@@ -126,24 +126,13 @@ concurrent external writers are not a crash-atomic multi-file transaction guaran
 
 ## 7. Release artifacts and checkout
 
-The [release implementation](../internal/release/release.go) and
-[committed-code bootstrap](../scripts/release.sh) prepare an isolated tracked-input
-checkout, stage expected manifests, verify rewritten graph/artifacts with GOWORK=off,
-and publish only explicit refs with atomic/collision checks. Original branch/index/
-untracked bytes survive success/failure/cancel. A green workspace graph cannot
-prove the rewritten release graph; final artifact verification is required.
+The current [shell release](../scripts/release.sh) uses an isolated checkout and
+an automatically discovered module inventory. It runs source gates, prepares
+internal requirements, and atomically publishes source to main and candidate to
+root/module tags. The caller's HEAD, index, files and refs remain unchanged.
 
-Evidence: [artifact parity](../internal/release/artifact_parity_test.go),
-[exact artifact graph](../internal/release/lifecycle_test.go),
-[untracked preservation](../internal/release/release_fixture_test.go),
-[explicit publication scope](../internal/release/publication_test.go),
-[command cancellation](../internal/release/command_lifecycle_test.go).
-TestReleaseExactArtifactGraph, TestReleasePreservesUntrackedSource and
-TestPublicationScope use disposable repositories/local bare remotes.
-TestReleaseBootstrapDrainsArchivePadding exercises a committed-code bootstrap
-with valid trailing tar padding: the complete archive is written to a temporary
-file before extraction, so early tar completion cannot SIGPIPE its producer.
-Prepare-only preserves the source and publishes no new tag. Production
-publish/push is outside this task. Row40 must rerun final candidate artifacts and
-all24modules/race/lint, targeted adversarial regressions, necessary benchmarks and
-two fresh whole-scope acceptance reviews before completion.
+See [the runbook](release/runbook.md) for confirmation and inspect/resume/finish
+recovery. [Shell contract tests](../internal/release/release_test.go) use disposable
+bare repositories; [artifact tests](../internal/release/artifacts_e2e_test.go)
+resolve and compile all modules through a local proxy without replacements.
+Historical Task41 evidence describes the former Go release implementation.

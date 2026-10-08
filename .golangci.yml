@@ -35,6 +35,7 @@ formatters:
       # A list of prefixes, which, if set, checks import paths
       # with the given prefixes are grouped after 3rd-party packages.
       # Default: []
+      # Project-specific import grouping; keep shared lint rules unchanged.
       local-prefixes:
         - github.com/skosovsky/toolsy
 
@@ -238,8 +239,6 @@ linters:
       check:
         - switch
         - map
-      # A default branch is enough for switches over open sets (e.g. reflect.Kind).
-      default-signifies-exhaustive: true
 
     exhaustruct_v5:
       # List of regular expressions to match type names that should be excluded from processing.
@@ -273,14 +272,6 @@ linters:
         - ^golang.org/x/tools/go/analysis.Analyzer$
         - ^google.golang.org/protobuf/.+Options$
         - ^gopkg.in/yaml.v3.Node$
-        # jsonschema-go: schemas are built incrementally; full struct literals are impractical.
-        - ^github.com/google/jsonschema-go/jsonschema\.Schema$
-        - ^github.com/google/jsonschema-go/jsonschema\.ForOptions$
-        # Chunks are filled incrementally by the registry and tools.
-        - ^github.com/skosovsky/toolsy\.Chunk$
-        # gRPC reflection / file descriptors: filled via oneof or proto.Unmarshal, not struct literals.
-        - ^google\.golang\.org/grpc/reflection/grpc_reflection_v1\.ServerReflectionRequest$
-        - ^google\.golang\.org/protobuf/types/descriptorpb\.FileDescriptorProto$
       # Allows empty structures in return statements.
       # Default: false
       allow-empty-returns: true
@@ -310,6 +301,11 @@ linters:
       # Default: 30 (but we recommend 10-20)
       min-complexity: 20
 
+    gomoddirectives:
+      # Root go.work + nested modules (adapters/*, contracts/*) use `replace ... => ../..`;
+      # `make lint` runs golangci per module with cwd = that directory, so path-based issue excludes for go.mod do not apply.
+      replace-local: true
+
     gocritic:
       # Settings passed to gocritic.
       # The settings key is the name of a supported gocritic checker.
@@ -323,11 +319,6 @@ linters:
           # Whether to skip (*x).method() calls where x is a pointer receiver.
           # Default: true
           skipRecvDeref: false
-
-    gomoddirectives:
-      # Root go.work + nested modules (adapters/*, contracts/*) use `replace ... => ../..`;
-      # `make lint` runs golangci per module with cwd = that directory, so path-based issue excludes for go.mod do not apply.
-      replace-local: true
 
     godoclint:
       # List of rules to enable in addition to the default set.
@@ -486,7 +477,9 @@ linters:
       - path: '.*_test\.go$'
         linters: [ forbidigo ]
       - path: 'examples/'
-        linters: [ forbidigo, exhaustruct_v5 ]
+        linters:
+          - forbidigo
+          - exhaustruct_v5
       - path: '_test\.go'
         linters:
           - bodyclose
@@ -498,9 +491,3 @@ linters:
           - noctx
           - wrapcheck
           - exhaustruct_v5
-      # Adapter modules use replace github.com/skosovsky/ragy => ../.. for local workspace dev.
-      - path: '^adapters/.*/go\.mod$'
-        linters: [ gomoddirectives ]
-      # contracts/* submodules use replace github.com/skosovsky/toolsy => ../.. for local workspace dev.
-      - path: '^contracts/.*/go\.mod$'
-        linters: [ gomoddirectives ]

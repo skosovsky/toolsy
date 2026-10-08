@@ -98,10 +98,9 @@ func listServicesAndBuildFiles(
 	budget *discoveryBudget,
 ) ([]string, *protoregistry.Files, error) {
 	// Request list of services.
-	req := &reflectionpb.ServerReflectionRequest{
-		MessageRequest: &reflectionpb.ServerReflectionRequest_ListServices{
-			ListServices: "",
-		},
+	req := new(reflectionpb.ServerReflectionRequest)
+	req.MessageRequest = &reflectionpb.ServerReflectionRequest_ListServices{
+		ListServices: "",
 	}
 	if err := stream.Send(req); err != nil {
 		return nil, nil, err
@@ -156,10 +155,9 @@ func buildRegistry(
 	var allFiles []*descriptorpb.FileDescriptorProto
 
 	for _, svc := range services {
-		req := &reflectionpb.ServerReflectionRequest{
-			MessageRequest: &reflectionpb.ServerReflectionRequest_FileContainingSymbol{
-				FileContainingSymbol: svc,
-			},
+		req := new(reflectionpb.ServerReflectionRequest)
+		req.MessageRequest = &reflectionpb.ServerReflectionRequest_FileContainingSymbol{
+			FileContainingSymbol: svc,
 		}
 		if err := stream.Send(req); err != nil {
 			return nil, err
@@ -199,7 +197,7 @@ func collectDescriptorResponse(
 		if err = budget.file(); err != nil {
 			return nil, err
 		}
-		fd := &descriptorpb.FileDescriptorProto{}
+		fd := new(descriptorpb.FileDescriptorProto)
 		if err := proto.Unmarshal(fdBytes, fd); err != nil {
 			return nil, err
 		}

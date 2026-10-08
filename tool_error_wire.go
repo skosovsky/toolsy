@@ -79,6 +79,8 @@ func sentinelForErrorCode(code ErrorCode) error {
 		return ErrValidation
 	case CodeDependencyMissing, CodeToolsContractMissing:
 		return nil
+	case CodeInternal, CodeStateCodecMissing, CodePolicyDenied, CodeCapabilityDenied, CodeRemoteExecution:
+		return nil
 	default:
 		return nil
 	}

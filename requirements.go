@@ -171,6 +171,28 @@ func (c *valueCloner) clone(v reflect.Value) reflect.Value {
 			}
 		}
 		return out
+	case reflect.Invalid,
+		reflect.Bool,
+		reflect.Int,
+		reflect.Int8,
+		reflect.Int16,
+		reflect.Int32,
+		reflect.Int64,
+		reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64,
+		reflect.Uintptr,
+		reflect.Float32,
+		reflect.Float64,
+		reflect.Complex64,
+		reflect.Complex128,
+		reflect.Chan,
+		reflect.Func,
+		reflect.String,
+		reflect.UnsafePointer:
+		return v
 	default:
 		return v
 	}
@@ -206,6 +228,31 @@ func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 		for i := range v.Len() {
 			out.Index(i).Set(c.clone(v.Index(i)))
 		}
+	case reflect.Invalid,
+		reflect.Bool,
+		reflect.Int,
+		reflect.Int8,
+		reflect.Int16,
+		reflect.Int32,
+		reflect.Int64,
+		reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64,
+		reflect.Uintptr,
+		reflect.Float32,
+		reflect.Float64,
+		reflect.Complex64,
+		reflect.Complex128,
+		reflect.Array,
+		reflect.Chan,
+		reflect.Func,
+		reflect.Interface,
+		reflect.String,
+		reflect.Struct,
+		reflect.UnsafePointer:
+		panic("toolsy: invalid internal snapshot reference kind")
 	default:
 		panic("toolsy: invalid internal snapshot reference kind")
 	}

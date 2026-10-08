@@ -228,6 +228,18 @@ func Classify(o toolsy.ToolOutcome, err error) string {
 				return Deny
 			case toolsy.CodeSchemaInvalid, toolsy.CodeValidationFailed:
 				return Correction
+			case toolsy.CodeTimeout,
+				toolsy.CodeToolNotFound,
+				toolsy.CodeDependencyMissing,
+				toolsy.CodeInternal,
+				toolsy.CodeShutdown,
+				toolsy.CodeMaxCallsExceeded,
+				toolsy.CodeRegistryNotReady,
+				toolsy.CodeToolsContractMissing,
+				toolsy.CodeBudgetExceeded,
+				toolsy.CodeStateCodecMissing,
+				toolsy.CodeRemoteExecution:
+				return Fault
 			default:
 				return Fault
 			}
@@ -242,12 +254,25 @@ func Classify(o toolsy.ToolOutcome, err error) string {
 			return Correction
 		case toolsy.CodeInternal:
 			return Fault
+		case toolsy.CodeTimeout,
+			toolsy.CodeToolNotFound,
+			toolsy.CodeDependencyMissing,
+			toolsy.CodeShutdown,
+			toolsy.CodeMaxCallsExceeded,
+			toolsy.CodeRegistryNotReady,
+			toolsy.CodeToolsContractMissing,
+			toolsy.CodeBudgetExceeded,
+			toolsy.CodeStateCodecMissing,
+			toolsy.CodeRemoteExecution:
+			return BusinessError
 		default:
 			return BusinessError
 		}
 	}
 	switch o.Status {
 	case toolsy.OutcomeSuccess, toolsy.OutcomeEmptySuccess, toolsy.OutcomeNoopSuccess:
+	case toolsy.OutcomeBusinessError, toolsy.OutcomeInfrastructureError:
+		return Fault
 	default:
 		return Fault
 	}
@@ -360,6 +385,8 @@ func journalDecision(err, business error) string {
 			return Uncertain
 		case toolsy.OperationRejected:
 			return Deny
+		case toolsy.OperationCompleted, toolsy.OperationRetryAuthorized:
+			return Fault
 		default:
 			return Fault
 		}

@@ -371,5 +371,9 @@ func executeGraphQL(
 	if !ok {
 		return errors.New("graphql: missing root result")
 	}
-	return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: value, MimeType: toolsy.MimeTypeJSON})
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventResult
+	chunk.Data = value
+	chunk.MimeType = toolsy.MimeTypeJSON
+	return yield(chunk)
 }

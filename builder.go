@@ -78,12 +78,11 @@ func NewTool[T any, R any](
 				if err != nil {
 					return NewInternalError(fmt.Errorf("toolsy: marshal typed result: %w", err))
 				}
-				chunk := Chunk{
-					Event:       EventResult,
-					Data:        data,
-					MimeType:    MimeTypeJSON,
-					TypedResult: res,
-				}
+				var chunk Chunk
+				chunk.Event = EventResult
+				chunk.Data = data
+				chunk.MimeType = MimeTypeJSON
+				chunk.TypedResult = res
 				prepared, err := prepareChunk(chunk)
 				if err != nil {
 					return err
@@ -126,7 +125,7 @@ func marshalToolResult(res any) ([]byte, error) {
 }
 
 func generateOutputSchema[R any](cfg SchemaConfig) (map[string]any, error) {
-	schemaMap, _, err := generateSchemaWithRawDefault[R](cfg, &jsonschema.Schema{})
+	schemaMap, _, err := generateSchemaWithRawDefault[R](cfg, new(jsonschema.Schema))
 	return schemaMap, err
 }
 

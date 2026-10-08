@@ -110,7 +110,11 @@ func newExecHandler(
 		if marshalErr != nil {
 			return toolsy.NewInternalError(fmt.Errorf("exectool: marshal result: %w", marshalErr))
 		}
-		return yield(toolsy.Chunk{Event: toolsy.EventResult, Data: out, MimeType: toolsy.MimeTypeJSON})
+		var chunk toolsy.Chunk
+		chunk.Event = toolsy.EventResult
+		chunk.Data = out
+		chunk.MimeType = toolsy.MimeTypeJSON
+		return yield(chunk)
 	}
 }
 

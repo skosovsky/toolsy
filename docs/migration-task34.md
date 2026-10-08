@@ -67,7 +67,7 @@ Schemas without `$schema` use JSON Schema 2020-12. Explicitly supported dialects
 cd mcp && go test -race ./...
 make test
 make lint
-make task34-preflight
+make test
 ```
 
 The actual `make release-break` target is separate and destructive: after lint, tests and this preflight it can create a release commit, tag every module and push tags. Use it only to publish the release.

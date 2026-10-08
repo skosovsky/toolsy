@@ -172,12 +172,11 @@ func NewErrorChunkFromErr(err error) Chunk {
 		llmMessage = formatExecutionError(marshalErr)
 		data, _ = marshalToolErrorWire(te, llmMessage)
 	}
-	chunk := Chunk{
-		Event:    EventResult,
-		Data:     data,
-		MimeType: MimeTypeToolErrorJSON,
-		IsError:  true,
-	}
+	var chunk Chunk
+	chunk.Event = EventResult
+	chunk.Data = data
+	chunk.MimeType = MimeTypeToolErrorJSON
+	chunk.IsError = true
 	chunk.Envelope = NewErrorEnvelope(te, chunk.Data, chunk.MimeType, DeliveryClassStructured, AudienceModel, nil)
 	return chunk
 }

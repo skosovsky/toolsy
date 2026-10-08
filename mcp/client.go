@@ -1250,21 +1250,21 @@ func buildToolResultChunk(name string, raw json.RawMessage, outputSchema schemaV
 			Reason: "remote tool execution failed",
 			Err:    remoteErr,
 		}
-		return toolsy.Chunk{
-			Event:       toolsy.EventResult,
-			Data:        projection,
-			MimeType:    toolsy.MimeTypeText,
-			IsError:     true,
-			TypedResult: result,
-			Envelope: toolsy.NewErrorEnvelope(
-				toolErr,
-				projection,
-				toolsy.MimeTypeText,
-				toolsy.DeliveryClassStructured,
-				toolsy.AudienceModel,
-				nil,
-			),
-		}, nil
+		var chunk toolsy.Chunk
+		chunk.Event = toolsy.EventResult
+		chunk.Data = projection
+		chunk.MimeType = toolsy.MimeTypeText
+		chunk.IsError = true
+		chunk.TypedResult = result
+		chunk.Envelope = toolsy.NewErrorEnvelope(
+			toolErr,
+			projection,
+			toolsy.MimeTypeText,
+			toolsy.DeliveryClassStructured,
+			toolsy.AudienceModel,
+			nil,
+		)
+		return chunk, nil
 	}
 	if outputSchema != nil && len(result.StructuredContent) == 0 {
 		return toolsy.Chunk{}, missingStructuredContentError()
@@ -1279,40 +1279,40 @@ func buildToolResultChunk(name string, raw json.RawMessage, outputSchema schemaV
 				return toolsy.Chunk{}, &InvalidPayloadError{Subject: structuredContentSubject, Err: err}
 			}
 		}
-		return toolsy.Chunk{
-			Event:       toolsy.EventResult,
-			Data:        canonical,
-			MimeType:    toolsy.MimeTypeJSON,
-			TypedResult: result,
-			Envelope: toolsy.NewResultEnvelope(
-				result,
-				canonical,
-				toolsy.MimeTypeJSON,
-				toolsy.DeliveryClassStructured,
-				toolsy.AudienceModel,
-				nil,
-			),
-		}, nil
+		var chunk toolsy.Chunk
+		chunk.Event = toolsy.EventResult
+		chunk.Data = canonical
+		chunk.MimeType = toolsy.MimeTypeJSON
+		chunk.TypedResult = result
+		chunk.Envelope = toolsy.NewResultEnvelope(
+			result,
+			canonical,
+			toolsy.MimeTypeJSON,
+			toolsy.DeliveryClassStructured,
+			toolsy.AudienceModel,
+			nil,
+		)
+		return chunk, nil
 	}
 	mimeType := toolsy.MimeTypeText
 	if len(projection) == 0 {
 		mimeType = ""
 	}
-	return toolsy.Chunk{
-		Event:       toolsy.EventResult,
-		Data:        projection,
-		MimeType:    mimeType,
-		TypedResult: result,
-		EmptyResult: len(projection) == 0,
-		Envelope: toolsy.NewResultEnvelope(
-			result,
-			projection,
-			mimeType,
-			toolsy.DeliveryClassText,
-			toolsy.AudienceModel,
-			nil,
-		),
-	}, nil
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventResult
+	chunk.Data = projection
+	chunk.MimeType = mimeType
+	chunk.TypedResult = result
+	chunk.EmptyResult = len(projection) == 0
+	chunk.Envelope = toolsy.NewResultEnvelope(
+		result,
+		projection,
+		mimeType,
+		toolsy.DeliveryClassText,
+		toolsy.AudienceModel,
+		nil,
+	)
+	return chunk, nil
 }
 
 func validatePresentStructuredContent(raw json.RawMessage, outputSchema schemaValidator) error {
@@ -1372,14 +1372,13 @@ func (c *Client) handleProgress(raw json.RawMessage) {
 		return
 	}
 	state.started, state.last = true, progress.Progress
-	chunk := toolsy.Chunk{
-		Event: toolsy.EventProgress,
-		Progress: &toolsy.ProgressInfo{
-			Current: &progress.Progress,
-			Total:   progress.Total,
-			Message: progress.Message,
-			Token:   progress.ProgressToken.String(),
-		},
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventProgress
+	chunk.Progress = &toolsy.ProgressInfo{
+		Current: &progress.Progress,
+		Total:   progress.Total,
+		Message: progress.Message,
+		Token:   progress.ProgressToken.String(),
 	}
 	select {
 	case state.ch <- chunk:
@@ -1512,14 +1511,14 @@ func buildResourceResultChunk(result ResourcesReadResult, projection []byte) (to
 	if len(data) == 0 {
 		mimeType = ""
 	}
-	return toolsy.Chunk{
-		Event:       toolsy.EventResult,
-		Data:        data,
-		MimeType:    mimeType,
-		TypedResult: result,
-		EmptyResult: len(result.Contents) == 0,
-		Envelope:    toolsy.NewResultEnvelope(result, data, mimeType, delivery, toolsy.AudienceModel, nil),
-	}, nil
+	var chunk toolsy.Chunk
+	chunk.Event = toolsy.EventResult
+	chunk.Data = data
+	chunk.MimeType = mimeType
+	chunk.TypedResult = result
+	chunk.EmptyResult = len(result.Contents) == 0
+	chunk.Envelope = toolsy.NewResultEnvelope(result, data, mimeType, delivery, toolsy.AudienceModel, nil)
+	return chunk, nil
 }
 
 func (c *Client) ListResources(ctx context.Context, cursor string) (ResourcesListResult, error) {

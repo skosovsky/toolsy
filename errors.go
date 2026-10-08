@@ -373,6 +373,19 @@ func ClientCorrectable(code ErrorCode) bool {
 	switch code {
 	case CodeValidationFailed, CodeSchemaInvalid, CodeToolNotFound:
 		return true
+	case CodeTimeout,
+		CodeDependencyMissing,
+		CodeInternal,
+		CodeShutdown,
+		CodeMaxCallsExceeded,
+		CodeRegistryNotReady,
+		CodeToolsContractMissing,
+		CodeBudgetExceeded,
+		CodeStateCodecMissing,
+		CodePolicyDenied,
+		CodeCapabilityDenied,
+		CodeRemoteExecution:
+		return false
 	default:
 		return false
 	}
@@ -382,6 +395,16 @@ func orchestratorSystemCode(code ErrorCode) bool {
 	switch code {
 	case CodeInternal, CodeTimeout, CodeShutdown, CodeMaxCallsExceeded, CodeRegistryNotReady, CodeStateCodecMissing:
 		return true
+	case CodeSchemaInvalid,
+		CodeValidationFailed,
+		CodeToolNotFound,
+		CodeDependencyMissing,
+		CodeToolsContractMissing,
+		CodeBudgetExceeded,
+		CodePolicyDenied,
+		CodeCapabilityDenied,
+		CodeRemoteExecution:
+		return false
 	default:
 		return false
 	}

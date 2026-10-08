@@ -175,6 +175,8 @@ func (p *projection) scalar(fd protoreflect.FieldDescriptor, depth int) (map[str
 				map[string]any{jsonSchemaTypeKey: jsonSchemaString, "enum": []any{"NaN", "Infinity", "-Infinity"}},
 			},
 		}, nil
+	case protoreflect.GroupKind:
+		return nil, unsupported(string(fd.FullName()), "field kind "+fd.Kind().String())
 	default:
 		return nil, unsupported(string(fd.FullName()), "field kind "+fd.Kind().String())
 	}

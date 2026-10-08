@@ -52,6 +52,8 @@ func normalizeBody(
 		return body, BodyPlainText, nil
 	case BodyHTML:
 		return convertHTMLBody(ctx, body, func(s string) (string, error) { return htmltomarkdown.ConvertString(s) })
+	case BodyMarkdown:
+		return "", "", bodyFailure("mail_body_representation", &BodyRepresentationError{Representation: representation})
 	default:
 		return "", "", bodyFailure("mail_body_representation", &BodyRepresentationError{Representation: representation})
 	}

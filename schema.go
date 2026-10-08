@@ -40,7 +40,9 @@ func (r *SchemaRegistry) RegisterType(emptyInstance any, jsonType, format string
 		panic("toolsy: RegisterType jsonType must not be empty")
 	}
 	t := reflect.TypeOf(emptyInstance)
-	s := &jsonschema.Schema{Type: jsonType, Format: format}
+	s := new(jsonschema.Schema)
+	s.Type = jsonType
+	s.Format = format
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.types == nil {
@@ -75,7 +77,9 @@ func (r *SchemaRegistry) buildTypeSchemas() map[reflect.Type]*jsonschema.Schema 
 // It is called once when building a Tool. cfg.Strict sets additionalProperties: false
 // for all objects (OpenAI Structured Outputs). cfg.Registry controls custom type mappings.
 func generateSchema[T any](cfg SchemaConfig) (map[string]any, schemaValidator, error) {
-	return generateSchemaWithRawDefault[T](cfg, &jsonschema.Schema{Type: "object"})
+	var schema jsonschema.Schema
+	schema.Type = "object"
+	return generateSchemaWithRawDefault[T](cfg, &schema)
 }
 
 func generateSchemaWithRawDefault[T any](
@@ -87,7 +91,8 @@ func generateSchemaWithRawDefault[T any](
 	if _, overridden := typeSchemas[reflect.TypeFor[json.RawMessage]()]; !overridden {
 		typeSchemas[reflect.TypeFor[json.RawMessage]()] = rawDefault
 	}
-	opts := &jsonschema.ForOptions{TypeSchemas: typeSchemas}
+	opts := new(jsonschema.ForOptions)
+	opts.TypeSchemas = typeSchemas
 	schema, err := jsonschema.For[T](opts)
 	if err != nil {
 		return nil, nil, err

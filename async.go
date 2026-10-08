@@ -156,11 +156,10 @@ func (t *asyncTool) yieldAsyncAccepted(ctx context.Context, taskID string, yield
 	if err != nil {
 		return NewInternalError(fmt.Errorf("async: marshal accepted payload: %w", err))
 	}
-	chunk := Chunk{
-		Event:    EventResult,
-		Data:     accepted,
-		MimeType: MimeTypeJSON,
-	}
+	var chunk Chunk
+	chunk.Event = EventResult
+	chunk.Data = accepted
+	chunk.MimeType = MimeTypeJSON
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

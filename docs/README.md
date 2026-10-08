@@ -79,3 +79,5 @@ not an optional library module to install.
 | `./toolkits/sqltool` | `github.com/skosovsky/toolsy/toolkits/sqltool` | [Reference](../toolkits/sqltool/README.md) |
 | `./toolkits/timetool` | `github.com/skosovsky/toolsy/toolkits/timetool` | [Reference](../toolkits/timetool/README.md) |
 | `./toolkits/web` | `github.com/skosovsky/toolsy/toolkits/web` | [Reference](../toolkits/web/README.md) |
+
+Repository operations: [verification](verification.md), [release runbook](release/runbook.md).

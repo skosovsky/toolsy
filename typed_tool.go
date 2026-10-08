@@ -342,14 +342,13 @@ func emitTypedToolResult[TResult, TEffect any](
 }
 
 func chunkFromToolResult[TResult, TEffect any](res ToolResult[TResult, TEffect]) (Chunk, error) {
-	chunk := Chunk{
-		Event:       EventResult,
-		TypedResult: res.Value,
-		EmptyResult: res.Empty,
-		Noop:        res.Noop,
-		Effects:     effectsToAny(res.Effects),
-		Controls:    append([]ControlSignal(nil), res.Controls...),
-	}
+	var chunk Chunk
+	chunk.Event = EventResult
+	chunk.TypedResult = res.Value
+	chunk.EmptyResult = res.Empty
+	chunk.Noop = res.Noop
+	chunk.Effects = effectsToAny(res.Effects)
+	chunk.Controls = append([]ControlSignal(nil), res.Controls...)
 	switch {
 	case res.Empty || res.Noop:
 		// Retain the BYOT value without serializing it into wire bytes.

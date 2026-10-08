@@ -219,17 +219,17 @@ func UnmarshalToolResult(data []byte) (toolsy.Chunk, error) {
 			Err:         nil,
 		}
 	}
-	return toolsy.Chunk{
-		CallID:      w.CallID,
-		ToolName:    w.ToolName,
-		Event:       toolsy.EventResult,
-		Data:        w.Data,
-		MimeType:    w.MimeType,
-		IsError:     w.IsError,
-		EmptyResult: w.Empty,
-		Noop:        w.Noop,
-		Envelope:    env,
-	}, nil
+	var chunk toolsy.Chunk
+	chunk.CallID = w.CallID
+	chunk.ToolName = w.ToolName
+	chunk.Event = toolsy.EventResult
+	chunk.Data = w.Data
+	chunk.MimeType = w.MimeType
+	chunk.IsError = w.IsError
+	chunk.EmptyResult = w.Empty
+	chunk.Noop = w.Noop
+	chunk.Envelope = env
+	return chunk, nil
 }
 
 func validateResult(w wireToolResult) error {

@@ -178,6 +178,12 @@ func TypedRPCError(rpc *RPCError) error {
 			Requested: data.Requested,
 			Supported: append([]string(nil), data.Supported...),
 		}
+	case JSONRPCParseError,
+		JSONRPCInvalidRequest,
+		JSONRPCMethodNotFound,
+		JSONRPCInvalidParams,
+		JSONRPCInternalError:
+		return rpc
 	default:
 		return rpc
 	}
