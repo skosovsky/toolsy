@@ -19,6 +19,7 @@ var ErrToolHandlerNil = errors.New("toolsy: tool handler must not be nil")
 type tool struct {
 	manifest ToolManifest
 	execute  func(context.Context, *RunEnv, ToolInput, func(Chunk) error) error
+	admit    func(context.Context, CallContext, ToolInput) (any, error)
 }
 
 // NewTool builds a low-level Tool from a typed function that also receives [*RunEnv].
@@ -98,6 +99,7 @@ func NewTool[T any, R any](
 	return &tool{
 		manifest: manifest,
 		execute:  execute,
+		admit:    nil,
 	}, nil
 }
 
@@ -273,6 +275,7 @@ func NewStreamTool[T any](
 	return &tool{
 		manifest: manifest,
 		execute:  execute,
+		admit:    nil,
 	}, nil
 }
 
@@ -323,6 +326,7 @@ func NewProxyTool(
 	return &tool{
 		manifest: manifest,
 		execute:  execute,
+		admit:    nil,
 	}, nil
 }
 

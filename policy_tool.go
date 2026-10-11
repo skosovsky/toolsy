@@ -142,7 +142,7 @@ func buildPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, 
 		}
 		return spec.Tool.Execute(ctx, &innerEnv, forward, func(c Chunk) error { return yield(transform(c)) })
 	}
-	return &tool{manifest: manifest, execute: execute}, nil
+	return &tool{manifest: manifest, execute: execute, admit: nil}, nil
 }
 
 func policyFinalCheck[TSubject, TScope, TArgs any](

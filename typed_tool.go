@@ -195,7 +195,13 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 			yield,
 		)
 	}
-	return &tool{manifest: manifest, execute: execute}, nil
+	admit := func(ctx context.Context, call CallContext, input ToolInput) (any, error) {
+		bound, _, bindErr := validateTypedToolInput[TSubject, TScope, TArgs](
+			ctx, call, input, manifest, ext, spec.ArgsBinder, spec.ArgValidator,
+		)
+		return bound.Value, bindErr
+	}
+	return &tool{manifest: manifest, execute: execute, admit: admit}, nil
 }
 
 func prepareTypedToolCall[TSubject, TScope, TArgs any](
@@ -210,19 +216,11 @@ func prepareTypedToolCall[TSubject, TScope, TArgs any](
 ) (ValidatedArgs[TArgs], TypedCallContext[TSubject, TScope], error) {
 	var zeroArgs ValidatedArgs[TArgs]
 	var zeroCtx TypedCallContext[TSubject, TScope]
-	callCtx, err := TypedContext[TSubject, TScope](env.CallContext())
+	bound, callCtx, err := validateTypedToolInput[TSubject, TScope, TArgs](
+		ctx, env.CallContext(), input, manifest, ext, argsBinder, argValidator,
+	)
 	if err != nil {
 		return zeroArgs, zeroCtx, err
-	}
-	bound, err := bindTypedArgs(ctx, input, manifest, callCtx, ext, argsBinder)
-	if err != nil {
-		return zeroArgs, zeroCtx, err
-	}
-	if argValidator != nil {
-		argErr := argValidator(bound.Value)
-		if argErr != nil {
-			return zeroArgs, zeroCtx, wrapArgValidatorError(argErr)
-		}
 	}
 	if policy != nil {
 		req := TypedPolicyRequest[TSubject, TScope, TArgs]{
@@ -235,6 +233,28 @@ func prepareTypedToolCall[TSubject, TScope, TArgs any](
 		policyErr := decisionError(policy(ctx, req))
 		if policyErr != nil {
 			return zeroArgs, zeroCtx, policyErr
+		}
+	}
+	return cloneValidatedArgs(bound), callCtx, nil
+}
+
+func validateTypedToolInput[TSubject, TScope, TArgs any](
+	ctx context.Context, call CallContext, input ToolInput, manifest ToolManifest,
+	ext *Extractor[TArgs], argsBinder ArgsBinder[TArgs], argValidator ArgValidator[TArgs],
+) (ValidatedArgs[TArgs], TypedCallContext[TSubject, TScope], error) {
+	var zeroArgs ValidatedArgs[TArgs]
+	var zeroCtx TypedCallContext[TSubject, TScope]
+	callCtx, err := TypedContext[TSubject, TScope](call)
+	if err != nil {
+		return zeroArgs, zeroCtx, err
+	}
+	bound, err := bindTypedArgs(ctx, input, manifest, callCtx, ext, argsBinder)
+	if err != nil {
+		return zeroArgs, zeroCtx, err
+	}
+	if argValidator != nil {
+		if argErr := argValidator(bound.Value); argErr != nil {
+			return zeroArgs, zeroCtx, wrapArgValidatorError(argErr)
 		}
 	}
 	return cloneValidatedArgs(bound), callCtx, nil

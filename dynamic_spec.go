@@ -38,7 +38,7 @@ type DynamicToolSpec struct {
 
 // NewDynamicToolFromSpec creates a [Tool] from [DynamicToolSpec].
 //
-//nolint:gocognit // schema compile + validated handler pipeline
+//nolint:gocognit,funlen // Constructor shares the validated input stage with dispatch and admission.
 func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	if spec.Handler == nil {
 		return nil, ErrToolHandlerNil
@@ -78,22 +78,29 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 		return nil, err
 	}
 
-	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
+	validateInput := func(ctx context.Context, input ToolInput) (map[string]any, error) {
 		v, err := jsonschemax.Decode(input.ArgsJSON)
 		if err != nil {
-			return wrapJSONParseError(err)
+			return nil, wrapJSONParseError(err)
 		}
 		if err := validateAgainstSchema(compiled, v); err != nil {
-			return err
+			return nil, err
 		}
 		decoded, ok := v.(map[string]any)
 		if !ok {
-			return NewSchemaError("dynamic tool arguments must be a JSON object")
+			return nil, NewSchemaError("dynamic tool arguments must be a JSON object")
 		}
 		if validateArgs != nil {
 			if vErr := runDynamicValidateArgs(ctx, validateArgs, decoded); vErr != nil {
-				return vErr
+				return nil, vErr
 			}
+		}
+		return decoded, nil
+	}
+	execute := func(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
+		decoded, err := validateInput(ctx, input)
+		if err != nil {
+			return err
 		}
 		return executePreparedResult(
 			ctx,
@@ -130,6 +137,9 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	return &tool{
 		manifest: manifest,
 		execute:  execute,
+		admit: func(ctx context.Context, _ CallContext, input ToolInput) (any, error) {
+			return validateInput(ctx, input)
+		},
 	}, nil
 }
 

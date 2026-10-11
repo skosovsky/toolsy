@@ -32,3 +32,66 @@ validate its construction, output and prepared capability before protected use.
 This table does not turn arbitrary custom implementations into trusted built-ins.
 Schema/source limits and cooperative callback ownership remain part of each
 linked module's contract, rather than an unenforceable universal guarantee.
+
+## Input admission before whole-batch dispatch
+
+`AdmitInput(ctx, tool, trustedCallContext, input)` returns a defensive `ToolInput`
+with canonical JSON from the same input stage as dispatch. It supports
+`NewTypedTool` (default extractor or custom `ArgsBinder`, then `ArgValidator`)
+and `NewDynamicToolFromSpec` (decode, schema, object check, then `ValidateArgs`).
+Canonical JSON encodes the validated value, including sanitizer changes; it
+preserves typed integers and dynamic `json.Number` precision.
+
+Known native wrappers forward internally: logging, recovery, budget, truncation,
+error formatting, async, and manifest overrides. Their execution behavior is not
+run by admission. An override still uses its underlying constructor's binder and
+schema, just as dispatch does. Chains are bounded to 64 inspected layers; nil,
+cycles, excessive chains and unsupported tools return
+`ErrInputAdmissionUnsupported`. `NewTool`, `NewStreamTool`, raw/proxy constructors
+and `NewPolicyTool` currently have no separate admission stage and return that
+error. Custom opaque tools and wrappers must implement `InputAdmitter` explicitly.
+`ChainUnwrapper` alone is insufficient: a wrapper that changes input in `Execute`
+must apply the same transformation in its admission port or reject admission.
+
+The host can check every slot before starting any handler. It retains the original
+inputs for dispatch; the returned canonical snapshot is informational, and feeding
+it back to a non-idempotent binder could apply its transformation twice:
+
+```go
+// slots contain the resolved tool, its ToolCall, and trusted host context.
+for _, slot := range slots {
+    if _, err := toolsy.AdmitInput(ctx, slot.Tool, slot.Call.CallContext, slot.Call.Input); err != nil {
+        return err
+    }
+}
+for _, slot := range slots {
+    if err := registry.Execute(ctx, slot.Call, yield); err != nil {
+        return err
+    }
+}
+```
+
+See the executable package-external `ExampleAdmitInput` for an invalid second slot
+that prevents the first handler, and a valid batch that runs only in phase two.
+This API adds no batch executor and promises no batch transaction or atomicity.
+Admission never invokes handlers, operation `Claim`, execution profiles, controls,
+budget tracking, typed policy, scope authorization or registry hooks. Success is
+not a grant, `PreparedCall`, cached binding, or reusable dispatch continuation.
+Normal dispatch repeats binding, validation and current authorization using its
+actual arguments and trusted context, even when the `CallID` is unchanged.
+
+Binders, schema/custom validators and custom admission ports may perform I/O or
+have effects: the SDK cannot prove callback purity. Hosts must keep these callbacks
+repeatable and free of business effects, and retain synchronization responsibility
+for host-owned mutable state. Input and context metadata snapshots protect ordinary
+JSON/typed mutable values, not arbitrary resources or closures. Canceled contexts
+are rejected before callbacks and after successful callbacks; callback validation
+errors retain the dispatch input-stage error mapping. Callback panics propagate to
+the caller, including through `WithRecovery`; Registry panic recovery belongs to
+execution and is not invoked here.
+
+Consumer migration should remove duplicate binder attachment and manual wrapper
+walking only for these supported constructor/native wrapper paths after updating
+to the verified release recorded in the input-admission task. Custom wrappers need
+the explicit port first; raw passthrough is not a validation success. Core adds no
+Guardy/Prompty imports and does not own Kosmify's batch orchestration.
