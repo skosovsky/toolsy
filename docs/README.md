@@ -16,7 +16,7 @@ or the final task41 acceptance.
 | Sandbox deadlines and host policy | [Deadline/capability reference](sandbox-deadlines.md) |
 | Sandbox outcomes, cleanup and capability limits | [Result/cleanup contract](sandbox-result-contract.md), [backend matrix](../adapters/sandbox/README.md) |
 | Remote bridge extension and task references | [Remote bridge contract](remote-bridge-contract.md), [agents module](../agents/README.md) |
-| MCP transport, discovery and ownership | [MCP module](../mcp/README.md) |
+| MCP SDK import/export and ownership | [MCP module](../mcp/README.md), [migration](migration-mcp-sdk.md), [coverage](mcp-sdk-integration-design.md) |
 | Schema adapters | [Contracts modules](../contracts/README.md) |
 | Toolkit input/output limits and ownership | [Toolkit index](../toolkits/README.md) |
 | Host recipes | [Runnable examples](../examples/README.md) |
@@ -81,3 +81,5 @@ not an optional library module to install.
 | `./toolkits/web` | `github.com/skosovsky/toolsy/toolkits/web` | [Reference](../toolkits/web/README.md) |
 
 Repository operations: [verification](verification.md), [release runbook](release/runbook.md).
+
+- [MCP SDK auth composition contract](mcp-sdk-auth-contract.md) — SDK OAuth/bearer owners, identity lifecycle and PKG-01–PKG-08.

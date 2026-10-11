@@ -1,5 +1,7 @@
 # Task35 conditional activation evidence
 
+> Historical contract for the retired MCP stack. The current SDK integration supersedes these MCP restrictions; see [migration-mcp-sdk.md](migration-mcp-sdk.md).
+
 Source: https://github.com/skosovsky/toolsy/issues/3. The current issue describes a conditional backlog, explicitly not one indivisible release gate. It specifies scenarios, but no confirmed external consumer, selected server transport, deployed catalog size or required remote profile. The issue has no comments supplying that evidence. Decisions below preserve all requirements in the matrix; deferred work is not counted as implemented.
 
 ## TLS-003 — deferred pending a programmatic consumer

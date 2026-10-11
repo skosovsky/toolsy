@@ -573,27 +573,16 @@ Implications for external executor wrappers:
 
 ## MCP integration
 
-The MCP bridge supports exactly protocol revision `2026-07-28`. `Connect` performs strict `server/discover` up front and returns a ready client only when the server's `supportedVersions` contains that exact revision.
+The optional `toolsy/mcp` module uses the official Go SDK v1.8.0. Import remote
+SDK tools into the core registry or export a scoped core view as an SDK server;
+the two directions are independent and the core has no SDK dependency.
+Hosts own transports, authentication, scope and connection lifetime. Current core
+policy, approval and replay boundaries apply to imported and exported execution.
 
-```go
-transport := mcp.NewStreamableHTTPTransport("https://example.com/mcp")
-client, err := mcp.Connect(ctx, transport)
-if err != nil {
-	return err
-}
-defer client.Close()
-```
-
-There is no `initialize` fallback, session ID, HTTP GET/resume/DELETE path or automatic retry. HTTP uses POST with exact version/method routing headers; `Mcp-Name` is emitted for tool calls, prompt gets and resource reads, and `x-mcp-header` tool arguments are mirrored as validated `Mcp-Param-*` fields. Stdio cancellation sends `notifications/cancelled` after delivery; HTTP cancellation closes the request-scoped response stream. Results are tagged with `resultType`, cacheable results expose `ttlMs`/`cacheScope`, and invalidations use explicit `subscriptions/listen`.
-
-For stable host-side cache identity, `mcp.ComputeSnapshotDigest` validates and hashes supported discovery/list/read snapshots using canonical, snapshot-type-separated encoding that includes cache metadata and ordered entries. Official MCP capability extensions are preserved inert and may use explicit BYO codecs; caller `_meta` still cannot forge MCP-reserved MetaObject namespaces.
-
-See [the module README](mcp/README.md) and [task34 migration guide](docs/migration-task34.md).
-
-Remote annotations remain untrusted hints. Use `mcp.WithToolPolicyMapper` for
-explicit host classification; current authorization and discovery generation
-protect cached delivery as well as dispatch. HTTP authentication failures expose
-bounded challenge diagnostics without automatic authentication or retries.
+This is a breaking migration with documented SDK precision/lifecycle limitations.
+See [the module contract](mcp/README.md), [migration guide](docs/migration-mcp-sdk.md)
+and the independent [import](mcp/examples/import/main.go) /
+[export](mcp/examples/export/main.go) examples.
 
 The separate [agents bridge](agents/README.md) reports confirmed terminal outcomes
 and accepted background task references. Hosts own persistence and continuation;

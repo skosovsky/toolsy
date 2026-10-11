@@ -1,304 +1,173 @@
-# MCP 2026-07-28 client for toolsy
-
-`github.com/skosovsky/toolsy/mcp` is a strict MCP client and protocol bridge. It supports exactly `2026-07-28`; there is no legacy negotiation, fallback, compatibility mode or MCP server implementation.
-
-All transport implementations and test doubles use `NotificationHandler` with
-`json.RawMessage` parameters and the `PrepareRequest` delivery boundary. A
-legacy `Call` method is not a substitute for preparation: request-correlated
-state must be registered before delivery. The package owns one shared JSON-line
-scanner cap; transports must not redeclare it or introduce compatibility shims.
-
-`NewSSETransport` and its `WithSSE*` options are removed. Select
-`NewStreamableHTTPTransport` for POST responses that contain request-scoped SSE.
-There is no GET/endpoint-discovery stream, legacy initializer, session recovery
-or server-request handler compatibility path. Migration retains applicable
-transport safety checks; obsolete positive protocol scenarios become explicit
-rejection/no-traffic checks rather than restoring unsupported features.
-
-## Connect
-
-Once `Connect` attempts `Transport.Start`, it owns cleanup on failure, including
-a partially successful start. It calls `Close` and preserves the original start
-error. Invalid client options rejected before `Start` do not transfer ownership.
-
-```go
-transport := mcp.NewStdioTransport("my-mcp-server", nil)
-// or: transport := mcp.NewStreamableHTTPTransport("https://example.com/mcp")
-
-client, err := mcp.Connect(ctx, transport)
-if err != nil {
-	return err
-}
-defer client.Close()
-```
-
-`Connect` sends `server/discover` first and accepts the server only when `supportedVersions` contains exact `2026-07-28`. The discovery result includes capabilities, extensions, cache metadata and optional server identity from result `_meta`. `initialize` and `notifications/initialized` do not exist in this implementation, and a failed discovery never falls back to them.
-
-Every request carries the protocol version, actual client capabilities and client identity in reserved `_meta.io.modelcontextprotocol/*` fields. Caller `Meta.Extra` cannot create a MetaObject key whose second DNS label is `mcp` or `modelcontextprotocol`; the protocol builder exclusively owns those namespaces. Duplicate JSON keys and malformed tagged unions fail closed.
-
-Set `RequestMeta.LogLevel` to opt a single request into bounded `notifications/message` diagnostics; no session-wide logging state exists. `ExtensionRegistry` and `ExtensionCodec` are the BYO-types boundary for typed extension payloads. Vendor IDs and official capability extension IDs such as `io.modelcontextprotocol/*` may be registered. Unknown declarations remain lossless and inert; registration does not advertise or enable a capability by itself. `logging`, `completions` and `experimental` advertisements are likewise inert data and expose no legacy runtime API.
-
-## Results
-
-Client discovery, call/read and list boundaries map transport read-limit failures
-to `toolsy.CodeValidationFailed` with the actual transport byte cap and operation
-subject. The underlying cause remains inspectable. Cancellation, deadlines and
-timeout causes take precedence and do not become validation failures.
-
-Frame limits count raw framing bytes, including LF/CRLF for stdio and all SSE
-lines through the event delimiter. Scanner headroom permits counting delimiters;
-it does not increase the configured cap. Optional lifetime readers preserve their
-inspectable read-limit cause. No cumulative traffic cap applies by default.
-Admission failures for queued bytes or in-flight work expose
-`TransportLimitError` and `ErrTransportLimitExceeded`.
-
-Every wire result requires `resultType`. `complete` is returned as a method-specific typed result. `input_required` is accepted only from `tools/call`, `resources/read` and `prompts/get` and is surfaced distinctly; the library does not automatically answer or retry MRTR rounds. A host-driven retry uses a fresh request ID, current-round `inputResponses` and the server's byte-exact opaque `requestState`. Use `CallTool`, `ReadResourceRound` and `GetPromptRound` for explicit rounds; convenience APIs return `InputRequiredError` rather than hiding interim results.
-
-Discovery and cacheable list/read results expose typed `ttlMs` and `cacheScope` (`public` or `private`). Missing, null, fractional, negative or unknown values are protocol errors. Cache hints do not enable hidden caching or refresh.
-
-Use `ComputeSnapshotDigest` when a host needs a stable identity for a discovery, tools, resources, resource-templates, resource-read or prompts snapshot. It first runs the strict wire encoder, rejects encodings above 8 MiB before canonical decoding, then hashes a bounded canonical JSON representation with explicit version and snapshot-type domain separation. The digest includes `ttlMs`, `cacheScope`, ordered list entries and all lossless wire metadata; pointer and value forms are identical. `SnapshotDigest.String` returns the 64-character lowercase SHA-256 hex value.
-
-Tool schemas default to JSON Schema 2020-12 when `$schema` is absent and respect explicitly supported dialects. Local `$ref` is supported with bounded evaluation; arbitrary network fetch is not. `structuredContent` may be any JSON value. Content and resource unions, binary Base64 data and output schemas are validated symmetrically.
-
-## Streamable HTTP
-
-Streamable HTTP uses one endpoint and POST only. Each request includes:
-
-- `MCP-Protocol-Version: 2026-07-28`;
-- `Mcp-Method`, equal to the JSON-RPC method;
-- `Mcp-Name` exactly for `tools/call`, `prompts/get` and `resources/read`, derived from `params.name` or `params.uri` so its decoded value matches the body value;
-- `Mcp-Param-*` for a present non-null tool argument whose static top-level property has a valid `x-mcp-header` annotation.
-
-`x-mcp-header` supports `string`, `integer` and `boolean`; integers must fit the JSON safe-integer range. Header suffixes are non-empty RFC 9110 `tchar` strings and case-insensitively unique. A malformed annotation removes that tool from a `tools/list` snapshot without discarding valid siblings. Unsafe values and values resembling the sentinel are UTF-8/Base64 encoded as `=?base64?{value}?=`. Base64 provides no confidentiality.
-
-Responses may be terminal JSON or request-scoped SSE. Cancelling an HTTP request closes that request's response stream; it does not send `notifications/cancelled`. A broken stream is not resumed or automatically retried. Sessions, `Mcp-Session-Id`, GET polling, DELETE-on-close, `Last-Event-ID` and SSE redelivery are absent. A correlated HTTP 400 JSON-RPC `HeaderMismatch` (`-32020`) is returned as a typed protocol error.
-
-SSE events are dispatched only at the terminating empty line. EOF discards an
-unfinished event; a truncated terminal result cannot complete a request, and
-truncated acknowledgements/notifications cannot trigger handlers. This follows
-the [SSE framing rules](https://html.spec.whatwg.org/multipage/server-sent-events.html#interpreting-an-event-stream),
-not the removed GET/reconnect transport behavior.
-
-The request decorator is for authentication and trace headers. It cannot replace protocol-derived `Mcp-*`/`Mcp-Param-*`, method, URL, Host or body fields. The transport retains SSRF-safe dialing and redirects, bounded responses and secret-safe diagnostics.
-
-The HTTP transport permits only same-origin GET/HEAD redirects. POST RPCs and DELETE session termination never redirect, including same-origin 307/308 body replay; method-changing redirects are also rejected. Configure the final MCP endpoint explicitly. A redirect failure occurs after the original dispatch and does not establish rollback or permission to repeat an RPC. `httptool.RedirectError` remains inspectable when the shared redirect policy refuses the request.
-
-## Stdio and cancellation
-
-Stdio uses one JSON-RPC message per line and sends `server/discover` first. Writes are serialized; stdout is protocol-only and stderr is bounded logging. After a request reaches the wire, context cancellation sends `notifications/cancelled` with the exact raw request ID. Cancellation before delivery sends no notification. Process failure unblocks all waiters, and `Close` terminates the complete child process tree.
-
-Tool progress is request-scoped and strictly increasing. Its completion callback
-is installed before `Deliver`: the wire-terminal boundary retires the route, so
-late notifications cannot reach the consumer. Accepted buffered progress is
-drained before delivering the terminal result. A custom transport must expose
-`CompletionPendingRequest` for proxy tool progress; otherwise the prepared
-request is aborted before any delivery.
-
-Proxy tool calls own a child cancellation context for preparation and Await.
-Returning from the invocation cancels that context, including after a consumer
-abort with an uncancelled caller. Cleanup does not require the optional local
-pending-cancellation interface or global transport Close. The proxy loop owns
-cancellation notification dispatch; the background Await worker does not send
-another cancellation. A completed wire request does not receive a consumer-abort
-notification. Completion still retires progress before Await is released.
-
-An intentional empty tool result retains its typed MCP value and result
-envelope, sets `EmptyResult`, and has neither payload bytes nor MIME type, in
-accordance with the core chunk contract. Consumer failures preserve their cause
-alongside the stream-aborted marker.
-
-This is intentionally different from HTTP cancellation: stdio has no per-request response stream, while HTTP does.
-
-## Subscriptions and invalidation
-
-Use `subscriptions/listen` for list changes and resource updates. The first SSE message must acknowledge the subscription with the effective filter and `_meta.io.modelcontextprotocol/subscriptionId`; notifications before acknowledgment are rejected. Later notifications must match both the active subscription ID and effective filter. The library does not silently reconnect a failed listen stream. Discovery generation counters remain authoritative if a bounded consumer channel overflows.
-
-Resource subscription matching normalizes scheme/hostname case, HTTP/HTTPS
-default ports and unreserved percent-encoded path octets. Reserved escapes and
-repeated slashes remain distinct; dot segments are rejected. Queries and
-fragments permit only the same normalized URI, not descendant matches. These
-rules route opted-in notifications; they do not confer filesystem or host rights.
-Normalization follows [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-6.2.2).
-
-## Tool registration
-
-```go
-builder := toolsy.NewRegistryBuilder()
-for proxy, err := range client.Discover(ctx) {
-	if err != nil {
-		return err
-	}
-	builder.Add(proxy)
-}
-registry, err := builder.Build()
-```
-
-`inputSchema` maps to `ToolManifest.Parameters`; `outputSchema` maps to `ToolManifest.OutputSchema`. `isError: true` becomes a remote execution error, distinct from JSON-RPC, schema and transport errors. Annotations remain hints, not authorization policy.
-
-## Host classification and current authorization
-
-Remote `annotations` are untrusted hints. The default proxy is `Dangerous: true`,
-`ReadOnly: false`, `Idempotent: false`, irrespective of `readOnlyHint`,
-`destructiveHint` or `idempotentHint`. `ListToolsPage` preserves the original typed
-annotations and extension metadata for display and diagnostics; the manifest
-contains only host execution properties, not server claims.
-
-`WithToolPolicyMapper` is an explicit host decision during `Discover`. It receives
-that call's host context and an owned `MCPTool` descriptor snapshot. For example:
-
-```go
-client, err := mcp.Connect(ctx, transport, mcp.WithToolPolicyMapper(
-    func(ctx context.Context, source mcp.MCPTool) (mcp.ToolExecutionProperties, error) {
-        // This allowlist is host-owned and scoped to the authenticated connection.
-        if source.Name == "catalog.lookup" {
-            return mcp.ToolExecutionProperties{ReadOnly: true, Idempotent: true}, nil
-        }
-        return mcp.ToolExecutionProperties{Dangerous: true}, nil
-    },
-))
-```
-
-The mapper classifies the discovery snapshot; it does not authenticate a caller
-or issue a grant. Current per-invocation authorization remains the Registry or
-typed host policy's responsibility. A mapper error prevents that proxy from
-being delivered. Remote metadata, model text and claimed tool names cannot
-establish authenticated subject/scope or connection trust.
-
-The optional `ResultCache` runs after current host authorization and requires a
-host-owned eligibility predicate, freshness partition and complete codec. Server
-hints and a mapper's `Idempotent: true` alone never enable reuse or promise remote
-exactly-once execution. The per-attempt host predicate must approve reusable data. Cached delivery and dispatch both reject stale
-MCP discovery generations, and revoking the current Registry policy prevents
-both handler execution and replay. A policy must enforce consent explicitly;
-`Dangerous` is a classification field, not an automatic approval mechanism.
-The generation guard rejects stale proxy instances; it does not invalidate stored
-cache entries when the host builds a new proxy after rediscovery. The host's cache
-partition must bind the authenticated connection and relevant discovery/dependency
-freshness, for example `client.DiscoveryGeneration(mcp.InvalidationTools)`, to
-prevent reuse across generations or connections with identical manifests.
-
-## Capability boundary
-
-The client remains pinned to MCP `2026-07-28`. It advertises no optional
-server-to-client capabilities: no elicitation, sampling, roots service, Tasks
-runtime or extension runtime. An `input_required` result with supported opaque
-`requestState` is returned to the host without automatic continuation. An
-`inputRequests` requirement for an undeclared capability is a typed
-`UnsupportedFeatureError`; the client sends no hidden follow-up or retry.
-
-`ExtensionRegistry` is a host-owned JSON codec registry. Registering a codec
-permits explicit encode/decode of that identifier only. It does not advertise a
-capability, install protocol handlers or execute a remote extension. Unknown
-identifiers are typed refusals. OAuth discovery/refresh, elicitation UI, persistent
-remote scheduling and new protocol profiles require a separate consumer-driven
-activation, as described in [Task35 activation](../docs/task35-activation.md).
-
-The trust/cache/policy, stale-generation, input-required and extension assertions
-are fixture and local integration tests. They do not constitute live remote
-interoperability verification.
-
-## HTTP authentication failures
-
-HTTP 401/403 returns `*HTTPError` with bounded authentication `Challenges` for
-explicit host inspection. Safe formatting and structured logging omit challenge
-values. The narrow projection retains scheme, known Bearer error codes and safe
-HTTPS `resource_metadata` hints; raw headers, credentials and free-text parameters
-are discarded. Hints remain untrusted, and no discovery, refresh or POST retry
-is triggered. See [the projection contract](docs/http-auth-challenges.md) for
-bounds, unsupported parameters and the host's network/identity responsibilities.
-
-## Removed APIs
-
-The clear break removes initialize DTOs/lifecycle, `WithClientRoots`, `WithRoots`, roots handlers, `logging/setLevel`, base `ping`, `ErrSessionExpired`, server-request dispatch, resource subscribe/unsubscribe, session/GET/resume internals and every older protocol revision. No deprecated aliases are provided.
-
-See [migration-task34.md](../docs/migration-task34.md) for the full migration checklist.
-
-## Limits and verification
-
-I/O, pagination, schema composition and diagnostics remain bounded. Context cancellation takes precedence over transport/read-limit mapping. Errors do not expose authorization/cookie headers, full binary blocks or unbounded bodies.
-
-The Contract-First test anchor is the byte-exact official `2026-07-28` schema at `testdata/task34/schema/mcp-2026-07-28.schema.json`, pinned to upstream commit `271ecc9accafdd9b83a3c869fa67c22953b2af80` with SHA-256 `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203`. Its provenance manifest cites all 19 wire fixtures, and `make test` verifies the trust anchor without network access.
-
-```text
-go test -race ./...
-make test
-make lint
-make test
-```
-
-`make release-break` is the actual destructive release workflow: after lint, tests and preflight it may create a release commit, create tags and push tags. Run it only when intentionally publishing the clear break.
-
-`WithStreamableHTTPSettings(httptool.ClientSettings{Timeout: ..., TLSConfig: ...})`
-replaces the removed `WithStreamableHTTPClient` accept-and-ignore option. Settings
-apply to one owned safe pool; invalid settings fail Start before dispatch. Close
-releases owned idle connections after active posts finish. TLSConfig is cloned;
-referenced certificates, root pools and callback state remain immutable host
-state. A positive timeout also bounds each SSE response; zero uses caller context.
-
-
-## Transport, discovery and subscription limits
-
-`TransportLimits` configures `WithStdioLimits` / `WithStreamableHTTPLimits`:
-default MaxFrameBytes=1MiB, MaxQueueBytes=16MiB, MaxInFlight=64. Frames and active
-request correlation are bounded separately from traffic lifetime. MaxQueueBytes
-bounds retained outgoing requests/writes; pending response slots are bounded by
-MaxInFlight and each response frame. Caller-retained completed outcomes are host
-objects, not a library queue. Incoming notifications dispatch synchronously, so
-there is no unbounded notification queue. Client event channels hold 64 events;
-overflow drops advisory delivery while validated active invalidations still advance
-current authority. Host callbacks must finish/cooperate with cancellation.
-
-MaxLifetimeBytes=0 leaves cumulative traffic unlimited. Positive lifetime bounds
-stdio stdout for that process, or each HTTP SSE response body. A frame cap applies
-to each stdio JSON line including its newline, and to each SSE event's raw lines
-and delimiters (comments included), resetting at an empty line. HTTP JSON bodies
-are one frame. Exact frame bounds are inclusive; outgoing stdio adds one LF byte, while incoming
-LF/CRLF counts its actual one/two delimiter bytes. Encoded outgoing RPC payloads
-are conservatively strictly below
-MaxFrameBytes. Oversized scanner tokens preserve the typed read-limit sentinel.
-Neither a frame cap nor lifetime cap is a timeout; caller contexts still matter.
-Negative limits and nil options fail before Start/Connect dispatch. Configure
-larger frame bounds explicitly for deliberately large messages.
-
-`WithPaginationLimits` separately bounds pages/cursor bytes, total tool count
-(default 10000), and cumulative raw tool-list response bytes (default 16MiB).
-Limits apply before descriptor accumulation/schema compilation. `ListToolsPage`
-returns a validated page with its original cache hints and never publishes routing
-authority. `DiscoverTools` returns a full `ToolDiscovery` (Tools, Pages, Generation)
-and atomically publishes the validated complete authority. Failed or stale discovery
-preserves existing authority unless an actual invalidation has already revoked it.
-`Discover` builds proxies through that same full discovery path. Page TTLs are not
-collapsed into an invented aggregate TTL. No unrestricted client authority setter
-is available. Transport header-binding publication is a trusted client facet,
-not a permission grant to a model or an authenticated subject.
-
-`WithSubscriptionLimits` defaults to MaxActive=64, MaxTracked=1024 and RetireTTL=1m.
-Tracked capacity includes active routes with reserved space for local cancellation;
-saturation refuses new Listen without evicting an active or recently retired ID.
-After Close or parent cancellation, late well-formed messages for a locally retired
-ID are ignored without generation change or sibling cancellation. In-flight traffic
-can race with cancellation already beginning. IDs beyond the bounded retirement
-window become unknown and trigger the strict unknown-ID policy. Malformed messages
-and unexpected active-route messages retain strict validation. Custom transports
-must not reuse a request ID within the correlation window. No wall-clock timer or
-unbounded tombstone map is created; expired entries are pruned on new admission or
-lookup while the retained count stays bounded.
-
-A minimal custom `Transport` implements Start, PrepareRequest, Notify,
-OnNotification and Close. PrepareRequest returns a stable ID before wire delivery;
-PreparedRequest adds exactly-once Deliver/Abort to PendingRequest.ID/Await. Await
-must honor context and must terminate on transport Close. Register correlation
-before Deliver; do not invoke notifications from PrepareRequest. Optional facets
-report real capabilities (terminal hooks, sent/cancel correlation, request-scoped
-HTTP notifications, validated header bindings, FrameByteCapTransport). Keep those
-facets narrow; implementing an unrelated giant interface is unnecessary. Custom
-ports must independently enforce their frame/queue/lifetime guarantees. Built-in
-bounds do not automatically constrain arbitrary host transport code.
-
-`ToolHeaderTransport.ReplaceToolHeaderBindings` is a synchronous atomic replace:
-on error it must leave previous bindings intact, finish in bounded time, and must
-not reenter Client methods. The client holds its authority lock to commit matching
-client and transport snapshots. This restriction applies only to the replacement
-facet, not descriptor mappers or other callbacks. Cancellation is checked under
-that lock before publication starts; cancellation after this commit point does not
-roll back a successful publication. Generation changes still invalidate authority.
+# MCP integration through the official Go SDK
+
+`github.com/skosovsky/toolsy/mcp` is an optional adapter over the published
+`github.com/modelcontextprotocol/go-sdk v1.8.0`. The core module has no MCP
+SDK dependency. Client import and server export can be used independently.
+This is a breaking migration; it does not promise lossless wire preservation.
+
+## Client import
+
+1. Call `ComposeClient(hostOptions, ImportConfig)` before creating the SDK client.
+2. Create `sdk.NewClient` with the returned options and call `hooks.Install(client)`
+   before `Connect`. The host creates its SDK transport and owns the connection.
+3. Bind the connected SDK session with a host-owned authenticated authority identity.
+4. Call `importer.Discover(ctx)` and register `snapshot.Tools` in the ordinary core
+   registry/view/session. Call `importer.ResourceTool()` for a resource-reading tool.
+5. Consume `Updates()` and rebuild the registry when generation changes. Close the
+   importer when disposed; the host must separately close its SDK session.
+
+`ImportConfig.Classify` is a trusted host function returning core tool options.
+It receives an owned SDK descriptor, never the SDK cache object. Remote annotations
+are hints; they grant no permissions. The host must classify imported tools and
+configure current core policy, approval, operation execution profiles and caches.
+Classifier options must not weaken schema validation. Resource reads use the
+core read-only classification; host authorization still applies to the URI.
+
+Options are copied before composition. Adapter state updates before each original
+host callback, which runs once with SDK failure/panic semantics. Callbacks must
+return promptly. Installing hooks after Connect is unsupported and Bind rejects
+sessions whose initial handshake was not observed. One client can bind multiple
+sessions; notification routing uses session identity plus an opaque per-call token.
+
+Each execution performs one SDK call. Automatic MRTR is disabled; an explicitly
+automatic host setting is rejected. `NeedsInputError.Result` retains an owned SDK
+result with request state/input requests. Only the host chooses continuation using
+`WithRound(ctx, Round{RequestState: ..., InputResponses: ...})`. Host values whose serialized representation changes during SDK DTO ownership copying are rejected with ErrUnsupported before dispatch, including nonrepresentable int64/json.Number/raw numeric tokens; this applies to both tool and resource continuation. These values are
+not approval grants and do not prove that no effect occurred. Direct prompts,
+resources, templates, extensions and subscription operations use the host SDK
+session; there is no second client facade.
+
+Schemas received from the SDK enter `NewProxyTool` unchanged. Input validation
+precedes dispatch; output validation precedes successful delivery/persistence.
+`Chunk.TypedResult` retains the owned SDK result and ordered content blocks,
+annotations, metadata, MIME and bytes. Structured content is the JSON business
+projection; unstructured results retain the complete SDK wrapper as JSON.
+`isError` becomes a core remote-execution error chunk. SDK faults, cancellation,
+schema errors and input-required remain distinct; `BridgeError` safely formats
+its category while retaining causes through `errors.Is/As`.
+
+Snapshots own mutable SDK DTOs independently of compiled tools and the SDK cache.
+Every successful discovery and notification revokes old generations, including
+cached replay. Digest domain `toolsy/mcp/sdk-snapshot/v1` binds SDK-visible tools,
+authority identity, generation and method. It is not the legacy raw wire digest.
+The host's result-cache partition must also bind that identity/generation; remote
+TTL/cacheScope is not execution authority or permission to cache results.
+
+Adapter defaults: 128 pages, 10000 tools, 8 MiB serialized SDK descriptors,
+32 concurrent calls, 64 progress events per call, 64 invalidation events.
+Cursor loops/duplicate names/aggregate limits reject discovery without publication.
+Progress overflow cancels only that child; invalidation overflow closes the importer
+fail-closed. One serialized yield loop drains accepted progress before terminal.
+Consumer failure cancels the child and leaves sibling calls/the SDK session alive.
+Remote `_meta`, effects, controls or claimed provenance remain inert data.
+
+## Server export
+
+`Export(scopedView, ExportConfig)` returns an SDK server. An explicit `Names` list,
+`Implementation` and trusted `Resolve` function are required. The host resolves
+subject/scope from the transport context, not arguments or `_meta`. Use one SDK
+server per immutable tenant/catalog boundary; an HTTP handler can select that
+server from authenticated request context. Discovery and invocation authenticate
+against the same boundary; invocation resolves current authority again.
+
+Raw `Server.AddTool` preserves explicit input/output schemas and raw arguments.
+Handlers execute through the scoped RegistryView or a trusted Session factory
+built from that view. No handler directly calls a domain tool. Model-controlled
+request state/input responses cannot create approval grants. Core owns current
+policy, exact-argument approval binding, operation claims, replay and uncertainty.
+
+The default projection accepts one model-audience terminal result: JSON business
+value, text/image/audio, an intentional empty result, or a safe soft-error message.
+Internal effects/controls/provenance are not serialized. Independent streams need
+an explicit `Project`; confirmation tools need a host `Control` mapping before
+registration. The mapping must preserve the core challenge/grant workflow; it is
+not itself an approval engine. Binary/application attachments and other audiences
+need an explicit projection. Collection is bounded (1024 chunks, 8 MiB data by
+default). Delivery failure after an effect never causes adapter retry/resend.
+
+## SDK limitations and upgrade contract
+
+These are accepted dependency limitations, not claims of upstream fixes:
+
+| Limitation in pinned SDK | Evidence / upstream |
+|---|---|
+| Large numeric JSON-RPC IDs round | `TestCharacterizationJSONRPCIDs`; no separate issue confirmed |
+| Structured content numbers round; null and missing collapse | `TestCharacterizationStructuredContentActualWire`, `TestCharacterizationDTORepresentationLoss`; [#1236](https://github.com/modelcontextprotocol/go-sdk/issues/1236), [merged #1239](https://github.com/modelcontextprotocol/go-sdk/pull/1239) after v1.8.0 |
+| Schema and metadata numbers round | `TestCharacterizationSchemaActualWire`; [#1310](https://github.com/modelcontextprotocol/go-sdk/issues/1310), [#1311](https://github.com/modelcontextprotocol/go-sdk/pull/1311) |
+| Generic AddTool numeric conversion | [#1201](https://github.com/modelcontextprotocol/go-sdk/issues/1201), [#1302](https://github.com/modelcontextprotocol/go-sdk/pull/1302); adapter uses raw Server.AddTool |
+| Unknown result fields disappear; duplicate keys/tags are permissive | DTO and actual HTTP characterization tests; no separately verified issue |
+| SDK TTL cache returns shared pointers, no public per-call bypass | `TestCharacterizationCatalogCacheAliasing`; adapter clones DTOs but Discover is not force-refresh |
+| SDK mutates call parameters | `TestCharacterizationCallParamsMutation`; adapter passes owned arguments/rounds |
+| No public pre-Await completion hook | Sending middleware retires after SDK method returns; progress scheduled after wire terminal but before that point can be accepted. No strict wire-terminal guarantee |
+| No public subscription ACK/filter/ID/error handle | SDK owns automatic listen/ACK and reconnect behavior; public Subscribe/Unsubscribe manage SDK-owned listening, and unsupported filters may be narrowed without a typed capability error (SDK-only lifecycle characterization); adapter Updates is local revocation, not a subscription handle. Direct public Subscribe/Unsubscribe delegates resource subscriptions. A stream whose subscription handler rejects may still make public Subscribe return nil; the SDK marker remains and the next Subscribe can return nil without reopening; host Unsubscribe clears it (TestCharacterizationSubscriptionFailureIsNotReportedOrRetried). No separate upstream issue confirmed |
+| Wrapped JSON-RPC error Data is omitted | `TestCharacterizationWrappedJSONRPCErrorDataLoss` uses SDK public Encode/DecodeMessage only; code/outer safe message survive. Explicit host `ExportConfig.ErrorMapper` returns an owned bounded top-level public jsonrpc.Error with approved data; default raw causes/data remain private. No separate upstream issue confirmed |
+| OAuth connection closure can collapse typed authorization causes | `TestCharacterizationOAuthClosureCauseCollapse`; SDK ErrConnectionClosed survives but a callback cancellation cause may become text only. Host must track callback/context cancellation independently; no separate upstream issue confirmed |
+| Wait has no cancellable observer variant | One observer per observed connection remains until host session closes, even after importer.Close; host must dispose the session |
+| SDK CommandTransport owns child, not a process-tree supervisor | Hosts requiring descendant cleanup/stderr budgets must supply a supervisor through SDK IOTransport; no former tree-cleanup guarantee is claimed |
+
+No adapter marshal can reconstruct numbers or fields lost before the SDK callback.
+Do not feed numeric tokens requiring precision beyond the SDK's representation to
+these paths. Input rejected before loss can be handled by host/domain validation;
+already rounded inbound results cannot be reliably detected or repaired.
+
+On upgrade: pin an official release in the optional module and SDK-only fixture;
+run the characterization suite first, inspect changed observations and upstream
+issues, update accepted constraints deliberately, then run all adapter contracts,
+GOWORK=off consumers, examples, root/nested tests and lint. A newly passing upstream
+case should remove its limitation, not silently leave stale characterization.
+Do not fork, add a parser, wrap Connection or install a bypass transport.
+
+## Migration and verification
+
+See [migration guide](../docs/migration-mcp-sdk.md),
+[design and coverage matrix](../docs/mcp-sdk-integration-design.md), and
+[historical API/test inventory](../docs/mcp-sdk-api-inventory.md).
+Runnable independent examples: `GOWORK=off go run ./examples/import` and
+`GOWORK=off go run ./examples/export` from this module. Both print `{"n":7}`.
+The adapter contract tests interoperate with real SDK in-memory/HTTP/STDIO transports;
+no external service or release publication is required.
+
+`make test` and `make lint` from the repository check root and all nested modules,
+including the SDK-only characterization fixture and external consumer fixture.
+
+
+## HTTP OAuth and identity composition
+
+Runnable local synthetic example: `GOWORK=off go run ./examples/auth` prints
+`{"n":7}`. It combines stock SDK AuthorizationCodeHandler on the host-owned
+StreamableClientTransport, host HTTPClient settings, SDK RequireBearerToken and
+ProtectedResourceMetadataHandler, and verified TokenInfoFromContext mapped into
+export CallContext subject/tenant. The adapter owns no credentials or token store.
+The example starts with a synthetic stored token; sdk_auth_test.go additionally
+exercises real SDK challenge/discovery, PKCE/code exchange and refresh.
+
+Host owns token persistence (NewTokenSource/InitialTokenSource), consent callbacks,
+issuer/audience/signature verification, IdP registration and network budgets.
+Verifier failures must use safe errors: SDK bearer middleware can write the verifier
+error to its HTTP response. SDK OAuth errors may retain sensitive response bodies
+in inspectable causes; use BridgeError for safe diagnostics and never log causes
+wholesale. OAuth consent and access scope do not replace core operation approval.
+
+Bind identity is immutable. On principal/credential change close BOTH importer and
+host session, create a new OAuth/token partition and client session, then Bind again.
+An SDK cacheScope or model _meta/arguments is never an authority source. Use one
+immutable exported server/view per trusted tenant scope. See the
+[auth contract](../docs/mcp-sdk-auth-contract.md) for the complete host boundary.
+
+The stock transport may retry a request once after 401/403 and successful Authorize.
+Bearer verification must run before business dispatch; do not return an auth challenge
+after an effect. Adapter adds no retry, and uncertain effect outcomes must not be
+resent. Synthetic tests count business handlers independently of OAuth HTTP rounds.
+STDIO composition has host/process trust and requires no HTTP OAuth.
+
+
+`ExportConfig.ErrorMapper` is an optional trusted host projection for necessary
+outbound JSON-RPC diagnostics. It receives the local cause and SDK request and
+returns a public `*jsonrpc.Error` with explicitly approved message/code/data.
+Returning nil keeps normal safe errors. The adapter copies Data and bounds combined
+message/data bytes; invalid JSON or over-budget diagnostics fail safely without
+retry. Do not forward raw cause messages/data by default: they may contain secrets.
+Inbound protocol errors retain public code/data in BridgeError's inspectable cause.
+SDK v1.8.0 drops Data when an error is wrapped; its public top-level Error supports
+safe host projection without a transport/parser fork. Local Go causes cannot be
+serialized across a wire; hosts can inspect them inside ErrorMapper.

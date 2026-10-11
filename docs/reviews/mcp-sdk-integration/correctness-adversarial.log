@@ -1,0 +1,32 @@
+Initial candidate f90dbcd9c83297fafff0207c11673062182f64976e2ec01d44591abd1d9deace
+GOWORK=off go test -race -count=15 -timeout=120s ./... [mcp]: PASS 24.011s
+GOWORK=off go test -race -count=5 -timeout=90s ./... [sdkcheck]: PASS 1.788s
+Independent probe TestReviewUnboundClosedSessions: FAIL, seen closed sessions =5
+Independent probe TestReviewRoundNumericInputNotSilentlyChanged: FAIL, int64 9007199254740993 => float64 9007199254740992 before SDK dispatch
+Independent TestReviewResourceRevokedBeforeDispatch: FAIL, generation revoked inside ExecutePrepared, actual remote dispatch=1, result error stale
+Fix1 recheck TestReviewUnbound+TestSDKUnboundSession -race-count15: PASS2.902s
+Fix2 recheck TestReview* numeric+unbound -race-count15: PASS1.888s (unsupported number now explicitly rejected)
+Independent TestReviewCanceledDiscoveryNeverPublishes: FAIL, ctx=context.Canceled but returned err=nil,generation=1,tools=1
+Intermediate repeat5 adapter race suite caught Control validation regression: fresh outbound SDK InputRequests{} NeedsInput=false until marshal; TestSDKExportApprovalBindingReplayAndRevoke failed5/5. Reported to author for recheck.
+Post-fix independent tmp candidate full suite+all4 probes -race-count5: PASS8.470s
+New SDK-only subscription characterization -race-count10 initially FAIL10/10: first Subscribe=nil,second=nil,rejected handler calls=1; test assumed first error propagation. Reported separately from adapter defects; final suite pending accurate characterization.
+Frozen snapshot27364cece6b8598b1cf6a3f5b11bbd507969fe3c8db2a3565432917e3f32bcce independently recomputed.
+Exact frozen adapter copy + all4 independent probes + affected mandatory regression tests -race-count10: PASS2.577s
+Actual optional module full suite -race-count3: PASS5.997s
+Corrected full SDK-only characterization suite -race-count10: PASS2.047s
+Git diff --check: PASS
+Final27364cece6b8598b1cf6a3f5b11bbd507969fe3c8db2a3565432917e3f32bcce recomputed after completed make-test/lint/e2e/module-verify log inspection.
+All4 confirmed adapter findings RESOLVED; final correctness verdict APPROVE.
+Expanded candidate a2080d2574f6888e473c138cdeda1ce1bec750d49e204d9fb697bff612898064 independently recomputed.
+New auth/error/approval tests race-count15 PASS9.897s
+Independent valid business JSON unauthorized bearer+OAuth mismatchedstate race-count10 PASS2.327s
+Independent TokenSource failure AFTER discovery zeroeffect/safediagnostics race-count10 PASS2.092s
+Independent outbound approved public ErrorMapper + Data ownership/malformed/budget race-count10 PASS4.508s
+Full exact expanded adapter copy plus all old/new probes race-count3 PASS11.328s
+SDK authcause/wrappedData characterization race-count20 PASS1.857s
+Auth example prints{"n":7}; diffcheckPASS
+Final expanded a2080d2574f6888e473c138cdeda1ce1bec750d49e204d9fb697bff612898064 recomputed after completed allmodule checks/e2e; own manifestchanges=[]
+Expanded correctness APPROVE; no unresolved confirmed defects, accepted SDK limits explicitly stated.
+Final administrative b4defda488a7158b309e7c8fd4f6677aa1119af728628a18ca9a0c08648cba69 independently recomputed
+Own a208 perfilemanifest changes only task+design. Own saved task diff administrativeonly; frozen temp designhash matches own a208manifest and differs by1 acceptance-status sentence. Production/tests/examples/dependencies unchanged; diffcheckPASS.
+Expanded correctness APPROVE finalb4defda488a7158b309e7c8fd4f6677aa1119af728628a18ca9a0c08648cba69 confirmed

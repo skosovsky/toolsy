@@ -1,0 +1,115 @@
+
+[test] .
+ok  	github.com/skosovsky/toolsy	3.394s
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	3.547s
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.369s
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	1.647s
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.321s
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	1.606s
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_dispatch	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch/recipe	1.775s
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.295s
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	1.327s
+ok  	github.com/skosovsky/toolsy/historycodec	1.237s
+ok  	github.com/skosovsky/toolsy/internal/format	1.234s
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.214s
+ok  	github.com/skosovsky/toolsy/internal/release	8.214s
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.257s
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	30.017s
+ok  	github.com/skosovsky/toolsy/testutil	1.209s
+ok  	github.com/skosovsky/toolsy/textprocessor	1.391s
+
+[test] adapters/sandbox/docker
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/docker	2.119s
+
+[test] adapters/sandbox/e2b
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/e2b	6.427s
+
+[test] adapters/sandbox/host
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	12.037s
+
+[test] adapters/sandbox/starlark
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark	3.827s
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark/examples/policy	1.270s
+
+[test] adapters/sandbox/wazero
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/wazero	245.178s
+
+[test] agents
+ok  	github.com/skosovsky/toolsy/agents	3.449s
+
+[test] contracts/graphql
+ok  	github.com/skosovsky/toolsy/contracts/graphql	2.555s
+
+[test] contracts/grpc
+ok  	github.com/skosovsky/toolsy/contracts/grpc	3.323s
+
+[test] contracts/openapi
+ok  	github.com/skosovsky/toolsy/contracts/openapi	3.385s
+
+[test] examples/host_dispatch_integration
+?   	github.com/skosovsky/toolsy/examples/host_dispatch_integration	[no test files]
+
+[test] examples/resiliency
+ok  	github.com/skosovsky/toolsy/examples/resiliency	1.484s
+
+[test] ext/toolsyotel
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	1.772s
+
+[test] mcp
+ok  	github.com/skosovsky/toolsy/mcp	4.304s
+?   	github.com/skosovsky/toolsy/mcp/examples/auth	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/export	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/import	[no test files]
+
+[test] mcp/testdata/consumer
+ok  	github.com/skosovsky/toolsy/mcp/testdata/consumer	1.748s
+
+[test] mcp/testdata/sdkcheck
+ok  	github.com/skosovsky/toolsy/mcp/testdata/sdkcheck	1.742s
+
+[test] toolkits/document
+ok  	github.com/skosovsky/toolsy/toolkits/document	4.811s
+
+[test] toolkits/fstool
+ok  	github.com/skosovsky/toolsy/toolkits/fstool	2.973s
+
+[test] toolkits/httptool
+ok  	github.com/skosovsky/toolsy/toolkits/httptool	3.224s
+
+[test] toolkits/human
+ok  	github.com/skosovsky/toolsy/toolkits/human	1.706s
+
+[test] toolkits/mail
+ok  	github.com/skosovsky/toolsy/toolkits/mail	1.981s
+
+[test] toolkits/memory
+ok  	github.com/skosovsky/toolsy/toolkits/memory	2.165s
+
+[test] toolkits/prompts
+ok  	github.com/skosovsky/toolsy/toolkits/prompts	1.543s
+
+[test] toolkits/rag
+ok  	github.com/skosovsky/toolsy/toolkits/rag	1.680s
+ok  	github.com/skosovsky/toolsy/toolkits/rag/examples/host	1.580s
+
+[test] toolkits/sqltool
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.873s
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool/examples/host	1.622s
+
+[test] toolkits/timetool
+ok  	github.com/skosovsky/toolsy/toolkits/timetool	1.602s
+ok  	github.com/skosovsky/toolsy/toolkits/timetool/examples/host	1.995s
+
+[test] toolkits/web
+ok  	github.com/skosovsky/toolsy/toolkits/web	2.217s

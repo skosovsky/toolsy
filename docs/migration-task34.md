@@ -1,5 +1,7 @@
 # Migration to MCP 2026-07-28 (task34)
 
+> Historical contract for the retired MCP stack. The current SDK integration supersedes these MCP restrictions; see [migration-mcp-sdk.md](migration-mcp-sdk.md).
+
 Task34 is a major, clear-break migration. `toolsy/mcp` now speaks exactly MCP `2026-07-28`; it cannot be configured to speak `2025-11-25` or any earlier revision.
 
 ## Required server behavior

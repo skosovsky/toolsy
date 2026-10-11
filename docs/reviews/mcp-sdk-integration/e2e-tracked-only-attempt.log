@@ -1,0 +1,38 @@
+
+[e2e] .
+ok  	github.com/skosovsky/toolsy	1.519s [no tests to run]
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	1.981s [no tests to run]
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.943s [no tests to run]
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	1.937s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.925s [no tests to run]
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	1.922s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_dispatch	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch/recipe	2.223s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	2.245s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	2.228s [no tests to run]
+ok  	github.com/skosovsky/toolsy/historycodec	2.167s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/format	1.587s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.480s [no tests to run]
+--- FAIL: TestE2ECurrentModuleArtifacts (50.07s)
+    artifacts_e2e_test.go:153: go test -mod=mod -run=^$ github.com/skosovsky/toolsy/mcp/...: exit status 1
+        
+        go: warning: "github.com/skosovsky/toolsy/mcp/..." matched no packages
+        no packages to test
+FAIL
+FAIL	github.com/skosovsky/toolsy/internal/release	104.926s
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.474s [no tests to run]
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	1.474s [no tests to run]
+ok  	github.com/skosovsky/toolsy/testutil	1.461s [no tests to run]
+ok  	github.com/skosovsky/toolsy/textprocessor	1.436s [no tests to run]
+FAIL
+make: *** [test-e2e] Error 1

@@ -1,0 +1,89 @@
+Independent reviewer checks, initial snapshot f90dbcd9c83297fafff0207c11673062182f64976e2ec01d44591abd1d9deace
+
+git rev-parse HEAD
+4f7eae6cc2393da259cf30a5535bef12c93d6e2c
+
+python3 docs/reviews/mcp-sdk-integration/snapshot.py
+f90dbcd9c83297fafff0207c11673062182f64976e2ec01d44591abd1d9deace
+
+All Go commands use GOWORK=off and task-local Go module/build caches.
+
+cd mcp && go test -race -count=1 -timeout=90s ./...
+ok github.com/skosovsky/toolsy/mcp 2.555s
+? github.com/skosovsky/toolsy/mcp/examples/export [no test files]
+? github.com/skosovsky/toolsy/mcp/examples/import [no test files]
+PASS
+
+cd mcp/testdata/sdkcheck && go test -race -count=1 ./...
+ok github.com/skosovsky/toolsy/mcp/testdata/sdkcheck 1.305s
+PASS
+
+root: go list -deps ./... | rg 'modelcontextprotocol|toolsy/mcp'
+No matches (rg exit 1 as expected); core graph has no optional MCP or SDK dependency.
+
+git diff -- go.mod go.sum
+No output; root dependency manifest unchanged.
+
+Manual source inspection: all five adapter production files, all adapter test files,
+SDK-only tests, independent examples and consumer fixture, Makefile, current docs,
+baseline exported declaration/test inventory, deleted protocol/transport families.
+
+Final candidate recheck: 27364cece6b8598b1cf6a3f5b11bbd507969fe3c8db2a3565432917e3f32bcce
+Independent source reading of sdk_coverage_test.go, subscription_test.go and
+updated boundary regressions; all six earlier concrete coverage/docs gaps closed.
+
+cd mcp && go test -race -count=3 -timeout=90s ./...
+ok github.com/skosovsky/toolsy/mcp 8.309s
+? github.com/skosovsky/toolsy/mcp/examples/export [no test files]
+? github.com/skosovsky/toolsy/mcp/examples/import [no test files]
+PASS
+
+cd mcp/testdata/sdkcheck && go test -race -count=3 -timeout=90s ./...
+ok github.com/skosovsky/toolsy/mcp/testdata/sdkcheck 2.990s
+PASS
+
+git diff --check
+No output, exit 0.
+
+rg '\]\(../mcp/.*_test.go' docs/mcp-sdk-api-inventory.md
+No matches: deleted baseline tests now use historical plain references.
+
+Expanded scope candidate b9ac895f23a17fb0b80061e6614dbf945c998eabafd9034b0ff36819f913ef69
+Independent optional-module race/count3 PASS 8.415s; auth example prints {"n":7}.
+Independent SDK-only race/count3 FAIL:
+TestCharacterizationOAuthClosureCauseCollapse failed three repetitions because
+second immediate call returned authorization-cancelled textual error rather than
+ErrConnectionClosed. Parent notified; claimed closure boundary was not synchronized.
+This is an evidence blocker, not proof of an adapter protocol defect.
+
+Expanded recheck f949907b80ba5450c368c26e5d20e3635c7b7dfeb848e626f37a107cacc9c17d
+Characterization synchronized public session.Wait completion before checking closure;
+original ErrConnectionClosed and no typed cancellation assertion unchanged.
+SDK-only full suite: go test -race -count=10 -timeout=90s ./... PASS 5.274s.
+External consumer: go test -race -count=1 ./... PASS 1.511s.
+Snapshot independently recomputed; git diff --check PASS.
+New auth fixtures/example/docs and authenticated core approval test independently read.
+
+Candidate a2080d2574f6888e473c138cdeda1ce1bec750d49e204d9fb697bff612898064
+New public ErrorMapper production/source+authenticated HTTP regressions reviewed.
+Optional fullsuite race/count3 PASS 13.752s.
+SDK-only fullsuite race/count3 PASS 2.649s (includes wrapped JSON-RPC Data-loss characterization).
+All original and expanded requirement evidence retained; final common checks and
+independent correctness confirmation pending from parent.
+
+Final a208 snapshot independently recomputed after fresh final checks.
+Complete make-test/make-lint/integration/e2e logs independently inspected through
+toolkits/web; parent confirmed all commands exit0 and 27 modules verified.
+git diff --check PASS; root go.mod/go.sum diff empty.
+Parent relayed separate independent expanded correctness APPROVE same snapshot;
+correctness report was not read by this reviewer. Fixed completeness denominator48.
+Final verdict48/48 COMPLETE.
+
+Final administrative snapshot independently recomputed:
+b4defda488a7158b309e7c8fd4f6677aa1119af728628a18ca9a0c08648cba69
+Compared every candidate path (including deletions and explicit ignored contract/task)
+against /private/tmp/toolsy-sdk-final-e2e verified complete-source copy:
+only .cursor/tasks/mcp-official-sdk-integration.md and docs/mcp-sdk-integration-design.md differ.
+Unified diffs inspected: status/checklists/acceptance prose/report link only.
+All implementation/tests/examples/dependency/requirements bytes unchanged.
+Completeness48/48 COMPLETE confirmed final b4 snapshot.
