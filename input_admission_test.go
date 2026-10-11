@@ -209,6 +209,7 @@ func (t *admissionModifier) AdmitInput(ctx context.Context, call CallContext, in
 	return AdmitInput(ctx, t.next, call, in)
 }
 
+//nolint:modernize // Embedded type elision is rejected by the supported Go compiler.
 func TestInputAdmissionWrappers(t *testing.T) {
 	// Arrange.
 	base := admissionTyped(t, nil, nil)
