@@ -209,6 +209,9 @@ func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 	if out, exists := c.seen[key]; exists {
 		return out
 	}
+	if out, ok := c.cloneJSONReference(v, key); ok {
+		return out
+	}
 	var out reflect.Value
 	switch v.Kind() {
 	case reflect.Pointer:
@@ -257,4 +260,38 @@ func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 		panic("toolsy: invalid internal snapshot reference kind")
 	}
 	return out
+}
+
+// cloneAny shares the reference memo across exact JSON containers and BYOT data.
+func (c *valueCloner) cloneAny(value any) any {
+	cloned := c.clone(reflect.ValueOf(value))
+	if !cloned.IsValid() {
+		return nil
+	}
+	return cloned.Interface()
+}
+
+func (c *valueCloner) cloneJSONReference(v reflect.Value, key cloneReference) (reflect.Value, bool) {
+	if !v.CanInterface() {
+		return reflect.Value{}, false
+	}
+	if values, ok := reflect.TypeAssert[map[string]any](v); ok {
+		copied := make(map[string]any, len(values))
+		out := reflect.ValueOf(copied)
+		c.seen[key] = out
+		for name, value := range values {
+			copied[name] = c.cloneAny(value)
+		}
+		return out, true
+	}
+	if values, ok := reflect.TypeAssert[[]any](v); ok {
+		copied := make([]any, len(values))
+		out := reflect.ValueOf(copied)
+		c.seen[key] = out
+		for i, value := range values {
+			copied[i] = c.cloneAny(value)
+		}
+		return out, true
+	}
+	return reflect.Value{}, false
 }

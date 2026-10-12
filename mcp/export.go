@@ -12,6 +12,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	tekuri "github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/skosovsky/toolsy"
 	"github.com/skosovsky/toolsy/internal/jsonschemax"
@@ -81,7 +82,8 @@ func Export(view *toolsy.RegistryView, config ExportConfig) (*sdk.Server, error)
 			return result, nil
 		}
 	})
-	for _, manifest := range selected {
+	for _, entry := range selected {
+		manifest := entry.manifest
 		input, err := json.Marshal(manifest.Parameters)
 		if err != nil {
 			return nil, err
@@ -105,19 +107,25 @@ func Export(view *toolsy.RegistryView, config ExportConfig) (*sdk.Server, error)
 				OutputSchema: output,
 			},
 			func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
-				return exportCall(ctx, view, config, manifest, req)
+				return exportCall(ctx, view, config, entry, req)
 			},
 		)
 	}
 	return server, nil
 }
 
-func selectExportManifests(view *toolsy.RegistryView, config ExportConfig) ([]toolsy.ToolManifest, error) {
+type exportEntry struct {
+	manifest  toolsy.ToolManifest
+	snapshots toolsy.ManifestSet
+	output    *tekuri.Schema
+}
+
+func selectExportManifests(view *toolsy.RegistryView, config ExportConfig) ([]exportEntry, error) {
 	manifests, err := view.ManifestSet()
 	if err != nil {
 		return nil, err
 	}
-	selected := make([]toolsy.ToolManifest, 0, len(config.Names))
+	selected := make([]exportEntry, 0, len(config.Names))
 	seen := map[string]bool{}
 	for _, name := range config.Names {
 		manifest, ok := manifests.Manifest(name)
@@ -125,37 +133,46 @@ func selectExportManifests(view *toolsy.RegistryView, config ExportConfig) ([]to
 			return nil, errors.New("mcp export selection is absent or duplicated")
 		}
 		seen[name] = true
-		if validationErr := validateExportManifest(manifest, config); validationErr != nil {
+		output, validationErr := validateExportManifest(manifest, config)
+		if validationErr != nil {
 			return nil, validationErr
 		}
-		selected = append(selected, manifest)
+		snapshots, snapshotErr := toolsy.ManifestSetFromManifests(manifest)
+		if snapshotErr != nil {
+			return nil, snapshotErr
+		}
+		selected = append(selected, exportEntry{manifest: manifest, snapshots: snapshots, output: output})
 	}
 	return selected, nil
 }
 
-func validateExportManifest(manifest toolsy.ToolManifest, config ExportConfig) error {
+//nolint:nilnil // An absent output schema has no output validator.
+func validateExportManifest(manifest toolsy.ToolManifest, config ExportConfig) (*tekuri.Schema, error) {
 	if manifest.StreamSemantics == toolsy.StreamIndependent && config.Project == nil {
-		return &BridgeError{Kind: "independent stream requires explicit projection", Cause: ErrUnsupported}
+		return nil, &BridgeError{Kind: "independent stream requires explicit projection", Cause: ErrUnsupported}
 	}
 	if manifest.RequiresConfirmation && config.Control == nil {
-		return &BridgeError{Kind: "confirmation requires host control mapping", Cause: ErrUnsupported}
+		return nil, &BridgeError{Kind: "confirmation requires host control mapping", Cause: ErrUnsupported}
 	}
 	if manifest.Parameters == nil || manifest.Parameters["type"] != "object" {
-		return ErrUnsupported
+		return nil, ErrUnsupported
 	}
 	if _, err := jsonschemax.Compile(manifest.Parameters); err != nil {
-		return &BridgeError{Kind: "input schema", Cause: err}
+		return nil, &BridgeError{Kind: "input schema", Cause: err}
 	}
 	if manifest.OutputSchema != nil {
-		if _, err := jsonschemax.Compile(manifest.OutputSchema); err != nil {
-			return &BridgeError{Kind: "output schema", Cause: err}
+		compiled, err := jsonschemax.Compile(manifest.OutputSchema)
+		if err != nil {
+			return nil, &BridgeError{Kind: "output schema", Cause: err}
 		}
+		return compiled, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func exportCall(ctx context.Context, view *toolsy.RegistryView, config ExportConfig,
-	manifest toolsy.ToolManifest, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+	entry exportEntry, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+	manifest := entry.manifest
 	identity, err := config.Resolve(ctx, req)
 	if err != nil {
 		return nil, &BridgeError{Kind: "export authority", Cause: err}
@@ -197,22 +214,22 @@ func exportCall(ctx context.Context, view *toolsy.RegistryView, config ExportCon
 			if controlErr != nil {
 				return nil, &BridgeError{Kind: "export control", Cause: controlErr}
 			}
-			return validateExportResult(manifest, result)
+			return validateExportResult(entry.output, result)
 		}
 		return nil, &BridgeError{Kind: "export execution", Cause: err}
 	}
 	if config.Project != nil {
-		result, projectionErr := config.Project(ctx, manifest, collector.chunks)
+		result, projectionErr := config.Project(ctx, exportManifestSnapshot(entry), collector.chunks)
 		if projectionErr != nil {
 			return nil, &BridgeError{Kind: "export projection", Cause: projectionErr}
 		}
-		return validateExportResult(manifest, result)
+		return validateExportResult(entry.output, result)
 	}
 	result, projectionErr := defaultExportProjection(collector.chunks)
 	if projectionErr != nil {
 		return nil, projectionErr
 	}
-	return validateExportResult(manifest, result)
+	return validateExportResult(entry.output, result)
 }
 
 type exportCollector struct {
@@ -268,11 +285,11 @@ func (c *exportCollector) accept(ctx context.Context, chunk toolsy.Chunk) error 
 	return nil
 }
 
-func validateExportResult(manifest toolsy.ToolManifest, result *sdk.CallToolResult) (*sdk.CallToolResult, error) {
+func validateExportResult(schema *tekuri.Schema, result *sdk.CallToolResult) (*sdk.CallToolResult, error) {
 	if result == nil {
 		return nil, &BridgeError{Kind: "nil export result", Cause: ErrUnsupported}
 	}
-	if result.IsError || manifest.OutputSchema == nil || result.InputRequests != nil {
+	if result.IsError || schema == nil || result.InputRequests != nil {
 		return result, nil
 	}
 	raw, err := json.Marshal(result.StructuredContent)
@@ -283,10 +300,7 @@ func validateExportResult(manifest toolsy.ToolManifest, result *sdk.CallToolResu
 	if err != nil {
 		return nil, &BridgeError{Kind: exportJSONKind, Cause: err}
 	}
-	schema, err := jsonschemax.Compile(manifest.OutputSchema)
-	if err == nil {
-		err = schema.Validate(value)
-	}
+	err = schema.Validate(value)
 	if err != nil {
 		return nil, &BridgeError{
 			Kind:  "export result contract",
@@ -370,4 +384,11 @@ func mapExportError(ctx context.Context, req sdk.Request, err error, config Expo
 		return &BridgeError{Kind: "export error projection", Cause: ErrUnsupported}
 	}
 	return &jsonrpc.Error{Code: mapped.Code, Message: mapped.Message, Data: bytes.Clone(mapped.Data)}
+}
+
+// Each projection receives its own mutable catalog snapshot; validation retains
+// the registration-owned schema even if a callback changes the advertised map.
+func exportManifestSnapshot(entry exportEntry) toolsy.ToolManifest {
+	manifest, _ := entry.snapshots.Manifest(entry.manifest.Name)
+	return manifest
 }

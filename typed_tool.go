@@ -201,7 +201,7 @@ func NewTypedTool[TSubject, TScope, TArgs, TResult, TEffect any](
 		)
 		return bound.Value, bindErr
 	}
-	return &tool{manifest: manifest, execute: execute, admit: admit}, nil
+	return &tool{manifest: manifest, manifestOwned: true, execute: execute, admit: admit}, nil
 }
 
 func prepareTypedToolCall[TSubject, TScope, TArgs any](

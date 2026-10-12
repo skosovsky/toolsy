@@ -595,10 +595,6 @@ control, policy, generator and adapter contracts, installation/module alignment,
 and the [task41 migration](docs/migration-task41.md). Runnable host recipes are
 listed in the [examples index](examples/README.md).
 
-Earlier task28–35 migration/audit reports are retained in the separate
-[historical evidence index](docs/history/README.md). Their verdicts describe
-specific older candidates and do not certify the current implementation.
-
 ## Zero-resiliency core
 
 The registry no longer applies default execution timeouts, concurrency limits, built-in retry middleware, or per-tool `WithTimeout` manifest deadlines. Removed APIs include `WithDefaultTimeout`, `WithMaxConcurrency`, `WithTimeoutMiddleware`, `WithIdempotentRetry`, `ToolOption` `WithTimeout`, and `ToolManifest.Timeout`. Use `context` deadlines and external execution wrappers instead; see `examples/resiliency/main.go`. Caller execution deadlines use the `context` passed to `Run`; `RunRequest` has no timeout field. Backends retain their own collection/cleanup deadlines and resource budgets, so a caller deadline is not a universal hard bound on return. See [sandbox deadline/capability policy](docs/sandbox-deadlines.md).

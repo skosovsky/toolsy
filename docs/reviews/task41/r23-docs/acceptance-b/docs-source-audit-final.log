@@ -1,4 +1,0 @@
-Local target/anchor checks 236 failures []
-Production changed ['exectool/doc.go', 'scripts/release.sh']
-Named fixtures 15 missing []
-PASS

@@ -45,20 +45,12 @@ func Compile(schema any) (*tekuri.Schema, error) {
 
 // Decode parses exactly one JSON value while preserving numeric precision.
 func Decode(raw []byte) (any, error) {
-	if err := validateJSON(raw, maxSchemaDepth, maxSchemaNodes); err != nil {
-		return nil, err
+	if !json.Valid(raw) {
+		if err := validateJSON(raw, maxSchemaDepth, maxSchemaNodes); err != nil {
+			return nil, err
+		}
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return nil, err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return nil, errors.New("JSON input must contain exactly one value")
-	}
-	return value, nil
+	return decodeValid(raw)
 }
 
 func checkComplexity(value any, maxDepth, maxNodes int) error {
@@ -94,7 +86,7 @@ func checkComplexity(value any, maxDepth, maxNodes int) error {
 // validateJSON rejects recursive duplicate keys and bounds parser work before
 // the schema compiler evaluates references and composition keywords.
 //
-//nolint:gocognit // The recursive token state machine intentionally centralizes all JSON container invariants.
+//nolint:gocognit,dupl // The bounded rejection walker is also retained independently as the baseline differential oracle.
 func validateJSON(raw []byte, maxDepth, maxNodes int) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()

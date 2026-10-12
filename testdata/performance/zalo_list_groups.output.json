@@ -1,0 +1,460 @@
+{
+  "type": "object",
+  "properties": {
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "has_more": {
+      "type": "boolean"
+    },
+    "next_cursor": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "empty_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "no_groups",
+            "no_matching_groups"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "catalog_updated_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stale": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "groups",
+    "has_more",
+    "next_cursor",
+    "empty_reason",
+    "catalog_updated_at",
+    "stale"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Group": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "name": {
+          "type": "string"
+        },
+        "member_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collection_enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "group_id",
+        "name",
+        "member_count",
+        "collection_enabled"
+      ],
+      "additionalProperties": false
+    },
+    "NextAction": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "arguments": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instruction": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "arguments",
+        "instruction"
+      ],
+      "additionalProperties": false
+    },
+    "Error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "next_action": {
+          "$ref": "#/$defs/NextAction"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "next_action",
+        "details"
+      ],
+      "additionalProperties": false
+    },
+    "Gap": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+          "format": "date-time"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "collection_started_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "earliest_stored_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest_stored_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "known_gaps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Gap"
+          }
+        },
+        "history_complete": {
+          "const": false
+        },
+        "retention_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "group_id",
+        "collection_started_at",
+        "earliest_stored_at",
+        "latest_stored_at",
+        "known_gaps",
+        "history_complete",
+        "retention_days"
+      ],
+      "additionalProperties": false
+    },
+    "Summary": {
+      "type": "object",
+      "properties": {
+        "group_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "history_complete": {
+          "const": false
+        },
+        "groups_with_known_gaps": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "group_count",
+        "history_complete",
+        "groups_with_known_gaps"
+      ],
+      "additionalProperties": false
+    },
+    "Message": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "sender_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "sender_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sent_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+          "format": "date-time"
+        },
+        "text": {
+          "type": "string"
+        },
+        "reply_to_message_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attachment_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "live",
+            "replay",
+            "history"
+          ]
+        },
+        "text_truncated": {
+          "type": "boolean"
+        },
+        "text_resource_uri": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque identifier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "group_id",
+        "message_id",
+        "sender_id",
+        "sender_name",
+        "sent_at",
+        "text",
+        "reply_to_message_id",
+        "attachment_types",
+        "source",
+        "text_truncated",
+        "text_resource_uri"
+      ],
+      "additionalProperties": false
+    },
+    "Hit": {
+      "type": "object",
+      "properties": {
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "sender_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier"
+        },
+        "group_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sender_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sent_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "RFC3339 time, e.g. 2026-10-01T00:00:00Z",
+          "format": "date-time"
+        },
+        "excerpt": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "text_truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "group_id",
+        "message_id",
+        "sender_id",
+        "group_name",
+        "sender_name",
+        "sent_at",
+        "excerpt",
+        "text_truncated"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -11,38 +11,46 @@ import (
 )
 
 func validateChunk(c Chunk) error {
+	_, err := validateChunkDecoded(c)
+	return err
+}
+
+//nolint:nilnil // Non-JSON chunks have no decoded JSON value.
+func validateChunkDecoded(c Chunk) (any, error) {
 	if c.Event == "" {
-		return NewInternalError(errors.New("toolsy: chunk event is required"))
+		return nil, NewInternalError(errors.New("toolsy: chunk event is required"))
 	}
 	if c.Event != EventProgress && c.Event != EventResult && c.Event != EventControl {
-		return NewInternalError(fmt.Errorf("toolsy: unsupported chunk event %q", c.Event))
+		return nil, NewInternalError(fmt.Errorf("toolsy: unsupported chunk event %q", c.Event))
 	}
 	if err := validateControlDeclarations(c); err != nil {
-		return err
+		return nil, err
 	}
 	if c.Event == EventControl {
-		return nil
+		return nil, nil
 	}
 	if c.Event == EventResult {
 		if err := validateResultChunkAlgebra(c); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if c.IsError {
-		return validateErrorChunk(c)
+		return nil, validateErrorChunk(c)
 	}
 	if len(c.Data) > 0 && c.MimeType == "" {
-		return NewInternalError(fmt.Errorf("toolsy: chunk data requires mime type for event %q", c.Event))
+		return nil, NewInternalError(fmt.Errorf("toolsy: chunk data requires mime type for event %q", c.Event))
 	}
 	if len(c.Data) == 0 && c.MimeType != "" {
-		return NewInternalError(errors.New("toolsy: chunk mime type without data is invalid"))
+		return nil, NewInternalError(errors.New("toolsy: chunk mime type without data is invalid"))
 	}
 	if len(c.Data) > 0 && jsonMimeType(c.MimeType) {
-		if _, err := jsonschemax.Decode(c.Data); err != nil {
-			return NewInternalError(&ResultContractError{Kind: resultInvalidJSON, Cause: err})
+		value, err := jsonschemax.Decode(c.Data)
+		if err != nil {
+			return nil, NewInternalError(&ResultContractError{Kind: resultInvalidJSON, Cause: err})
 		}
+		return value, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func validateResultChunkAlgebra(c Chunk) error {
@@ -122,14 +130,21 @@ func malformedErrorChunkDetail(c Chunk) string {
 
 // prepareChunk normalizes error chunks and validates the wire contract before delivery.
 func prepareChunk(c Chunk) (Chunk, error) {
+	prepared, _, err := prepareChunkDecoded(c)
+	return prepared, err
+}
+
+// The decoded value is reusable only inside this unchanged private boundary.
+func prepareChunkDecoded(c Chunk) (Chunk, any, error) {
 	if err := validateControlDeclarations(c); err != nil {
-		return Chunk{}, err
+		return Chunk{}, nil, err
 	}
 	if c.IsError {
 		c = normalizeErrorChunk(c)
 	}
-	if err := validateChunk(c); err != nil {
-		return Chunk{}, err
+	value, err := validateChunkDecoded(c)
+	if err != nil {
+		return Chunk{}, nil, err
 	}
 	if c.Control != nil {
 		c.Control = cloneControl(c.Control)
@@ -143,17 +158,17 @@ func prepareChunk(c Chunk) (Chunk, error) {
 	}
 	if c.Envelope != nil {
 		if !bytes.Equal(c.Envelope.Raw, c.Data) || c.Envelope.MimeType != c.MimeType {
-			return Chunk{}, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
+			return Chunk{}, nil, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
 		}
 		if c.Event == EventResult &&
 			((c.IsError && (c.Envelope.Kind != ToolEnvelopeKindError || c.Envelope.Error == nil)) ||
 				(!c.IsError && (c.Envelope.Kind != ToolEnvelopeKindResult || c.Envelope.Error != nil))) {
-			return Chunk{}, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
+			return Chunk{}, nil, NewInternalError(&ResultContractError{Kind: "envelope_mismatch", Cause: nil})
 		}
 		c.Envelope = cloneToolEnvelope(c.Envelope)
 	} else if c.Event == EventResult {
 		envelope := c.ToolEnvelope()
 		c.Envelope = &envelope
 	}
-	return c, nil
+	return c, value, nil
 }

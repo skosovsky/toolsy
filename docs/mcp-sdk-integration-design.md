@@ -108,12 +108,12 @@ source replacements, never an SDK replacement or workspace resolution.
 ## Verification
 
 Run make test/lint for root and every nested module, applicable integration/e2e
-checks, independent examples and GOWORK=off consumer/SDK-only fixtures. Review
-logs under docs/reviews/mcp-sdk-integration. No releases, pushes or external writes.
+checks, independent examples and GOWORK=off consumer/SDK-only fixtures. No
+releases, pushes or external writes.
 
 ## Expanded SDK package scope
 
-The user expanded the goal to PKG-01–PKG-08. [Auth composition contract](mcp-sdk-auth-contract.md) specifies owners, identity/approval boundaries and acceptance. Previous reviews cover only the 40-item baseline migration; final expanded acceptance uses 48 items. The synthetic auth fixtures and runnable auth example implement this addendum. Expanded independent acceptance and the final snapshot are recorded in the [independent review](reviews/mcp-sdk-integration/completeness-review.md).
+The user expanded the goal to PKG-01–PKG-08. [Auth composition contract](mcp-sdk-auth-contract.md) specifies owners, identity/approval boundaries and acceptance. Previous reviews cover only the 40-item baseline migration; final expanded acceptance uses 48 items. The synthetic auth fixtures and runnable auth example implement this addendum.
 
 
 | Expanded requirement | Owner and evidence |

@@ -2,7 +2,6 @@ package toolsy
 
 import (
 	"context"
-	"maps"
 )
 
 type overrideOptions struct {
@@ -44,70 +43,7 @@ func deepCopySchema(m map[string]any) map[string]any {
 	if m == nil {
 		return nil
 	}
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = deepCopySchemaValue(v)
-	}
-	return out
-}
-
-func deepCopySchemaValue(v any) any {
-	if v == nil {
-		return nil
-	}
-	switch x := v.(type) {
-	case map[string]any:
-		return deepCopySchema(x)
-	case map[string]string:
-		return cloneStringMap(x)
-	case []any:
-		return deepCopySchemaSlice(x)
-	case []string:
-		return cloneStringSlice(x)
-	case []map[string]any:
-		return deepCopySchemaMapSlice(x)
-	default:
-		return v
-	}
-}
-
-func cloneStringSlice(s []string) []string {
-	if s == nil {
-		return nil
-	}
-	out := make([]string, len(s))
-	copy(out, s)
-	return out
-}
-
-func cloneStringMap(m map[string]string) map[string]string {
-	if m == nil {
-		return nil
-	}
-	out := make(map[string]string, len(m))
-	maps.Copy(out, m)
-	return out
-}
-
-func deepCopySchemaMapSlice(s []map[string]any) []map[string]any {
-	if s == nil {
-		return nil
-	}
-	out := make([]map[string]any, len(s))
-	for i, m := range s {
-		out[i] = deepCopySchema(m)
-	}
-	return out
-}
-
-func deepCopySchemaSlice(s []any) []any {
-	if s == nil {
-		return nil
-	}
-	out := make([]any, len(s))
-	for i, v := range s {
-		out[i] = deepCopySchemaValue(v)
-	}
+	out, _ := cloneMutableValue(m).(map[string]any)
 	return out
 }
 
@@ -138,7 +74,7 @@ func (t *overriddenTool) Manifest() ToolManifest {
 		manifest.Description = *t.opts.description
 	}
 	if t.opts.parameters != nil {
-		manifest.Parameters = maps.Clone(t.opts.parameters)
+		manifest.Parameters = deepCopySchema(t.opts.parameters)
 	}
 	return manifest
 }

@@ -1,2 +1,0 @@
-double(21) = 42
-validation error routed via outcome.ExecutionError (not err)

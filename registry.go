@@ -436,7 +436,7 @@ func (r *Registry) runToolWithValidationAndExecute(
 	toolYield func(Chunk) error,
 	summary *ExecutionSummary,
 ) {
-	manifest := cloneManifestForPolicy(tool.Manifest())
+	manifest := executionManifest(tool)
 	env.executionManifest = &manifest
 	if r.opts.executionProfile != nil {
 		env.executionProfile = r.opts.executionProfile
@@ -766,4 +766,15 @@ func validateRegistryPolicy(opts registryOptions) error {
 		return errors.New("toolsy: registry policy id is required")
 	}
 	return nil
+}
+
+// executionManifest borrows only constructor-owned immutable builtin data.
+// Policy tools over arbitrary custom bases may retain host-owned manifest maps.
+// Custom and wrapped tools retain their observable Manifest callback and snapshot.
+// External policy/profile callbacks always receive a separate defensive copy.
+func executionManifest(t Tool) ToolManifest {
+	if builtin, ok := t.(*tool); ok && builtin.manifestOwned {
+		return builtin.manifest
+	}
+	return cloneManifestForPolicy(t.Manifest())
 }

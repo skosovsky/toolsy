@@ -142,7 +142,9 @@ func buildPolicyTool[TSubject, TScope, TArgs any](spec ToolPolicySpec[TSubject, 
 		}
 		return spec.Tool.Execute(ctx, &innerEnv, forward, func(c Chunk) error { return yield(transform(c)) })
 	}
-	return &tool{manifest: manifest, execute: execute, admit: nil}, nil
+	// Custom bases may return live manifest maps. Preserve the existing per-call
+	// snapshot instead of assuming their cached policy facade owns immutable data.
+	return &tool{manifest: manifest, manifestOwned: false, execute: execute, admit: nil}, nil
 }
 
 func policyFinalCheck[TSubject, TScope, TArgs any](

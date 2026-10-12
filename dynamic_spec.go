@@ -135,8 +135,8 @@ func NewDynamicToolFromSpec(spec DynamicToolSpec) (Tool, error) {
 	}
 
 	return &tool{
-		manifest: manifest,
-		execute:  execute,
+		manifest: manifest, manifestOwned: true,
+		execute: execute,
 		admit: func(ctx context.Context, _ CallContext, input ToolInput) (any, error) {
 			return validateInput(ctx, input)
 		},

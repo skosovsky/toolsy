@@ -49,5 +49,4 @@ example fixtures; the nested resiliency module needs its own `go test` or `make 
 | [Timezone store](../toolkits/timetool/examples/host/main.go) | `go -C toolkits/timetool run ./examples/host` | Explicit bounded host StateStore resolver |
 
 Current contracts, module installation/alignment and migration links are in the
-[documentation index](../docs/README.md). Old task audit reports are indexed
-[separately](../docs/history/README.md).
+[documentation index](../docs/README.md).

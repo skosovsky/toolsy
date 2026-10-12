@@ -61,7 +61,7 @@ func jsonMimeType(value string) bool {
 }
 
 func prepareResultChunk(c Chunk, validator schemaValidator) (Chunk, error) {
-	prepared, err := prepareChunk(c)
+	prepared, value, err := prepareChunkDecoded(c)
 	if err != nil {
 		return Chunk{}, err
 	}
@@ -76,10 +76,6 @@ func prepareResultChunk(c Chunk, validator schemaValidator) (Chunk, error) {
 	}
 	if !jsonMimeType(c.MimeType) {
 		return prepared, nil
-	}
-	value, err := jsonschemax.Decode(c.Data)
-	if err != nil {
-		return Chunk{}, NewInternalError(&ResultContractError{Kind: resultInvalidJSON, Cause: err})
 	}
 	if validator != nil {
 		if err := validator.Validate(value); err != nil {
@@ -135,6 +131,11 @@ func executePreparedResult(
 			return rejected
 		}
 		return err
+	}
+	// With no profile there is no callback between produce validation and yield.
+	// ExecutePrepared still enforces cancellation, nested-dispatch and prepared checks.
+	if env == nil || (env.executionProfile == nil && len(env.preparedChecks) == 0) {
+		return ExecutePrepared(ctx, env, manifest, input, args, produce, yield)
 	}
 	return ExecutePrepared(ctx, env, manifest, input, args, produce, deliver)
 }

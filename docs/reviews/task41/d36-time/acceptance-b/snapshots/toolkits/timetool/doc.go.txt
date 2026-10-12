@@ -1,7 +1,0 @@
-// Package timetool exposes current time and checked date arithmetic in a host-selected location.
-// Both tools use WithLocation or the per-call WithLocationProvider override. RFC3339 input
-// specifies an instant; calculation converts it to that location, adds calendar days with
-// time.AddDate, then elapsed hours with time.Add. Days need not be 24 hours across DST.
-// Ambiguous/nonexistent local times follow Go timezone normalization, without guaranteed
-// offset choice. Hosts own any provider StateStore access; no automatic timezone persistence.
-package timetool

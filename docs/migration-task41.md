@@ -2,8 +2,6 @@
 
 Current API references and installation/module alignment are indexed in
 [docs/README](README.md); runnable host recipes in [examples](../examples/README.md).
-Earlier task28–35 audits/migrations are retained in the
-[historical evidence index](history/README.md), not a substitute for current contracts.
 
 ## HTTP redirects (R01)
 
@@ -153,9 +151,6 @@ Use `RELEASE_SOURCE=<full-SHA>` to select an ancestor, and `make release-inspect
 Module artifact consumption is an ordinary Go e2e test using a local file proxy;
 it is not a custom release-runner phase. Production remotes are never used by
 release regression fixtures.
-
-[The earlier Task41 implementation and its guarantees](history/task41-release-preparation.md)
-remain recorded as history; they are not the current operational contract.
 
 ## HTTP pool ownership and explicit settings (R07 / D18 / D19)
 
@@ -977,9 +972,8 @@ remains synchronous until explicit host async composition.
 
 Current API/contracts, source module map and version alignment are in the
 [documentation index](README.md); [examples](../examples/README.md) list actual
-invocations, including nested modules. Old audit paths and bytes are preserved;
-current navigation separates them in [history](history/README.md). This row does
-not certify a published release or whole task41 completion.
+invocations, including nested modules. This row does not certify a published
+release or whole task41 completion.
 
 
 ## R23 — caller deadlines and backend-owned bounds

@@ -3,7 +3,6 @@ package toolsy
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"slices"
 )
 
@@ -70,8 +69,8 @@ func addToolToManifestSet(ms *ManifestSet, tool Tool) error {
 func cloneToolManifest(m ToolManifest) ToolManifest {
 	out := m
 	out.Tags = append([]string(nil), m.Tags...)
-	out.Parameters = maps.Clone(m.Parameters)
-	out.OutputSchema = maps.Clone(m.OutputSchema)
+	out.Parameters = deepCopySchema(m.Parameters)
+	out.OutputSchema = deepCopySchema(m.OutputSchema)
 	out.Requirements = cloneRequirements(m.Requirements)
 	return out
 }

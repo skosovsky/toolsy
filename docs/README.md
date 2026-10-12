@@ -1,9 +1,7 @@
 # Current API and integration reference
 
 Use current source contracts below. [Task41 migration](migration-task41.md) records
-breaking changes and retained boundaries; [task28–35 historical evidence](history/README.md)
-has a separate index. Per-row review scores are scope-specific, not a guarantee
-or the final task41 acceptance.
+breaking changes and retained boundaries.
 
 | Area | Current reference |
 | --- | --- |

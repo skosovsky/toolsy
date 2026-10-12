@@ -96,5 +96,4 @@ reopen tests demonstrate local durability, not distributed exactly-once effects.
 
 AC1–AC7: recipe contract/operation tests, including durable reopen and fault
 injection. AC8: runnable provider-neutral main and real consumer semantic fixtures.
-AC9: module-wide race/lint and both dependency modes. Exact test names and results
-are recorded in `docs/reviews/task36/verification.md` after execution.
+AC9: module-wide race/lint and both dependency modes.

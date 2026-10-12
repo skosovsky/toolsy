@@ -53,7 +53,7 @@ type middlewareTool struct {
 }
 
 func (m *middlewareTool) Execute(ctx context.Context, env *RunEnv, input ToolInput, yield func(Chunk) error) error {
-	toolName := m.next.Manifest().Name
+	toolName := loggingToolName(m.next)
 	m.logger.InfoContext(ctx, "tool start", "tool", toolName)
 	start := time.Now()
 	var chunks, totalBytes, errorChunks int64
@@ -127,4 +127,13 @@ func (r *recoveryTool) Execute(
 		}
 	}()
 	return r.next.Execute(ctx, env, input, yield)
+}
+
+// loggingToolName avoids copying a schema only for an exact immutable builtin.
+// Wrappers and custom tools retain their effective, observable Manifest callback.
+func loggingToolName(next Tool) string {
+	if builtin, ok := next.(*tool); ok {
+		return builtin.manifest.Name
+	}
+	return next.Manifest().Name
 }
