@@ -24,4 +24,4 @@ require (
 
 replace github.com/skosovsky/toolsy => ../
 
-replace github.com/modelcontextprotocol/go-sdk => github.com/skosovsky/go-sdk v1.8.1-0.20261012144231-5ec4c4212548
+replace github.com/modelcontextprotocol/go-sdk => github.com/skosovsky/go-sdk v1.8.1-0.20261012153430-1e3d51f2f580

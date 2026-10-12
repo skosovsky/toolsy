@@ -2,7 +2,7 @@
 
 `github.com/skosovsky/toolsy/mcp` is an optional adapter over the published
 `github.com/modelcontextprotocol/go-sdk v1.8.0`, replaced by
-`github.com/skosovsky/go-sdk v1.8.1-0.20261012144231-5ec4c4212548`.
+`github.com/skosovsky/go-sdk v1.8.1-0.20261012153430-1e3d51f2f580`.
 Consumers must add the same `replace` to their main module: Go does not inherit
 dependency replacements. The core module has no MCP
 SDK dependency. Client import and server export can be used independently.
