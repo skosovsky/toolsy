@@ -4,8 +4,8 @@ go 1.27.1
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/skosovsky/toolsy v0.0.0
-	github.com/skosovsky/toolsy/mcp v0.0.0
+	github.com/skosovsky/toolsy v0.20.5
+	github.com/skosovsky/toolsy/mcp v0.20.5
 )
 
 require (
@@ -20,11 +20,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
-
-// Local source replacements test the unpublished candidate without go.work.
-// The SDK replacement matches the MCP module dependency.
-replace github.com/skosovsky/toolsy => ../../../
-
-replace github.com/skosovsky/toolsy/mcp => ../../
 
 replace github.com/modelcontextprotocol/go-sdk => github.com/skosovsky/go-sdk v1.8.1-0.20261012184819-4347cd438f3c
