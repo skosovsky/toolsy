@@ -21,8 +21,10 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 )
 
-// Local source replacements test the unpublished candidate. No SDK replacement
-// or go.work dependency is allowed.
+// Local source replacements test the unpublished candidate without go.work.
+// The SDK replacement matches the MCP module dependency.
 replace github.com/skosovsky/toolsy => ../../../
 
 replace github.com/skosovsky/toolsy/mcp => ../../
+
+replace github.com/modelcontextprotocol/go-sdk => github.com/skosovsky/go-sdk v1.8.1-0.20261012144231-5ec4c4212548

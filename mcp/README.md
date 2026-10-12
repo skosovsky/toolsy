@@ -1,7 +1,10 @@
 # MCP integration through the official Go SDK
 
 `github.com/skosovsky/toolsy/mcp` is an optional adapter over the published
-`github.com/modelcontextprotocol/go-sdk v1.8.0`. The core module has no MCP
+`github.com/modelcontextprotocol/go-sdk v1.8.0`, replaced by
+`github.com/skosovsky/go-sdk v1.8.1-0.20261012144231-5ec4c4212548`.
+Consumers must add the same `replace` to their main module: Go does not inherit
+dependency replacements. The core module has no MCP
 SDK dependency. Client import and server export can be used independently.
 This is a breaking migration; it does not promise lossless wire preservation.
 
@@ -91,8 +94,6 @@ These are accepted dependency limitations, not claims of upstream fixes:
 
 | Limitation in pinned SDK | Evidence / upstream |
 |---|---|
-| Large numeric JSON-RPC IDs round | `TestCharacterizationJSONRPCIDs`; no separate issue confirmed |
-| Structured content numbers round; null and missing collapse | `TestCharacterizationStructuredContentActualWire`, `TestCharacterizationDTORepresentationLoss`; [#1236](https://github.com/modelcontextprotocol/go-sdk/issues/1236), [merged #1239](https://github.com/modelcontextprotocol/go-sdk/pull/1239) after v1.8.0 |
 | Schema and metadata numbers round | `TestCharacterizationSchemaActualWire`; [#1310](https://github.com/modelcontextprotocol/go-sdk/issues/1310), [#1311](https://github.com/modelcontextprotocol/go-sdk/pull/1311) |
 | Generic AddTool numeric conversion | [#1201](https://github.com/modelcontextprotocol/go-sdk/issues/1201), [#1302](https://github.com/modelcontextprotocol/go-sdk/pull/1302); adapter uses raw Server.AddTool |
 | Unknown result fields disappear; duplicate keys/tags are permissive | DTO and actual HTTP characterization tests; no separately verified issue |
@@ -110,12 +111,16 @@ Do not feed numeric tokens requiring precision beyond the SDK's representation t
 these paths. Input rejected before loss can be handled by host/domain validation;
 already rounded inbound results cannot be reliably detected or repaired.
 
-On upgrade: pin an official release in the optional module and SDK-only fixture;
+The pinned fork preserves large numeric JSON-RPC IDs, structured content numbers
+and explicit structured-content nulls; SDK-only characterization covers these paths.
+
+On upgrade: pin the SDK version/replacement in the optional module and test fixtures;
 run the characterization suite first, inspect changed observations and upstream
 issues, update accepted constraints deliberately, then run all adapter contracts,
 GOWORK=off consumers, examples, root/nested tests and lint. A newly passing upstream
 case should remove its limitation, not silently leave stale characterization.
-Do not fork, add a parser, wrap Connection or install a bypass transport.
+Keep the SDK replacement explicit; do not add a parser, wrap Connection or install
+a bypass transport.
 
 ## Migration and verification
 

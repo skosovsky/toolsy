@@ -326,7 +326,7 @@ func TestSDKExportScopedPolicyAndProjection(t *testing.T) {
 			require.NoError(t, err)
 			require.NotContains(t, string(raw), "private-effect")
 			require.NotContains(t, string(raw), "forged")
-			require.Equal(t, map[string]any{"n": float64(7)}, result.StructuredContent)
+			require.Equal(t, map[string]any{"n": json.Number("7")}, result.StructuredContent)
 			// Act: hidden direct call, invalid input and current revoke.
 			_, hidden := session.CallTool(t.Context(), &sdk.CallToolParams{Name: "hidden"})
 			_, invalid := session.CallTool(

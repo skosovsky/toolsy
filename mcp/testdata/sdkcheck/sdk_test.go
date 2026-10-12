@@ -88,9 +88,9 @@ func idRoundTrip(t *testing.T, id string) string {
 func TestCharacterizationJSONRPCIDs(t *testing.T) {
 	// Arrange: public SDK codec, including a string ID and exponent spelling.
 	for _, fixture := range []struct{ name, input, observed string }{
-		{"integer", exactInteger, roundedInteger},
+		{"integer", exactInteger, exactInteger},
 		{"string", `"9007199254740993"`, `"9007199254740993"`},
-		{"exponent", "9.007199254740993e15", roundedInteger},
+		{"exponent", "9.007199254740993e15", exactInteger},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			// Act.
@@ -128,10 +128,10 @@ func TestCharacterizationStructuredContentActualWire(t *testing.T) {
 	}{{"inmemory", false}, {"HTTP", true}} {
 		t.Run(wire.name, func(t *testing.T) {
 			for _, fixture := range []struct{ name, input, observed string }{
-				{"object", `{"id":` + exactInteger + `}`, `{"id":` + roundedInteger + `}`},
-				{"array", `[` + exactInteger + `]`, `[` + roundedInteger + `]`},
-				{"scalar", exactInteger, roundedInteger},
-				{"exponent", "9.007199254740993e15", roundedInteger},
+				{"object", `{"id":` + exactInteger + `}`, `{"id":` + exactInteger + `}`},
+				{"array", `[` + exactInteger + `]`, `[` + exactInteger + `]`},
+				{"scalar", exactInteger, exactInteger},
+				{"exponent", "9.007199254740993e15", "9.007199254740993e15"},
 				{"null", "null", "null"},
 			} {
 				t.Run(fixture.name, func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestCharacterizationStructuredContentActualWire(t *testing.T) {
 					result := fidelityResult(t, wire.http, fixture.input)
 					value := string(marshal(t, result.StructuredContent))
 					metadata := object(t, marshal(t, result.Meta["vendor.example/payload"]))
-					// Assert: incoming values have already lost precision before adapter code.
+					// Assert: structured content preserves numbers; metadata still rounds.
 					if value != fixture.observed || string(metadata["id"]) != roundedInteger {
 						t.Fatalf("reassess SDK behavior: value=%s metadata=%s", value, metadata["id"])
 					}
@@ -186,8 +186,10 @@ func TestCharacterizationDTORepresentationLoss(t *testing.T) {
 			t.Fatal(err)
 		}
 		fields := object(t, marshal(t, &result))
-		// Assert: null and missing collapse; unrecognized top-level fields vanish.
-		if _, present := fields["structuredContent"]; present {
+		// Assert: explicit null survives; unrecognized top-level fields vanish.
+		_, expectedNull := object(t, []byte(raw))["structuredContent"]
+		value, present := fields["structuredContent"]
+		if present != expectedNull || (present && string(value) != "null") {
 			t.Fatal("reassess null handling")
 		}
 		if _, present := fields["vendorField"]; present {

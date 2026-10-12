@@ -305,6 +305,9 @@ linters:
       # Root go.work + nested modules (adapters/*, contracts/*) use `replace ... => ../..`;
       # `make lint` runs golangci per module with cwd = that directory, so path-based issue excludes for go.mod do not apply.
       replace-local: true
+      # MCP pins the SDK fork for numeric fidelity fixes.
+      replace-allow-list:
+        - github.com/modelcontextprotocol/go-sdk
 
     gocritic:
       # Settings passed to gocritic.

@@ -573,7 +573,8 @@ Implications for external executor wrappers:
 
 ## MCP integration
 
-The optional `toolsy/mcp` module uses the official Go SDK v1.8.0. Import remote
+The optional `toolsy/mcp` module uses Go SDK v1.8.0 with a pinned
+`github.com/skosovsky/go-sdk` replacement (see the module contract). Import remote
 SDK tools into the core registry or export a scoped core view as an SDK server;
 the two directions are independent and the core has no SDK dependency.
 Hosts own transports, authentication, scope and connection lifetime. Current core
