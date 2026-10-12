@@ -1,0 +1,11 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:43:44 +07
+Showing nodes accounting for 512.23kB, 100% of 512.23kB total
+      flat  flat%   sum%        cum   cum%
+  512.23kB   100%   100%   512.23kB   100%  runtime.mallocgc
+         0     0%   100%   512.23kB   100%  runtime.malg
+         0     0%   100%   512.23kB   100%  runtime.newobject
+         0     0%   100%   512.23kB   100%  runtime.newproc.func1
+         0     0%   100%   512.23kB   100%  runtime.newproc1
+         0     0%   100%   512.23kB   100%  runtime.systemstack

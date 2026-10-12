@@ -1,0 +1,210 @@
+package evaluation
+
+import (
+	"context"
+	"fmt"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/skosovsky/zl-mcp/internal/evalfixture"
+	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/metrics"
+	"sort"
+	"time"
+)
+
+type HeapPoint struct {
+	HeapAlloc   uint64 `json:"heap_alloc"`
+	HeapObjects uint64 `json:"heap_objects"`
+	HeapInuse   uint64 `json:"heap_inuse"`
+	HeapSys     uint64 `json:"heap_sys"`
+	StackInuse  uint64 `json:"stack_inuse"`
+	NumGC       uint32 `json:"num_gc"`
+	NumForcedGC uint32 `json:"num_forced_gc"`
+}
+
+func heap(m runtime.MemStats) HeapPoint {
+	return HeapPoint{m.HeapAlloc, m.HeapObjects, m.HeapInuse, m.HeapSys, m.StackInuse, m.NumGC, m.NumForcedGC}
+}
+
+type Epoch struct {
+	Index                  int       `json:"index"`
+	Calls                  int       `json:"calls"`
+	AllocationsPerOp       float64   `json:"allocations_per_op"`
+	AllocBytesPerOp        float64   `json:"alloc_bytes_per_op"`
+	WindowAllocationsPerOp float64   `json:"window_allocations_per_op"`
+	WindowAllocBytesPerOp  float64   `json:"window_alloc_bytes_per_op"`
+	ElapsedSeconds         float64   `json:"elapsed_seconds"`
+	P95Seconds             float64   `json:"p95_seconds"`
+	ResponseBytes          int       `json:"response_bytes"`
+	NaturalGC              uint32    `json:"natural_gc"`
+	PauseNS                uint64    `json:"pause_ns"`
+	GCCPUSeconds           float64   `json:"gc_cpu_seconds"`
+	GCAssistCPUSeconds     float64   `json:"gc_assist_cpu_seconds"`
+	Before                 HeapPoint `json:"before"`
+	AfterLoad              HeapPoint `json:"after_load"`
+	AfterGC                HeapPoint `json:"after_gc"`
+}
+type Measurement struct {
+	Kind             string  `json:"kind"`
+	Calls            int     `json:"calls"`
+	Warmup           int     `json:"warmup"`
+	Errors           int     `json:"errors"`
+	Bytes            int     `json:"bytes"`
+	P95Seconds       float64 `json:"p95_seconds"`
+	AllocationsPerOp float64 `json:"allocations_per_op"`
+	AllocBytesPerOp  float64 `json:"alloc_bytes_per_op"`
+	ElapsedSeconds   float64 `json:"elapsed_seconds"`
+	Go               string  `json:"go"`
+	OS               string  `json:"os"`
+	Arch             string  `json:"arch"`
+	Concurrency      int     `json:"concurrency"`
+	PacingMillis     int     `json:"pacing_millis"`
+	Admission        bool    `json:"admission_enabled"`
+	Exporters        bool    `json:"exporters_enabled"`
+	Cleanup          bool    `json:"cleanup"`
+	Epochs           []Epoch `json:"epochs"`
+	GOMAXPROCS       int     `json:"gomaxprocs"`
+	GOGC             string  `json:"gogc"`
+	GOMEMLIMIT       string  `json:"gomemlimit"`
+}
+
+func cpu() (float64, float64) {
+	s := []metrics.Sample{{Name: "/cpu/classes/gc/total:cpu-seconds"}, {Name: "/cpu/classes/gc/mark/assist:cpu-seconds"}}
+	metrics.Read(s)
+	return s[0].Value.Float64(), s[1].Value.Float64()
+}
+func Measure(ctx context.Context, root, state, kind string, count int) (result Measurement, err error) {
+	result = Measurement{Kind: kind, Warmup: 50, Go: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, Concurrency: 1, PacingMillis: 110, Admission: true, Exporters: false, GOMAXPROCS: runtime.GOMAXPROCS(0), GOGC: os.Getenv("GOGC"), GOMEMLIMIT: os.Getenv("GOMEMLIMIT"), Epochs: make([]Epoch, 0, 3)}
+	if count < 3 || count%3 != 0 {
+		return result, fmt.Errorf("count must divide into three epochs")
+	}
+	name := ""
+	args := map[string]any{}
+	switch kind {
+	case "read":
+		name = "zalo_list_groups"
+	case "search":
+		name = "zalo_search_messages"
+		args["query"] = "ремонт"
+	case "context":
+		name = "zalo_get_message_context"
+		args["group_id"] = "g-1"
+		args["message_id"] = "m-101"
+		args["before"] = 0
+		args["after"] = 0
+	default:
+		return result, fmt.Errorf("unknown kind")
+	}
+	effects := filepath.Join(state, "effects.jsonl")
+	if err = os.WriteFile(effects, nil, 0600); err != nil {
+		return result, err
+	}
+	f, err := evalfixture.New(ctx, evalfixture.Options{Offline: true, StateDir: filepath.Join(state, "state"), EffectsFile: effects, Fixtures: filepath.Join(root, "docs/evals/fixtures.json")})
+	if err != nil {
+		return result, err
+	}
+	c, err := connect(ctx, f)
+	if err != nil {
+		f.Close()
+		return result, err
+	}
+	defer func() {
+		c.close()
+		e := f.Close()
+		result.Cleanup = e == nil
+		if err == nil {
+			err = e
+		}
+	}()
+	// This helper returns no response reference so every forced-GC checkpoint has identical liveness.
+	call := func() (int, float64, uint64, uint64, error) {
+		var a, b runtime.MemStats
+		runtime.ReadMemStats(&a)
+		start := time.Now()
+		response, e := c.session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		wire := marshaled(response)
+		duration := time.Since(start).Seconds()
+		runtime.ReadMemStats(&b)
+		if e != nil || response == nil || response.IsError {
+			return 0, 0, 0, 0, fmt.Errorf("MCP failure: %v", e)
+		}
+		return len(wire), duration, b.Mallocs - a.Mallocs, b.TotalAlloc - a.TotalAlloc, nil
+	}
+	pace := func() error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(110 * time.Millisecond):
+			return nil
+		}
+	}
+	for i := 0; i < result.Warmup; i++ {
+		if err = pace(); err != nil {
+			return result, err
+		}
+		if _, _, _, _, err = call(); err != nil {
+			result.Errors++
+			return result, err
+		}
+	}
+	samples := make([]float64, count)
+	totalStart := time.Now()
+	var totalAllocs, totalBytes uint64
+	for epoch := 0; epoch < 3; epoch++ {
+		e := Epoch{Index: epoch, Calls: count / 3}
+		runtime.GC()
+		var a, b, d runtime.MemStats
+		runtime.ReadMemStats(&a)
+		gc0, assist0 := cpu()
+		start := time.Now()
+		var aa, bb uint64
+		for i := 0; i < e.Calls; i++ {
+			if err = pace(); err != nil {
+				return result, err
+			}
+			var n int
+			var dur float64
+			var x, y uint64
+			n, dur, x, y, err = call()
+			if err != nil {
+				result.Errors++
+				return result, err
+			}
+			samples[epoch*e.Calls+i] = dur
+			aa += x
+			bb += y
+			e.ResponseBytes += n
+		}
+		e.ElapsedSeconds = time.Since(start).Seconds()
+		runtime.ReadMemStats(&b)
+		gc1, assist1 := cpu()
+		runtime.GC()
+		runtime.ReadMemStats(&d)
+		e.Before = heap(a)
+		e.AfterLoad = heap(b)
+		e.AfterGC = heap(d)
+		e.NaturalGC = b.NumGC - a.NumGC
+		e.PauseNS = b.PauseTotalNs - a.PauseTotalNs
+		e.GCCPUSeconds = gc1 - gc0
+		e.GCAssistCPUSeconds = assist1 - assist0
+		e.AllocationsPerOp = float64(aa) / float64(e.Calls)
+		e.AllocBytesPerOp = float64(bb) / float64(e.Calls)
+		e.WindowAllocationsPerOp = float64(b.Mallocs-a.Mallocs) / float64(e.Calls)
+		e.WindowAllocBytesPerOp = float64(b.TotalAlloc-a.TotalAlloc) / float64(e.Calls)
+		part := samples[epoch*e.Calls : (epoch+1)*e.Calls]
+		sort.Float64s(part)
+		e.P95Seconds = part[(95*e.Calls+99)/100-1]
+		result.Epochs = append(result.Epochs, e)
+		result.Calls += e.Calls
+		result.Bytes += e.ResponseBytes
+		totalAllocs += aa
+		totalBytes += bb
+	}
+	sort.Float64s(samples)
+	result.P95Seconds = samples[(95*count+99)/100-1]
+	result.AllocationsPerOp = float64(totalAllocs) / float64(count)
+	result.AllocBytesPerOp = float64(totalBytes) / float64(count)
+	result.ElapsedSeconds = time.Since(totalStart).Seconds()
+	return result, nil
+}

@@ -1,0 +1,48 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:24:22 +07
+Active filters:
+   focus=NewProxyTool|compileResultContract
+Showing nodes accounting for 96.02kB, 75.85% of 126.58kB total
+Dropped 39 nodes (cum <= 0.63kB)
+      flat  flat%   sum%        cum   cum%
+   34.45kB 27.21% 27.21%    43.91kB 34.69%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).object
+      32kB 25.28% 52.49%       32kB 25.28%  github.com/skosovsky/toolsy.(*valueCloner).remember
+   16.50kB 13.04% 65.53%    18.23kB 14.41%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+    4.28kB  3.38% 68.91%     4.28kB  3.38%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).text
+    2.95kB  2.33% 71.24%    43.91kB 34.69%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).value
+    2.33kB  1.84% 73.08%     2.33kB  1.84%  fmt.Sprintf
+    2.23kB  1.76% 74.84%    16.10kB 12.72%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).array
+    0.50kB   0.4% 75.24%     9.09kB  7.18%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+    0.39kB  0.31% 75.55%    96.62kB 76.34%  github.com/skosovsky/toolsy.NewProxyTool
+    0.33kB  0.26% 75.81%    32.33kB 25.54%  github.com/skosovsky/toolsy.(*valueCloner).cloneJSONReference
+    0.06kB 0.049% 75.85%     7.08kB  5.59%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueArr
+         0     0% 75.85%    19.92kB 15.74%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0% 75.85%    18.31kB 14.47%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0% 75.85%    18.31kB 14.47%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0% 75.85%    19.91kB 15.73%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0% 75.85%    18.23kB 14.41%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0% 75.85%    18.31kB 14.47%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0% 75.85%     0.85kB  0.67%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft2020
+         0     0% 75.85%    17.46kB 13.79%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0% 75.85%     0.85kB  0.67%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueProp
+         0     0% 75.85%    16.64kB 13.15%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0% 75.85%     0.84kB  0.67%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRef
+         0     0% 75.85%     0.84kB  0.67%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRefVal
+         0     0% 75.85%     1.73kB  1.37%  github.com/santhosh-tekuri/jsonschema/v6.(*urlPtr).String
+         0     0% 75.85%     0.62kB  0.49%  github.com/santhosh-tekuri/jsonschema/v6.jsonPointer.append2
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.(*valueCloner).clone
+         0     0% 75.85%       32kB 25.28%  github.com/skosovsky/toolsy.(*valueCloner).cloneAny
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.(*valueCloner).cloneReference
+         0     0% 75.85%    96.62kB 76.34%  github.com/skosovsky/toolsy.TestMemoryMeasurement
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.buildToolManifest
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.cloneMutableValue
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.cloneReflectValue
+         0     0% 75.85%       63kB 49.77%  github.com/skosovsky/toolsy.compileResultContract
+         0     0% 75.85%    32.33kB 25.54%  github.com/skosovsky/toolsy.deepCloneMap
+         0     0% 75.85%    43.92kB 34.70%  github.com/skosovsky/toolsy.deepCopySchemaFromMap
+         0     0% 75.85%    96.62kB 76.34%  github.com/skosovsky/toolsy.performanceToolForMemory
+         0     0% 75.85%    19.92kB 15.74%  github.com/skosovsky/toolsy/internal/jsonschemax.Compile
+         0     0% 75.85%    43.91kB 34.69%  github.com/skosovsky/toolsy/internal/jsonschemax.Decode
+         0     0% 75.85%    43.91kB 34.69%  github.com/skosovsky/toolsy/internal/jsonschemax.decodeValid
+         0     0% 75.85%    96.62kB 76.34%  testing.tRunner

@@ -1,0 +1,57 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:23:12 +07
+Showing nodes accounting for 86.31kB, 96.35% of 89.59kB total
+Dropped 103 nodes (cum <= 0.45kB)
+Showing top 50 nodes out of 105
+      flat  flat%   sum%        cum   cum%
+   34.45kB 38.45% 38.45%    43.91kB 49.01%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).object
+   17.25kB 19.26% 57.70%    18.97kB 21.17%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+    9.13kB 10.19% 67.90%     9.13kB 10.19%  runtime/metrics.runtime_readMetrics
+    4.28kB  4.78% 72.68%     4.28kB  4.78%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).text
+       3kB  3.35% 76.03%        3kB  3.35%  os.readFileContents
+    2.95kB  3.30% 79.32%    43.91kB 49.01%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).value
+    2.55kB  2.84% 82.17%     2.58kB  2.88%  runtime.mallocgc
+    2.33kB  2.60% 84.76%     2.39kB  2.67%  fmt.Sprintf
+    2.23kB  2.49% 87.25%    16.10kB 17.97%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).array
+    1.80kB  2.01% 89.26%     1.80kB  2.01%  regexp.onePassCopy
+    1.38kB  1.53% 90.79%     1.38kB  1.53%  regexp/syntax.(*compiler).inst (inline)
+    1.24kB  1.39% 92.18%     1.57kB  1.75%  testing.(*T).Run
+    0.80kB  0.89% 93.07%     6.43kB  7.18%  testing.runTests
+    0.58kB  0.65% 93.71%     0.73kB  0.82%  github.com/skosovsky/toolsy.(*RegistryBuilder).Build
+    0.52kB  0.58% 94.30%    79.68kB 88.94%  github.com/skosovsky/toolsy.TestMemoryMeasurement
+    0.52kB  0.58% 94.87%     0.52kB  0.58%  sync.(*Pool).pinSlow
+    0.50kB  0.56% 95.43%     9.05kB 10.11%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+    0.39kB  0.44% 95.87%    64.62kB 72.14%  github.com/skosovsky/toolsy.NewProxyTool
+    0.18kB   0.2% 96.07%     3.59kB  4.00%  regexp.compile
+    0.13kB  0.15% 96.22%     3.78kB  4.22%  testing.newMatcher
+    0.06kB  0.07% 96.28%     7.84kB  8.76%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueArr
+    0.03kB 0.035% 96.32%    67.98kB 75.88%  github.com/skosovsky/toolsy.performanceToolForMemory
+    0.02kB 0.026% 96.35%     6.58kB  7.34%  testing.(*M).Run
+         0     0% 96.35%     0.58kB  0.65%  encoding/json.Valid (inline)
+         0     0% 96.35%     0.58kB  0.65%  encoding/json.checkValid
+         0     0% 96.35%     0.58kB  0.65%  encoding/json/jsontext.export.GetBufferedDecoder (inline)
+         0     0% 96.35%     0.58kB  0.65%  encoding/json/jsontext.getBufferedDecoder
+         0     0% 96.35%     0.47kB  0.52%  fmt.Sprint
+         0     0% 96.35%    20.67kB 23.07%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0% 96.35%     0.75kB  0.84%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0% 96.35%    19.06kB 21.28%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0% 96.35%    19.06kB 21.28%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0% 96.35%    20.66kB 23.06%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0% 96.35%    18.97kB 21.17%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0% 96.35%     0.56kB  0.63%  github.com/santhosh-tekuri/jsonschema/v6.(*Schema).Validate
+         0     0% 96.35%     0.58kB  0.65%  github.com/santhosh-tekuri/jsonschema/v6.(*Schema).validate
+         0     0% 96.35%    19.06kB 21.28%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0% 96.35%     0.87kB  0.97%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft2020
+         0     0% 96.35%    18.20kB 20.31%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0% 96.35%     0.87kB  0.97%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueProp
+         0     0% 96.35%    17.38kB 19.39%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0% 96.35%     0.83kB  0.92%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRef
+         0     0% 96.35%     0.83kB  0.92%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRefVal
+         0     0% 96.35%     1.72kB  1.92%  github.com/santhosh-tekuri/jsonschema/v6.(*urlPtr).String
+         0     0% 96.35%     0.56kB  0.63%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).arrValidate
+         0     0% 96.35%     0.55kB  0.61%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).condValidate
+         0     0% 96.35%     0.58kB  0.65%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).objValidate
+         0     0% 96.35%     0.58kB  0.65%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).validate
+         0     0% 96.35%     0.58kB  0.65%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).validateRef
+         0     0% 96.35%     0.58kB  0.65%  github.com/santhosh-tekuri/jsonschema/v6.(*validator).validateSelf

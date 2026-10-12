@@ -1,0 +1,78 @@
+package toolsy
+
+import (
+ "reflect"
+ "testing"
+)
+
+type reviewerBNamedPointer *reviewerBPointerNode
+type reviewerBPointerNode struct { Value int; Next reviewerBNamedPointer }
+
+func TestReviewerBNamedPointerContract(t *testing.T) {
+ t.Run("nil-root",func(t *testing.T){
+  var source reviewerBNamedPointer
+  out:=cloneMutableValue(source)
+  if reflect.TypeOf(out)!=reflect.TypeOf(source)||!reflect.ValueOf(out).IsNil(){t.Errorf("nil dynamic type changed: %T",out)}
+ })
+ t.Run("nonnil-root-cycle",func(t *testing.T){
+  source:=reviewerBNamedPointer(&reviewerBPointerNode{Value:1});source.Next=source
+  out:=cloneMutableValue(source); value:=reflect.ValueOf(out)
+  if reflect.TypeOf(out)!=reflect.TypeOf(source){t.Errorf("root dynamic type: got %T want %T",out,source)}
+  if value.Pointer()==reflect.ValueOf(source).Pointer(){t.Error("root aliases source")}
+  if value.Elem().FieldByName("Next").Pointer()!=value.Pointer(){t.Error("cycle lost")}
+  value.Elem().FieldByName("Value").SetInt(2)
+  if source.Value!=1{t.Error("root mutation escaped")}
+ })
+ t.Run("nested-interface-alias",func(t *testing.T){
+  source:=reviewerBNamedPointer(&reviewerBPointerNode{Value:1});source.Next=source
+  var nilSource reviewerBNamedPointer
+  out:=cloneMutableValue([]any{source,source,nilSource}).([]any)
+  if reflect.TypeOf(out[0])!=reflect.TypeOf(source){t.Errorf("nested dynamic type: got %T want %T",out[0],source)}
+  if reflect.ValueOf(out[0]).Pointer()!=reflect.ValueOf(out[1]).Pointer(){t.Error("alias lost")}
+  if reflect.TypeOf(out[2])!=reflect.TypeOf(nilSource)||!reflect.ValueOf(out[2]).IsNil(){t.Error("nested typed nil changed")}
+ })
+ t.Run("nested-typed-field",func(t *testing.T){
+  type holder struct {Ptr reviewerBNamedPointer}
+  source:=reviewerBNamedPointer(&reviewerBPointerNode{Value:1});source.Next=source
+  out:=cloneMutableValue(holder{source}).(holder)
+  if reflect.TypeOf(out.Ptr)!=reflect.TypeOf(source)||out.Ptr==source||out.Ptr.Next!=out.Ptr{t.Error("typed pointer field ownership/cycle/type changed")}
+ })
+ t.Run("generic-typed-args-isolation",func(t *testing.T){
+  source:=reviewerBNamedPointer(&reviewerBPointerNode{Value:1});source.Next=source
+  out:=cloneTypedArgValue(source)
+  out.Value=2
+  if source.Value!=1{t.Errorf("generic snapshot fallback aliases original; original Value=%d",source.Value)}
+ })
+}
+
+type reviewerBOtherPointer *reviewerBPointerNode
+
+func TestReviewerBNamedPointerIdentityStress(t *testing.T) {
+ // Arrange: same-address pointers of three distinct dynamic types must retain
+ // separate memo identities, while aliases of the same named type cross both
+ // inline migration and fixed-table overflow.
+ source:=reviewerBNamedPointer(&reviewerBPointerNode{Value:1});source.Next=source
+ other:=reviewerBOtherPointer(source)
+ unnamed:=(*reviewerBPointerNode)(source)
+ graph:=make([]any,1104)
+ graph[0],graph[1],graph[2]=source,other,unnamed
+ for i:=3;i<1103;i++ {graph[i]=map[string]any{"id":i}}
+ graph[1103]=source
+ // Act.
+ out:=cloneMutableValue(graph).([]any)
+ first,ok:=out[0].(reviewerBNamedPointer)
+ if !ok {t.Fatalf("stress root type erased: %T",out[0])}
+ second,ok:=out[1].(reviewerBOtherPointer)
+ if !ok {t.Fatalf("other named type erased: %T",out[1])}
+ third:=out[2].(*reviewerBPointerNode)
+ first.Value=2
+ // Assert.
+ if source.Value!=1||first==source||out[1103].(reviewerBNamedPointer)!=first||first.Next!=first {t.Fatal("named alias/cycle/source isolation lost across overflow")}
+ if second.Value!=1||third.Value!=1||second.Next!=first||third.Next!=first {t.Fatal("different pointer-type identity domains changed")}
+ // Arrange and Act: typed array aliases must retain the named dynamic type.
+ array:=cloneMutableValue([2]reviewerBNamedPointer{source,source}).([2]reviewerBNamedPointer)
+ // Assert.
+ if array[0]==source||array[0]!=array[1]||array[0].Next!=array[0] {t.Fatal("typed array pointer ownership/cycle changed")}
+ var nilOther reviewerBOtherPointer
+ if reflect.TypeOf(cloneMutableValue(nilOther))!=reflect.TypeOf(nilOther) {t.Fatal("other named typed nil erased")}
+}

@@ -1,0 +1,90 @@
+{
+  "Windows": [
+    {
+      "Name": "fixed-1",
+      "Iterations": 300,
+      "DurationNS": 55327083,
+      "AllocBytes": 51073872,
+      "NaturalGC": 18,
+      "STWNS": 969875,
+      "GCCPUSeconds": 0.007829133,
+      "AssistCPUSeconds": 0.0008716660000000001,
+      "SampledPeak": 3555224,
+      "Retained": 669008
+    },
+    {
+      "Name": "fixed-2",
+      "Iterations": 300,
+      "DurationNS": 56199875,
+      "AllocBytes": 51065096,
+      "NaturalGC": 18,
+      "STWNS": 1017336,
+      "GCCPUSeconds": 0.0074258829999999994,
+      "AssistCPUSeconds": 0.0007652079999999999,
+      "SampledPeak": 3726224,
+      "Retained": 669136
+    },
+    {
+      "Name": "fixed-3",
+      "Iterations": 300,
+      "DurationNS": 55493167,
+      "AllocBytes": 51067064,
+      "NaturalGC": 18,
+      "STWNS": 925916,
+      "GCCPUSeconds": 0.0075954230000000005,
+      "AssistCPUSeconds": 0.0008271679999999999,
+      "SampledPeak": 3610856,
+      "Retained": 669408
+    },
+    {
+      "Name": "concurrent-churn",
+      "Iterations": 300,
+      "DurationNS": 300182708,
+      "AllocBytes": 412138680,
+      "NaturalGC": 168,
+      "STWNS": 12854801,
+      "GCCPUSeconds": 0.07400905499999999,
+      "AssistCPUSeconds": 0.013008749,
+      "SampledPeak": 3626632,
+      "Retained": 710712
+    },
+    {
+      "Name": "large-small",
+      "Iterations": 300,
+      "DurationNS": 82083583,
+      "AllocBytes": 81703920,
+      "NaturalGC": 30,
+      "STWNS": 1743834,
+      "GCCPUSeconds": 0.017083044000000006,
+      "AssistCPUSeconds": 0.000995250999999999,
+      "SampledPeak": 5718736,
+      "Retained": 710536
+    },
+    {
+      "Name": "registry-churn",
+      "Iterations": 300,
+      "DurationNS": 416894250,
+      "AllocBytes": 323824448,
+      "NaturalGC": 127,
+      "STWNS": 7723546,
+      "GCCPUSeconds": 0.05964831799999999,
+      "AssistCPUSeconds": 0.004042002999999999,
+      "SampledPeak": 3522432,
+      "Retained": 717192
+    },
+    {
+      "Name": "retained-snapshots",
+      "Iterations": 300,
+      "DurationNS": 69301625,
+      "AllocBytes": 55249872,
+      "NaturalGC": 27,
+      "STWNS": 1581711,
+      "GCCPUSeconds": 0.021379919999999997,
+      "AssistCPUSeconds": 0.0009865010000000007,
+      "SampledPeak": 4499344,
+      "Retained": 1847160
+    }
+  ],
+  "ReleasedHeap": 639536,
+  "Note": "300 iterations/window; concurrent window has 8 calls/iteration; sampled heap after iterations; RSS not measured; finite diagnostic, not production budget"
+}

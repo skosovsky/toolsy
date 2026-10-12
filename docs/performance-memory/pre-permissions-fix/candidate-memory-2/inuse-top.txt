@@ -1,0 +1,13 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:43:56 +07
+Showing nodes accounting for 512.03kB, 100% of 512.03kB total
+      flat  flat%   sum%        cum   cum%
+  512.03kB   100%   100%   512.03kB   100%  flag.(*FlagSet).Var
+         0     0%   100%   512.03kB   100%  flag.(*FlagSet).String
+         0     0%   100%   512.03kB   100%  flag.(*FlagSet).StringVar (inline)
+         0     0%   100%   512.03kB   100%  flag.String (inline)
+         0     0%   100%   512.03kB   100%  main.main
+         0     0%   100%   512.03kB   100%  runtime.main
+         0     0%   100%   512.03kB   100%  testing.Init
+         0     0%   100%   512.03kB   100%  testing.MainStart

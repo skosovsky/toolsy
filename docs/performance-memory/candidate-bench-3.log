@@ -1,0 +1,61 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkManifestPreDispatch-2      	    9430	     38116 ns/op	   41654 B/op	     311 allocs/op
+BenchmarkPerformanceClone/tiny-2    	 1544989	       232.1 ns/op	     336 B/op	       2 allocs/op
+BenchmarkPerformanceClone/rich-2    	   10000	     33483 ns/op	   37312 B/op	     264 allocs/op
+BenchmarkPerformanceClone/named-2   	   10000	     33402 ns/op	   37696 B/op	     269 allocs/op
+BenchmarkPerformanceClone/byot-2    	  707361	       532.1 ns/op	     496 B/op	       8 allocs/op
+BenchmarkPerformanceClone/alias-2   	  899887	       411.2 ns/op	     448 B/op	       6 allocs/op
+BenchmarkPerformanceClone/cycle-2   	 1475458	       246.2 ns/op	     336 B/op	       2 allocs/op
+BenchmarkPerformanceDecode/tiny-2   	 4457401	        82.05 ns/op	      48 B/op	       1 allocs/op
+BenchmarkPerformanceDecode/large-2  	   20295	     17774 ns/op	   16050 B/op	     389 allocs/op
+BenchmarkPerformanceDecode/malformed-2         	  623650	       573.8 ns/op	     440 B/op	       8 allocs/op
+BenchmarkPerformanceFreshSchema-2              	    4162	     82022 ns/op	   78914 B/op	    1695 allocs/op
+BenchmarkPerformanceExecute/proxy/direct/off-2 	    4054	     85327 ns/op	   80354 B/op	    1712 allocs/op
+BenchmarkPerformanceExecute/proxy/registry/off-2         	    3387	    109009 ns/op	  100617 B/op	    2112 allocs/op
+BenchmarkPerformanceExecute/proxy/registry/on-2          	    2394	    145973 ns/op	  138294 B/op	    2379 allocs/op
+BenchmarkPerformanceExecute/proxy/registry/composed-2    	    1576	    220710 ns/op	  213616 B/op	    2913 allocs/op
+BenchmarkPerformanceExecute/proxy/view/off-2             	    3369	    108320 ns/op	  100647 B/op	    2114 allocs/op
+BenchmarkPerformanceExecute/proxy/view/on-2              	    2432	    145511 ns/op	  138338 B/op	    2382 allocs/op
+BenchmarkPerformanceExecute/proxy/view/composed-2        	    1628	    222247 ns/op	  213696 B/op	    2918 allocs/op
+BenchmarkPerformanceExecute/proxy/session/off-2          	    3067	    109281 ns/op	  100615 B/op	    2112 allocs/op
+BenchmarkPerformanceExecute/proxy/session/on-2           	    2348	    147886 ns/op	  138291 B/op	    2379 allocs/op
+BenchmarkPerformanceExecute/proxy/session/composed-2     	    1650	    222989 ns/op	  213615 B/op	    2913 allocs/op
+BenchmarkPerformanceExecute/typed/direct/off-2           	    1750	    198652 ns/op	  113119 B/op	    2122 allocs/op
+BenchmarkPerformanceExecute/typed/registry/off-2         	    1356	    263084 ns/op	  136544 B/op	    2524 allocs/op
+BenchmarkPerformanceExecute/typed/registry/on-2          	    1162	    306973 ns/op	  174264 B/op	    2791 allocs/op
+BenchmarkPerformanceExecute/typed/registry/composed-2    	     939	    374890 ns/op	  249826 B/op	    3326 allocs/op
+BenchmarkPerformanceExecute/typed/view/off-2             	    1410	    262242 ns/op	  136627 B/op	    2526 allocs/op
+BenchmarkPerformanceExecute/typed/view/on-2              	    1150	    303431 ns/op	  174308 B/op	    2794 allocs/op
+BenchmarkPerformanceExecute/typed/view/composed-2        	     919	    378226 ns/op	  249860 B/op	    3331 allocs/op
+BenchmarkPerformanceExecute/typed/session/off-2          	    1330	    262070 ns/op	  136557 B/op	    2524 allocs/op
+BenchmarkPerformanceExecute/typed/session/on-2           	    1188	    299701 ns/op	  174331 B/op	    2791 allocs/op
+BenchmarkPerformanceExecute/typed/session/composed-2     	     948	    379704 ns/op	  249859 B/op	    3326 allocs/op
+BenchmarkPerformanceExecute/dynamic/direct/off-2         	    4156	     87451 ns/op	   80354 B/op	    1712 allocs/op
+BenchmarkPerformanceExecute/dynamic/registry/off-2       	    3272	    107840 ns/op	  100616 B/op	    2112 allocs/op
+BenchmarkPerformanceExecute/dynamic/registry/on-2        	    2284	    150032 ns/op	  138290 B/op	    2379 allocs/op
+BenchmarkPerformanceExecute/dynamic/registry/composed-2  	    1699	    220397 ns/op	  213615 B/op	    2913 allocs/op
+BenchmarkPerformanceExecute/dynamic/view/off-2           	    3337	    108979 ns/op	  100648 B/op	    2114 allocs/op
+BenchmarkPerformanceExecute/dynamic/view/on-2            	    2280	    150410 ns/op	  138340 B/op	    2382 allocs/op
+BenchmarkPerformanceExecute/dynamic/view/composed-2      	    1632	    222426 ns/op	  213696 B/op	    2918 allocs/op
+BenchmarkPerformanceExecute/dynamic/session/off-2        	    3304	    110291 ns/op	  100617 B/op	    2112 allocs/op
+BenchmarkPerformanceExecute/dynamic/session/on-2         	    2427	    151226 ns/op	  138292 B/op	    2379 allocs/op
+BenchmarkPerformanceExecute/dynamic/session/composed-2   	    1628	    223049 ns/op	  213618 B/op	    2913 allocs/op
+BenchmarkPerformanceWrappers/override-2                  	    1537	    237801 ns/op	  151467 B/op	    2391 allocs/op
+BenchmarkPerformanceWrappers/logging-2                   	    1893	    200735 ns/op	  113333 B/op	    2130 allocs/op
+BenchmarkPerformanceWrappers/binder-2                    	    1494	    297376 ns/op	  151620 B/op	    2388 allocs/op
+BenchmarkPerformanceWrappers/prepared-2                  	     801	    435895 ns/op	  270571 B/op	    4356 allocs/op
+BenchmarkPerformanceProfiles/cache-miss-2                	   26520	     12760 ns/op	   10214 B/op	     140 allocs/op
+BenchmarkPerformanceProfiles/cache-hit-2                 	   23692	     15077 ns/op	   12178 B/op	     142 allocs/op
+BenchmarkPerformanceProfiles/operation-fresh-2           	   24452	     14412 ns/op	   10114 B/op	     149 allocs/op
+BenchmarkPerformanceProfiles/operation-replay-2          	   23612	     15255 ns/op	   11714 B/op	     148 allocs/op
+BenchmarkPerformanceEnv/empty-2                          	 2136548	       165.3 ns/op	     384 B/op	       1 allocs/op
+BenchmarkPerformanceEnv/populated-2                      	 1000000	       349.8 ns/op	     784 B/op	       5 allocs/op
+BenchmarkPerformanceStream/independent-2                 	  185247	      1967 ns/op	    2520 B/op	      32 allocs/op
+BenchmarkPerformanceStream/terminal-2                    	  130545	      2745 ns/op	    3544 B/op	      48 allocs/op
+BenchmarkPerformanceCold-2                               	     294	   1204735 ns/op	  870896 B/op	   13432 allocs/op
+BenchmarkPolicyManifestRich-2                            	    9594	     36304 ns/op	   39016 B/op	     275 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	22.919s

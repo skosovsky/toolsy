@@ -1,0 +1,28 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:04:53 +07
+Showing nodes accounting for 2049.03kB, 100% of 2049.03kB total
+      flat  flat%   sum%        cum   cum%
+ 1024.75kB 50.01% 50.01%  1536.78kB 75.00%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+  512.25kB 25.00% 75.01%   512.25kB 25.00%  regexp.onePassCopy
+  512.03kB 24.99%   100%   512.03kB 24.99%  fmt.Sprintf
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0%   100%  1536.78kB 75.00%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0%   100%   512.03kB 24.99%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueArr
+         0     0%   100%  1024.75kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+         0     0%   100%  1536.78kB 75.00%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0%   100%   512.03kB 24.99%  github.com/santhosh-tekuri/jsonschema/v6.(*urlPtr).String
+         0     0%   100%   512.25kB 25.00%  github.com/santhosh-tekuri/jsonschema/v6.goRegexpCompile
+         0     0%   100%  2049.03kB   100%  github.com/santhosh-tekuri/jsonschema/v6.init.0
+         0     0%   100%   512.25kB 25.00%  regexp.Compile (inline)
+         0     0%   100%   512.25kB 25.00%  regexp.compile
+         0     0%   100%   512.25kB 25.00%  regexp.compileOnePass
+         0     0%   100%  2049.03kB   100%  runtime.doInit (inline)
+         0     0%   100%  2049.03kB   100%  runtime.doInit1
+         0     0%   100%  2049.03kB   100%  runtime.main

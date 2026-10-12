@@ -1,0 +1,16 @@
+{
+  "Path": "github.com/skosovsky/toolsy",
+  "Version": "v0.20.1",
+  "Info": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/@v/v0.20.1.info",
+  "GoMod": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/@v/v0.20.1.mod",
+  "Zip": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/@v/v0.20.1.zip",
+  "Dir": "/tmp/toolsy-performance-gopath/pkg/mod/github.com/skosovsky/toolsy@v0.20.1",
+  "Sum": "h1:jhc6D4MXQL/s20aZNnR8Q6X+MniHmcR+eDt2F2ie65M=",
+  "GoModSum": "h1:uOads5+FMotCJ4w2+ku37BhcyEIQjnZpVsfvHRvjnHY=",
+  "Origin": {
+    "VCS": "git",
+    "URL": "https://github.com/skosovsky/toolsy",
+    "Hash": "2b4c9419792bc843ff92c0cf64b35f83330a389d",
+    "Ref": "refs/tags/v0.20.1"
+  }
+}

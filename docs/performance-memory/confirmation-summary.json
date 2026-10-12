@@ -1,0 +1,84 @@
+{
+  "env": {
+    "baseline": {
+      "ns": {
+        "median": 281.7,
+        "min": 273.5,
+        "max": 300.7
+      },
+      "bytes": {
+        "median": 784.0,
+        "min": 784.0,
+        "max": 784.0
+      },
+      "allocs": {
+        "median": 5.0,
+        "min": 5.0,
+        "max": 5.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 280.0,
+        "min": 273.7,
+        "max": 286.0
+      },
+      "bytes": {
+        "median": 784.0,
+        "min": 784.0,
+        "max": 784.0
+      },
+      "allocs": {
+        "median": 5.0,
+        "min": 5.0,
+        "max": 5.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9939652112176074,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "cache": {
+    "baseline": {
+      "ns": {
+        "median": 12595.0,
+        "min": 12497.0,
+        "max": 12900.0
+      },
+      "bytes": {
+        "median": 10251.0,
+        "min": 10251.0,
+        "max": 10252.0
+      },
+      "allocs": {
+        "median": 140.0,
+        "min": 140.0,
+        "max": 140.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 12406.0,
+        "min": 12373.0,
+        "max": 12444.0
+      },
+      "bytes": {
+        "median": 10251.0,
+        "min": 10251.0,
+        "max": 10251.0
+      },
+      "allocs": {
+        "median": 140.0,
+        "min": 140.0,
+        "max": 140.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9849940452560539,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  }
+}

@@ -84,8 +84,9 @@ func hasRequirements(r ToolRequirements) bool {
 // cloneRequirements returns a defensive copy of requirements.
 func cloneRequirements(r ToolRequirements) ToolRequirements {
 	out := r
-	if len(r.Permissions) > 0 {
-		out.Permissions = append([]Permission(nil), r.Permissions...)
+	if r.Permissions != nil {
+		out.Permissions = make([]Permission, len(r.Permissions))
+		copy(out.Permissions, r.Permissions)
 	}
 	return out
 }
@@ -126,7 +127,9 @@ func cloneMutableValue(v any) any {
 }
 
 func cloneReflectValue(v reflect.Value) reflect.Value {
-	return (&valueCloner{seen: make(map[cloneReference]reflect.Value)}).clone(v)
+	c := valueCloner{} //nolint:exhaustruct_v5 // Each operation starts with an empty memo.
+	defer c.release()
+	return c.clone(v)
 }
 
 type cloneReference struct {
@@ -136,7 +139,9 @@ type cloneReference struct {
 }
 
 type valueCloner struct {
-	seen map[cloneReference]reflect.Value
+	memo        *cloneMemo
+	inline      [8]cloneMemoEntry
+	inlineCount int
 }
 
 // Exported data fields are snapshotted without JSON type erasure. Opaque private
@@ -206,7 +211,7 @@ func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 	if v.Kind() == reflect.Slice {
 		key.length = v.Len()
 	}
-	if out, exists := c.seen[key]; exists {
+	if out, exists := c.lookup(key); exists {
 		return out
 	}
 	if out, ok := c.cloneJSONReference(v, key); ok {
@@ -216,18 +221,21 @@ func (c *valueCloner) cloneReference(v reflect.Value) reflect.Value {
 	switch v.Kind() {
 	case reflect.Pointer:
 		out = reflect.New(v.Type().Elem())
-		c.seen[key] = out
+		if out.Type() != v.Type() {
+			out = out.Convert(v.Type())
+		}
+		c.remember(key, out)
 		out.Elem().Set(c.clone(v.Elem()))
 	case reflect.Map:
 		out = reflect.MakeMapWithSize(v.Type(), v.Len())
-		c.seen[key] = out
+		c.remember(key, out)
 		iter := v.MapRange()
 		for iter.Next() {
 			out.SetMapIndex(iter.Key(), c.clone(iter.Value()))
 		}
 	case reflect.Slice:
 		out = reflect.MakeSlice(v.Type(), v.Len(), v.Len())
-		c.seen[key] = out
+		c.remember(key, out)
 		for i := range v.Len() {
 			out.Index(i).Set(c.clone(v.Index(i)))
 		}
@@ -278,7 +286,7 @@ func (c *valueCloner) cloneJSONReference(v reflect.Value, key cloneReference) (r
 	if values, ok := reflect.TypeAssert[map[string]any](v); ok {
 		copied := make(map[string]any, len(values))
 		out := reflect.ValueOf(copied)
-		c.seen[key] = out
+		c.remember(key, out)
 		for name, value := range values {
 			copied[name] = c.cloneAny(value)
 		}
@@ -287,7 +295,7 @@ func (c *valueCloner) cloneJSONReference(v reflect.Value, key cloneReference) (r
 	if values, ok := reflect.TypeAssert[[]any](v); ok {
 		copied := make([]any, len(values))
 		out := reflect.ValueOf(copied)
-		c.seen[key] = out
+		c.remember(key, out)
 		for i, value := range values {
 			copied[i] = c.cloneAny(value)
 		}

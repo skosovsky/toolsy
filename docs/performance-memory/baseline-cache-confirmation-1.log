@@ -1,0 +1,7 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkPerformanceProfiles/cache-miss-2         	   10000	     12595 ns/op	   10251 B/op	     140 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	0.330s

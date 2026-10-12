@@ -1,0 +1,40 @@
+=== RUN   TestMemoryPermissionsEmptyOwnership
+--- PASS: TestMemoryPermissionsEmptyOwnership (0.00s)
+=== RUN   TestMemoryPermissionsNilAndPopulated
+--- PASS: TestMemoryPermissionsNilAndPopulated (0.00s)
+=== RUN   TestReviewerBNamedPointerContract
+=== RUN   TestReviewerBNamedPointerContract/nil-root
+=== RUN   TestReviewerBNamedPointerContract/nonnil-root-cycle
+=== RUN   TestReviewerBNamedPointerContract/nested-interface-alias
+=== RUN   TestReviewerBNamedPointerContract/nested-typed-field
+=== RUN   TestReviewerBNamedPointerContract/generic-typed-args-isolation
+--- PASS: TestReviewerBNamedPointerContract (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nil-root (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nonnil-root-cycle (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nested-interface-alias (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nested-typed-field (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/generic-typed-args-isolation (0.00s)
+=== RUN   TestReviewerBNamedPointerIdentityStress
+--- PASS: TestReviewerBNamedPointerIdentityStress (0.00s)
+=== RUN   TestReviewerBPermissionsEmptySnapshot
+=== RUN   TestReviewerBPermissionsEmptySnapshot/append-isolation
+=== RUN   TestReviewerBPermissionsEmptySnapshot/empty-backing-detachment
+=== RUN   TestReviewerBPermissionsEmptySnapshot/nil-and-populated
+--- PASS: TestReviewerBPermissionsEmptySnapshot (0.00s)
+    --- PASS: TestReviewerBPermissionsEmptySnapshot/append-isolation (0.00s)
+    --- PASS: TestReviewerBPermissionsEmptySnapshot/empty-backing-detachment (0.00s)
+    --- PASS: TestReviewerBPermissionsEmptySnapshot/nil-and-populated (0.00s)
+=== RUN   TestReviewerBPermissionsZeroCapacityBacking
+--- PASS: TestReviewerBPermissionsZeroCapacityBacking (0.00s)
+=== RUN   TestReviewerBPermissionsPolicyRetained
+--- PASS: TestReviewerBPermissionsPolicyRetained (0.00s)
+=== RUN   TestReviewerBOverflowGraph
+--- PASS: TestReviewerBOverflowGraph (0.09s)
+=== RUN   TestReviewerBCollisionOverflowPanic
+--- PASS: TestReviewerBCollisionOverflowPanic (0.01s)
+=== RUN   TestReviewerBConcurrentNoGC
+--- PASS: TestReviewerBConcurrentNoGC (0.13s)
+=== RUN   TestReviewerBTypedIdentityAndInlineBoundary
+--- PASS: TestReviewerBTypedIdentityAndInlineBoundary (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.890s

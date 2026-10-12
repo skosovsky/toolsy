@@ -1,0 +1,9 @@
+{
+  "measured_inventory": "9b0cd39f97838a8636f88086768c8fe9d259b5e98b5c45fcd4792dfbd44713bf",
+  "final_inventory": "c6747b79cc3f0d3565b791c528d4d34a656a89a91e6bd7eeb9284fe1b77e2e88",
+  "changed_files": [
+    "performance_permissions_test.go"
+  ],
+  "production_benchmarks_fixtures_unchanged": true,
+  "sole_test_change": "--- measured/performance_permissions_test.go\n+++ final/performance_permissions_test.go\n@@ -9,7 +9,8 @@\n \tinput := ToolManifest{Requirements: ToolRequirements{Permissions: backing[:0]}}\n \t// Act.\n \tsnapshot := cloneManifestForPolicy(input)\n-\tgrown := append(snapshot.Requirements.Permissions, \"changed\")\n+\tgrown := snapshot.Requirements.Permissions\n+\tgrown = append(grown, \"changed\")\n \t// Assert: empty stays nonnil, capacity is detached, and policy append cannot touch source.\n \tif snapshot.Requirements.Permissions == nil || len(snapshot.Requirements.Permissions) != 0 ||\n \t\tcap(snapshot.Requirements.Permissions) != 0 {\n"
+}

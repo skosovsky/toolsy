@@ -1,0 +1,8 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy/mcp
+cpu: Apple M1 Max
+BenchmarkPerformanceExport/default-2         	    1483	    230835 ns/op	  202587 B/op	    4207 allocs/op
+BenchmarkPerformanceExport/custom-2          	    1332	    269249 ns/op	  253142 B/op	    4093 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy/mcp	1.184s

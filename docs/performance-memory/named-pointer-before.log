@@ -1,0 +1,7 @@
+--- FAIL: TestMemoryNamedPointerIsolation (0.00s)
+    performance_named_pointer_test.go:21: root named pointer type erased
+--- FAIL: TestMemoryNamedPointerGenericAndContext (0.00s)
+    performance_named_pointer_test.go:60: generic/context snapshot aliases source
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.603s
+FAIL

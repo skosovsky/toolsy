@@ -1,0 +1,254 @@
+{
+  "BenchmarkPerformanceClone/tiny": {
+    "pooled": {
+      "ns": {
+        "median": 252.2,
+        "min": 251.5,
+        "max": 339.9
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 215.0,
+        "min": 206.7,
+        "max": 244.9
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    }
+  },
+  "BenchmarkPerformanceClone/rich": {
+    "pooled": {
+      "ns": {
+        "median": 30239.0,
+        "min": 30008.0,
+        "max": 31356.0
+      },
+      "bytes": {
+        "median": 37312.0,
+        "min": 37312.0,
+        "max": 37312.0
+      },
+      "allocs": {
+        "median": 264.0,
+        "min": 264.0,
+        "max": 264.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 30449.0,
+        "min": 29558.0,
+        "max": 120294.0
+      },
+      "bytes": {
+        "median": 37312.0,
+        "min": 37312.0,
+        "max": 37312.0
+      },
+      "allocs": {
+        "median": 264.0,
+        "min": 264.0,
+        "max": 264.0
+      }
+    }
+  },
+  "BenchmarkPerformanceClone/named": {
+    "pooled": {
+      "ns": {
+        "median": 30424.0,
+        "min": 30309.0,
+        "max": 32264.0
+      },
+      "bytes": {
+        "median": 37696.0,
+        "min": 37696.0,
+        "max": 37696.0
+      },
+      "allocs": {
+        "median": 269.0,
+        "min": 269.0,
+        "max": 269.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 31109.0,
+        "min": 30422.0,
+        "max": 40798.0
+      },
+      "bytes": {
+        "median": 37696.0,
+        "min": 37696.0,
+        "max": 37696.0
+      },
+      "allocs": {
+        "median": 269.0,
+        "min": 269.0,
+        "max": 269.0
+      }
+    }
+  },
+  "BenchmarkPerformanceClone/byot": {
+    "pooled": {
+      "ns": {
+        "median": 566.7,
+        "min": 556.6,
+        "max": 590.8
+      },
+      "bytes": {
+        "median": 496.0,
+        "min": 496.0,
+        "max": 496.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 497.8,
+        "min": 477.4,
+        "max": 581.1
+      },
+      "bytes": {
+        "median": 496.0,
+        "min": 496.0,
+        "max": 496.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    }
+  },
+  "BenchmarkPerformanceClone/alias": {
+    "pooled": {
+      "ns": {
+        "median": 468.7,
+        "min": 458.9,
+        "max": 481.1
+      },
+      "bytes": {
+        "median": 448.0,
+        "min": 448.0,
+        "max": 448.0
+      },
+      "allocs": {
+        "median": 6.0,
+        "min": 6.0,
+        "max": 6.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 389.3,
+        "min": 374.4,
+        "max": 418.8
+      },
+      "bytes": {
+        "median": 448.0,
+        "min": 448.0,
+        "max": 448.0
+      },
+      "allocs": {
+        "median": 6.0,
+        "min": 6.0,
+        "max": 6.0
+      }
+    }
+  },
+  "BenchmarkPerformanceClone/cycle": {
+    "pooled": {
+      "ns": {
+        "median": 270.9,
+        "min": 263.2,
+        "max": 399.3
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 224.6,
+        "min": 219.4,
+        "max": 235.3
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    }
+  },
+  "BenchmarkPolicyManifestRich": {
+    "pooled": {
+      "ns": {
+        "median": 32097.0,
+        "min": 31476.0,
+        "max": 39843.0
+      },
+      "bytes": {
+        "median": 39016.0,
+        "min": 39016.0,
+        "max": 39016.0
+      },
+      "allocs": {
+        "median": 275.0,
+        "min": 275.0,
+        "max": 275.0
+      }
+    },
+    "final": {
+      "ns": {
+        "median": 31910.0,
+        "min": 31483.0,
+        "max": 32955.0
+      },
+      "bytes": {
+        "median": 39016.0,
+        "min": 39016.0,
+        "max": 39016.0
+      },
+      "allocs": {
+        "median": 275.0,
+        "min": 275.0,
+        "max": 275.0
+      }
+    }
+  }
+}

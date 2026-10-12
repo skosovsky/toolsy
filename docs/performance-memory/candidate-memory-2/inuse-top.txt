@@ -1,0 +1,30 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 18:24:07 +07
+Showing nodes accounting for 1024.08kB, 100% of 1024.08kB total
+      flat  flat%   sum%        cum   cum%
+ 1024.08kB   100%   100%  1024.08kB   100%  fmt.Sprintf
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0%   100%   512.03kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0%   100%   512.05kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueArr
+         0     0%   100%   512.05kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0%   100%   512.03kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRef
+         0     0%   100%   512.03kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRefVal
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*urlPtr).String
+         0     0%   100%   512.03kB 50.00%  github.com/santhosh-tekuri/jsonschema/v6.init.0
+         0     0%   100%  1024.08kB   100%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+         0     0%   100%   512.05kB 50.00%  github.com/skosovsky/toolsy.NewProxyTool
+         0     0%   100%   512.05kB 50.00%  github.com/skosovsky/toolsy.TestMemoryMeasurement
+         0     0%   100%   512.05kB 50.00%  github.com/skosovsky/toolsy.compileResultContract
+         0     0%   100%   512.05kB 50.00%  github.com/skosovsky/toolsy.performanceToolForMemory
+         0     0%   100%   512.05kB 50.00%  github.com/skosovsky/toolsy/internal/jsonschemax.Compile
+         0     0%   100%   512.03kB 50.00%  runtime.doInit (inline)
+         0     0%   100%   512.03kB 50.00%  runtime.doInit1
+         0     0%   100%   512.03kB 50.00%  runtime.main
+         0     0%   100%   512.05kB 50.00%  testing.tRunner

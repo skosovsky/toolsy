@@ -1,0 +1,20 @@
+go: downloading github.com/google/jsonschema-go v0.4.3
+go: downloading github.com/stretchr/testify v1.12.1
+go: downloading go.uber.org/goleak v1.3.0
+go: downloading github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
+go: downloading golang.org/x/text v0.42.0
+go: downloading go.yaml.in/yaml/v3 v3.0.5
+=== RUN   TestReviewerBPermissionsEmptySnapshot
+=== RUN   TestReviewerBPermissionsEmptySnapshot/append-isolation
+    reviewer_b_permissions_test.go:17: zero-length permission snapshot append mutated backing: "changed"
+=== RUN   TestReviewerBPermissionsEmptySnapshot/empty-backing-detachment
+    reviewer_b_permissions_test.go:27: empty snapshot retains original capacity: 65536
+    reviewer_b_permissions_test.go:28: empty snapshot still references original backing
+=== RUN   TestReviewerBPermissionsEmptySnapshot/nil-and-populated
+--- FAIL: TestReviewerBPermissionsEmptySnapshot (0.00s)
+    --- FAIL: TestReviewerBPermissionsEmptySnapshot/append-isolation (0.00s)
+    --- FAIL: TestReviewerBPermissionsEmptySnapshot/empty-backing-detachment (0.00s)
+    --- PASS: TestReviewerBPermissionsEmptySnapshot/nil-and-populated (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.655s
+FAIL

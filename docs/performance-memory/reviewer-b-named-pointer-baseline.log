@@ -1,0 +1,21 @@
+=== RUN   TestReviewerBNamedPointerContract
+=== RUN   TestReviewerBNamedPointerContract/nil-root
+=== RUN   TestReviewerBNamedPointerContract/nonnil-root-cycle
+    reviewer_b_named_pointer_test.go:20: root dynamic type: got *toolsy.reviewerBPointerNode want toolsy.reviewerBNamedPointer
+=== RUN   TestReviewerBNamedPointerContract/nested-interface-alias
+    reviewer_b_named_pointer_test.go:30: nested dynamic type: got *toolsy.reviewerBPointerNode want toolsy.reviewerBNamedPointer
+=== RUN   TestReviewerBNamedPointerContract/nested-typed-field
+=== RUN   TestReviewerBNamedPointerContract/generic-typed-args-isolation
+    reviewer_b_named_pointer_test.go:44: generic snapshot fallback aliases original; original Value=2
+--- FAIL: TestReviewerBNamedPointerContract (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nil-root (0.00s)
+    --- FAIL: TestReviewerBNamedPointerContract/nonnil-root-cycle (0.00s)
+    --- FAIL: TestReviewerBNamedPointerContract/nested-interface-alias (0.00s)
+    --- PASS: TestReviewerBNamedPointerContract/nested-typed-field (0.00s)
+    --- FAIL: TestReviewerBNamedPointerContract/generic-typed-args-isolation (0.00s)
+=== RUN   TestReviewerBNamedPointerIdentityStress
+    reviewer_b_named_pointer_test.go:64: stress root type erased: *toolsy.reviewerBPointerNode
+--- FAIL: TestReviewerBNamedPointerIdentityStress (0.00s)
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.674s
+FAIL

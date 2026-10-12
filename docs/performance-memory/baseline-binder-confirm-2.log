@@ -1,0 +1,7 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkPerformanceWrappers/binder-2         	    4726	    265351 ns/op	  183570 B/op	    2400 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	1.500s

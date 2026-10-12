@@ -1,0 +1,5 @@
+--- FAIL: TestMemoryPermissionsEmptyOwnership (0.00s)
+    performance_permissions_test.go:15: empty permissions retain source capacity or lose nonnil type
+FAIL
+FAIL	github.com/skosovsky/toolsy	0.452s
+FAIL

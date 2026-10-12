@@ -1,0 +1,115 @@
+
+[integration] .
+ok  	github.com/skosovsky/toolsy	1.492s [no tests to run]
+ok  	github.com/skosovsky/toolsy/adapters/execution/filejournal	1.248s [no tests to run]
+ok  	github.com/skosovsky/toolsy/cmd/toolsy-gen	1.245s [no tests to run]
+ok  	github.com/skosovsky/toolsy/examples/approval_journal	1.233s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/calculator	[no test files]
+?   	github.com/skosovsky/toolsy/examples/contract_recovery	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/full_agent	1.225s [no tests to run]
+ok  	github.com/skosovsky/toolsy/examples/generated_presence	1.228s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/generated_stream	[no test files]
+?   	github.com/skosovsky/toolsy/examples/host_dispatch	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch/recipe	1.213s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/host_event	[no test files]
+ok  	github.com/skosovsky/toolsy/examples/nested_contract	1.221s [no tests to run]
+?   	github.com/skosovsky/toolsy/examples/run_call	[no test files]
+?   	github.com/skosovsky/toolsy/examples/session_snapshot	[no test files]
+?   	github.com/skosovsky/toolsy/examples/stream_terminal	[no test files]
+?   	github.com/skosovsky/toolsy/examples/streaming	[no test files]
+ok  	github.com/skosovsky/toolsy/exectool	1.278s
+ok  	github.com/skosovsky/toolsy/historycodec	1.212s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/format	1.224s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/jsonschemax	1.214s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/release	1.163s [no tests to run]
+ok  	github.com/skosovsky/toolsy/internal/sandboxfs	1.219s [no tests to run]
+?   	github.com/skosovsky/toolsy/internal/sqlutil	[no test files]
+?   	github.com/skosovsky/toolsy/internal/testhttp	[no test files]
+ok  	github.com/skosovsky/toolsy/internal/toolsygen	1.228s [no tests to run]
+ok  	github.com/skosovsky/toolsy/testutil	1.216s [no tests to run]
+ok  	github.com/skosovsky/toolsy/textprocessor	1.181s [no tests to run]
+
+[integration] adapters/sandbox/docker
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/docker	3.115s
+
+[integration] adapters/sandbox/e2b
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/e2b	1.224s [no tests to run]
+
+[integration] adapters/sandbox/host
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/host	1.237s [no tests to run]
+
+[integration] adapters/sandbox/starlark
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark	1.230s [no tests to run]
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/starlark/examples/policy	1.230s [no tests to run]
+
+[integration] adapters/sandbox/wazero
+ok  	github.com/skosovsky/toolsy/adapters/sandbox/wazero	1.277s [no tests to run]
+
+[integration] agents
+ok  	github.com/skosovsky/toolsy/agents	1.254s [no tests to run]
+
+[integration] contracts/graphql
+ok  	github.com/skosovsky/toolsy/contracts/graphql	1.254s [no tests to run]
+
+[integration] contracts/grpc
+ok  	github.com/skosovsky/toolsy/contracts/grpc	1.316s [no tests to run]
+
+[integration] contracts/openapi
+ok  	github.com/skosovsky/toolsy/contracts/openapi	1.262s [no tests to run]
+
+[integration] examples/host_dispatch_integration
+ok  	github.com/skosovsky/toolsy/examples/host_dispatch_integration	1.365s
+
+[integration] examples/resiliency
+ok  	github.com/skosovsky/toolsy/examples/resiliency	1.232s [no tests to run]
+
+[integration] ext/toolsyotel
+ok  	github.com/skosovsky/toolsy/ext/toolsyotel	1.238s [no tests to run]
+
+[integration] mcp
+ok  	github.com/skosovsky/toolsy/mcp	1.289s [no tests to run]
+?   	github.com/skosovsky/toolsy/mcp/examples/auth	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/export	[no test files]
+?   	github.com/skosovsky/toolsy/mcp/examples/import	[no test files]
+
+[integration] mcp/testdata/consumer
+ok  	github.com/skosovsky/toolsy/mcp/testdata/consumer	1.489s [no tests to run]
+
+[integration] mcp/testdata/sdkcheck
+ok  	github.com/skosovsky/toolsy/mcp/testdata/sdkcheck	1.484s [no tests to run]
+
+[integration] toolkits/document
+ok  	github.com/skosovsky/toolsy/toolkits/document	1.494s [no tests to run]
+
+[integration] toolkits/fstool
+ok  	github.com/skosovsky/toolsy/toolkits/fstool	1.456s [no tests to run]
+
+[integration] toolkits/httptool
+ok  	github.com/skosovsky/toolsy/toolkits/httptool	1.505s [no tests to run]
+
+[integration] toolkits/human
+ok  	github.com/skosovsky/toolsy/toolkits/human	1.459s [no tests to run]
+
+[integration] toolkits/mail
+ok  	github.com/skosovsky/toolsy/toolkits/mail	1.470s [no tests to run]
+
+[integration] toolkits/memory
+ok  	github.com/skosovsky/toolsy/toolkits/memory	1.470s [no tests to run]
+
+[integration] toolkits/prompts
+ok  	github.com/skosovsky/toolsy/toolkits/prompts	1.946s [no tests to run]
+
+[integration] toolkits/rag
+ok  	github.com/skosovsky/toolsy/toolkits/rag	1.473s [no tests to run]
+ok  	github.com/skosovsky/toolsy/toolkits/rag/examples/host	1.472s [no tests to run]
+
+[integration] toolkits/sqltool
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool	1.553s [no tests to run]
+ok  	github.com/skosovsky/toolsy/toolkits/sqltool/examples/host	1.555s [no tests to run]
+
+[integration] toolkits/timetool
+ok  	github.com/skosovsky/toolsy/toolkits/timetool	1.494s [no tests to run]
+ok  	github.com/skosovsky/toolsy/toolkits/timetool/examples/host	1.494s [no tests to run]
+
+[integration] toolkits/web
+ok  	github.com/skosovsky/toolsy/toolkits/web	1.496s [no tests to run]

@@ -1,0 +1,31 @@
+=== RUN   TestMemoryMemoPanicAndNestedLease
+--- PASS: TestMemoryMemoPanicAndNestedLease (0.00s)
+=== RUN   TestMemoryMemoBoundWithoutGC
+    performance_memo_contract_test.go:76: memo struct 29456 bytes, max idle payload 117824 bytes; channel header/runtime allocator excluded
+--- PASS: TestMemoryMemoBoundWithoutGC (0.05s)
+=== RUN   TestMemoryIdleAllocationBound
+    performance_memo_contract_test.go:139: idle scratch+channel allocation 131216 bytes; conservative bound 132096 bytes
+--- PASS: TestMemoryIdleAllocationBound (0.00s)
+=== RUN   TestMemoryMeasurement
+    performance_memory_measure_test.go:46: set TOOLSY_MEMORY_OUT for fixed retained/GC diagnostic
+--- SKIP: TestMemoryMeasurement (0.00s)
+=== RUN   TestMemoryOwnersReleased
+--- PASS: TestMemoryOwnersReleased (0.01s)
+=== RUN   TestMemoryPolicyRetainsSnapshots
+--- PASS: TestMemoryPolicyRetainsSnapshots (0.04s)
+=== RUN   TestMemorySnapshotRetainedChurn
+--- PASS: TestMemorySnapshotRetainedChurn (0.07s)
+=== RUN   TestMemoryCloneConcurrent
+--- PASS: TestMemoryCloneConcurrent (0.00s)
+=== RUN   TestMemoryCloneNilOverlap
+--- PASS: TestMemoryCloneNilOverlap (0.00s)
+=== RUN   TestMemoryNamedPointerIsolation
+--- PASS: TestMemoryNamedPointerIsolation (0.00s)
+=== RUN   TestMemoryNamedPointerGenericAndContext
+--- PASS: TestMemoryNamedPointerGenericAndContext (0.00s)
+=== RUN   TestMemoryPermissionsEmptyOwnership
+--- PASS: TestMemoryPermissionsEmptyOwnership (0.00s)
+=== RUN   TestMemoryPermissionsNilAndPopulated
+--- PASS: TestMemoryPermissionsNilAndPopulated (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.820s

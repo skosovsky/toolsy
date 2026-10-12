@@ -1,0 +1,49 @@
+=== RUN   TestPerformanceCloneMixedMemo
+--- PASS: TestPerformanceCloneMixedMemo (0.00s)
+=== RUN   TestPerformanceManifestNestedIsolation
+--- PASS: TestPerformanceManifestNestedIsolation (0.00s)
+=== RUN   TestMemoryMemoPanicAndNestedLease
+--- PASS: TestMemoryMemoPanicAndNestedLease (0.00s)
+=== RUN   TestMemoryMemoBoundWithoutGC
+    performance_memo_contract_test.go:76: memo struct 29456 bytes, max idle payload 117824 bytes; channel header/runtime allocator excluded
+--- PASS: TestMemoryMemoBoundWithoutGC (0.06s)
+=== RUN   TestMemoryIdleAllocationBound
+    performance_memo_contract_test.go:139: idle scratch+channel allocation 131216 bytes; conservative bound 132096 bytes
+--- PASS: TestMemoryIdleAllocationBound (0.00s)
+=== RUN   TestMemoryMeasurement
+    performance_memory_measure_test.go:46: set TOOLSY_MEMORY_OUT for fixed retained/GC diagnostic
+--- SKIP: TestMemoryMeasurement (0.00s)
+=== RUN   TestMemoryOwnersReleased
+--- PASS: TestMemoryOwnersReleased (0.02s)
+=== RUN   TestMemoryPolicyRetainsSnapshots
+--- PASS: TestMemoryPolicyRetainsSnapshots (0.05s)
+=== RUN   TestMemorySnapshotRetainedChurn
+--- PASS: TestMemorySnapshotRetainedChurn (0.07s)
+=== RUN   TestMemoryCloneConcurrent
+--- PASS: TestMemoryCloneConcurrent (0.00s)
+=== RUN   TestMemoryCloneNilOverlap
+--- PASS: TestMemoryCloneNilOverlap (0.00s)
+=== RUN   TestMemoryNamedPointerIsolation
+--- PASS: TestMemoryNamedPointerIsolation (0.00s)
+=== RUN   TestMemoryNamedPointerGenericAndContext
+--- PASS: TestMemoryNamedPointerGenericAndContext (0.00s)
+=== RUN   TestMemoryPermissionsEmptyOwnership
+--- PASS: TestMemoryPermissionsEmptyOwnership (0.00s)
+=== RUN   TestMemoryPermissionsNilAndPopulated
+--- PASS: TestMemoryPermissionsNilAndPopulated (0.00s)
+=== RUN   TestPerformanceFreshStickyRejection
+=== RUN   TestPerformanceFreshStickyRejection/direct
+=== RUN   TestPerformanceFreshStickyRejection/prepared
+--- PASS: TestPerformanceFreshStickyRejection (0.00s)
+    --- PASS: TestPerformanceFreshStickyRejection/direct (0.00s)
+    --- PASS: TestPerformanceFreshStickyRejection/prepared (0.00s)
+=== RUN   TestPerformanceFreshPreparedCancellation
+--- PASS: TestPerformanceFreshPreparedCancellation (0.00s)
+=== RUN   TestPerformanceOuterWrapperRevalidation
+--- PASS: TestPerformanceOuterWrapperRevalidation (0.00s)
+=== RUN   TestPerformanceBuiltinPolicySnapshot
+--- PASS: TestPerformanceBuiltinPolicySnapshot (0.00s)
+=== RUN   TestPerformancePolicyFacadeManifestOwnership
+--- PASS: TestPerformancePolicyFacadeManifestOwnership (0.00s)
+PASS
+ok  	github.com/skosovsky/toolsy	1.765s

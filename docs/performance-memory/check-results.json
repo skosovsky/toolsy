@@ -1,0 +1,46 @@
+{
+  "lint": {
+    "status": "PASS",
+    "exit": 0,
+    "started_unix": 1791805130.881372,
+    "ended_unix": 1791805200.641946,
+    "command": [
+      "make",
+      "lint"
+    ]
+  },
+  "test": {
+    "status": "PASS",
+    "exit": 0,
+    "started_unix": 1791805200.642391,
+    "ended_unix": 1791805373.012634,
+    "command": [
+      "make",
+      "test"
+    ]
+  },
+  "test-integration": {
+    "status": "PASS",
+    "exit": 0,
+    "started_unix": 1791805373.0133271,
+    "ended_unix": 1791805427.052734,
+    "command": [
+      "make",
+      "test-integration"
+    ]
+  },
+  "test-e2e": {
+    "status": "PASS",
+    "exit": 0,
+    "started_unix": 1791805427.05327,
+    "ended_unix": 1791805606.942692,
+    "command": [
+      "make",
+      "test-e2e"
+    ]
+  },
+  "live": {
+    "status": "NOT RUN",
+    "reason": "External credential/provider checks are separate; no live-provider validation claim."
+  }
+}

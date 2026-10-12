@@ -1,0 +1,13 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkPerformanceClone/tiny-2         	 1327579	       263.2 ns/op	     336 B/op	       2 allocs/op
+BenchmarkPerformanceClone/rich-2         	   10000	     32192 ns/op	   37312 B/op	     264 allocs/op
+BenchmarkPerformanceClone/named-2        	    9681	     33452 ns/op	   37696 B/op	     269 allocs/op
+BenchmarkPerformanceClone/byot-2         	  585409	       586.4 ns/op	     496 B/op	       8 allocs/op
+BenchmarkPerformanceClone/alias-2        	  729039	       480.7 ns/op	     448 B/op	       6 allocs/op
+BenchmarkPerformanceClone/cycle-2        	 1272312	       282.2 ns/op	     336 B/op	       2 allocs/op
+BenchmarkPolicyManifestRich-2            	   10000	     33593 ns/op	   39016 B/op	     275 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	3.192s

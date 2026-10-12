@@ -1,0 +1,128 @@
+
+[lint] .
+diff performance_boundary_bench_test.go.orig performance_boundary_bench_test.go
+--- performance_boundary_bench_test.go.orig
++++ performance_boundary_bench_test.go
+@@ -18,7 +18,12 @@
+ 		b.Fatal(err)
+ 	}
+ 	summary := ExecutionSummary{}
+-	yield := registry.wrapYieldWithCallMeta(context.Background(), ToolCall{ToolName: "groups"}, &summary, func(Chunk) error { return nil })
++	yield := registry.wrapYieldWithCallMeta(
++		context.Background(),
++		ToolCall{ToolName: "groups"},
++		&summary,
++		func(Chunk) error { return nil },
++	)
+ 	b.ReportAllocs()
+ 	b.ResetTimer()
+ 	for range b.N {
+diff performance_memo_contract_test.go.orig performance_memo_contract_test.go
+--- performance_memo_contract_test.go.orig
++++ performance_memo_contract_test.go
+@@ -35,7 +35,8 @@
+ 		t.Fatal("nested operation broke ownership")
+ 	}
+ 	for _, entry := range lease.entries {
+-		if entry.value.IsValid() && entry.value.Kind() == reflect.Map && entry.value.Interface().(map[string]any)["x"] != 1 {
++		if entry.value.IsValid() && entry.value.Kind() == reflect.Map &&
++			entry.value.Interface().(map[string]any)["x"] != 1 {
+ 			t.Fatal("inner operation reused outer memo")
+ 		}
+ 	}
+@@ -61,7 +62,11 @@
+ 		t.Fatal("idle capacity incorrect")
+ 	}
+ 	assertIdleMemosClean(t)
+-	t.Logf("memo struct %d bytes, max idle payload %d bytes; channel header/runtime allocator excluded", unsafe.Sizeof(cloneMemo{}), cloneMemoIdle*unsafe.Sizeof(cloneMemo{}))
++	t.Logf(
++		"memo struct %d bytes, max idle payload %d bytes; channel header/runtime allocator excluded",
++		unsafe.Sizeof(cloneMemo{}),
++		cloneMemoIdle*unsafe.Sizeof(cloneMemo{}),
++	)
+ }
+ 
+ func drainIdleMemos() {
+diff performance_memory_measure_test.go.orig performance_memory_measure_test.go
+--- performance_memory_measure_test.go.orig
++++ performance_memory_measure_test.go
+@@ -28,7 +28,10 @@
+ }
+ 
+ func memoryCPU() (float64, float64) {
+-	samples := []metrics.Sample{{Name: "/cpu/classes/gc/total:cpu-seconds"}, {Name: "/cpu/classes/gc/mark/assist:cpu-seconds"}}
++	samples := []metrics.Sample{
++		{Name: "/cpu/classes/gc/total:cpu-seconds"},
++		{Name: "/cpu/classes/gc/mark/assist:cpu-seconds"},
++	}
+ 	metrics.Read(samples)
+ 	return samples[0].Value.Float64(), samples[1].Value.Float64()
+ }
+@@ -41,7 +44,10 @@
+ 	}
+ 	// Arrange: keep a real compiled registry alive at every retained checkpoint.
+ 	tool := performanceToolForMemory(t)
+-	registry, err := NewRegistryBuilder(WithPolicy("allow", PolicyFunc(func(context.Context, PolicyRequest) Decision { return AllowDecision() }))).Add(tool).Build()
++	registry, err := NewRegistryBuilder(
++		WithPolicy("allow", PolicyFunc(func(context.Context, PolicyRequest) Decision { return AllowDecision() })),
++	).Add(tool).
++		Build()
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+@@ -116,7 +122,21 @@
+ 		runtime.GC()
+ 		var retained runtime.MemStats
+ 		runtime.ReadMemStats(&retained)
+-		checkpoints = append(checkpoints, memoryWindow{name, calls, elapsed.Nanoseconds(), after.TotalAlloc - before.TotalAlloc, after.NumGC - before.NumGC, after.PauseTotalNs - before.PauseTotalNs, cpuAfter - cpu, assistAfter - assist, peak, retained.HeapAlloc})
++		checkpoints = append(
++			checkpoints,
++			memoryWindow{
++				name,
++				calls,
++				elapsed.Nanoseconds(),
++				after.TotalAlloc - before.TotalAlloc,
++				after.NumGC - before.NumGC,
++				after.PauseTotalNs - before.PauseTotalNs,
++				cpuAfter - cpu,
++				assistAfter - assist,
++				peak,
++				retained.HeapAlloc,
++			},
++		)
+ 		if name == "fixed-3" {
+ 			f, e := os.Create(filepath.Join(dir, "live-registry-inuse.pprof"))
+ 			if e != nil {
+@@ -167,9 +187,15 @@
+ 	if e != nil {
+ 		t.Fatal(e)
+ 	}
+-	tool, e := NewProxyTool("groups", "groups", []byte(`{"type":"object"}`), func(_ context.Context, _ *RunEnv, _ []byte, y func(Chunk) error) error {
+-		return y(Chunk{Event: EventResult, MimeType: MimeTypeJSON, Data: raw})
+-	}, WithOutputSchema(schema))
++	tool, e := NewProxyTool(
++		"groups",
++		"groups",
++		[]byte(`{"type":"object"}`),
++		func(_ context.Context, _ *RunEnv, _ []byte, y func(Chunk) error) error {
++			return y(Chunk{Event: EventResult, MimeType: MimeTypeJSON, Data: raw})
++		},
++		WithOutputSchema(schema),
++	)
+ 	if e != nil {
+ 		t.Fatal(e)
+ 	}
+diff performance_memory_test.go.orig performance_memory_test.go
+--- performance_memory_test.go.orig
++++ performance_memory_test.go
+@@ -62,7 +62,8 @@
+ 				out := cloneMutableValue(source).(map[string]any)
+ 				out["worker"] = worker
+ 				// Assert: cycle/alias is local to this operation.
+-				if out["self"].(map[string]any)["worker"] != worker || out["values"].([]any)[1].(map[string]any)["worker"] != worker {
++				if out["self"].(map[string]any)["worker"] != worker ||
++					out["values"].([]any)[1].(map[string]any)["worker"] != worker {
+ 					t.Error("identity lost")
+ 				}
+ 			}
+make: *** [lint] Error 1

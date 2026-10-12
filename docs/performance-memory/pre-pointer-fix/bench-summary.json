@@ -1,0 +1,2339 @@
+{
+  "BenchmarkManifestPreDispatch": {
+    "baseline": {
+      "ns": {
+        "median": 49953.0,
+        "min": 49278.0,
+        "max": 63441.0
+      },
+      "bytes": {
+        "median": 73570.0,
+        "min": 73570.0,
+        "max": 73571.0
+      },
+      "allocs": {
+        "median": 322.0,
+        "min": 322.0,
+        "max": 322.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 36120.0,
+        "min": 35583.0,
+        "max": 36962.0
+      },
+      "bytes": {
+        "median": 41654.0,
+        "min": 41653.0,
+        "max": 41654.0
+      },
+      "allocs": {
+        "median": 311.0,
+        "min": 311.0,
+        "max": 311.0
+      }
+    },
+    "ratios": {
+      "ns": 0.7230796949132184,
+      "bytes": 0.5661818676090797,
+      "allocs": 0.9658385093167702
+    }
+  },
+  "BenchmarkPerformanceClone/tiny": {
+    "baseline": {
+      "ns": {
+        "median": 234.1,
+        "min": 232.0,
+        "max": 239.8
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 218.3,
+        "min": 214.3,
+        "max": 228.0
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9325074754378472,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceClone/rich": {
+    "baseline": {
+      "ns": {
+        "median": 44065.0,
+        "min": 43741.0,
+        "max": 44715.0
+      },
+      "bytes": {
+        "median": 69224.0,
+        "min": 69224.0,
+        "max": 69224.0
+      },
+      "allocs": {
+        "median": 275.0,
+        "min": 275.0,
+        "max": 275.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 31349.0,
+        "min": 30513.0,
+        "max": 33080.0
+      },
+      "bytes": {
+        "median": 37312.0,
+        "min": 37312.0,
+        "max": 37312.0
+      },
+      "allocs": {
+        "median": 264.0,
+        "min": 264.0,
+        "max": 264.0
+      }
+    },
+    "ratios": {
+      "ns": 0.7114263020537842,
+      "bytes": 0.5390038137062291,
+      "allocs": 0.96
+    }
+  },
+  "BenchmarkPerformanceClone/named": {
+    "baseline": {
+      "ns": {
+        "median": 45121.0,
+        "min": 44112.0,
+        "max": 51666.0
+      },
+      "bytes": {
+        "median": 69608.0,
+        "min": 69608.0,
+        "max": 69608.0
+      },
+      "allocs": {
+        "median": 280.0,
+        "min": 280.0,
+        "max": 280.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 31919.0,
+        "min": 31134.0,
+        "max": 34465.0
+      },
+      "bytes": {
+        "median": 37696.0,
+        "min": 37696.0,
+        "max": 37696.0
+      },
+      "allocs": {
+        "median": 269.0,
+        "min": 269.0,
+        "max": 269.0
+      }
+    },
+    "ratios": {
+      "ns": 0.7074089669998449,
+      "bytes": 0.5415469486265947,
+      "allocs": 0.9607142857142857
+    }
+  },
+  "BenchmarkPerformanceClone/byot": {
+    "baseline": {
+      "ns": {
+        "median": 571.2,
+        "min": 558.1,
+        "max": 584.0
+      },
+      "bytes": {
+        "median": 496.0,
+        "min": 496.0,
+        "max": 496.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 491.5,
+        "min": 481.0,
+        "max": 656.1
+      },
+      "bytes": {
+        "median": 496.0,
+        "min": 496.0,
+        "max": 496.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    },
+    "ratios": {
+      "ns": 0.86046918767507,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceClone/alias": {
+    "baseline": {
+      "ns": {
+        "median": 478.7,
+        "min": 468.2,
+        "max": 501.9
+      },
+      "bytes": {
+        "median": 448.0,
+        "min": 448.0,
+        "max": 448.0
+      },
+      "allocs": {
+        "median": 6.0,
+        "min": 6.0,
+        "max": 6.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 392.8,
+        "min": 384.5,
+        "max": 514.0
+      },
+      "bytes": {
+        "median": 448.0,
+        "min": 448.0,
+        "max": 448.0
+      },
+      "allocs": {
+        "median": 6.0,
+        "min": 6.0,
+        "max": 6.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8205556716106122,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceClone/cycle": {
+    "baseline": {
+      "ns": {
+        "median": 255.4,
+        "min": 253.4,
+        "max": 339.9
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 235.0,
+        "min": 222.0,
+        "max": 263.4
+      },
+      "bytes": {
+        "median": 336.0,
+        "min": 336.0,
+        "max": 336.0
+      },
+      "allocs": {
+        "median": 2.0,
+        "min": 2.0,
+        "max": 2.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9201252936570086,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceDecode/tiny": {
+    "baseline": {
+      "ns": {
+        "median": 80.6,
+        "min": 79.08,
+        "max": 82.05
+      },
+      "bytes": {
+        "median": 48.0,
+        "min": 48.0,
+        "max": 48.0
+      },
+      "allocs": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 79.03,
+        "min": 78.0,
+        "max": 82.81
+      },
+      "bytes": {
+        "median": 48.0,
+        "min": 48.0,
+        "max": 48.0
+      },
+      "allocs": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9805210918114144,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceDecode/large": {
+    "baseline": {
+      "ns": {
+        "median": 17182.0,
+        "min": 16805.0,
+        "max": 17643.0
+      },
+      "bytes": {
+        "median": 16050.0,
+        "min": 16049.0,
+        "max": 16050.0
+      },
+      "allocs": {
+        "median": 389.0,
+        "min": 389.0,
+        "max": 389.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 17549.0,
+        "min": 17012.0,
+        "max": 17817.0
+      },
+      "bytes": {
+        "median": 16050.0,
+        "min": 16049.0,
+        "max": 16050.0
+      },
+      "allocs": {
+        "median": 389.0,
+        "min": 389.0,
+        "max": 389.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0213595623326737,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceDecode/malformed": {
+    "baseline": {
+      "ns": {
+        "median": 546.7,
+        "min": 544.0,
+        "max": 563.8
+      },
+      "bytes": {
+        "median": 440.0,
+        "min": 440.0,
+        "max": 440.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 539.4,
+        "min": 534.9,
+        "max": 591.3
+      },
+      "bytes": {
+        "median": 440.0,
+        "min": 440.0,
+        "max": 440.0
+      },
+      "allocs": {
+        "median": 8.0,
+        "min": 8.0,
+        "max": 8.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9866471556612401,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceFreshSchema": {
+    "baseline": {
+      "ns": {
+        "median": 77590.0,
+        "min": 77054.0,
+        "max": 81023.0
+      },
+      "bytes": {
+        "median": 78913.0,
+        "min": 78911.0,
+        "max": 78913.0
+      },
+      "allocs": {
+        "median": 1695.0,
+        "min": 1695.0,
+        "max": 1695.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 77672.0,
+        "min": 76396.0,
+        "max": 82456.0
+      },
+      "bytes": {
+        "median": 78913.0,
+        "min": 78912.0,
+        "max": 78914.0
+      },
+      "allocs": {
+        "median": 1695.0,
+        "min": 1695.0,
+        "max": 1695.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0010568372212914,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/direct/off": {
+    "baseline": {
+      "ns": {
+        "median": 80078.0,
+        "min": 79644.0,
+        "max": 87372.0
+      },
+      "bytes": {
+        "median": 80353.0,
+        "min": 80352.0,
+        "max": 80354.0
+      },
+      "allocs": {
+        "median": 1712.0,
+        "min": 1712.0,
+        "max": 1712.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 80220.0,
+        "min": 78967.0,
+        "max": 82483.0
+      },
+      "bytes": {
+        "median": 80353.0,
+        "min": 80353.0,
+        "max": 80355.0
+      },
+      "allocs": {
+        "median": 1712.0,
+        "min": 1712.0,
+        "max": 1712.0
+      }
+    },
+    "ratios": {
+      "ns": 1.001773271060716,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/registry/off": {
+    "baseline": {
+      "ns": {
+        "median": 100844.0,
+        "min": 100320.0,
+        "max": 106834.0
+      },
+      "bytes": {
+        "median": 100614.0,
+        "min": 100614.0,
+        "max": 100615.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 101358.0,
+        "min": 99806.0,
+        "max": 101980.0
+      },
+      "bytes": {
+        "median": 100616.0,
+        "min": 100616.0,
+        "max": 100617.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0050969814763397,
+      "bytes": 1.0000198779493907,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/registry/on": {
+    "baseline": {
+      "ns": {
+        "median": 151273.0,
+        "min": 148965.0,
+        "max": 156389.0
+      },
+      "bytes": {
+        "median": 170213.0,
+        "min": 170211.0,
+        "max": 170215.0
+      },
+      "allocs": {
+        "median": 2390.0,
+        "min": 2390.0,
+        "max": 2390.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 136147.0,
+        "min": 133466.0,
+        "max": 137062.0
+      },
+      "bytes": {
+        "median": 138292.0,
+        "min": 138290.0,
+        "max": 138293.0
+      },
+      "allocs": {
+        "median": 2379.0,
+        "min": 2379.0,
+        "max": 2379.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9000085937345065,
+      "bytes": 0.8124643828614736,
+      "allocs": 0.9953974895397489
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/registry/composed": {
+    "baseline": {
+      "ns": {
+        "median": 246577.0,
+        "min": 244136.0,
+        "max": 253713.0
+      },
+      "bytes": {
+        "median": 309388.0,
+        "min": 309381.0,
+        "max": 309390.0
+      },
+      "allocs": {
+        "median": 2946.0,
+        "min": 2946.0,
+        "max": 2946.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 205373.0,
+        "min": 201786.0,
+        "max": 249346.0
+      },
+      "bytes": {
+        "median": 213616.0,
+        "min": 213614.0,
+        "max": 213618.0
+      },
+      "allocs": {
+        "median": 2913.0,
+        "min": 2913.0,
+        "max": 2913.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8328960121990291,
+      "bytes": 0.6904469468757677,
+      "allocs": 0.9887983706720977
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/view/off": {
+    "baseline": {
+      "ns": {
+        "median": 100868.0,
+        "min": 100446.0,
+        "max": 109233.0
+      },
+      "bytes": {
+        "median": 100647.0,
+        "min": 100647.0,
+        "max": 100649.0
+      },
+      "allocs": {
+        "median": 2114.0,
+        "min": 2114.0,
+        "max": 2114.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 101853.0,
+        "min": 100090.0,
+        "max": 1318244.0
+      },
+      "bytes": {
+        "median": 100648.0,
+        "min": 100644.0,
+        "max": 100649.0
+      },
+      "allocs": {
+        "median": 2114.0,
+        "min": 2114.0,
+        "max": 2114.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0097652377364477,
+      "bytes": 1.000009935715918,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/view/on": {
+    "baseline": {
+      "ns": {
+        "median": 151114.0,
+        "min": 149851.0,
+        "max": 191994.0
+      },
+      "bytes": {
+        "median": 170262.0,
+        "min": 170259.0,
+        "max": 170263.0
+      },
+      "allocs": {
+        "median": 2393.0,
+        "min": 2393.0,
+        "max": 2393.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 137450.0,
+        "min": 134702.0,
+        "max": 1130122.0
+      },
+      "bytes": {
+        "median": 138340.0,
+        "min": 138336.0,
+        "max": 138341.0
+      },
+      "allocs": {
+        "median": 2382.0,
+        "min": 2382.0,
+        "max": 2382.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9095781992403087,
+      "bytes": 0.8125124807649388,
+      "allocs": 0.9954032595068951
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/view/composed": {
+    "baseline": {
+      "ns": {
+        "median": 247918.0,
+        "min": 245280.0,
+        "max": 292837.0
+      },
+      "bytes": {
+        "median": 309467.0,
+        "min": 309465.0,
+        "max": 309469.0
+      },
+      "allocs": {
+        "median": 2951.0,
+        "min": 2951.0,
+        "max": 2951.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 205419.0,
+        "min": 202847.0,
+        "max": 1307791.0
+      },
+      "bytes": {
+        "median": 213696.0,
+        "min": 213689.0,
+        "max": 213698.0
+      },
+      "allocs": {
+        "median": 2918.0,
+        "min": 2918.0,
+        "max": 2918.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8285763841270097,
+      "bytes": 0.6905292002055147,
+      "allocs": 0.9888173500508303
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/session/off": {
+    "baseline": {
+      "ns": {
+        "median": 102569.0,
+        "min": 100749.0,
+        "max": 106488.0
+      },
+      "bytes": {
+        "median": 100615.0,
+        "min": 100615.0,
+        "max": 100617.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 103151.0,
+        "min": 101130.0,
+        "max": 463222.0
+      },
+      "bytes": {
+        "median": 100616.0,
+        "min": 100615.0,
+        "max": 100617.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0056742290555627,
+      "bytes": 1.0000099388759132,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/session/on": {
+    "baseline": {
+      "ns": {
+        "median": 152384.0,
+        "min": 151385.0,
+        "max": 368131.0
+      },
+      "bytes": {
+        "median": 170215.0,
+        "min": 170212.0,
+        "max": 170216.0
+      },
+      "allocs": {
+        "median": 2390.0,
+        "min": 2390.0,
+        "max": 2390.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 139914.0,
+        "min": 136625.0,
+        "max": 1311460.0
+      },
+      "bytes": {
+        "median": 138292.0,
+        "min": 138291.0,
+        "max": 138294.0
+      },
+      "allocs": {
+        "median": 2379.0,
+        "min": 2379.0,
+        "max": 2379.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9181672616547669,
+      "bytes": 0.8124548365302705,
+      "allocs": 0.9953974895397489
+    }
+  },
+  "BenchmarkPerformanceExecute/proxy/session/composed": {
+    "baseline": {
+      "ns": {
+        "median": 249135.0,
+        "min": 246281.0,
+        "max": 297763.0
+      },
+      "bytes": {
+        "median": 309388.0,
+        "min": 309384.0,
+        "max": 309389.0
+      },
+      "allocs": {
+        "median": 2946.0,
+        "min": 2946.0,
+        "max": 2946.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 208552.0,
+        "min": 203984.0,
+        "max": 1940685.0
+      },
+      "bytes": {
+        "median": 213615.0,
+        "min": 213614.0,
+        "max": 213618.0
+      },
+      "allocs": {
+        "median": 2913.0,
+        "min": 2913.0,
+        "max": 2913.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8371043811588095,
+      "bytes": 0.6904437146883525,
+      "allocs": 0.9887983706720977
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/direct/off": {
+    "baseline": {
+      "ns": {
+        "median": 189500.0,
+        "min": 185612.0,
+        "max": 194974.0
+      },
+      "bytes": {
+        "median": 113137.0,
+        "min": 113126.0,
+        "max": 113140.0
+      },
+      "allocs": {
+        "median": 2122.0,
+        "min": 2122.0,
+        "max": 2122.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 189379.0,
+        "min": 188990.0,
+        "max": 1004345.0
+      },
+      "bytes": {
+        "median": 113134.0,
+        "min": 113072.0,
+        "max": 113173.0
+      },
+      "allocs": {
+        "median": 2122.0,
+        "min": 2122.0,
+        "max": 2122.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9993614775725593,
+      "bytes": 0.999973483475786,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/registry/off": {
+    "baseline": {
+      "ns": {
+        "median": 251525.0,
+        "min": 249623.0,
+        "max": 320605.0
+      },
+      "bytes": {
+        "median": 136579.0,
+        "min": 136566.0,
+        "max": 136604.0
+      },
+      "allocs": {
+        "median": 2524.0,
+        "min": 2524.0,
+        "max": 2524.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 252816.0,
+        "min": 251428.0,
+        "max": 366677.0
+      },
+      "bytes": {
+        "median": 136588.0,
+        "min": 136556.0,
+        "max": 136638.0
+      },
+      "allocs": {
+        "median": 2524.0,
+        "min": 2524.0,
+        "max": 2524.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0051326905874167,
+      "bytes": 1.0000658959283637,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/registry/on": {
+    "baseline": {
+      "ns": {
+        "median": 303566.0,
+        "min": 299164.0,
+        "max": 334810.0
+      },
+      "bytes": {
+        "median": 206297.0,
+        "min": 206267.0,
+        "max": 206352.0
+      },
+      "allocs": {
+        "median": 2803.0,
+        "min": 2803.0,
+        "max": 2803.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 288390.0,
+        "min": 286014.0,
+        "max": 363546.0
+      },
+      "bytes": {
+        "median": 174339.0,
+        "min": 174283.0,
+        "max": 174405.0
+      },
+      "allocs": {
+        "median": 2792.0,
+        "min": 2791.0,
+        "max": 2792.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9500075766060758,
+      "bytes": 0.8450874225025086,
+      "allocs": 0.9960756332500892
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/registry/composed": {
+    "baseline": {
+      "ns": {
+        "median": 403553.0,
+        "min": 397450.0,
+        "max": 408759.0
+      },
+      "bytes": {
+        "median": 345897.0,
+        "min": 345781.0,
+        "max": 345954.0
+      },
+      "allocs": {
+        "median": 3360.0,
+        "min": 3360.0,
+        "max": 3360.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 363624.0,
+        "min": 359035.0,
+        "max": 378420.0
+      },
+      "bytes": {
+        "median": 249815.0,
+        "min": 249784.0,
+        "max": 249877.0
+      },
+      "allocs": {
+        "median": 3326.0,
+        "min": 3326.0,
+        "max": 3326.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9010563668217062,
+      "bytes": 0.7222236677392403,
+      "allocs": 0.9898809523809524
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/view/off": {
+    "baseline": {
+      "ns": {
+        "median": 251614.0,
+        "min": 251130.0,
+        "max": 253147.0
+      },
+      "bytes": {
+        "median": 136593.0,
+        "min": 136566.0,
+        "max": 136626.0
+      },
+      "allocs": {
+        "median": 2526.0,
+        "min": 2526.0,
+        "max": 2526.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 250814.0,
+        "min": 248826.0,
+        "max": 278354.0
+      },
+      "bytes": {
+        "median": 136600.0,
+        "min": 136570.0,
+        "max": 136635.0
+      },
+      "allocs": {
+        "median": 2526.0,
+        "min": 2526.0,
+        "max": 2526.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9968205266797555,
+      "bytes": 1.000051247135651,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/view/on": {
+    "baseline": {
+      "ns": {
+        "median": 304944.0,
+        "min": 299056.0,
+        "max": 306201.0
+      },
+      "bytes": {
+        "median": 206336.0,
+        "min": 206254.0,
+        "max": 206376.0
+      },
+      "allocs": {
+        "median": 2806.0,
+        "min": 2806.0,
+        "max": 2806.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 290303.0,
+        "min": 285143.0,
+        "max": 306034.0
+      },
+      "bytes": {
+        "median": 174353.0,
+        "min": 174324.0,
+        "max": 174408.0
+      },
+      "allocs": {
+        "median": 2794.0,
+        "min": 2794.0,
+        "max": 2795.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9519879059761792,
+      "bytes": 0.8449955412531017,
+      "allocs": 0.9957234497505346
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/view/composed": {
+    "baseline": {
+      "ns": {
+        "median": 401632.0,
+        "min": 399017.0,
+        "max": 410804.0
+      },
+      "bytes": {
+        "median": 345947.0,
+        "min": 345828.0,
+        "max": 346030.0
+      },
+      "allocs": {
+        "median": 3365.0,
+        "min": 3364.0,
+        "max": 3365.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 364317.0,
+        "min": 357053.0,
+        "max": 431532.0
+      },
+      "bytes": {
+        "median": 249916.0,
+        "min": 249839.0,
+        "max": 250006.0
+      },
+      "allocs": {
+        "median": 3331.0,
+        "min": 3331.0,
+        "max": 3331.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9070915664090511,
+      "bytes": 0.7224112364032641,
+      "allocs": 0.9898959881129272
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/session/off": {
+    "baseline": {
+      "ns": {
+        "median": 250220.0,
+        "min": 246751.0,
+        "max": 272063.0
+      },
+      "bytes": {
+        "median": 136577.0,
+        "min": 136502.0,
+        "max": 136597.0
+      },
+      "allocs": {
+        "median": 2524.0,
+        "min": 2524.0,
+        "max": 2524.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 252233.0,
+        "min": 247874.0,
+        "max": 258210.0
+      },
+      "bytes": {
+        "median": 136575.0,
+        "min": 136546.0,
+        "max": 136640.0
+      },
+      "allocs": {
+        "median": 2524.0,
+        "min": 2524.0,
+        "max": 2524.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0080449204699864,
+      "bytes": 0.9999853562459272,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/session/on": {
+    "baseline": {
+      "ns": {
+        "median": 302456.0,
+        "min": 301047.0,
+        "max": 329029.0
+      },
+      "bytes": {
+        "median": 206306.0,
+        "min": 206274.0,
+        "max": 206320.0
+      },
+      "allocs": {
+        "median": 2803.0,
+        "min": 2803.0,
+        "max": 2803.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 291498.0,
+        "min": 284863.0,
+        "max": 317242.0
+      },
+      "bytes": {
+        "median": 174336.0,
+        "min": 174304.0,
+        "max": 174412.0
+      },
+      "allocs": {
+        "median": 2791.0,
+        "min": 2791.0,
+        "max": 2792.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9637699367841934,
+      "bytes": 0.8450360144639516,
+      "allocs": 0.995718872636461
+    }
+  },
+  "BenchmarkPerformanceExecute/typed/session/composed": {
+    "baseline": {
+      "ns": {
+        "median": 403741.0,
+        "min": 400954.0,
+        "max": 410287.0
+      },
+      "bytes": {
+        "median": 345856.0,
+        "min": 345753.0,
+        "max": 345910.0
+      },
+      "allocs": {
+        "median": 3360.0,
+        "min": 3359.0,
+        "max": 3360.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 362454.0,
+        "min": 355566.0,
+        "max": 366376.0
+      },
+      "bytes": {
+        "median": 249865.0,
+        "min": 249793.0,
+        "max": 249891.0
+      },
+      "allocs": {
+        "median": 3326.0,
+        "min": 3326.0,
+        "max": 3326.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8977388969661243,
+      "bytes": 0.722453853626943,
+      "allocs": 0.9898809523809524
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/direct/off": {
+    "baseline": {
+      "ns": {
+        "median": 82526.0,
+        "min": 79716.0,
+        "max": 99725.0
+      },
+      "bytes": {
+        "median": 80354.0,
+        "min": 80353.0,
+        "max": 80355.0
+      },
+      "allocs": {
+        "median": 1712.0,
+        "min": 1712.0,
+        "max": 1712.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 81944.0,
+        "min": 80997.0,
+        "max": 83825.0
+      },
+      "bytes": {
+        "median": 80354.0,
+        "min": 80353.0,
+        "max": 80355.0
+      },
+      "allocs": {
+        "median": 1712.0,
+        "min": 1712.0,
+        "max": 1712.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9929476770957032,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/registry/off": {
+    "baseline": {
+      "ns": {
+        "median": 101315.0,
+        "min": 100970.0,
+        "max": 110502.0
+      },
+      "bytes": {
+        "median": 100616.0,
+        "min": 100615.0,
+        "max": 100616.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 103357.0,
+        "min": 101971.0,
+        "max": 116731.0
+      },
+      "bytes": {
+        "median": 100617.0,
+        "min": 100616.0,
+        "max": 100617.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "ratios": {
+      "ns": 1.020154962246459,
+      "bytes": 1.0000099387771328,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/registry/on": {
+    "baseline": {
+      "ns": {
+        "median": 151743.0,
+        "min": 150468.0,
+        "max": 160154.0
+      },
+      "bytes": {
+        "median": 170215.0,
+        "min": 170213.0,
+        "max": 170218.0
+      },
+      "allocs": {
+        "median": 2390.0,
+        "min": 2390.0,
+        "max": 2390.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 141283.0,
+        "min": 138130.0,
+        "max": 151040.0
+      },
+      "bytes": {
+        "median": 138292.0,
+        "min": 138292.0,
+        "max": 138293.0
+      },
+      "allocs": {
+        "median": 2379.0,
+        "min": 2379.0,
+        "max": 2379.0
+      }
+    },
+    "ratios": {
+      "ns": 0.931067660452212,
+      "bytes": 0.8124548365302705,
+      "allocs": 0.9953974895397489
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/registry/composed": {
+    "baseline": {
+      "ns": {
+        "median": 248064.0,
+        "min": 245616.0,
+        "max": 321265.0
+      },
+      "bytes": {
+        "median": 309387.0,
+        "min": 309382.0,
+        "max": 309391.0
+      },
+      "allocs": {
+        "median": 2946.0,
+        "min": 2946.0,
+        "max": 2946.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 210069.0,
+        "min": 205441.0,
+        "max": 224035.0
+      },
+      "bytes": {
+        "median": 213617.0,
+        "min": 213615.0,
+        "max": 213619.0
+      },
+      "allocs": {
+        "median": 2913.0,
+        "min": 2913.0,
+        "max": 2913.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8468338815789473,
+      "bytes": 0.6904524107347756,
+      "allocs": 0.9887983706720977
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/view/off": {
+    "baseline": {
+      "ns": {
+        "median": 101452.0,
+        "min": 100154.0,
+        "max": 156597.0
+      },
+      "bytes": {
+        "median": 100648.0,
+        "min": 100646.0,
+        "max": 100649.0
+      },
+      "allocs": {
+        "median": 2114.0,
+        "min": 2114.0,
+        "max": 2114.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 102976.0,
+        "min": 101521.0,
+        "max": 107879.0
+      },
+      "bytes": {
+        "median": 100648.0,
+        "min": 100647.0,
+        "max": 100650.0
+      },
+      "allocs": {
+        "median": 2114.0,
+        "min": 2114.0,
+        "max": 2114.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0150218822694477,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/view/on": {
+    "baseline": {
+      "ns": {
+        "median": 153212.0,
+        "min": 152002.0,
+        "max": 163913.0
+      },
+      "bytes": {
+        "median": 170262.0,
+        "min": 170259.0,
+        "max": 170263.0
+      },
+      "allocs": {
+        "median": 2393.0,
+        "min": 2393.0,
+        "max": 2393.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 140583.0,
+        "min": 137849.0,
+        "max": 162109.0
+      },
+      "bytes": {
+        "median": 138340.0,
+        "min": 138338.0,
+        "max": 138342.0
+      },
+      "allocs": {
+        "median": 2382.0,
+        "min": 2382.0,
+        "max": 2382.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9175717306738376,
+      "bytes": 0.8125124807649388,
+      "allocs": 0.9954032595068951
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/view/composed": {
+    "baseline": {
+      "ns": {
+        "median": 251565.0,
+        "min": 248365.0,
+        "max": 279075.0
+      },
+      "bytes": {
+        "median": 309466.0,
+        "min": 309463.0,
+        "max": 309470.0
+      },
+      "allocs": {
+        "median": 2951.0,
+        "min": 2951.0,
+        "max": 2951.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 209802.0,
+        "min": 205488.0,
+        "max": 235441.0
+      },
+      "bytes": {
+        "median": 213696.0,
+        "min": 213696.0,
+        "max": 213700.0
+      },
+      "allocs": {
+        "median": 2918.0,
+        "min": 2918.0,
+        "max": 2918.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8339872398783614,
+      "bytes": 0.6905314315627565,
+      "allocs": 0.9888173500508303
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/session/off": {
+    "baseline": {
+      "ns": {
+        "median": 102697.0,
+        "min": 101618.0,
+        "max": 390252.0
+      },
+      "bytes": {
+        "median": 100615.0,
+        "min": 100615.0,
+        "max": 100617.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 102350.0,
+        "min": 101549.0,
+        "max": 109063.0
+      },
+      "bytes": {
+        "median": 100617.0,
+        "min": 100614.0,
+        "max": 100618.0
+      },
+      "allocs": {
+        "median": 2112.0,
+        "min": 2112.0,
+        "max": 2112.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9966211281731696,
+      "bytes": 1.0000198777518263,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/session/on": {
+    "baseline": {
+      "ns": {
+        "median": 156449.0,
+        "min": 151798.0,
+        "max": 2238582.0
+      },
+      "bytes": {
+        "median": 170214.0,
+        "min": 170213.0,
+        "max": 170218.0
+      },
+      "allocs": {
+        "median": 2390.0,
+        "min": 2390.0,
+        "max": 2390.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 139471.0,
+        "min": 137124.0,
+        "max": 153791.0
+      },
+      "bytes": {
+        "median": 138292.0,
+        "min": 138291.0,
+        "max": 138294.0
+      },
+      "allocs": {
+        "median": 2379.0,
+        "min": 2379.0,
+        "max": 2379.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8914790123298967,
+      "bytes": 0.8124596096678299,
+      "allocs": 0.9953974895397489
+    }
+  },
+  "BenchmarkPerformanceExecute/dynamic/session/composed": {
+    "baseline": {
+      "ns": {
+        "median": 256978.0,
+        "min": 247641.0,
+        "max": 2625912.0
+      },
+      "bytes": {
+        "median": 309387.0,
+        "min": 309384.0,
+        "max": 309388.0
+      },
+      "allocs": {
+        "median": 2946.0,
+        "min": 2946.0,
+        "max": 2946.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 207652.0,
+        "min": 205059.0,
+        "max": 237543.0
+      },
+      "bytes": {
+        "median": 213618.0,
+        "min": 213617.0,
+        "max": 213618.0
+      },
+      "allocs": {
+        "median": 2913.0,
+        "min": 2913.0,
+        "max": 2913.0
+      }
+    },
+    "ratios": {
+      "ns": 0.8080536077018267,
+      "bytes": 0.6904556429326377,
+      "allocs": 0.9887983706720977
+    }
+  },
+  "BenchmarkPerformanceWrappers/override": {
+    "baseline": {
+      "ns": {
+        "median": 245391.0,
+        "min": 239675.0,
+        "max": 852353.0
+      },
+      "bytes": {
+        "median": 183481.0,
+        "min": 183379.0,
+        "max": 183533.0
+      },
+      "allocs": {
+        "median": 2403.0,
+        "min": 2402.0,
+        "max": 2403.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 228420.0,
+        "min": 224730.0,
+        "max": 254489.0
+      },
+      "bytes": {
+        "median": 151507.0,
+        "min": 151436.0,
+        "max": 151520.0
+      },
+      "allocs": {
+        "median": 2391.0,
+        "min": 2391.0,
+        "max": 2391.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9308409843881805,
+      "bytes": 0.8257367247834926,
+      "allocs": 0.9950062421972534
+    }
+  },
+  "BenchmarkPerformanceWrappers/logging": {
+    "baseline": {
+      "ns": {
+        "median": 188357.0,
+        "min": 187977.0,
+        "max": 571519.0
+      },
+      "bytes": {
+        "median": 113298.0,
+        "min": 113261.0,
+        "max": 113330.0
+      },
+      "allocs": {
+        "median": 2130.0,
+        "min": 2130.0,
+        "max": 2130.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 193101.0,
+        "min": 189241.0,
+        "max": 197818.0
+      },
+      "bytes": {
+        "median": 113308.0,
+        "min": 113289.0,
+        "max": 113341.0
+      },
+      "allocs": {
+        "median": 2130.0,
+        "min": 2130.0,
+        "max": 2130.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0251862155375164,
+      "bytes": 1.000088262811347,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceWrappers/binder": {
+    "baseline": {
+      "ns": {
+        "median": 243588.0,
+        "min": 238668.0,
+        "max": 410893.0
+      },
+      "bytes": {
+        "median": 183602.0,
+        "min": 183505.0,
+        "max": 183649.0
+      },
+      "allocs": {
+        "median": 2400.0,
+        "min": 2399.0,
+        "max": 2400.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 227692.0,
+        "min": 223412.0,
+        "max": 256716.0
+      },
+      "bytes": {
+        "median": 151589.0,
+        "min": 151573.0,
+        "max": 151627.0
+      },
+      "allocs": {
+        "median": 2388.0,
+        "min": 2388.0,
+        "max": 2388.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9347422697341412,
+      "bytes": 0.8256391542575789,
+      "allocs": 0.995
+    }
+  },
+  "BenchmarkPerformanceWrappers/prepared": {
+    "baseline": {
+      "ns": {
+        "median": 417948.0,
+        "min": 408238.0,
+        "max": 1437219.0
+      },
+      "bytes": {
+        "median": 334660.0,
+        "min": 334412.0,
+        "max": 334751.0
+      },
+      "allocs": {
+        "median": 4378.0,
+        "min": 4378.0,
+        "max": 4379.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 387407.0,
+        "min": 382911.0,
+        "max": 392761.0
+      },
+      "bytes": {
+        "median": 270641.0,
+        "min": 270577.0,
+        "max": 270749.0
+      },
+      "allocs": {
+        "median": 4356.0,
+        "min": 4356.0,
+        "max": 4356.0
+      }
+    },
+    "ratios": {
+      "ns": 0.926926316192445,
+      "bytes": 0.8087043566604912,
+      "allocs": 0.9949748743718593
+    }
+  },
+  "BenchmarkPerformanceProfiles/cache-miss": {
+    "baseline": {
+      "ns": {
+        "median": 12275.0,
+        "min": 12037.0,
+        "max": 83637.0
+      },
+      "bytes": {
+        "median": 10234.0,
+        "min": 10210.0,
+        "max": 10253.0
+      },
+      "allocs": {
+        "median": 140.0,
+        "min": 140.0,
+        "max": 140.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 12148.0,
+        "min": 11852.0,
+        "max": 12272.0
+      },
+      "bytes": {
+        "median": 10263.0,
+        "min": 10207.0,
+        "max": 10271.0
+      },
+      "allocs": {
+        "median": 140.0,
+        "min": 140.0,
+        "max": 140.0
+      }
+    },
+    "ratios": {
+      "ns": 0.989653767820774,
+      "bytes": 1.0028336916161813,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceProfiles/cache-hit": {
+    "baseline": {
+      "ns": {
+        "median": 14306.0,
+        "min": 14118.0,
+        "max": 64564.0
+      },
+      "bytes": {
+        "median": 12179.0,
+        "min": 12179.0,
+        "max": 12181.0
+      },
+      "allocs": {
+        "median": 142.0,
+        "min": 142.0,
+        "max": 142.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 14348.0,
+        "min": 13975.0,
+        "max": 25543.0
+      },
+      "bytes": {
+        "median": 12180.0,
+        "min": 12179.0,
+        "max": 12181.0
+      },
+      "allocs": {
+        "median": 142.0,
+        "min": 142.0,
+        "max": 142.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0029358311198098,
+      "bytes": 1.0000821085474998,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceProfiles/operation-fresh": {
+    "baseline": {
+      "ns": {
+        "median": 13786.0,
+        "min": 13653.0,
+        "max": 22794.0
+      },
+      "bytes": {
+        "median": 10110.0,
+        "min": 10109.0,
+        "max": 10124.0
+      },
+      "allocs": {
+        "median": 149.0,
+        "min": 149.0,
+        "max": 149.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 13617.0,
+        "min": 13514.0,
+        "max": 14226.0
+      },
+      "bytes": {
+        "median": 10109.0,
+        "min": 10108.0,
+        "max": 10110.0
+      },
+      "allocs": {
+        "median": 149.0,
+        "min": 149.0,
+        "max": 149.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9877411867111563,
+      "bytes": 0.9999010880316518,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceProfiles/operation-replay": {
+    "baseline": {
+      "ns": {
+        "median": 15757.0,
+        "min": 14254.0,
+        "max": 18179.0
+      },
+      "bytes": {
+        "median": 11714.0,
+        "min": 11713.0,
+        "max": 11715.0
+      },
+      "allocs": {
+        "median": 148.0,
+        "min": 148.0,
+        "max": 148.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 14480.0,
+        "min": 14020.0,
+        "max": 22253.0
+      },
+      "bytes": {
+        "median": 11714.0,
+        "min": 11712.0,
+        "max": 11716.0
+      },
+      "allocs": {
+        "median": 148.0,
+        "min": 148.0,
+        "max": 148.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9189566541854414,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceEnv/empty": {
+    "baseline": {
+      "ns": {
+        "median": 152.7,
+        "min": 150.9,
+        "max": 156.5
+      },
+      "bytes": {
+        "median": 384.0,
+        "min": 384.0,
+        "max": 384.0
+      },
+      "allocs": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 158.7,
+        "min": 146.3,
+        "max": 196.8
+      },
+      "bytes": {
+        "median": 384.0,
+        "min": 384.0,
+        "max": 384.0
+      },
+      "allocs": {
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0392927308447937,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceEnv/populated": {
+    "baseline": {
+      "ns": {
+        "median": 317.1,
+        "min": 310.5,
+        "max": 400.5
+      },
+      "bytes": {
+        "median": 784.0,
+        "min": 784.0,
+        "max": 784.0
+      },
+      "allocs": {
+        "median": 5.0,
+        "min": 5.0,
+        "max": 5.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 334.7,
+        "min": 307.6,
+        "max": 443.1
+      },
+      "bytes": {
+        "median": 784.0,
+        "min": 784.0,
+        "max": 784.0
+      },
+      "allocs": {
+        "median": 5.0,
+        "min": 5.0,
+        "max": 5.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0555029959003468,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceStream/independent": {
+    "baseline": {
+      "ns": {
+        "median": 1847.0,
+        "min": 1825.0,
+        "max": 2557.0
+      },
+      "bytes": {
+        "median": 2520.0,
+        "min": 2520.0,
+        "max": 2520.0
+      },
+      "allocs": {
+        "median": 32.0,
+        "min": 32.0,
+        "max": 32.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 1896.0,
+        "min": 1788.0,
+        "max": 2163.0
+      },
+      "bytes": {
+        "median": 2520.0,
+        "min": 2520.0,
+        "max": 2520.0
+      },
+      "allocs": {
+        "median": 32.0,
+        "min": 32.0,
+        "max": 32.0
+      }
+    },
+    "ratios": {
+      "ns": 1.02652950730915,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceStream/terminal": {
+    "baseline": {
+      "ns": {
+        "median": 2586.0,
+        "min": 2551.0,
+        "max": 3439.0
+      },
+      "bytes": {
+        "median": 3544.0,
+        "min": 3544.0,
+        "max": 3544.0
+      },
+      "allocs": {
+        "median": 48.0,
+        "min": 48.0,
+        "max": 48.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 2607.0,
+        "min": 2481.0,
+        "max": 2711.0
+      },
+      "bytes": {
+        "median": 3544.0,
+        "min": 3544.0,
+        "max": 3544.0
+      },
+      "allocs": {
+        "median": 48.0,
+        "min": 48.0,
+        "max": 48.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0081206496519721,
+      "bytes": 1.0,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceCold": {
+    "baseline": {
+      "ns": {
+        "median": 1149069.0,
+        "min": 1119291.0,
+        "max": 1363386.0
+      },
+      "bytes": {
+        "median": 902928.0,
+        "min": 902606.0,
+        "max": 903054.0
+      },
+      "allocs": {
+        "median": 13443.0,
+        "min": 13443.0,
+        "max": 13443.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 1104798.0,
+        "min": 1088303.0,
+        "max": 1155845.0
+      },
+      "bytes": {
+        "median": 870722.0,
+        "min": 869891.0,
+        "max": 870900.0
+      },
+      "allocs": {
+        "median": 13431.0,
+        "min": 13430.0,
+        "max": 13432.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9614722875649765,
+      "bytes": 0.9643315967607605,
+      "allocs": 0.9991073421111359
+    }
+  },
+  "BenchmarkPolicyManifestRich": {
+    "baseline": {
+      "ns": {
+        "median": 49447.0,
+        "min": 47703.0,
+        "max": 59389.0
+      },
+      "bytes": {
+        "median": 70928.0,
+        "min": 70928.0,
+        "max": 70928.0
+      },
+      "allocs": {
+        "median": 286.0,
+        "min": 286.0,
+        "max": 286.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 33892.0,
+        "min": 32917.0,
+        "max": 34619.0
+      },
+      "bytes": {
+        "median": 39016.0,
+        "min": 39016.0,
+        "max": 39016.0
+      },
+      "allocs": {
+        "median": 275.0,
+        "min": 275.0,
+        "max": 275.0
+      }
+    },
+    "ratios": {
+      "ns": 0.685420753534087,
+      "bytes": 0.5500789533047598,
+      "allocs": 0.9615384615384616
+    }
+  },
+  "BenchmarkPerformanceExport/default": {
+    "baseline": {
+      "ns": {
+        "median": 212042.0,
+        "min": 210562.0,
+        "max": 227638.0
+      },
+      "bytes": {
+        "median": 202586.0,
+        "min": 202567.0,
+        "max": 202653.0
+      },
+      "allocs": {
+        "median": 4207.0,
+        "min": 4207.0,
+        "max": 4207.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 213366.0,
+        "min": 211574.0,
+        "max": 217023.0
+      },
+      "bytes": {
+        "median": 202649.0,
+        "min": 202616.0,
+        "max": 202665.0
+      },
+      "allocs": {
+        "median": 4207.0,
+        "min": 4207.0,
+        "max": 4207.0
+      }
+    },
+    "ratios": {
+      "ns": 1.0062440459908886,
+      "bytes": 1.0003109790409999,
+      "allocs": 1.0
+    }
+  },
+  "BenchmarkPerformanceExport/custom": {
+    "baseline": {
+      "ns": {
+        "median": 247301.0,
+        "min": 246066.0,
+        "max": 273760.0
+      },
+      "bytes": {
+        "median": 253111.0,
+        "min": 253095.0,
+        "max": 253167.0
+      },
+      "allocs": {
+        "median": 4093.0,
+        "min": 4093.0,
+        "max": 4093.0
+      }
+    },
+    "candidate": {
+      "ns": {
+        "median": 233380.0,
+        "min": 230062.0,
+        "max": 238261.0
+      },
+      "bytes": {
+        "median": 221163.0,
+        "min": 221137.0,
+        "max": 221219.0
+      },
+      "allocs": {
+        "median": 4082.0,
+        "min": 4082.0,
+        "max": 4082.0
+      }
+    },
+    "ratios": {
+      "ns": 0.9437082745318458,
+      "bytes": 0.8737786978835372,
+      "allocs": 0.9973124847300269
+    }
+  }
+}

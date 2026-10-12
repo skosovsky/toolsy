@@ -1,0 +1,71 @@
+package toolsy
+
+import (
+ "context"
+ "testing"
+ "reflect"
+)
+
+func TestReviewerBPermissionsEmptySnapshot(t *testing.T) {
+ t.Run("append-isolation",func(t *testing.T){
+  // Arrange.
+  backing:=[]Permission{"original"}
+  source:=ToolManifest{Requirements:ToolRequirements{Permissions:backing[:0]}}
+  // Act.
+  snapshot:=cloneManifestForPolicy(source)
+  snapshot.Requirements.Permissions=append(snapshot.Requirements.Permissions,"changed")
+  // Assert.
+  if backing[0]!="original"{t.Errorf("zero-length permission snapshot append mutated backing: %q",backing[0])}
+ })
+ t.Run("empty-backing-detachment",func(t *testing.T){
+  // Arrange: permission strings occupy a sizable caller-owned backing array.
+  backing:=make([]Permission,1<<16)
+  source:=ToolManifest{Requirements:ToolRequirements{Permissions:backing[:0]}}
+  // Act.
+  snapshot:=cloneManifestForPolicy(source)
+  // Assert.
+  if snapshot.Requirements.Permissions==nil {t.Error("nonnil empty permissions changed to nil")}
+  if cap(snapshot.Requirements.Permissions)!=0 {t.Errorf("empty snapshot retains original capacity: %d",cap(snapshot.Requirements.Permissions))}
+  if reflect.ValueOf(snapshot.Requirements.Permissions).Pointer()==reflect.ValueOf(backing).Pointer(){t.Error("empty snapshot still references original backing")}
+ })
+ t.Run("nil-and-populated",func(t *testing.T){
+  // Arrange and Act.
+  nilOut:=cloneRequirements(ToolRequirements{})
+  source:=[]Permission{"a"}
+  populated:=cloneRequirements(ToolRequirements{Permissions:source})
+  populated.Permissions[0]="b"
+  // Assert.
+  if nilOut.Permissions!=nil {t.Error("nil permissions changed")}
+  if source[0]!="a" {t.Error("populated permissions aliases original")}
+ })
+}
+
+func TestReviewerBPermissionsZeroCapacityBacking(t *testing.T) {
+ // Arrange: clipping capacity is insufficient to release a source backing array.
+ backing:=make([]Permission,65536)
+ source:=ToolManifest{Requirements:ToolRequirements{Permissions:backing[:0:0]}}
+ // Act.
+ snapshot:=cloneManifestForPolicy(source)
+ // Assert.
+ if snapshot.Requirements.Permissions==nil ||len(snapshot.Requirements.Permissions)!=0 ||cap(snapshot.Requirements.Permissions)!=0 {t.Fatal("nonnil empty zero-cap permissions changed")}
+ if reflect.ValueOf(snapshot.Requirements.Permissions).Pointer()==reflect.ValueOf(backing).Pointer() {t.Fatal("zero-cap snapshot still holds original backing")}
+}
+
+func TestReviewerBPermissionsPolicyRetained(t *testing.T) {
+ // Arrange: use the public requirements-policy callback and retain its request.
+ backing:=[]Permission{"original"}
+ var saved RequirementsPolicyRequest[NoSubject,NoScope]
+ called:=false
+ policy:=NewRequirementsPolicy(func(_ context.Context,req RequirementsPolicyRequest[NoSubject,NoScope]) Decision {
+  called=true;saved=req;return AllowDecision()
+ })
+ request:=PolicyRequest{Manifest:ToolManifest{Name:"tool",Requirements:ToolRequirements{NeedsSession:true,Permissions:backing[:0]}},CallContext:NewCallContext(NoSubject{},NoScope{})}
+ // Act.
+ _=policy.Decide(context.Background(),request)
+ if !called {t.Fatal("requirements callback not invoked")}
+ saved.Requirements.Permissions=append(saved.Requirements.Permissions,"requirement")
+ saved.Manifest.Requirements.Permissions=append(saved.Manifest.Requirements.Permissions,"manifest")
+ // Assert.
+ if backing[0]!="original" {t.Errorf("retained public policy request aliases original backing: %q",backing[0])}
+ if saved.Requirements.Permissions[0]!="requirement"||saved.Manifest.Requirements.Permissions[0]!="manifest" {t.Fatal("separate snapshot domains unexpectedly share backing")}
+}

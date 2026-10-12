@@ -1,0 +1,17 @@
+{
+  "Path": "github.com/skosovsky/toolsy/mcp",
+  "Version": "v0.20.1",
+  "Info": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/mcp/@v/v0.20.1.info",
+  "GoMod": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/mcp/@v/v0.20.1.mod",
+  "Zip": "/tmp/toolsy-performance-gopath/pkg/mod/cache/download/github.com/skosovsky/toolsy/mcp/@v/v0.20.1.zip",
+  "Dir": "/tmp/toolsy-performance-gopath/pkg/mod/github.com/skosovsky/toolsy/mcp@v0.20.1",
+  "Sum": "h1:rY3gXa5oT6VKDwhNBvNj28RY8ntns1Ms3CuRROdfWDo=",
+  "GoModSum": "h1:5d+AFRiGhzSuo2SRRfcHLdwvCRbt9kwr0FDTxytGwbM=",
+  "Origin": {
+    "VCS": "git",
+    "URL": "https://github.com/skosovsky/toolsy",
+    "Subdir": "mcp",
+    "Hash": "2b4c9419792bc843ff92c0cf64b35f83330a389d",
+    "Ref": "refs/tags/mcp/v0.20.1"
+  }
+}

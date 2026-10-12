@@ -1,0 +1,57 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:45:47 +07
+Showing nodes accounting for 118.61kB, 97.09% of 122.16kB total
+Dropped 118 nodes (cum <= 0.61kB)
+Showing top 50 nodes out of 91
+      flat  flat%   sum%        cum   cum%
+   34.45kB 28.20% 28.20%    43.91kB 35.94%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).object
+      32kB 26.19% 54.39%       32kB 26.19%  github.com/skosovsky/toolsy.(*valueCloner).remember
+   17.25kB 14.12% 68.51%    18.98kB 15.54%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+    9.13kB  7.48% 75.99%     9.13kB  7.48%  runtime/metrics.runtime_readMetrics
+    4.28kB  3.50% 79.49%     4.28kB  3.50%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).text
+    3.02kB  2.47% 81.96%     3.05kB  2.49%  runtime.mallocgc
+       3kB  2.46% 84.42%        3kB  2.46%  os.readFileContents
+    2.95kB  2.42% 86.83%    43.91kB 35.94%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).value
+    2.33kB  1.91% 88.74%     2.33kB  1.91%  fmt.Sprintf
+    2.23kB  1.82% 90.56%    16.10kB 13.18%  github.com/skosovsky/toolsy/internal/jsonschemax.(*valueParser).array
+    1.80kB  1.47% 92.03%     1.80kB  1.47%  regexp.onePassCopy
+    1.38kB  1.13% 93.16%     1.38kB  1.13%  regexp/syntax.(*compiler).inst (inline)
+    1.24kB  1.02% 94.17%     1.57kB  1.29%  testing.(*T).Run
+    0.80kB  0.65% 94.83%     6.43kB  5.26%  testing.runTests
+    0.58kB  0.47% 95.30%     0.73kB   0.6%  github.com/skosovsky/toolsy.(*RegistryBuilder).Build
+    0.50kB  0.41% 95.71%     9.84kB  8.05%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+    0.44kB  0.36% 96.07%    32.44kB 26.55%  github.com/skosovsky/toolsy.(*valueCloner).cloneJSONReference
+    0.43kB  0.35% 96.42%   111.79kB 91.51%  github.com/skosovsky/toolsy.TestMemoryMeasurement
+    0.39kB  0.32% 96.74%    96.62kB 79.09%  github.com/skosovsky/toolsy.NewProxyTool
+    0.18kB  0.15% 96.89%     3.59kB  2.94%  regexp.compile
+    0.13kB  0.11% 96.99%     3.78kB  3.10%  testing.newMatcher
+    0.06kB 0.051% 97.05%     7.08kB  5.79%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueArr
+    0.03kB 0.026% 97.07%   100.13kB 81.97%  github.com/skosovsky/toolsy.performanceToolForMemory
+    0.02kB 0.019% 97.09%     6.58kB  5.38%  testing.(*M).Run
+         0     0% 97.09%    20.67kB 16.92%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0% 97.09%     0.75kB  0.61%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0% 97.09%    19.06kB 15.60%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0% 97.09%    19.06kB 15.60%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0% 97.09%    20.66kB 16.91%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0% 97.09%    18.98kB 15.54%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0% 97.09%    19.06kB 15.60%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0% 97.09%     0.85kB   0.7%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft2020
+         0     0% 97.09%    18.21kB 14.91%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0% 97.09%     0.85kB   0.7%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueProp
+         0     0% 97.09%    17.39kB 14.24%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0% 97.09%     0.84kB  0.69%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRef
+         0     0% 97.09%     0.84kB  0.69%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueRefVal
+         0     0% 97.09%     1.73kB  1.42%  github.com/santhosh-tekuri/jsonschema/v6.(*urlPtr).String
+         0     0% 97.09%     0.75kB  0.61%  github.com/santhosh-tekuri/jsonschema/v6.init.0
+         0     0% 97.09%     0.62kB  0.51%  github.com/santhosh-tekuri/jsonschema/v6.jsonPointer.append2
+         0     0% 97.09%     1.30kB  1.06%  github.com/skosovsky/toolsy.(*Registry).Execute (inline)
+         0     0% 97.09%     1.30kB  1.06%  github.com/skosovsky/toolsy.(*Registry).execute (inline)
+         0     0% 97.09%     1.30kB  1.06%  github.com/skosovsky/toolsy.(*Registry).executeWithSummary
+         0     0% 97.09%     1.30kB  1.06%  github.com/skosovsky/toolsy.(*Registry).runToolWithValidationAndExecute
+         0     0% 97.09%     1.17kB  0.96%  github.com/skosovsky/toolsy.(*tool).Execute
+         0     0% 97.09%    32.44kB 26.55%  github.com/skosovsky/toolsy.(*valueCloner).clone
+         0     0% 97.09%    32.11kB 26.28%  github.com/skosovsky/toolsy.(*valueCloner).cloneAny
+         0     0% 97.09%    32.44kB 26.55%  github.com/skosovsky/toolsy.(*valueCloner).cloneReference
+         0     0% 97.09%     0.86kB   0.7%  github.com/skosovsky/toolsy.ExecutePrepared
+         0     0% 97.09%     6.58kB  5.38%  github.com/skosovsky/toolsy.TestMain

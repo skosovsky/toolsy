@@ -1,0 +1,20 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:13:16 +07
+Showing nodes accounting for 512.38kB, 100% of 512.38kB total
+      flat  flat%   sum%        cum   cum%
+  512.38kB   100%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0%   100%   512.38kB   100%  github.com/santhosh-tekuri/jsonschema/v6.init.0
+         0     0%   100%   512.38kB   100%  runtime.doInit (inline)
+         0     0%   100%   512.38kB   100%  runtime.doInit1
+         0     0%   100%   512.38kB   100%  runtime.main

@@ -1,0 +1,6 @@
+{
+  "measurement_steps": "PASS (marginal, measure, measure-confirm, boundary-confirm, profile, consumer)",
+  "original_pipeline_checks": "Superseded: lint test-only appendAssign failure then interrupted during integration; partial pipeline-results is historical orchestration evidence only.",
+  "final_checks": "All four PASS on c674; check-results.json and make logs authoritative.",
+  "measurement_final_identity_bridge": "measurement-identity-bridge.json"
+}

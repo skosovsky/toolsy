@@ -1,0 +1,121 @@
+package toolsy
+
+import (
+ "fmt"
+ "reflect"
+ "runtime/debug"
+ "sync"
+ "testing"
+)
+
+// Reviewer B's independent adversarial probe. It deliberately crosses the
+// fixed-table overflow boundary, retaining snapshots and mutating both directions.
+func TestReviewerBOverflowGraph(t *testing.T) {
+ // Arrange.
+ type named map[string]any
+ type node struct { Root map[string]any; Pair [2]any; private map[string]any }
+ root := map[string]any{}
+ shared := named{"token": 1}
+ nodes := make([]any, 900)
+ for i := range nodes { nodes[i] = &node{Root:root, Pair:[2]any{shared, shared}, private:root} }
+ root["nodes"], root["shared"], root["self"] = nodes, shared, root
+ // Act.
+ out := cloneMutableValue(root).(map[string]any)
+ clones := out["nodes"].([]any)
+ out["new"] = 2
+ out["shared"].(named)["token"] = 7
+ for i, item := range clones {
+  n := item.(*node)
+  // Assert.
+  if n.Root["new"] != 2 || n.Pair[0].(named)["token"] != 7 || n.Pair[1].(named)["token"] != 7 { t.Fatalf("overflow identity lost at %d",i) }
+  if n.private["new"] != nil { t.Fatal("private ownership changed") }
+ }
+ if shared["token"] != 1 || root["new"] != nil { t.Fatal("source escaped") }
+ out["self"].(map[string]any)["loop"] = true
+ if out["loop"] != true { t.Fatal("root cycle lost") }
+ for range 15 { _ = cloneMutableValue(root) }
+ if out["shared"].(named)["token"] != 7 { t.Fatal("retained snapshot overwritten") }
+}
+
+func TestReviewerBCollisionOverflowPanic(t *testing.T) {
+ // Arrange: 384 colliding table keys plus 400 overflow keys.
+ c := valueCloner{}
+ defer c.release()
+ typ := reflect.TypeOf(map[string]any{})
+ keys := make([]cloneReference,0,784)
+ for p := uintptr(1); len(keys)<784; p++ {
+  k := cloneReference{typeOf:typ,pointer:p}
+  if cloneMemoSlot(k)==0 { keys=append(keys,k) }
+ }
+ values:=make([]reflect.Value,len(keys))
+ // Act.
+ for i,k:=range keys { _,_ = c.lookup(k); values[i]=reflect.ValueOf(map[string]any{"id":i}); c.remember(k,values[i]) }
+ // Assert.
+ for i,k:=range keys { got,ok:=c.lookup(k); if !ok || got.Interface().(map[string]any)["id"]!=i { t.Fatalf("collision lookup %d failed",i) } }
+ owned:=c.memo
+ marker:=new(int)
+ recovered:=func()(got any) { defer func(){got=recover()}(); defer c.release(); panic(marker) }()
+ if recovered != marker { t.Fatal("panic identity changed") }
+ if owned.count!=0 || owned.overflow!=nil {t.Fatal("panic retained overflow")}
+ for _,entry:=range owned.entries {if entry.key.typeOf!=nil || entry.value.IsValid(){t.Fatal("panic retained graph")}}
+}
+
+func TestReviewerBConcurrentNoGC(t *testing.T) {
+ // Arrange: disable GC so idle scratch cleanup cannot rely on collector behavior.
+ previous:=debug.SetGCPercent(-1)
+ defer debug.SetGCPercent(previous)
+ var wg sync.WaitGroup
+ // Act.
+ for worker:=range 24 { wg.Go(func(){
+  for j:=range 20 {
+   root:=map[string]any{"id":fmt.Sprint(worker,j)}
+   parts:=make([]any,550)
+   for i:=range parts {parts[i]=map[string]any{"root":root}}
+   root["parts"]=parts
+   out:=cloneMutableValue(root).(map[string]any)
+   out["id"]=worker
+   // Assert.
+   if out["parts"].([]any)[549].(map[string]any)["root"].(map[string]any)["id"]!=worker {t.Error("overflow cycle escaped")}
+   if root["id"]!=fmt.Sprint(worker,j) {t.Error("source overwritten")}
+  }
+ }) }
+ wg.Wait()
+ if len(idleCloneMemos)>cloneMemoIdle {t.Fatal("idle exceeded bound")}
+ held:=make([]*cloneMemo,0,cloneMemoIdle)
+ defer func(){for _,m:=range held{idleCloneMemos<-m}}()
+ for { select {case m:=<-idleCloneMemos:
+  held=append(held,m)
+  if m.count!=0 || m.overflow!=nil {t.Fatal("graph-size scratch retained")}
+  for _,e:=range m.entries {if e.key!=(cloneReference{})||e.value.IsValid(){t.Fatal("source/output pointer retained")}}
+ default:return} }
+}
+
+func TestReviewerBTypedIdentityAndInlineBoundary(t *testing.T) {
+ // Arrange: the same backing map through different dynamic types must retain
+ // the existing type-sensitive identity domains; a repeated same-type alias
+ // inserted before inline migration must still resolve after migration.
+ type named map[string]any
+ backing:=map[string]any{"id":1}
+ source:=make([]any,12)
+ source[0],source[1],source[11]=backing,named(backing),backing
+ for i:=2;i<11;i++ {source[i]=map[string]any{"id":i}}
+ // Act.
+ out:=cloneMutableValue(source).([]any)
+ out[0].(map[string]any)["id"]=9
+ // Assert.
+ if out[11].(map[string]any)["id"]!=9 {t.Fatal("early alias lost across inline migration")}
+ if out[1].(named)["id"]!=1 {t.Fatal("different type identity keys merged")}
+ if backing["id"]!=1 {t.Fatal("typed clones escaped")}
+ // Arrange.
+ tiny:=valueCloner{}
+ var input [8]any
+ for i:=range input {input[i]=map[string]any{"id":i}}
+ // Act.
+ output:=tiny.clone(reflect.ValueOf(input)).Interface().([8]any)
+ tiny.release()
+ output[0].(map[string]any)["id"]=100
+ // Assert.
+ if tiny.inlineCount!=0||tiny.memo!=nil {t.Fatal("inline lease retained")}
+ for _,e:=range tiny.inline {if e.key!=(cloneReference{})||e.value.IsValid(){t.Fatal("inline source/output references retained")}}
+ if input[0].(map[string]any)["id"]!=0 {t.Fatal("inline output escaped")}
+}

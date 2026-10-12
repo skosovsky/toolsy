@@ -1,0 +1,11 @@
+{
+  "inventory_sha256": "c6747b79cc3f0d3565b791c528d4d34a656a89a91e6bd7eeb9284fe1b77e2e88",
+  "source_files": 543,
+  "targets": [
+    "lint",
+    "test",
+    "test-integration",
+    "test-e2e"
+  ],
+  "note": "Final rerun after test-only appendAssign correction. Earlier pipeline check run was interrupted while final rerun continued; check-results.json and final make logs are authoritative. Bench measurements were completed before heavy checks; no final source changes since rerun started."
+}

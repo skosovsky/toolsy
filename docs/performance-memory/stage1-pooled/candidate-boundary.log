@@ -1,0 +1,11 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/skosovsky/toolsy
+cpu: Apple M1 Max
+BenchmarkMemoryRegistryBoundary-2   	   20254	     18299 ns/op	   19474 B/op	     394 allocs/op
+BenchmarkMemoryRegistryBoundary-2   	   20053	     18613 ns/op	   19474 B/op	     394 allocs/op
+BenchmarkMemoryRegistryBoundary-2   	   19689	     18196 ns/op	   19474 B/op	     394 allocs/op
+BenchmarkMemoryRegistryBoundary-2   	   19784	     18247 ns/op	   19474 B/op	     394 allocs/op
+BenchmarkMemoryRegistryBoundary-2   	   16551	     19003 ns/op	   19474 B/op	     394 allocs/op
+PASS
+ok  	github.com/skosovsky/toolsy	2.955s

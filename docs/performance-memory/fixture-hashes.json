@@ -1,0 +1,5 @@
+{
+  "testdata/performance/zalo_list_groups.input.json": "976079812d0bb4da48473e7834248894ed0e7df6cd23b15db2b4de450e72c10c",
+  "testdata/performance/zalo_list_groups.output.json": "d23489a04f79a91e77ad19ab5ccd65964dd31abecab42056c0afbdf3f7eb1586",
+  "testdata/performance/groups.payload.json": "51b324cbe7c3658a7aae672b304ec76950bdf6ed34bbed574a4266b0c484984e"
+}

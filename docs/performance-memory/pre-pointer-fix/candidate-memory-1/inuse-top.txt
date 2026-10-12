@@ -1,0 +1,23 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 17:13:27 +07
+Showing nodes accounting for 1024.62kB, 100% of 1024.62kB total
+      flat  flat%   sum%        cum   cum%
+  512.38kB 50.01% 50.01%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.newSchema (inline)
+  512.25kB 49.99%   100%   512.25kB 49.99%  runtime.mallocgc
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).Compile
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).MustCompile
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileObject
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).compileValue
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).doCompile
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*Compiler).enqueue
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compile
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).compileDraft4
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueueMap
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.(*objCompiler).enqueuePtr (inline)
+         0     0%   100%   512.38kB 50.01%  github.com/santhosh-tekuri/jsonschema/v6.init.0
+         0     0%   100%   512.38kB 50.01%  runtime.doInit (inline)
+         0     0%   100%   512.38kB 50.01%  runtime.doInit1
+         0     0%   100%   512.25kB 49.99%  runtime.gcBgMarkWorker
+         0     0%   100%   512.38kB 50.01%  runtime.main
+         0     0%   100%   512.25kB 49.99%  runtime.newobject

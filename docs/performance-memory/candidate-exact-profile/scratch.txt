@@ -1,0 +1,20 @@
+File: toolsy.test
+Type: inuse_space
+Time: 2026-10-12 18:26:21 +07
+Active filters:
+   focus=valueCloner.*remember
+Showing nodes accounting for 32kB, 26.03% of 122.95kB total
+      flat  flat%   sum%        cum   cum%
+      32kB 26.03% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.(*valueCloner).remember
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.(*valueCloner).clone
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.(*valueCloner).cloneAny
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.(*valueCloner).cloneJSONReference
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.(*valueCloner).cloneReference
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.NewProxyTool
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.TestMemoryMeasurement
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.buildToolManifest
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.cloneMutableValue
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.cloneReflectValue
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.deepCloneMap
+         0     0% 26.03%       32kB 26.03%  github.com/skosovsky/toolsy.performanceToolForMemory
+         0     0% 26.03%       32kB 26.03%  testing.tRunner

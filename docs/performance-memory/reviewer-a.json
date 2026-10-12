@@ -1,0 +1,338 @@
+{
+  "reviewer": "A - independent completeness",
+  "verdict": "APPROVE",
+  "candidate_inventory_sha256": "c6747b79cc3f0d3565b791c528d4d34a656a89a91e6bd7eeb9284fe1b77e2e88",
+  "candidate_head": "2b6f6ac928da1d1f5af26f43503e3f7f541a6a87",
+  "total_mandatory": 53,
+  "pass": 53,
+  "fail": 0,
+  "not_run_mandatory": 0,
+  "completeness_percent": 100,
+  "independent_checks": [
+    "All 543 source hashes verified",
+    "All raw matrix medians/min/max and five samples per role independently parsed",
+    "Targeted clone/memory/result/policy race tests PASS"
+  ],
+  "live_check_execution": "NOT RUN; recording requirement PASS",
+  "consumer_bytes_target": "PASS all three; original full allocation/latency gates and adoption remain open",
+  "items": [
+    {
+      "id": 1,
+      "item": "Initial HEAD/status/toolchain/module metadata and official baseline origin recorded",
+      "verdict": "PASS",
+      "evidence": "contract.md; baseline-metadata.json; baseline-initial.log: clean initial HEAD, Go/platform, official v0.20.1 origin verified"
+    },
+    {
+      "id": 2,
+      "item": "Fixture and final candidate identities recorded; later user changes preserved",
+      "verdict": "PASS",
+      "evidence": "candidate-identity.json; measured-candidate-identity.json; fixture-hashes.json: 543 final file hashes independently recomputed; only equivalent lint-only Permissions test assignment differs from measured inventory; HEAD and unchanged module/source scope audited"
+    },
+    {
+      "id": 3,
+      "item": "Ownership/lifetime/invariants contract written before optimization",
+      "verdict": "PASS",
+      "evidence": "contract.md: preimplementation ownership, lifetime, invariants and separate active/idle costs"
+    },
+    {
+      "id": 4,
+      "item": "Self-contained rich fixtures and distinguishing AAA tests fixed before measurement",
+      "verdict": "PASS",
+      "evidence": "performance_memory_test.go; performance_clone_contract_test.go; original testdata/performance hashes; setup.py copies identical fixtures into official baseline; AAA tests"
+    },
+    {
+      "id": 5,
+      "item": "Exclusive scratch per concurrent/nested traversal",
+      "verdict": "PASS",
+      "evidence": "clone_memo.go channel receive/acquire; TestMemoryMemoPanicAndNestedLease and TestMemoryCloneConcurrent; reviewer-b-final-probes.log"
+    },
+    {
+      "id": 6,
+      "item": "References cleared on normal return and panic; panic semantics unchanged",
+      "verdict": "PASS",
+      "evidence": "requirements.go cloneReflectValue deferred release; clone_memo.go clears both tiers/overflow; independent panic identity sentinel probe PASS"
+    },
+    {
+      "id": 7,
+      "item": "Insertion before recursion and identity key semantics preserved",
+      "verdict": "PASS",
+      "evidence": "requirements.go remembers before recursion; unchanged cloneReference type/pointer/length keys; pointer conversion before insertion; reviewer-b-final-probes.log collision+type+cycles"
+    },
+    {
+      "id": 8,
+      "item": "Mixed JSON/BYOT cycles and aliases preserved within clone operation",
+      "verdict": "PASS",
+      "evidence": "TestPerformanceCloneMixedMemo and reviewer B 900-pointer overflow mixed JSON/named-BYOT cyclic alias corpus PASS"
+    },
+    {
+      "id": 9,
+      "item": "Named/dynamic types, typed nil and nil/empty behavior preserved",
+      "verdict": "PASS",
+      "evidence": "contract.md explicitly distinguishes generic nil/empty preservation from established manifest/schema helper normalization; Permissions now detaches nonnil empty backing; performance_permissions_test.go; TestMemoryCloneNilOverlap; TestMemoryNamedPointerIsolation and TestMemoryNamedPointerGenericAndContext; clone type-preserving pointer repair; original mixed clone contract suite and independent race PASS"
+    },
+    {
+      "id": 10,
+      "item": "Pointer/array/struct/private fields/map keys/opaque behavior preserved",
+      "verdict": "PASS",
+      "evidence": "requirements.go type-preserving pointer conversion; performance_named_pointer_test.go; reviewer B arrays/private fields/type keys; original root suite PASS; documented host-owned limitations retained"
+    },
+    {
+      "id": 11,
+      "item": "Slice identity type/pointer/length and independent overlap lengths preserved",
+      "verdict": "PASS",
+      "evidence": "TestMemoryCloneNilOverlap: overlapping lengths independent with shared child alias; unchanged key length/type equality"
+    },
+    {
+      "id": 12,
+      "item": "Policy/caller output maps and slices never pooled; retained snapshots isolated",
+      "verdict": "PASS",
+      "evidence": "performance_permissions_test.go policy append isolation and backing-release regressions; TestMemoryPolicyRetainsSnapshots; TestMemorySnapshotRetainedChurn; outputs allocated as before and never returned to scratch storage"
+    },
+    {
+      "id": 13,
+      "item": "Preimplementation retained count/capacity bound and oversized-drop policy recorded",
+      "verdict": "PASS",
+      "evidence": "contract.md: FOUR idle 512-slot/384-occupied tables, operation-local overflow always dropped; bound written before optimization"
+    },
+    {
+      "id": 14,
+      "item": "Idle bound derived independently of sync.Pool and GC; active peak treated separately",
+      "verdict": "PASS",
+      "evidence": "contract.md; REPORT.md; TestMemoryIdleAllocationBound: 131216 B observed, <=132096 B conservative allocator-aware idle bound; active costs separate"
+    },
+    {
+      "id": 15,
+      "item": "No global mutable schema/address cache or removed memo",
+      "verdict": "PASS",
+      "evidence": "production diff requirements.go/clone_memo.go: memo remains, no schema/address cache; type-sensitive full keys"
+    },
+    {
+      "id": 16,
+      "item": "W1 measured compatible optimization (at least 20 percent rich policy clone bytes saving)",
+      "verdict": "PASS",
+      "evidence": "bench-summary.json + five raw process logs/version: rich 39016/70928 B = 55.0079%, <=80% unchanged target"
+    },
+    {
+      "id": 17,
+      "item": "Full library execution measured; clone benefit survives complete policy execution",
+      "verdict": "PASS",
+      "evidence": "bench-summary.json full registry/policy: complete policy execution raw medians in bench-summary.json; bytes saving survives full call; predispatch bytes saving independently confirmed from current raw matrix; complete matrix"
+    },
+    {
+      "id": 18,
+      "item": "Live-registry baseline/candidate inuse_space after matched warmup/GC",
+      "verdict": "PASS",
+      "evidence": "baseline/candidate-memory-[1-4]/live-registry-inuse.pprof; exact-profile dirs: matched live-registry warmup/GC, profiler overhead excluded from natural conclusions"
+    },
+    {
+      "id": 19,
+      "item": "Startup schemas/validators, bounded scratch and per-call retention distinguished",
+      "verdict": "PASS",
+      "evidence": "*-exact-profile/constructor.txt and scratch.txt; REPORT.md: compileResultContract ~63KiB unchanged, scratch +32KiB sequential; cumulative values not added"
+    },
+    {
+      "id": 20,
+      "item": "Repeated registry creation/release and live retained snapshots checked",
+      "verdict": "PASS",
+      "evidence": "TestMemoryOwnersReleased weak registry/source; memory registry-churn and retained-snapshots windows; TestMemoryPolicyRetainsSnapshots"
+    },
+    {
+      "id": 21,
+      "item": "Large-small and unique concurrent graph churn checked",
+      "verdict": "PASS",
+      "evidence": "TestMemorySnapshotRetainedChurn; TestMemoryMemoBoundWithoutGC; 8-worker concurrent-churn and large-small measurement windows; B GC-disabled oversized probes"
+    },
+    {
+      "id": 22,
+      "item": "Freed original graph and registry cannot remain reachable via scratch",
+      "verdict": "PASS",
+      "evidence": "weak node/registry release PASS while clone snapshot alive; structural reference clearing; dropped overflow map and exclusive scratch release"
+    },
+    {
+      "id": 23,
+      "item": "wrapYieldWithCallMeta/prepareChunk measured and explicit disposition documented",
+      "verdict": "PASS",
+      "evidence": "boundary-summary.json and five independent 1s confirmation pairs: 19474 B/394 allocs unchanged, comparable median ns and overlapping ranges; REPORT.md explicit keep-boundary disposition"
+    },
+    {
+      "id": 24,
+      "item": "Validation boundary custom Tool/middleware/profile/replay/codec/malformed preserved",
+      "verdict": "PASS",
+      "evidence": "production validation/registry/profile/replay/codec implementations unchanged; make test + B independent root race include original malformed/custom/middleware tests"
+    },
+    {
+      "id": 25,
+      "item": "Sticky rejection/cancellation/accounting regression checks pass",
+      "verdict": "PASS",
+      "evidence": "performance_result_contract_test.go sticky rejection/cancellation; unchanged result path/accounting tests; reviewer-a-contract-race.log and B root race PASS"
+    },
+    {
+      "id": 26,
+      "item": "Metadata-only policy potential documented without new API or schemas removed",
+      "verdict": "PASS",
+      "evidence": "REPORT.md metadata-only API disposition: no introduced API, schemas preserved; expected 39016 B region explicitly estimated, not implementation gain"
+    },
+    {
+      "id": 27,
+      "item": "No consumer source/pin/neighbor/dependency/version/signature/release changes",
+      "verdict": "PASS",
+      "evidence": "git diff/status and candidate identity: production only requirements.go+clone_memo.go, includes required named-pointer and empty-capacity Permissions ownership repairs, new tests/evidence; no go.mod/go.sum/API/release/consumer source changes"
+    },
+    {
+      "id": 28,
+      "item": "Prior decoder/fresh-delivery optimizations not claimed as new work",
+      "verdict": "PASS",
+      "evidence": "REPORT.md explicitly preserves earlier decoder/fresh delivery work as v0.20.1; diff adds memo representation/lifecycle and required named-pointer and empty-capacity Permissions type/ownership repairs"
+    },
+    {
+      "id": 29,
+      "item": "Existing applicable execution/validation gates not weakened and pass",
+      "verdict": "PASS",
+      "evidence": "Original W5 gate specification checked: predispatch311<=400, rich candidate allocations vs historical1085, Decode389 vs983, fresh1695 vs3273, MCP4207/4082 vs24229/23243; warm compile counter tests unchanged/PASS"
+    },
+    {
+      "id": 30,
+      "item": "No unexplained paired ns/B/alloc/retained regression",
+      "verdict": "PASS",
+      "evidence": "All 57 raw benchmark medians independently parsed; confirmations env/cache/boundary/binder resolve timing/storage blips; bounded retained tradeoff and GC noise explicitly documented"
+    },
+    {
+      "id": 31,
+      "item": "Five independent processes per library benchmark version; raw data/medians/ranges",
+      "verdict": "PASS",
+      "evidence": "20 final root/MCP raw logs: independent 5 processes/version and 57 rows; every median/min/max independently recomputed without mismatch"
+    },
+    {
+      "id": 32,
+      "item": "Hot fixture setup excluded; cold setup separate",
+      "verdict": "PASS",
+      "evidence": "BenchmarkPolicyManifestRich resets after schemas; existing execution hot benchmark setup outside timers; BenchmarkPerformanceCold separately reported"
+    },
+    {
+      "id": 33,
+      "item": "Marginal and cumulative effects stated",
+      "verdict": "PASS",
+      "evidence": "stage1-pooled raw matrix; marginal-summary.json + paired pooled/final logs; bench-summary.json cumulative official-to-final values; REPORT.md separate-series explanation"
+    },
+    {
+      "id": 34,
+      "item": "Idle bound verified between GC after oversize/concurrency; no stale graph refs",
+      "verdict": "PASS",
+      "evidence": "TestMemoryMemoBoundWithoutGC and TestMemoryIdleAllocationBound; B GC-disabled 24-worker overflow probe; all idle entries and overflow headers clear after release"
+    },
+    {
+      "id": 35,
+      "item": "Matched runtime settings for retained fixed/concurrent/churn windows",
+      "verdict": "PASS",
+      "evidence": "measure.py/measure-confirm.py: GOMAXPROCS2 GOGC100 GOMEMLIMIToff fixed baseline/candidate; fixed/concurrent/unique/large-small/registry windows; superseded first-window outlier explicitly classified"
+    },
+    {
+      "id": 36,
+      "item": "Forced GC outside natural windows and live registry retained checkpoints",
+      "verdict": "PASS",
+      "evidence": "TestMemoryMeasurement GC outside timed natural windows, KeepAlive registry/tool/saved after every checkpoint; matched 100-call warmup"
+    },
+    {
+      "id": 37,
+      "item": "HeapAlloc/sampled peak/GC count/STW/GC assist/total GC CPU distinguished; RSS not measured stated",
+      "verdict": "PASS",
+      "evidence": "memory-summary.json distinct HeapAlloc/peak/GC count/STW/total GC CPU/assist; REPORT.md RSS/offheap NOT MEASURED, total runtime CPU not OS share"
+    },
+    {
+      "id": 38,
+      "item": "Diagnostic duration/workload/inference limits stated without production budget claims",
+      "verdict": "PASS",
+      "evidence": "REPORT.md exact workloads, millisecond duration, sampling limits/outliers, finite diagnostic vs soak/production budget; raw DurationNS retained"
+    },
+    {
+      "id": 39,
+      "item": "Contract/race tests mutation/retention/cycle/BYOT/sequence/concurrent/nested/panic/oversize/release/churn",
+      "verdict": "PASS",
+      "evidence": "reviewer-a-contract-race.log; reviewer-b-final-probes.log/root-race.log; make-test.log: mutation/saved snapshot/cycle/BYOT/nil/concurrent/nested/panic/oversize/release/churn PASS"
+    },
+    {
+      "id": 40,
+      "item": "make lint results recorded",
+      "verdict": "PASS",
+      "evidence": "check-results.json lint PASS exit0; make-lint.log covers repository modules with formatter/config/lint; initial failure separately retained"
+    },
+    {
+      "id": 41,
+      "item": "make test results recorded including root/optional race",
+      "verdict": "PASS",
+      "evidence": "check-results.json test PASS exit0; make-test.log + Makefile: fresh race root and all 27 modules; no optional module implementation changed"
+    },
+    {
+      "id": 42,
+      "item": "make test-integration results recorded",
+      "verdict": "PASS",
+      "evidence": "check-results.json test-integration PASS exit0; make-test-integration.log: \u0448\u0442\u0430\u0442\u043d\u044b\u0435 integration-tag/prefix/race scope; no-tests-to-run distinguished"
+    },
+    {
+      "id": 43,
+      "item": "make test-e2e results recorded",
+      "verdict": "PASS",
+      "evidence": "check-results.json test-e2e PASS exit0; make-test-e2e.log: \u0448\u0442\u0430\u0442\u043d\u044b\u0435 e2e-tag/prefix/race scope; no-tests-to-run distinguished"
+    },
+    {
+      "id": 44,
+      "item": "Live credentials checks recorded separately",
+      "verdict": "PASS",
+      "evidence": "check-results.json live NOT RUN recorded separately: external provider/credential checks not claimed PASS; recording requirement PASS"
+    },
+    {
+      "id": 45,
+      "item": "Available isolated consumer diagnostic repeated with explicit temporary candidate override",
+      "verdict": "PASS",
+      "evidence": "consumer.py + consumer/manifest.json: isolated temporary source override; 18 successful processes, mirrored pairwise ABBA, 10800 calls/900 warmups, raw JSON"
+    },
+    {
+      "id": 46,
+      "item": "Consumer bytes target and original allocation gap reported separately from library DONE",
+      "verdict": "PASS",
+      "evidence": "consumer/summary.json and REPORT.md: bytes target all 3 PASS; original allocation deficits556/767/788 remain separately open and no original gate protocol claim"
+    },
+    {
+      "id": 47,
+      "item": "Consumer latency discrepancy retained and no adoption/full gate/production claim",
+      "verdict": "PASS",
+      "evidence": "REPORT.md current/historical p95 discrepancy explicit; adoption/full consumer gate/production budget not claimed"
+    },
+    {
+      "id": 48,
+      "item": "Reproducible commands/fixtures/raw evidence stored in repository",
+      "verdict": "PASS",
+      "evidence": "repository testdata fixtures, reproduction Python scripts, raw benchmarks/profiles/consumer instrumentation and manifests stored; external consumer restore prerequisite explicit"
+    },
+    {
+      "id": 49,
+      "item": "Final frozen checklist and code identity supplied to both independent reviewers",
+      "verdict": "PASS",
+      "evidence": "checklist.json fixed53 items; candidate-identity.json hash sent to both independent reviewers and independently verified by A/B"
+    },
+    {
+      "id": 50,
+      "item": "A every item evidence/verdict with denominator 100 percent APPROVE",
+      "verdict": "PASS",
+      "evidence": "reviewer-a.json + reviewer-a.md: all53 item/evidence/verdict rows, including B1/B2 ownership repairs and explicit measured/final identity bridge, explicit PASS denominator and separate live/consumer limitations"
+    },
+    {
+      "id": 51,
+      "item": "B adversarial findings/reproductions/severity/limitations APPROVE with no unfixed errors",
+      "verdict": "PASS",
+      "evidence": "reviewer-b.md/result.json: independent final identity/probes/root race APPROVE, found2 (B1/B2 FIXED)/unfixed0, reproducible probes and stated limits"
+    },
+    {
+      "id": 52,
+      "item": "Both reviewers validate the same final candidate and corrections re-reviewed",
+      "verdict": "PASS",
+      "evidence": "A/B independent identity verification same c6747b79... final 543-file inventory; inline refinement re-tested; B1 named-pointer and B2 empty-capacity Permissions defects fixed and independently re-reviewed; no pending correction findings"
+    },
+    {
+      "id": 53,
+      "item": "Concrete handoff hashes/changes/checks/performance/retention/consumer/limitations recorded",
+      "verdict": "PASS",
+      "evidence": "REPORT.md concrete candidate hashes/changes/checks/raw before-after/bounds/GC/consumer gap/limits; reviewer acceptance reports referenced separately"
+    }
+  ]
+}
