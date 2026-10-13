@@ -5,7 +5,7 @@ go 1.27.1
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
-	github.com/skosovsky/toolsy v0.0.0
+	github.com/skosovsky/toolsy v0.20.6
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/oauth2 v0.35.0
 )
@@ -21,7 +21,5 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
-
-replace github.com/skosovsky/toolsy => ../
 
 replace github.com/modelcontextprotocol/go-sdk => github.com/skosovsky/go-sdk v1.8.1-0.20261013081052-4a7b89fe086f
